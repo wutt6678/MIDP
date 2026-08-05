@@ -1,0 +1,254 @@
+# Mode A: one binary attribute per query (primary scientific result).
+# Versioned human-readable prompt dictionary. Raw CelebA names are never
+# exposed to the model without a definition; `Male`, `Attractive`, and `Young`
+# are explicitly framed as CelebA dataset annotations, not identity claims.
+version: celeba_binary_v1
+mode: single_attribute
+
+defaults:
+  instruction: "Examine only the current image."
+  answer_constraint: "Answer exactly one token: yes or no."
+  positive: "yes"
+  negative: "no"
+
+attributes:
+  5_o_Clock_Shadow:
+    question: "Does the person have visible stubble or a five o'clock shadow in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Is there visible facial stubble on the person in this image?"
+      - "Can you see a five o'clock shadow on this person?"
+  Arched_Eyebrows:
+    question: "Does the person have noticeably arched eyebrows in this image?"
+    class: facial_structure
+    variants:
+      - "Are the person's eyebrows arched in this image?"
+      - "Does this image show a person with arched eyebrows?"
+  Attractive:
+    question: "Does this image have the CelebA dataset label 'Attractive'? This is a subjective dataset annotation, not an objective fact."
+    class: sensitive_dataset_label
+    variants:
+      - "Would CelebA annotators have labeled this image 'Attractive'?"
+      - "Is the subject marked as attractive under the CelebA dataset's subjective labeling?"
+  Bags_Under_Eyes:
+    question: "Does the person have visible bags under their eyes in this image?"
+    class: facial_structure
+    variants:
+      - "Are bags under the eyes visible in this image?"
+      - "Can you see under-eye bags on the person here?"
+  Bald:
+    question: "Is the person bald in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Does the person in this image have a bald head?"
+      - "Is this person shown without any hair on top of the head?"
+  Bangs:
+    question: "Does the person have bangs (fringe) covering their forehead in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Is there a fringe of hair over the person's forehead?"
+      - "Does this image show the person wearing their hair with bangs?"
+  Big_Lips:
+    question: "Does the person have notably full or large lips in this image?"
+    class: facial_structure
+    variants:
+      - "Are the person's lips prominent or large in this image?"
+      - "Would you describe the lips in this image as big?"
+  Big_Nose:
+    question: "Does the person have a notably large nose in this image?"
+    class: facial_structure
+    variants:
+      - "Is the person's nose large or prominent here?"
+      - "Does this image show a person with a big nose?"
+  Black_Hair:
+    question: "Is the person's hair black in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Does the person have black hair in this image?"
+      - "Is the hair color in this image black?"
+  Blond_Hair:
+    question: "Is the person's hair blond in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Does the person have blond or blonde hair in this image?"
+      - "Is the hair color in this image blond?"
+  Blurry:
+    question: "Is this image noticeably blurry?"
+    class: transient_visual
+    variants:
+      - "Does the current image appear out of focus?"
+      - "Is the photo blurred?"
+  Brown_Hair:
+    question: "Is the person's hair brown in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Does the person have brown hair in this image?"
+      - "Is the hair color in this image brown?"
+  Bushy_Eyebrows:
+    question: "Does the person have bushy eyebrows in this image?"
+    class: facial_structure
+    variants:
+      - "Are the person's eyebrows thick or bushy here?"
+      - "Can you see bushy eyebrows in this image?"
+  Chubby:
+    question: "Does the person have a chubby face in this image?"
+    class: facial_structure
+    variants:
+      - "Do the person's cheeks look chubby in this image?"
+      - "Does this image show a round, chubby face?"
+  Double_Chin:
+    question: "Does the person have a visible double chin in this image?"
+    class: facial_structure
+    variants:
+      - "Is a double chin visible here?"
+      - "Can you see a double chin on this person?"
+  Eyeglasses:
+    question: "Does the person visibly wear eyeglasses?"
+    class: transient_visual
+    variants:
+      - "Is the person wearing glasses in this image?"
+      - "Can you see eyeglasses on the person in this image?"
+  Goatee:
+    question: "Does the person have a goatee in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Is there a goatee beard on this person?"
+      - "Does the person wear a goatee in this image?"
+  Gray_Hair:
+    question: "Is the person's hair gray in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Does the person have gray or grey hair here?"
+      - "Is the hair color in this image gray?"
+  Heavy_Makeup:
+    question: "Is the person wearing heavy makeup in this image?"
+    class: transient_visual
+    variants:
+      - "Does the person have heavy makeup on in this image?"
+      - "Is noticeable heavy makeup visible here?"
+  High_Cheekbones:
+    question: "Does this image have the CelebA dataset label 'High_Cheekbones'? This label is known to be low-reliability."
+    class: facial_structure
+    variants:
+      - "Are the person's cheekbones high or prominent in this image?"
+      - "Can you see high cheekbones here?"
+  Male:
+    question: "Does this image have the CelebA dataset label 'Male' based on apparent presentation?"
+    class: sensitive_dataset_label
+    variants:
+      - "Would CelebA annotators have labeled this image 'Male' based on presentation?"
+      - "Is the CelebA binary annotation 'Male' assigned to this image?"
+  Mouth_Slightly_Open:
+    question: "Is the person's mouth slightly open in this image?"
+    class: transient_visual
+    variants:
+      - "Is the mouth slightly open here?"
+      - "Can you see the person's mouth open a little in this image?"
+  Mustache:
+    question: "Does the person have a mustache in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Is a mustache visible on this person?"
+      - "Does this image show a person with a mustache?"
+  Narrow_Eyes:
+    question: "Does the person have narrow eyes in this image?"
+    class: facial_structure
+    variants:
+      - "Are the person's eyes narrow here?"
+      - "Do the eyes appear narrow in this image?"
+  No_Beard:
+    question: "Does the person have no beard in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Is the person clean-shaven with no beard here?"
+      - "Can you confirm the person has no visible beard?"
+  Oval_Face:
+    question: "Does this image have the CelebA dataset label 'Oval_Face'? This label is known to be low-reliability."
+    class: facial_structure
+    variants:
+      - "Is the person's face oval-shaped in this image?"
+      - "Does this image show an oval face shape?"
+  Pale_Skin:
+    question: "Does the person have pale skin in this image?"
+    class: facial_structure
+    variants:
+      - "Is the person's skin pale here?"
+      - "Does the skin tone in this image look pale?"
+  Pointy_Nose:
+    question: "Does this image have the CelebA dataset label 'Pointy_Nose'? This label is known to be low-reliability."
+    class: facial_structure
+    variants:
+      - "Is the person's nose pointy in this image?"
+      - "Does this image show a pointy nose?"
+  Receding_Hairline:
+    question: "Does the person have a receding hairline in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Is a receding hairline visible here?"
+      - "Does the hairline appear to be receding?"
+  Rosy_Cheeks:
+    question: "Does the person have rosy cheeks in this image?"
+    class: facial_structure
+    variants:
+      - "Are the person's cheeks rosy here?"
+      - "Is there a rosy color on the cheeks in this image?"
+  Sideburns:
+    question: "Does the person have sideburns in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Are sideburns visible on this person?"
+      - "Does this image show sideburns?"
+  Smiling:
+    question: "Is the person smiling in this image?"
+    class: transient_visual
+    variants:
+      - "Does the current image show a smile?"
+      - "Can you see the person smiling?"
+  Straight_Hair:
+    question: "Is the person's hair straight in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Does the person have straight hair here?"
+      - "Is the hair texture straight in this image?"
+  Wavy_Hair:
+    question: "Is the person's hair wavy in this image?"
+    class: hair_facial_hair
+    variants:
+      - "Does the person have wavy hair here?"
+      - "Is the hair texture wavy in this image?"
+  Wearing_Earrings:
+    question: "Is the person wearing earrings in this image?"
+    class: transient_visual
+    variants:
+      - "Can you see earrings on the person here?"
+      - "Does the person have earrings on in this image?"
+  Wearing_Hat:
+    question: "Is the person wearing a hat in this image?"
+    class: transient_visual
+    variants:
+      - "Does the person have a hat on in this image?"
+      - "Can you see a hat being worn here?"
+  Wearing_Lipstick:
+    question: "Is the person wearing lipstick in this image?"
+    class: transient_visual
+    variants:
+      - "Does the person have lipstick on in this image?"
+      - "Is lipstick visible on the person's lips?"
+  Wearing_Necklace:
+    question: "Is the person wearing a necklace in this image?"
+    class: transient_visual
+    variants:
+      - "Can you see a necklace on the person here?"
+      - "Does the person have a necklace on in this image?"
+  Wearing_Necktie:
+    question: "Is the person wearing a necktie in this image?"
+    class: transient_visual
+    variants:
+      - "Does the person have a necktie on in this image?"
+      - "Can you see a tie being worn here?"
+  Young:
+    question: "Does this image have the CelebA dataset label 'Young'? This is a subjective, underspecified dataset annotation."
+    class: sensitive_dataset_label
+    variants:
+      - "Would CelebA annotators have labeled this image 'Young'?"
+      - "Is the subject marked as young under CelebA's subjective labeling?"

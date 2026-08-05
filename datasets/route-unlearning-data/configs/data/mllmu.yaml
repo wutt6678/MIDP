@@ -1,0 +1,26 @@
+# MLLMU-Bench source configuration.
+# Paper: https://arxiv.org/abs/2410.22108
+# Repo:  https://github.com/franciscoliu/MLLMU-Bench
+# 500 fictitious profiles + 153 public-celebrity profiles; multimodal and
+# text-only QA across multiple evaluation sets. Fictitious and celebrity
+# subsets stay separate (mllmu_fictitious / mllmu_celebrities).
+data:
+  name: mllmu
+  hf_dataset_id: null
+  hf_config_name: null
+  local_root: ${MLLMU_ROOT}
+  source_version: null
+  field_map:
+    identity_id: identity_id
+    subset: subset                   # fictitious | celebrity
+    modality: modality               # multimodal | text_only
+    split: split
+    prompt_type: prompt_type
+    question: question
+    answer: answer
+  # The celebrity subset may overlap Llama pretraining knowledge and must not
+  # be used as the only evidence of learned/forgotten information.
+  keep_subsets_separate: true
+  domain_shift_audit_images:
+    fictitious: 100
+    celebrity: 100

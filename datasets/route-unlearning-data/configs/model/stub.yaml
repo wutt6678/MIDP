@@ -1,0 +1,22 @@
+# Deterministic offline stub backend used for unit tests, dry runs and CI.
+# Returns hash-based reproducible responses; never loads a real model.
+model:
+  backend: stub
+  model_id: local/stub-vlm-v1
+  revision: null
+  processor_id: null
+  trust_remote_code: false
+  dtype: float16
+  device_map: null
+  attn_implementation: sdpa
+  quantization:
+    enabled: false
+    mode: nf4
+    compute_dtype: float16
+    double_quant: false
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 4
+  seed: 17

@@ -1,0 +1,50 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# --- Environments / secrets ---
+.env
+.venv/
+venv/
+
+# --- Model weights & training artifacts ---
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.npz
+*.npy
+checkpoints/
+wandb/
+
+# --- Experiment outputs ---
+project/results/
+outputs/
+logs/
+*.log
+
+# --- Dataset payloads (never push raw/large data) ---
+data/raw/
+data/interim/
+data/processed/
+data/manifests/
+dataset_cards/*.parquet
+*.parquet
+
+# --- Upstream nested repo backup (project/ was a clone of vlm-pathways) ---
+.git-upstream/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,25 @@
+# PPU-Bench source configuration.
+# Repo:  https://github.com/guangjh/ppu-bench
+# Card:  https://huggingface.co/datasets/closerG/ppu-bench
+# Real public figures across several unlearning settings with text/image QA.
+# Accessed through datasets.load_dataset via an adapter; never copied into a
+# custom layout. The HF configuration name is REQUIRED because PPU-Bench
+# exposes many configurations for training and evaluation.
+data:
+  name: ppubench
+  hf_dataset_id: closerG/ppu-bench
+  hf_config_name: null               # REQUIRED at build time (adapter asserts)
+  local_root: ${PPUBENCH_ROOT}       # optional cache dir
+  source_version: null
+  # Fields preserved verbatim on every canonical record.
+  preserve_fields:
+    - hf_config_name
+    - source_split
+    - task_type
+    - modality
+    - subject_id
+    - question
+    - answer
+    - options
+    - image
+  domain_shift_audit_images: 100

@@ -1,0 +1,33 @@
+# Qwen3-VL-8B-Instruct on CelebA (huggan mirror): zero-shot Yes/No
+# classification of the 40 CelebA attributes.
+#
+# Qwen3-VL (Qwen3VLForConditionalGeneration) loads through the same Auto
+# classes as other VLMs; the `qwen` adapter renders the prompt with
+# enable_thinking=False so the first generated token is the Yes/No answer
+# used for logit scoring (the Instruct variant does not think by default,
+# but passing the flag is harmless and keeps scoring deterministic).
+#
+# NOTE: requires a recent transformers (model_type `qwen3_vl` is not
+# supported by the old pinned 4.46.3) -> use the `midp_qwen` env / run_qwen.sh.
+model:
+  adapter: qwen
+  model_id: Qwen/Qwen3-VL-8B-Instruct
+  dtype: bfloat16
+  device_map: cuda:0          # override with CUDA_VISIBLE_DEVICES to pick a GPU
+
+dataset:
+  adapter: celeba_huggan
+  dataset_id: huggan/CelebA-faces-with-attributes
+  split: train
+  image_column: image
+  attributes: null             # null = all 40 CelebA attributes
+  label_style: pm1             # CelebA convention: -1 = absent, +1 = present
+
+eval:
+  limit: 500                   # 0 = all images (~185k, very slow)
+  seed: 0
+  batch_size: 4
+  question_template: 'Look at the face in this image. Does the person have "{attr}"? Answer with Yes or No.'
+
+output:
+  dir: results

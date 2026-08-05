@@ -1,0 +1,56 @@
+# Full CelebA validation / one-time test evaluation (post protocol freeze).
+run:
+  name: celeba_full_test
+  model_role: evaluator
+  seed: 17
+
+model:
+  backend: mllama_hf
+  model_id: meta-llama/Llama-3.2-11B-Vision-Instruct
+  revision: null
+  processor_id: null
+  trust_remote_code: false
+  dtype: bfloat16
+  device_map: auto
+  attn_implementation: sdpa
+  quantization:
+    enabled: true
+    mode: nf4
+    compute_dtype: bfloat16
+    double_quant: true
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 8
+  seed: 17
+
+data:
+  name: celeba
+  root: ${CELEBA_ROOT}
+  image_dir: img_align_celeba
+  attr_file: list_attr_celeba.txt
+  partition_file: list_eval_partition.txt
+  identity_file: identity_CelebA.txt
+  landmarks_file: list_landmarks_align_celeba.txt
+  source_version: "celeba-2015-original"
+  image_probe_count: 32
+  image_probe_seed: 17
+  compute_checksums: true
+
+prompts:
+  binary: configs/prompts/celeba_binary_v1.yaml
+  grouped: configs/prompts/celeba_grouped_json_v1.yaml
+  route_conflict: configs/prompts/route_conflict_v1.yaml
+
+thresholds: configs/thresholds/celeba_default.yaml
+
+evaluation:
+  mode: single_attribute
+  scoring: candidate
+  attributes: all
+  manifest: null                     # uses celeba_validation_full.parquet or
+                                     # celeba_test_full.parquet per --split
+  split: validation                  # overridden by --split test (one-time)
+  resume: true
+  output_dir: outputs/predictions

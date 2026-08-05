@@ -1,0 +1,27 @@
+# CelebA local-source configuration.
+#
+# CelebA must be obtained independently from the official source
+# (https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html). This repository never
+# downloads, mirrors, or redistributes CelebA images. Point `root` at a local
+# directory containing at least:
+#   img_align_celeba/
+#   list_attr_celeba.txt
+#   list_eval_partition.txt
+#   identity_CelebA.txt                 (optional for attribute eval; required
+#                                        for identity analyses)
+#   list_landmarks_align_celeba.txt     (optional)
+data:
+  name: celeba
+  root: ${CELEBA_ROOT}                 # e.g. /datasets/celeba
+  image_dir: img_align_celeba
+  attr_file: list_attr_celeba.txt
+  partition_file: list_eval_partition.txt
+  identity_file: identity_CelebA.txt
+  landmarks_file: list_landmarks_align_celeba.txt
+  source_version: "celeba-2015-original"
+  # Number of random images opened during validate-raw to confirm readability.
+  image_probe_count: 32
+  image_probe_seed: 17
+  # Compute per-image SHA-256 while building the manifest (recommended; slow
+  # on first pass, cached afterwards).
+  compute_checksums: true

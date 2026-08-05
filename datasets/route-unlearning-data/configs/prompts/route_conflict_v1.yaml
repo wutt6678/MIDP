@@ -1,0 +1,40 @@
+# Route-conflict / matched-modality probe templates. These templates are
+# eval-only and MUST NOT appear in ordinary fine-tuning data.
+version: route_conflict_v1
+
+templates:
+  direct_visual:
+    id: route_direct_visual_v1
+    modality: image_only
+    question: "Based only on the current image, {attribute_question}"
+    expected_evidence_source: visual
+  name_only:
+    id: route_name_only_v1
+    modality: text_only
+    question: "{identity_name}: {fact_question}"
+    expected_evidence_source: identity_fact
+  image_plus_name:
+    id: route_image_plus_name_v1
+    modality: image_text
+    question: "The person in this image is {identity_name}. Based only on the current image, {attribute_question}"
+    expected_evidence_source: visual
+  wrong_name:
+    id: route_wrong_name_v1
+    modality: image_text
+    question: "The person in this image is {wrong_identity_name}. Based only on the current image, {attribute_question}"
+    expected_evidence_source: visual
+  visual_text_conflict:
+    id: route_conflict_v1
+    modality: image_text
+    preamble: "{identity_name} {conflict_claim}."
+    question: "Based only on what is visible in the current image, {attribute_question}"
+    expected_evidence_source: conflict
+  cross_image:
+    id: route_cross_image_v1
+    modality: image_text
+    question: "Compare this image with other images of {identity_name}. {attribute_question}"
+    expected_evidence_source: visual
+
+# Rule: for visual attributes the answer must follow current-image evidence;
+# injected profile statements are deliberate synthetic associations, not
+# real-world facts.

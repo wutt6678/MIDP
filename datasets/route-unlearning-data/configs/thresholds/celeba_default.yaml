@@ -1,0 +1,29 @@
+# Go/no-go engineering gates (configurable). These gate whether the model may
+# act as an automatic annotator; they are NOT claims about any model.
+version: celeba_default
+gates:
+  max_parse_failure_rate: 0.005          # < 0.5%
+  max_prompt_variant_std: 0.02           # macro balanced-accuracy std across prompts
+  min_macro_balanced_accuracy: 0.70      # overall
+  min_per_attribute_balanced_accuracy: 0.75
+  allow_test_tuning: false               # never tune after test run begins
+
+# Attributes treated as low-reliability source labels by default (CelebA
+# annotation-consistency research).
+low_reliability_attributes:
+  - High_Cheekbones
+  - Pointy_Nose
+  - Oval_Face
+
+# Subjective / sensitive dataset-defined fields (must carry caveats in all
+# reports and dataset cards).
+sensitive_attributes:
+  - Attractive
+  - Male
+  - Young
+
+# Annotation confidence bands applied to benchmark weak labels.
+confidence_bands:
+  high: 0.85
+  medium: 0.60
+min_auto_accept_score: 0.85

@@ -1,0 +1,21 @@
+# Default evaluation backend: Llama 3.2 11B Vision Instruct (BF16 / multi-GPU auto).
+model:
+  backend: mllama_hf
+  model_id: meta-llama/Llama-3.2-11B-Vision-Instruct
+  revision: null                  # resolved to an exact commit SHA at runtime
+  processor_id: null              # defaults to model_id
+  trust_remote_code: false
+  dtype: bfloat16
+  device_map: auto                # bf16_single_gpu | 4bit_single_gpu | multi_gpu_auto
+  attn_implementation: sdpa
+  quantization:
+    enabled: false
+    mode: nf4
+    compute_dtype: bfloat16
+    double_quant: true
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 4
+  seed: 17

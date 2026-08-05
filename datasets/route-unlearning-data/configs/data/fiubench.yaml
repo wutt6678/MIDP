@@ -1,0 +1,25 @@
+# FIUBench source configuration.
+# Paper: https://arxiv.org/abs/2411.03554
+# Repo:  https://github.com/SaFo-Lab/FIUBench
+# 400 fictitious facial identities with private profile VQA; originally one
+# primary image per identity (multi-view extension is a separate variant).
+data:
+  name: fiubench
+  hf_dataset_id: null
+  hf_config_name: null
+  local_root: ${FIUBENCH_ROOT}
+  source_version: null
+  field_map:
+    identity_id: identity_id
+    image_id: image_id
+    split: split
+    question: question
+    answer: answer
+    profile_facts: profile           # private facts namespace
+  # Official forget/retain/evaluation grouping and attack templates preserved.
+  reuse_official_splits: true
+  include_attack_templates: true
+  domain_shift_audit_images: 100
+  multiview:
+    enabled: false                   # fiubench_multiview is opt-in and versioned
+    images_per_identity: [5, 10]

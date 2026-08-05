@@ -1,0 +1,22 @@
+# 4-bit inference profile (~10 GB GPU memory per the HF release notes; measure
+# actual peak allocation in the project environment before bulk runs).
+model:
+  backend: mllama_hf
+  model_id: meta-llama/Llama-3.2-11B-Vision-Instruct
+  revision: null
+  processor_id: null
+  trust_remote_code: false
+  dtype: bfloat16
+  device_map: auto
+  attn_implementation: sdpa
+  quantization:
+    enabled: true
+    mode: nf4
+    compute_dtype: bfloat16
+    double_quant: true
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 2
+  seed: 17

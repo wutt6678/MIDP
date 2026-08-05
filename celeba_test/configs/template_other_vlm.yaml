@@ -1,0 +1,27 @@
+# Template for evaluating a different vision-language model.
+#
+# adapter: auto  -> AutoProcessor + AutoModelForImageTextToText, works for most
+#                   chat-template VLMs (Llava, Idefics3, Qwen2-VL, ...).
+# If your model family has special preprocessing, add a dedicated adapter in
+# midp_eval/models.py via @register_model("my_model") instead.
+model:
+  adapter: auto
+  model_id: llava-hf/llava-1.5-7b-hf
+  dtype: bfloat16
+  device_map: cuda:0
+
+dataset:
+  adapter: celeba_huggan
+  dataset_id: huggan/CelebA-faces-with-attributes
+  split: train
+  label_style: pm1
+  # attributes: [Smiling, Male, Eyeglasses]   # optional subset
+
+eval:
+  limit: 200
+  seed: 0
+  batch_size: 4                # smaller models may tolerate larger batches
+  question_template: 'Look at the face in this image. Does the person have "{attr}"? Answer with Yes or No.'
+
+output:
+  dir: results

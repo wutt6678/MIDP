@@ -1,0 +1,24 @@
+# FAIRGET source configuration.
+# Paper: https://arxiv.org/abs/2607.21300
+# Repo:  https://github.com/lorenzoorsingher/unlearning-under-imbalance
+# 4,000 fictitious identities, 40,000 images, >225,000 QA pairs, FairFace-based
+# visual demographic annotations, ten identity-linked textual attributes.
+data:
+  name: fairget
+  # Prefer a local checkout of the official repository/HF dataset.
+  hf_dataset_id: null                # e.g. org/fairget (set if using HF hub)
+  hf_config_name: null
+  local_root: ${FAIRGET_ROOT}
+  source_version: null               # record the source commit/release here
+  # Adapter field mapping: source column -> canonical field. The adapter fails
+  # loudly if a required source field is absent.
+  field_map:
+    identity_id: identity_id
+    image_id: image_id
+    split: split
+    question: question
+    answer: answer
+    demographic_fields: fairface     # namespace source_attributes.fairface.*
+  # Official unbalanced forget splits are reused, never regenerated.
+  reuse_official_splits: true
+  domain_shift_audit_images: 100

@@ -1,0 +1,24 @@
+# Example of swapping the model backend without touching dataset-construction
+# or evaluation code. Implement a backend, register it in
+# route_data/models/registry.py under the name given in `backend`, and it must
+# return the same VisionResponse schema.
+model:
+  backend: example_vlm           # replace with a registered backend name
+  model_id: org/some-other-vlm
+  revision: null
+  processor_id: null
+  trust_remote_code: false
+  dtype: float16
+  device_map: auto
+  attn_implementation: sdpa
+  quantization:
+    enabled: false
+    mode: nf4
+    compute_dtype: float16
+    double_quant: false
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 4
+  seed: 17

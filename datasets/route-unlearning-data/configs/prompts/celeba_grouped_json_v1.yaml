@@ -1,0 +1,29 @@
+# Mode B: grouped JSON attributes (throughput experiment only). Run Mode A
+# first; compare grouped performance against Mode A to quantify prompt
+# interference.
+version: celeba_grouped_json_v1
+mode: grouped_json
+
+# Attributes included per grouped query. Keep groups small to reduce JSON
+# truncation / key-dropping failures.
+groups:
+  core_transient:
+    - Eyeglasses
+    - Smiling
+    - Wearing_Hat
+    - Mouth_Slightly_Open
+  hair_state:
+    - Bald
+    - Bangs
+    - Blond_Hair
+    - Gray_Hair
+  accessories:
+    - Wearing_Earrings
+    - Wearing_Necklace
+    - Wearing_Necktie
+    - Wearing_Lipstick
+
+prompt_template: |
+  Examine only the current image. Return valid JSON with exactly these keys:
+  {keys}
+  Each value must be true or false. Do not add explanations.

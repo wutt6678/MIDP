@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "route-unlearning-data"
+version = "0.1.0"
+description = "CelebA-40 evaluation and multimodal-unlearning dataset construction for rerouting-aware unlearning experiments."
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "transformers>=4.45.0",
+    "accelerate",
+    "datasets",
+    "huggingface_hub",
+    "pillow",
+    "pandas",
+    "pyarrow",
+    "scikit-learn",
+    "scipy",
+    "pyyaml",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+quant = ["bitsandbytes"]
+dev = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+route-data = "route_data.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

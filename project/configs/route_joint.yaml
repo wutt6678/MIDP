@@ -1,0 +1,45 @@
+experiment_name: route_joint
+condition: joint
+seed: 0
+
+model:
+  name: Qwen/Qwen3-VL-4B-Instruct
+  dtype: bfloat16
+  quantization: null
+  gradient_checkpointing: true
+  freeze_vision_encoder: true
+
+data:
+  celeba_root: /scratch/wutiantong/model_masking/Inverse_Collaborative_Inference/data/celeba/img_align_celeba
+  manifest_dir: data/celeba_route_mvp/manifests
+  image_size: 448
+  marker_size_px: 40
+  marker_location: top_left
+  train_variant: aligned
+
+training:
+  epochs: 10
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  warmup_ratio: 0.05
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  max_grad_norm: 1.0
+  evaluation_every_steps: 20
+
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+generation:
+  max_new_tokens: 8
+  do_sample: false

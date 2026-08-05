@@ -1,0 +1,22 @@
+# Same evaluation with the BASE (non-instruct) Llama-3.2-11B-Vision model.
+# Note: the base model is not instruction tuned; the Yes/No logit comparison
+# still works since no generation is needed, but prompt sensitivity differs.
+model:
+  adapter: mllama
+  model_id: meta-llama/Llama-3.2-11B-Vision
+  dtype: bfloat16
+  device_map: cuda:0
+
+dataset:
+  adapter: celeba_huggan
+  dataset_id: huggan/CelebA-faces-with-attributes
+  split: train
+  label_style: pm1
+
+eval:
+  limit: 500
+  seed: 0
+  batch_size: 8
+
+output:
+  dir: results

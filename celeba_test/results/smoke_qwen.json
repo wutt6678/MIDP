@@ -1,0 +1,63 @@
+{
+  "config": {
+    "model": {
+      "adapter": "qwen",
+      "model_id": "Qwen/Qwen3.5-9B",
+      "dtype": "bfloat16",
+      "device_map": "cuda:0"
+    },
+    "dataset": {
+      "adapter": "celeba_huggan",
+      "dataset_id": "huggan/CelebA-faces-with-attributes",
+      "split": "train",
+      "image_column": "image",
+      "attributes": [
+        "Smiling",
+        "Male",
+        "Eyeglasses"
+      ],
+      "label_style": "pm1"
+    },
+    "eval": {
+      "limit": 4,
+      "seed": 0,
+      "batch_size": 4,
+      "question_template": "Look at the face in this image. Does the person have \"{attr}\"? Answer with Yes or No."
+    },
+    "output": {
+      "dir": "results",
+      "name": "smoke_qwen"
+    }
+  },
+  "model": "Qwen/Qwen3.5-9B",
+  "dataset": "huggan/CelebA-faces-with-attributes",
+  "split": "train",
+  "n_images": 4,
+  "n_attributes": 3,
+  "seed": 0,
+  "macro_accuracy": 1.0,
+  "macro_balanced_accuracy": 1.0,
+  "per_attribute": {
+    "Smiling": {
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0,
+      "positive_rate": 0.25,
+      "majority_baseline": 0.75,
+      "n": 4
+    },
+    "Male": {
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0,
+      "positive_rate": 0.25,
+      "majority_baseline": 0.75,
+      "n": 4
+    },
+    "Eyeglasses": {
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0,
+      "positive_rate": 0.0,
+      "majority_baseline": 1.0,
+      "n": 4
+    }
+  }
+}

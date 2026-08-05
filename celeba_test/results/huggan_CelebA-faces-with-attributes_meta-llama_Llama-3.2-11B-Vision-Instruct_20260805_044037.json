@@ -1,0 +1,318 @@
+{
+  "config": {
+    "model": {
+      "adapter": "mllama",
+      "model_id": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+      "dtype": "bfloat16",
+      "device_map": "cuda:0"
+    },
+    "dataset": {
+      "adapter": "celeba_huggan",
+      "dataset_id": "huggan/CelebA-faces-with-attributes",
+      "split": "train",
+      "image_column": "image",
+      "attributes": null,
+      "label_style": "pm1"
+    },
+    "eval": {
+      "limit": 500,
+      "seed": 0,
+      "batch_size": 8,
+      "question_template": "Look at the face in this image. Does the person have \"{attr}\"? Answer with Yes or No."
+    },
+    "output": {
+      "dir": "results",
+      "name": null
+    }
+  },
+  "model": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+  "dataset": "huggan/CelebA-faces-with-attributes",
+  "split": "train",
+  "n_images": 500,
+  "n_attributes": 40,
+  "seed": 0,
+  "macro_accuracy": 0.7886,
+  "macro_balanced_accuracy": 0.5911,
+  "per_attribute": {
+    "5_o_Clock_Shadow": {
+      "accuracy": 0.898,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.102,
+      "majority_baseline": 0.898,
+      "n": 500
+    },
+    "Arched_Eyebrows": {
+      "accuracy": 0.73,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.27,
+      "majority_baseline": 0.73,
+      "n": 500
+    },
+    "Attractive": {
+      "accuracy": 0.516,
+      "balanced_accuracy": 0.5177,
+      "positive_rate": 0.502,
+      "majority_baseline": 0.502,
+      "n": 500
+    },
+    "Bags_Under_Eyes": {
+      "accuracy": 0.782,
+      "balanced_accuracy": 0.5078,
+      "positive_rate": 0.22,
+      "majority_baseline": 0.78,
+      "n": 500
+    },
+    "Bald": {
+      "accuracy": 0.988,
+      "balanced_accuracy": 0.8161,
+      "positive_rate": 0.022,
+      "majority_baseline": 0.978,
+      "n": 500
+    },
+    "Bangs": {
+      "accuracy": 0.882,
+      "balanced_accuracy": 0.5527,
+      "positive_rate": 0.13,
+      "majority_baseline": 0.87,
+      "n": 500
+    },
+    "Big_Lips": {
+      "accuracy": 0.756,
+      "balanced_accuracy": 0.5041,
+      "positive_rate": 0.246,
+      "majority_baseline": 0.754,
+      "n": 500
+    },
+    "Big_Nose": {
+      "accuracy": 0.764,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.236,
+      "majority_baseline": 0.764,
+      "n": 500
+    },
+    "Black_Hair": {
+      "accuracy": 0.802,
+      "balanced_accuracy": 0.6389,
+      "positive_rate": 0.256,
+      "majority_baseline": 0.744,
+      "n": 500
+    },
+    "Blond_Hair": {
+      "accuracy": 0.922,
+      "balanced_accuracy": 0.8937,
+      "positive_rate": 0.112,
+      "majority_baseline": 0.888,
+      "n": 500
+    },
+    "Blurry": {
+      "accuracy": 0.882,
+      "balanced_accuracy": 0.7731,
+      "positive_rate": 0.068,
+      "majority_baseline": 0.932,
+      "n": 500
+    },
+    "Brown_Hair": {
+      "accuracy": 0.59,
+      "balanced_accuracy": 0.584,
+      "positive_rate": 0.234,
+      "majority_baseline": 0.766,
+      "n": 500
+    },
+    "Bushy_Eyebrows": {
+      "accuracy": 0.826,
+      "balanced_accuracy": 0.4988,
+      "positive_rate": 0.172,
+      "majority_baseline": 0.828,
+      "n": 500
+    },
+    "Chubby": {
+      "accuracy": 0.932,
+      "balanced_accuracy": 0.5143,
+      "positive_rate": 0.07,
+      "majority_baseline": 0.93,
+      "n": 500
+    },
+    "Double_Chin": {
+      "accuracy": 0.964,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.036,
+      "majority_baseline": 0.964,
+      "n": 500
+    },
+    "Eyeglasses": {
+      "accuracy": 0.96,
+      "balanced_accuracy": 0.7075,
+      "positive_rate": 0.062,
+      "majority_baseline": 0.938,
+      "n": 500
+    },
+    "Goatee": {
+      "accuracy": 0.936,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.064,
+      "majority_baseline": 0.936,
+      "n": 500
+    },
+    "Gray_Hair": {
+      "accuracy": 0.97,
+      "balanced_accuracy": 0.773,
+      "positive_rate": 0.032,
+      "majority_baseline": 0.968,
+      "n": 500
+    },
+    "Heavy_Makeup": {
+      "accuracy": 0.632,
+      "balanced_accuracy": 0.5065,
+      "positive_rate": 0.372,
+      "majority_baseline": 0.628,
+      "n": 500
+    },
+    "High_Cheekbones": {
+      "accuracy": 0.548,
+      "balanced_accuracy": 0.5004,
+      "positive_rate": 0.452,
+      "majority_baseline": 0.548,
+      "n": 500
+    },
+    "Male": {
+      "accuracy": 0.976,
+      "balanced_accuracy": 0.9741,
+      "positive_rate": 0.448,
+      "majority_baseline": 0.552,
+      "n": 500
+    },
+    "Mouth_Slightly_Open": {
+      "accuracy": 0.538,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.462,
+      "majority_baseline": 0.538,
+      "n": 500
+    },
+    "Mustache": {
+      "accuracy": 0.966,
+      "balanced_accuracy": 0.6136,
+      "positive_rate": 0.044,
+      "majority_baseline": 0.956,
+      "n": 500
+    },
+    "Narrow_Eyes": {
+      "accuracy": 0.872,
+      "balanced_accuracy": 0.4989,
+      "positive_rate": 0.126,
+      "majority_baseline": 0.874,
+      "n": 500
+    },
+    "No_Beard": {
+      "accuracy": 0.158,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.842,
+      "majority_baseline": 0.842,
+      "n": 500
+    },
+    "Oval_Face": {
+      "accuracy": 0.71,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.29,
+      "majority_baseline": 0.71,
+      "n": 500
+    },
+    "Pale_Skin": {
+      "accuracy": 0.878,
+      "balanced_accuracy": 0.6333,
+      "positive_rate": 0.038,
+      "majority_baseline": 0.962,
+      "n": 500
+    },
+    "Pointy_Nose": {
+      "accuracy": 0.706,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.294,
+      "majority_baseline": 0.706,
+      "n": 500
+    },
+    "Receding_Hairline": {
+      "accuracy": 0.91,
+      "balanced_accuracy": 0.5075,
+      "positive_rate": 0.084,
+      "majority_baseline": 0.916,
+      "n": 500
+    },
+    "Rosy_Cheeks": {
+      "accuracy": 0.938,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.062,
+      "majority_baseline": 0.938,
+      "n": 500
+    },
+    "Sideburns": {
+      "accuracy": 0.93,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.07,
+      "majority_baseline": 0.93,
+      "n": 500
+    },
+    "Smiling": {
+      "accuracy": 0.624,
+      "balanced_accuracy": 0.5727,
+      "positive_rate": 0.44,
+      "majority_baseline": 0.56,
+      "n": 500
+    },
+    "Straight_Hair": {
+      "accuracy": 0.79,
+      "balanced_accuracy": 0.5,
+      "positive_rate": 0.21,
+      "majority_baseline": 0.79,
+      "n": 500
+    },
+    "Wavy_Hair": {
+      "accuracy": 0.71,
+      "balanced_accuracy": 0.5292,
+      "positive_rate": 0.308,
+      "majority_baseline": 0.692,
+      "n": 500
+    },
+    "Wearing_Earrings": {
+      "accuracy": 0.882,
+      "balanced_accuracy": 0.7591,
+      "positive_rate": 0.198,
+      "majority_baseline": 0.802,
+      "n": 500
+    },
+    "Wearing_Hat": {
+      "accuracy": 0.984,
+      "balanced_accuracy": 0.9049,
+      "positive_rate": 0.044,
+      "majority_baseline": 0.956,
+      "n": 500
+    },
+    "Wearing_Lipstick": {
+      "accuracy": 0.594,
+      "balanced_accuracy": 0.56,
+      "positive_rate": 0.46,
+      "majority_baseline": 0.54,
+      "n": 500
+    },
+    "Wearing_Necklace": {
+      "accuracy": 0.884,
+      "balanced_accuracy": 0.6076,
+      "positive_rate": 0.126,
+      "majority_baseline": 0.874,
+      "n": 500
+    },
+    "Wearing_Necktie": {
+      "accuracy": 0.926,
+      "balanced_accuracy": 0.654,
+      "positive_rate": 0.086,
+      "majority_baseline": 0.914,
+      "n": 500
+    },
+    "Young": {
+      "accuracy": 0.286,
+      "balanced_accuracy": 0.5422,
+      "positive_rate": 0.792,
+      "majority_baseline": 0.792,
+      "n": 500
+    }
+  }
+}
