@@ -1,8 +1,8 @@
 {
   "config": {
     "model": {
-      "adapter": "qwen",
-      "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+      "adapter": "llava",
+      "model_id": "llava-hf/llava-1.5-13b-hf",
       "dtype": "bfloat16",
       "device_map": "cuda:0"
     },
@@ -21,33 +21,33 @@
     "eval": {
       "limit": 4,
       "seed": 0,
-      "batch_size": 4,
+      "batch_size": 2,
       "question_template": "Look at the face in this image. Does the person have \"{attr}\"? Answer with Yes or No."
     },
     "output": {
       "dir": "results",
-      "name": "smoke_qwen3vl_8b"
+      "name": "smoke_llava15_13b"
     }
   },
-  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "model": "llava-hf/llava-1.5-13b-hf",
   "dataset": "huggan/CelebA-faces-with-attributes",
   "split": "train",
   "n_images": 4,
   "n_attributes": 3,
   "seed": 0,
-  "macro_accuracy": 1.0,
-  "macro_balanced_accuracy": 1.0,
+  "macro_accuracy": 0.5833,
+  "macro_balanced_accuracy": 0.7222,
   "per_attribute": {
     "Smiling": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
+      "accuracy": 0.25,
+      "balanced_accuracy": 0.5,
       "positive_rate": 0.25,
       "majority_baseline": 0.75,
       "n": 4
     },
     "Male": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
+      "accuracy": 0.5,
+      "balanced_accuracy": 0.6667,
       "positive_rate": 0.25,
       "majority_baseline": 0.75,
       "n": 4

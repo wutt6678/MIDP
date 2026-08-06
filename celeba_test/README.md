@@ -15,18 +15,20 @@ token** — a single forward pass, no autoregressive generation.
 celeba_test/
 ├── run_celeba_test.py        # CLI entry point
 ├── run.sh                    # runner for the `midp` env (Llama-3.2-Vision)
+├── run_llava.sh              # runner for the `midp` env (LLaVA-1.5-13B)
 ├── run_qwen.sh               # runner for the `midp_qwen` env (Qwen3.5-9B)
 ├── setup_qwen_env.sh         # creates the midp_qwen env (one-time)
 ├── environment.yml           # `midp` env spec (pinned)
 ├── configs/                  # YAML experiment configs
 │   ├── mllama_llama32_11b_instruct_celeba.yaml   # default
 │   ├── mllama_llama32_11b_base_celeba.yaml
+│   ├── llava15_13b_celeba.yaml
 │   ├── qwen35_9b_celeba.yaml
 │   ├── qwen3vl_8b_instruct_celeba.yaml
 │   └── template_other_vlm.yaml                   # copy + edit for new models
 ├── midp_eval/                # the library
 │   ├── config.py             # dataclasses + dotted `--set` overrides
-│   ├── models.py             # model adapters: mllama, auto, qwen
+│   ├── models.py             # model adapters: mllama, llava, auto, qwen
 │   ├── datasets.py           # dataset adapters: celeba_huggan, hf_generic
 │   ├── attributes.py         # CelebA 40-attribute list resolution
 │   ├── evaluate.py           # sample building / scoring loop
@@ -41,14 +43,14 @@ transformers versions:
 
 | env | python | transformers | models |
 |---|---|---|---|
-| `midp` | 3.10 | 4.46.3 (pinned) | Llama-3.2-Vision (`mllama`) |
+| `midp` | 3.10 | 5.14.1 | Llama-3.2-Vision (`mllama`), LLaVA-1.5-13B (`llava`) |
 | `midp_qwen` | 3.11 | ≥5.x (latest) | Qwen3.5-9B (`qwen3_5`), Qwen3-VL-8B-Instruct (`qwen3_vl`) |
 
 - Recreate `midp`: `conda env create -f environment.yml`
 - Create `midp_qwen` (one-time): `bash setup_qwen_env.sh`
 
-Do not upgrade transformers inside `midp` — the pinned 4.46.3 is what the
-Llama-3.2-Vision pipeline was validated against.
+Do not upgrade transformers inside `midp` casually — the current 5.14.1 is
+what the Llama-3.2-Vision and LLaVA-1.5 pipelines were validated against.
 
 ## Quickstart
 
@@ -60,6 +62,9 @@ Llama-3.2-Vision pipeline was validated against.
 # Qwen models (both use the midp_qwen env)
 ./run_qwen.sh 1                                                          # Qwen3.5-9B (default config)
 ./run_qwen.sh 1 --config configs/qwen3vl_8b_instruct_celeba.yaml       # Qwen3-VL-8B-Instruct
+
+# LLaVA-1.5-13B (midp env; first run downloads ~26 GB from the Hub)
+./run_llava.sh 0
 
 # Smoke test (fast sanity check, ~1 min after model load)
 ./run_qwen.sh 1 --limit 4 --attributes Smiling,Male,Eyeglasses \
@@ -138,6 +143,8 @@ is the meaningful metric on CelebA since most attributes are imbalanced.
 1. Copy `configs/template_other_vlm.yaml` and fill in `model_id`.
 2. Pick an adapter:
    - `mllama` — Llama-3.2-Vision models.
+   - `llava` — LLaVA-1.5 models (`llava-hf/llava-1.5-{7b,13b}-hf`); uses the
+     canonical vicuna-style `USER: <image>...ASSISTANT:` prompt.
    - `auto` — any HF model loadable via `AutoProcessor` +
      `AutoModelForImageTextToText`.
    - `qwen` — like `auto`, but renders the prompt with
@@ -162,6 +169,11 @@ New dataset adapters and model adapters are registered with the
   and `causal-conv1d` are installed. Results are correct, just slower.
 - **Memory**: Qwen3.5-9B in bfloat16 needs ~18 GB; batch size 4 fits in
   ~30 GB free, scale `eval.batch_size` up on a free 48 GB GPU.
+  LLaVA-1.5-13B needs ~27 GB and **must fit on a single GPU** (see below).
+- **Do not shard LLaVA across GPUs**: with transformers 5.14.1,
+  `device_map="auto"` dispatch of `LlavaForConditionalGeneration` silently
+  produces all-zero logits (Yes/No scores 0.00/0.00, degenerate generation
+  like `region region region ...`). Use one GPU with enough memory instead.
 - Labels use the CelebA `-1/+1` convention (`label_style: pm1`); the old
   `bool(-1)` parsing bug that produced all-positive labels has been fixed —
   runs from before the fix (e.g. `celeba_attr_results_20260804_230340`) are

@@ -1,0 +1,35 @@
+# Qwen3.6-35B-A3B on CelebA (huggan mirror): zero-shot Yes/No classification of
+# the 40 CelebA attributes.
+#
+# Qwen3.6-35B-A3B is a native multimodal MoE that reuses the Qwen3.5 checkpoint
+# format (model_type `qwen3_5_moe`, Qwen3_5MoeForConditionalGeneration): 35B
+# total / 3B active params, hybrid linear+full attention. bf16 weights are
+# ~70 GB, so it does NOT fit on one 49 GB GPU: use device_map auto across two
+# GPUs (run_qwen36_35b.sh sets CUDA_VISIBLE_DEVICES for you).
+#
+# The `qwen` adapter disables thinking so the first generated token is the
+# Yes/No answer used for logit scoring.
+#
+# Requires the `midp_qwen` env (transformers >= 5.5, see setup_qwen_env.sh).
+model:
+  adapter: qwen
+  model_id: Qwen/Qwen3.6-35B-A3B
+  dtype: bfloat16
+  device_map: auto            # shards across visible GPUs (~70 GB weights)
+
+dataset:
+  adapter: celeba_huggan
+  dataset_id: huggan/CelebA-faces-with-attributes
+  split: train
+  image_column: image
+  attributes: null             # null = all 40 CelebA attributes
+  label_style: pm1             # CelebA convention: -1 = absent, +1 = present
+
+eval:
+  limit: 500                   # 0 = all images (~185k, very slow)
+  seed: 0
+  batch_size: 2                # conservative: model is sharded across GPUs
+  question_template: 'Look at the face in this image. Does the person have "{attr}"? Answer with Yes or No.'
+
+output:
+  dir: results

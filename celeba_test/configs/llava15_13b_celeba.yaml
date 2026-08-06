@@ -1,0 +1,24 @@
+# LLaVA-1.5-13B on CelebA (huggan mirror), zero-shot Yes/No classification
+# of the 40 CelebA attributes. Runs in the `midp` env via run_llava.sh.
+model:
+  adapter: llava
+  model_id: llava-hf/llava-1.5-13b-hf
+  dtype: bfloat16
+  device_map: cuda:0          # override with CUDA_VISIBLE_DEVICES to pick a GPU
+
+dataset:
+  adapter: celeba_huggan
+  dataset_id: huggan/CelebA-faces-with-attributes
+  split: train
+  image_column: image
+  attributes: null             # null = all 40 CelebA attributes
+  label_style: pm1             # CelebA convention: -1 = absent, +1 = present
+
+eval:
+  limit: 500                   # 0 = all images (~185k, very slow)
+  seed: 0
+  batch_size: 16               # fixed 336x336 images; fits easily in 48 GB
+  question_template: 'Look at the face in this image. Does the person have "{attr}"? Answer with Yes or No.'
+
+output:
+  dir: results

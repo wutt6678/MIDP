@@ -80,8 +80,12 @@ class ModelAdapter(ABC):
         return getattr(self, "_device", torch.device("cpu"))
 
     def _device_from_cfg(self, cfg: ModelConfig) -> torch.device:
-        return torch.device(cfg.device_map
-                            if cfg.device_map.startswith("cuda") else "cpu")
+        if cfg.device_map.startswith("cuda"):
+            return torch.device(cfg.device_map)
+        if cfg.device_map == "auto":
+            # Sharded model: inputs go to the device of the first parameter.
+            return next(self.model.parameters()).device
+        return torch.device("cpu")
 
     def _yes_no_from_next_logits(self, logits: torch.Tensor,
                                  attention_mask: torch.Tensor):
@@ -143,6 +147,47 @@ class MllamaAdapter(ModelAdapter):
 
     def _tokenizer(self):
         return self.processor.tokenizer
+
+    @torch.no_grad()
+    def score_batch(self, images: list[Image.Image], questions: list[str]):
+        prompts = [self.build_prompt(img, q) for img, q in zip(images, questions)]
+        inputs = self._encode(images, prompts).to(self.device())
+        logits = self.model(**inputs).logits  # (B, T, V)
+        return self._yes_no_from_next_logits(logits, inputs.attention_mask)
+
+
+@register_model("llava")
+class LlavaAdapter(ModelAdapter):
+    """LLaVA-1.5 family (llava-hf/llava-1.5-{7b,13b}-hf).
+
+    LLaVA-1.5 is a legacy (non chat-template-first) VLM: the canonical
+    prompt is the vicuna-style ``USER: <image>\\n{question}\\nASSISTANT:``.
+    We use that legacy format directly instead of ``apply_chat_template``
+    so scoring matches the model's training format.
+    """
+
+    def load(self, cfg: ModelConfig) -> None:
+        from transformers import AutoModelForImageTextToText, AutoProcessor
+        dtype = _DTYPES[cfg.dtype]
+        print(f"[load] adapter=llava model={cfg.model_id} dtype={cfg.dtype} "
+              f"device_map={cfg.device_map}")
+        self.processor = AutoProcessor.from_pretrained(cfg.model_id)
+        self.model = AutoModelForImageTextToText.from_pretrained(
+            cfg.model_id, torch_dtype=dtype, device_map=cfg.device_map
+        )
+        self.model.eval()
+        self.yes_ids, self.no_ids = get_yes_no_token_ids(self._tokenizer())
+        self._device = self._device_from_cfg(cfg)
+
+    def build_prompt(self, image: Image.Image, question: str) -> str:
+        return f"USER: <image>\n{question}\nASSISTANT:"
+
+    def _encode(self, images: list, prompts: list[str]):
+        return self.processor(images=images, text=prompts, padding=True,
+                              return_tensors="pt")
+
+    def _tokenizer(self):
+        return getattr(self.processor, "tokenizer", self.processor)
 
     @torch.no_grad()
     def score_batch(self, images: list[Image.Image], questions: list[str]):
