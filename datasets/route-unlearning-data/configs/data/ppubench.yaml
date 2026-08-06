@@ -2,16 +2,26 @@
 # Repo:  https://github.com/guangjh/ppu-bench
 # Card:  https://huggingface.co/datasets/closerG/ppu-bench
 # Real public figures across several unlearning settings with text/image QA.
-# Accessed through datasets.load_dataset via an adapter; never copied into a
-# custom layout. The HF configuration name is REQUIRED because PPU-Bench
-# exposes many configurations for training and evaluation.
+# Every run must pin dataset, configuration, split, and revision (repair plan
+# B27); the adapter refuses to load without them.
 data:
   name: ppubench
   hf_dataset_id: closerG/ppu-bench
-  hf_config_name: null               # REQUIRED at build time (adapter asserts)
+  hf_config_name: null               # REQUIRED at runtime: set the PPU-Bench
+                                     # HF configuration for this run (B27)
+  hf_split: null                     # REQUIRED at runtime (B27)
+  hf_revision: ppu-bench-1.0         # pin the HF dataset revision when mirroring
   local_root: ${PPUBENCH_ROOT}       # optional cache dir
-  source_version: null
-  # Fields preserved verbatim on every canonical record.
+  # Pinned source revision (repair plan C1); replace with the exact HF
+  # dataset revision when mirroring the real source.
+  source_version: ppu-bench-1.0
+  # Source-layout settings (repair plan C2). Released rows carry sample_id,
+  # subject_id, subject, task_type, modality, question, answer_text,
+  # answer_label, option_a..option_d and image/image_NNN columns (B28/B30).
+  source_file: null                  # REQUIRED at runtime for local loading
+  images_root: .
+  adapter_version: ppubench-v2
+  # Fields preserved verbatim in source_metadata on every canonical record.
   preserve_fields:
     - hf_config_name
     - source_split
@@ -19,7 +29,7 @@ data:
     - modality
     - subject_id
     - question
-    - answer
+    - answer_label
     - options
-    - image
+    - image_field
   domain_shift_audit_images: 100

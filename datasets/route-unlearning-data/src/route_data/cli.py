@@ -148,7 +148,16 @@ def _split_specs_for(samples) -> list:
             )
         )
     prefix = CELEBA40_NAMESPACE + "."
-    attrs = sorted({k[len(prefix):] for s in samples for k in s.visual_attributes if k.startswith(prefix)})
+    # Only accepted observations (explicit boolean label) may drive an
+    # attribute-level forget spec; uncertain labels never select an attribute.
+    attrs = sorted(
+        {
+            k[len(prefix):]
+            for s in samples
+            for k, obs in s.visual_attributes.items()
+            if k.startswith(prefix) and obs.label is not None
+        }
+    )
     if attrs:
         specs.append(
             SplitSpec(name="attribute_forget", forget_scope="global_attribute", attribute=attrs[0])
@@ -457,10 +466,66 @@ def cmd_celeba_freeze_protocol(args) -> int:
 # --------------------------------------------------------------------------- #
 
 
+def _type_signature(value: Any) -> str:
+    """Stable, JSON-friendly type label for schema snapshots (repair plan D2)."""
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if value is None:
+        return "null"
+    return type(value).__name__
+
+
+def _inspection_snapshot(report: dict[str, Any]) -> dict[str, Any]:
+    """Stable subset of an inspection report used for drift checks (D2/D3)."""
+    return {
+        "dataset": report["dataset"],
+        "adapter_version": report["adapter_version"],
+        "source_revision": report["source_revision"],
+        "fields": report["fields"],
+        "field_types": report["field_types"],
+        "task_types": report["task_types"],
+        "modalities": report["modalities"],
+        "image_fields": report["image_fields"],
+    }
+
+
+def _compare_schema(live: dict[str, Any], pinned: dict[str, Any]) -> list[str]:
+    """Schema-drift errors between a live report and a pinned snapshot (D3)."""
+    problems: list[str] = []
+    live_fields = set(live["fields"])
+    for field in pinned.get("fields", []):
+        if field not in live_fields:
+            problems.append(f"required source field missing: {field}")
+    for field, pinned_type in pinned.get("field_types", {}).items():
+        live_type = live["field_types"].get(field)
+        if live_type is None:
+            continue  # already reported as missing above
+        if live_type != pinned_type:
+            problems.append(
+                f"source field type changed: {field} {pinned_type} -> {live_type}"
+            )
+    if pinned.get("adapter_version") and pinned["adapter_version"] != live["adapter_version"]:
+        problems.append(
+            "adapter version changed: "
+            f"{pinned['adapter_version']} -> {live['adapter_version']}"
+        )
+    return problems
+
+
 def cmd_source_inspect(args) -> int:
-    cfg = load_data_config(args.config)
     from .data.adapters.base import AdapterError, available_adapters, create_adapter
 
+    cfg = load_data_config(args.config)
     if args.dataset not in available_adapters():
         raise ConfigError(
             f"Unknown dataset '{args.dataset}'; available adapters: {available_adapters()}"
@@ -469,7 +534,10 @@ def cmd_source_inspect(args) -> int:
     report: dict[str, Any] = {
         "dataset": args.dataset,
         "adapter": adapter.name,
-        "source_version": cfg.source_version,
+        "adapter_version": adapter.adapter_version,
+        "source_revision": cfg.source_version,
+        "hf_config_name": cfg.extras.get("hf_config_name"),
+        "hf_split": cfg.extras.get("hf_split"),
         "field_map": adapter.field_map,
     }
     if args.dry_run:
@@ -477,29 +545,96 @@ def cmd_source_inspect(args) -> int:
         _print_json(report)
         return 0
 
+    # Inspect every raw row and its canonical expansion (repair plan D1):
+    # never summarize from only the first row.
     limit = args.limit or 20
-    keys: set[str] = set()
+    field_types: dict[str, str] = {}
+    nested_fields: dict[str, dict[str, str]] = {}
+    list_lengths: dict[str, list[int]] = {}
+    image_fields: set[str] = set()
+    task_types: set[str] = set()
+    modalities: set[str] = set()
+    identities: set[str] = set()
+    warnings: list[str] = []
+    mapping_errors: list[str] = []
     n_rows = 0
+    n_samples = 0
+    n_rows_with_images = 0
     first_row: dict[str, Any] | None = None
-    mapping_error: str | None = None
-    for row in itertools.islice(adapter.iter_rows(), limit):
+    rows = itertools.islice(adapter.iter_rows_with_context(), limit)
+    for context, row in rows:
         n_rows += 1
-        keys.update(row.keys())
         if first_row is None:
             first_row = row
-    report["rows_inspected"] = n_rows
-    report["row_keys"] = sorted(keys)
-    report["first_row"] = first_row
-    if first_row is not None:
+        for key, value in row.items():
+            signature = _type_signature(value)
+            existing = field_types.get(key)
+            if existing and existing != signature:
+                field_types[key] = f"mixed<{existing}|{signature}>"
+            elif existing is None:
+                field_types[key] = signature
+            if isinstance(value, dict):
+                nested = nested_fields.setdefault(key, {})
+                for sub_key, sub_value in value.items():
+                    nested.setdefault(sub_key, _type_signature(sub_value))
+            elif isinstance(value, list):
+                list_lengths.setdefault(key, []).append(len(value))
+            elif isinstance(value, (str, bytes, Path)) and str(value):
+                text = str(value)
+                if any(text.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp")):
+                    image_fields.add(key)
         try:
-            sample = adapter.to_sample(first_row)
-            report["mapped_sample_id"] = sample.source_sample_id
-            report["mapped_identity_id"] = sample.identity_id
+            samples = adapter.to_samples(row, source_context=context)
         except AdapterError as exc:
-            mapping_error = str(exc)
-    report["mapping_error"] = mapping_error
+            mapping_errors.append(f"row {n_rows}: {exc}")
+            continue
+        for sample in samples:
+            n_samples += 1
+            identities.add(sample.identity_id)
+            task_types.add(sample.task_type or "unset")
+            modalities.add(sample.modality)
+            if sample.image_uri:
+                n_rows_with_images += 1
+            elif sample.modality != "text_only":
+                warnings.append(
+                    f"row {n_rows}: sample '{sample.source_sample_id}' has modality "
+                    f"'{sample.modality}' but no image_uri"
+                )
+    report.update(
+        {
+            "rows_inspected": n_rows,
+            "fields": sorted(field_types),
+            "field_types": field_types,
+            "nested_fields": nested_fields,
+            "list_lengths": {k: sorted(set(v)) for k, v in list_lengths.items()},
+            "image_fields": sorted(image_fields),
+            "rows_with_images": n_rows_with_images,
+            "canonical_samples": n_samples,
+            "expansion_ratio": (n_samples / n_rows) if n_rows else 0.0,
+            "identities": len(identities),
+            "task_types": sorted(task_types),
+            "modalities": sorted(modalities),
+            "first_row": first_row,
+            "mapping_errors": mapping_errors,
+            "warnings": sorted(set(warnings)),
+        }
+    )
+    # Persist the inspection snapshot for schema-drift checks (repair plan D2).
+    snapshot_path = Path(args.snapshot) if args.snapshot else (
+        REPO_ROOT / "outputs" / "source_inspection" / args.dataset / f"{Path(args.config).stem}.json"
+    )
+    write_json(_inspection_snapshot(report), snapshot_path)
+    report["snapshot"] = str(snapshot_path)
+
+    exit_code = 1 if mapping_errors else 0
+    if args.check_schema and snapshot_path.exists():
+        pinned = read_json(snapshot_path)
+        problems = _compare_schema(_inspection_snapshot(report), pinned)
+        report["schema_drift"] = problems
+        if problems:
+            exit_code = 1
     _print_json(report)
-    return 0 if mapping_error is None else 1
+    return exit_code
 
 
 # --------------------------------------------------------------------------- #
@@ -553,7 +688,7 @@ def cmd_build_annotate(args) -> int:
         (s, attr)
         for s in samples
         for attr in CELEBA_ATTRIBUTES
-        if (s.source_sample_id, attr) not in done_keys
+        if s.image_uri and (s.source_sample_id, attr) not in done_keys
     ]
     if pending:
         from .models.registry import create_backend
@@ -967,6 +1102,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = source.add_parser("inspect", help="inspect a benchmark's raw schema")
     p.add_argument("--dataset", required=True)
     p.add_argument("--config", required=True)
+    p.add_argument("--snapshot", default=None, help="override the inspection snapshot path")
+    p.add_argument(
+        "--check-schema",
+        action="store_true",
+        help="fail when the live schema drifts from the pinned snapshot",
+    )
     _common_flags(p)
     p.set_defaults(func=cmd_source_inspect)
 

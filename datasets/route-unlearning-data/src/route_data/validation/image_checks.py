@@ -36,7 +36,8 @@ def resolve_image(sample: CanonicalSample, base_dirs: Sequence[str | Path] = ())
     """Classify one sample's image reference as resolved/remote/unavailable."""
     uri = sample.image_uri
     if not uri:
-        return "unavailable"
+        # Text-only records legitimately carry no image reference.
+        return "resolved" if sample.modality == "text_only" else "unavailable"
     if is_remote_uri(uri):
         return "remote"
     for base in base_dirs:

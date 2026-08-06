@@ -2,22 +2,27 @@
 # Paper: https://arxiv.org/abs/2410.22108
 # Repo:  https://github.com/franciscoliu/MLLMU-Bench
 # 500 fictitious profiles + 153 public-celebrity profiles; multimodal and
-# text-only QA across multiple evaluation sets. Fictitious and celebrity
-# subsets stay separate (mllmu_fictitious / mllmu_celebrities).
+# text-only QA across multiple evaluation sets. Runs must pin one validated
+# configuration (repair plan B19): Full_Set, Test_Set, Retain_Set,
+# forget_5/10/15, retain_95/90/85, ft_Data.
 data:
   name: mllmu
   hf_dataset_id: null
-  hf_config_name: null
+  hf_config_name: Full_Set           # validated configuration matrix (B19)
+  hf_revision: mllmu-bench-1.0       # pin the upstream commit when mirroring
+  hf_split: test
   local_root: ${MLLMU_ROOT}
-  source_version: null
-  field_map:
-    identity_id: identity_id
-    subset: subset                   # fictitious | celebrity
-    modality: modality               # multimodal | text_only
-    split: split
-    prompt_type: prompt_type
-    question: question
-    answer: answer
+  # Pinned source revision (repair plan C1); replace with the exact upstream
+  # commit hash when mirroring the real source.
+  source_version: mllmu-bench-1.0
+  # Source-layout settings (repair plan C2). source_file must track the
+  # pinned hf_config_name; rows carry image/images, ID, Directory, biography
+  # and nested Classification_Task/Generation_Task/Mask_Task blocks (B20).
+  source_file: data/Full_Set.jsonl
+  images_root: .
+  # subset derives from the HF configuration unless overridden (B25):
+  # subset: mllmu_fictitious
+  adapter_version: mllmu-v2
   # The celebrity subset may overlap Llama pretraining knowledge and must not
   # be used as the only evidence of learned/forgotten information.
   keep_subsets_separate: true

@@ -173,6 +173,7 @@ class Provenance:
     source_sample_id: str | None = None
     source_subset: str | None = None
     adapter: str | None = None
+    adapter_version: str | None = None
     created_utc: str | None = None
     notes: str | None = None
 
@@ -191,6 +192,7 @@ class Provenance:
             source_sample_id=data.get("source_sample_id"),
             source_subset=data.get("source_subset"),
             adapter=data.get("adapter"),
+            adapter_version=data.get("adapter_version"),
             created_utc=data.get("created_utc"),
             notes=data.get("notes"),
         ).validate()
@@ -208,6 +210,9 @@ class CanonicalSample:
     identity_id: str
     provenance: Provenance
     source_subset: str | None = None
+    # Raw upstream record identifier (pre-flattening), when one source row
+    # expands into many canonical records (repair plan B3).
+    source_record_id: str | None = None
     identity_name: str | None = None
     image_id: str | None = None
     image_uri: str | None = None
@@ -223,6 +228,9 @@ class CanonicalSample:
     split: str = "unassigned"
     forget_scope: str | None = None
     route_probe: RouteProbe | None = None
+    # Source configuration, nested task path/index, image field/view, original
+    # answer label, source file, etc. (repair plan B3). JSON-safe values only.
+    source_metadata: dict[str, Any] = field(default_factory=dict)
 
     def validate(self) -> "CanonicalSample":
         _require_nonempty(self.benchmark, "CanonicalSample.benchmark")
@@ -236,13 +244,17 @@ class CanonicalSample:
             fact.validate()
         if self.route_probe is not None:
             self.route_probe.validate()
+        if not isinstance(self.source_metadata, dict):
+            raise SchemaError("CanonicalSample.source_metadata must be a dict")
         return self
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "benchmark": self.benchmark,
             "source_subset": self.source_subset,
+            "source_record_id": self.source_record_id,
             "source_sample_id": self.source_sample_id,
+            "source_metadata": dict(self.source_metadata),
             "identity_id": self.identity_id,
             "identity_name": self.identity_name,
             "image_id": self.image_id,
@@ -278,6 +290,7 @@ class CanonicalSample:
             identity_id=data["identity_id"],
             provenance=Provenance.from_dict(data["provenance"]),
             source_subset=data.get("source_subset"),
+            source_record_id=data.get("source_record_id"),
             identity_name=data.get("identity_name"),
             image_id=data.get("image_id"),
             image_uri=data.get("image_uri"),
@@ -293,4 +306,5 @@ class CanonicalSample:
             split=data.get("split", "unassigned"),
             forget_scope=data.get("forget_scope"),
             route_probe=probe,
+            source_metadata=dict(data.get("source_metadata") or {}),
         ).validate()

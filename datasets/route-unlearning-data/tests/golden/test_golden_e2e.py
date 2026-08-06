@@ -81,20 +81,22 @@ class TestGoldenEndToEnd:
         rows = list(
             read_jsonl(golden_run["out"] / "fairget" / "fairget_annotated.jsonl")
         )
-        assert len(rows) == 6
-        # 48 accepted labels overall (24 model celeba40 + 24 source fairface).
-        assert _accepted_labels(rows) == 48
+        assert len(rows) == 18  # 3 identities x 6 samples
+        # 124 accepted labels overall (100 model celeba40 + 24 source
+        # fairface observations on the 12 image samples).
+        assert _accepted_labels(rows) == 124
         assert (
             _accepted_labels(rows, namespace="extended_attributes.celeba40.")
-            == 24
+            == 100
         )
 
     def test_visual_qa_rows(self, golden_run):
         dataset_dir = golden_run["out"] / "fairget"
         train = list(read_jsonl(dataset_dir / "fairget_visual_qa_train.jsonl"))
         eval_rows = list(read_jsonl(dataset_dir / "fairget_visual_qa_eval.jsonl"))
-        assert len(train) == 24
-        assert len(eval_rows) == 24
+        # One QA row per accepted celeba40 observation, per split.
+        assert len(train) == 100
+        assert len(eval_rows) == 100
 
     def test_route_probes(self, golden_run):
         probes = list(
@@ -127,5 +129,22 @@ class TestGoldenEndToEnd:
             ).read_text()
         )
         assert len(payload["splits"]) == 3
+        by_name = {s["name"]: s for s in payload["splits"]}
+        assert set(by_name) == {
+            "identity_forget",
+            "identity_fact_forget",
+            "attribute_forget",
+        }
         for split in payload["splits"]:
             assert split["invariant_issues"] == []
+        assert by_name["identity_forget"]["forget_identity_ids"] == ["gld_001"]
+        assert by_name["identity_forget"]["counts"] == {
+            "forget": 6,
+            "retain_train": 6,
+            "retain_eval": 6,
+            "unassigned": 0,
+        }
+        assert by_name["identity_fact_forget"]["forget_fact_ids"] == [
+            "fairget_nationality"
+        ]
+        assert by_name["attribute_forget"]["attribute"] == "5_o_Clock_Shadow"

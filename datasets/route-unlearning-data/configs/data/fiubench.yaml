@@ -1,21 +1,24 @@
 # FIUBench source configuration.
 # Paper: https://arxiv.org/abs/2411.03554
 # Repo:  https://github.com/SaFo-Lab/FIUBench
-# 400 fictitious facial identities with private profile VQA; originally one
-# primary image per identity (multi-view extension is a separate variant).
+# 400 fictitious facial identities with private profile VQA; released rows
+# carry image_path, name, gender, caption, qa_list, raw_data (repair plan B13).
 data:
   name: fiubench
   hf_dataset_id: null
   hf_config_name: null
+  hf_revision: fiubench-1.0          # pin the upstream commit when mirroring
   local_root: ${FIUBENCH_ROOT}
-  source_version: null
-  field_map:
-    identity_id: identity_id
-    image_id: image_id
-    split: split
-    question: question
-    answer: answer
-    profile_facts: profile           # private facts namespace
+  # Pinned source revision (repair plan C1); replace with the exact upstream
+  # commit hash when mirroring the real source.
+  source_version: fiubench-1.0
+  # Source-layout settings (repair plan C2).
+  source_file: data/fiubench_profiles.jsonl
+  split_file: splits/official.json   # official forget/retain/evaluation grouping
+  images_root: .
+  include_paraphrases: true          # qa_list paraphrased variants (B15)
+  include_perturbed: true            # qa_list perturbed variants (B15)
+  adapter_version: fiubench-v2
   # Official forget/retain/evaluation grouping and attack templates preserved.
   reuse_official_splits: true
   include_attack_templates: true
