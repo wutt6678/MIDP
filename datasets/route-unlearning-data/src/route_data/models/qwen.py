@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from pathlib import Path
 
 from ..config import ModelConfig
 from .base import CandidateScore, VisionLanguageModel, VisionResponse
@@ -254,14 +255,27 @@ class QwenHFBackend(VisionLanguageModel):
 
 
 def _read_head_commit(local_dir: str) -> str | None:
-    import os
-    for rel in ("refs/main",):
-        path = os.path.join(local_dir, rel)
-        if os.path.isfile(path):
+    """Resolve the commit hash for a ``snapshot_download`` directory.
+
+    Tries common ref files first (``refs/main``, ``refs/HEAD``), then
+    falls back to the snapshot directory name itself — ``snapshot_download``
+    places files under ``…/snapshots/<commit_hash>/``.
+    """
+    # 1. Try well-known ref files inside the snapshot root.
+    for rel in ("refs/main", "refs/HEAD"):
+        ref_path = Path(local_dir) / rel
+        if ref_path.is_file():
             try:
-                value = Path(path).read_text().strip()
+                value = ref_path.read_text().strip()
                 if value:
                     return value
             except OSError:
                 pass
+
+    # 2. Fall back to the basename of the snapshot directory, which
+    #    snapshot_download names after the resolved commit hash.
+    stem = Path(local_dir).name
+    # Commit hashes are 40-char hex (or 7+ char short hashes).
+    if len(stem) >= 7 and all(c in "0123456789abcdef" for c in stem):
+        return stem
     return None

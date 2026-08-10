@@ -138,6 +138,7 @@ class BuildConfig:
     confidence_bands: dict[str, float] = field(default_factory=dict)
     min_auto_accept_score: float = 0.85
     qa_registry_hash: str | None = None
+    attribute_whitelist: str | None = None
 
 
 @dataclass

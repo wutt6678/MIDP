@@ -95,9 +95,15 @@ class TestGoldenEndToEnd:
         dataset_dir = golden_run["out"] / _STUB_MODEL_DIR / "fairget"
         train = list(read_jsonl(dataset_dir / "fairget_visual_qa_train.jsonl"))
         eval_rows = list(read_jsonl(dataset_dir / "fairget_visual_qa_eval.jsonl"))
-        # One QA row per accepted celeba40 observation, per split.
-        assert len(train) == 100
-        assert len(eval_rows) == 100
+        # P0-3: samples are deterministically split ~80/20 with no overlap.
+        # Total QA rows == total accepted celeba40 observations (100).
+        assert len(train) + len(eval_rows) == 100
+        assert len(train) > 0
+        assert len(eval_rows) > 0
+        # No sample may appear in both splits (no leakage).
+        train_ids = {r["sample_id"] for r in train}
+        eval_ids = {r["sample_id"] for r in eval_rows}
+        assert not train_ids & eval_ids, "train/eval sample leakage detected"
 
     def test_route_probes(self, golden_run):
         probes = list(

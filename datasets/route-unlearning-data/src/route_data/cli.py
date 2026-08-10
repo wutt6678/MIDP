@@ -94,25 +94,49 @@ def _load_samples(dataset_dir: Path, dataset: str):
     return [CanonicalSample.from_dict(doc) for doc in read_jsonl(path)]
 
 
+def _load_processed_samples(dataset_dir: Path, dataset: str):
+    """Load whitelist-processed samples (preferred) or fall back to annotated."""
+    from .data.schemas import CanonicalSample
+
+    processed = dataset_dir / f"{dataset}_processed.jsonl"
+    if processed.exists():
+        return [CanonicalSample.from_dict(doc) for doc in read_jsonl(processed)]
+    annotated = dataset_dir / f"{dataset}_annotated.jsonl"
+    if annotated.exists():
+        log.warning(
+            "No processed artifact at %s; falling back to annotated. "
+            "Re-run 'build annotate' to produce the processed stage.",
+            processed,
+        )
+        return [CanonicalSample.from_dict(doc) for doc in read_jsonl(annotated)]
+    raise ConfigError(
+        f"No samples at {dataset_dir}; run 'route-data build annotate' first"
+    )
+
+
 def _load_image(uri: str | None, base: Path | None = None):
-    """Best-effort PIL image load; blank placeholder when unavailable.
+    """Best-effort PIL image load; raise when the image is missing or corrupt.
 
     Relative URIs are resolved against ``base`` (typically the source
     dataset root) so redistributable fixtures can store relative paths.
+    A ``None`` uri returns a blank placeholder (used by model smoke-test
+    which has no real image).
     """
     from PIL import Image
 
-    if uri:
-        try:
-            path = Path(uri.removeprefix("file://"))
-            if not path.is_absolute() and base is not None:
-                path = base / path
-            if path.is_file():
-                with Image.open(path) as im:
-                    return im.convert("RGB")
-        except Exception as exc:  # noqa: BLE001 - fall back to placeholder
-            log.warning("Could not open image %s (%s); using blank placeholder", uri, exc)
-    return Image.new("RGB", (224, 224), (127, 127, 127))
+    if uri is None:
+        return Image.new("RGB", (224, 224), (127, 127, 127))
+
+    path = Path(uri.removeprefix("file://"))
+    if not path.is_absolute() and base is not None:
+        path = base / path
+    if not path.is_file():
+        raise FileNotFoundError(f"Image not found: {path} (uri={uri!r})")
+    try:
+        with Image.open(path) as im:
+            return im.convert("RGB")
+    except Exception as exc:
+        raise OSError(f"Could not open image {path}: {exc}") from exc
 
 
 def _p_positive(response) -> float | None:
@@ -664,15 +688,18 @@ def cmd_build_annotate(args) -> int:
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     data_cfg, samples = _adapter_samples(args, run_cfg, args.dataset)
     scores_path = dataset_dir / f"{args.dataset}_model_scores.jsonl"
-    annotated_path = dataset_dir / f"{args.dataset}_annotated.jsonl"
+    annotated_path = dataset_dir / f"{args.dataset}_annotated_all.jsonl"
+    annotated_working = dataset_dir / f"{args.dataset}_annotated.jsonl"
+    processed_path = dataset_dir / f"{args.dataset}_processed.jsonl"
 
     if args.dry_run:
         log.info(
-            "[dry-run] annotate %s: %d samples loaded; scores=%s annotated=%s",
+            "[dry-run] annotate %s: %d samples loaded; scores=%s annotated=%s processed=%s",
             args.dataset,
             len(samples),
             scores_path,
             annotated_path,
+            processed_path,
         )
         return 0
 
@@ -684,28 +711,71 @@ def cmd_build_annotate(args) -> int:
     )
     from .constants.celeba_attributes import CELEBA_ATTRIBUTES
 
-    # 1) Model scores (resumable via the scores JSONL cache).
+    # -- 0. Load whitelist (P0-1) ---------------------------------------- #
+    whitelist_attrs: frozenset[str] | None = None
+    if run_cfg.build.attribute_whitelist:
+        from .build.whitelist import load_attribute_whitelist
+
+        wl_path = Path(run_cfg.build.attribute_whitelist)
+        if not wl_path.is_absolute():
+            base = Path(__file__).resolve().parents[2]
+            wl_path = (base / wl_path).resolve()
+        wl = load_attribute_whitelist(wl_path, expected_model_id=run_cfg.model.model_id)
+        whitelist_attrs = wl.attributes
+        log.info(
+            "Whitelist loaded: %d attributes for model %s (sha256=%s)",
+            len(wl.attributes), wl.model_id, wl.sha256[:12],
+        )
+
+    gated = whitelist_attrs if whitelist_attrs is not None else frozenset(CELEBA_ATTRIBUTES)
+
+    # -- 1. Model scores (resumable via the scores JSONL cache) ---------- #
+    # Create backend FIRST so fingerprint is available for cache key (P0-7).
+    from .models.registry import create_backend
+    from .prompts.registry import PromptRegistry
+
+    backend = create_backend(run_cfg.model)
+    registry = PromptRegistry(run_cfg.prompts)
+    fingerprint_id: str | None = None
+    try:
+        fingerprint_id = str(backend.fingerprint().get("fingerprint_id"))
+    except Exception as exc:  # noqa: BLE001 - fingerprint is best-effort
+        log.warning("Backend fingerprint unavailable (%s); continuing without it", exc)
+
+    # Cache key includes model fingerprint + prompt registry hash (P0-6).
+    cache_parts = [fingerprint_id or "nofp", registry.registry_hash()]
+    cache_key_suffix = "|".join(cache_parts)
+
     done_keys: set[tuple[str, str]] = set()
     score_rows: list[dict[str, Any]] = []
     if scores_path.exists() and args.resume:
-        score_rows = list(read_jsonl(scores_path))
-        done_keys = {(r["sample_id"], r["attribute"]) for r in score_rows}
+        raw_rows = list(read_jsonl(scores_path))
+        for r in raw_rows:
+            ck = (r.get("sample_id"), r.get("_cache_key", ""))
+            if ck[1] == cache_key_suffix:
+                score_rows.append(r)
+                done_keys.add((ck[0], r["attribute"]))
+        if len(score_rows) < len(raw_rows):
+            log.info(
+                "Resume: kept %d/%d cached rows matching current cache key",
+                len(score_rows), len(raw_rows),
+            )
+
     sample_ids = {s.source_sample_id for s in samples}
     score_rows = [r for r in score_rows if r["sample_id"] in sample_ids]
     pending = [
         (s, attr)
         for s in samples
         for attr in CELEBA_ATTRIBUTES
-        if s.image_uri and (s.source_sample_id, attr) not in done_keys
+        if s.image_uri
+        and (s.source_sample_id, attr) not in done_keys
     ]
+    image_base = Path(data_cfg.root or data_cfg.extras.get("local_root") or ".")
     if pending:
-        from .models.registry import create_backend
-        from .prompts.registry import PromptRegistry
-
-        backend = create_backend(run_cfg.model)
-        registry = PromptRegistry(run_cfg.prompts)
-        image_base = Path(data_cfg.root or data_cfg.extras.get("local_root") or ".")
-        log.info("Scoring %d (image, attribute) queries with backend=%s", len(pending), run_cfg.model.backend)
+        log.info(
+            "Scoring %d (image, attribute) queries with backend=%s",
+            len(pending), run_cfg.model.backend,
+        )
         for sample, attr in pending:
             image = _load_image(sample.image_uri, base=image_base)
             resp = backend.score_candidates(
@@ -720,31 +790,22 @@ def cmd_build_annotate(args) -> int:
                     "attribute": attr,
                     "p_positive": p,
                     "raw_text": resp.text,
+                    "_cache_key": cache_key_suffix,
                 }
             )
     dataset_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl(score_rows, scores_path)
 
-    # 2) Frozen-protocol annotation.
+    # -- 2. Frozen-protocol annotation (all 40 attributes) --------------- #
     policy = AnnotationPolicy(
-        gated_attributes=frozenset(CELEBA_ATTRIBUTES),
+        gated_attributes=gated,
         bands=dict(run_cfg.build.confidence_bands) or None,
         min_auto_accept_score=run_cfg.build.min_auto_accept_score,
     )
-    fingerprint_id: str | None = None
-    if scores_path.exists():
-        try:
-            from .models.registry import create_backend
-
-            fingerprint_id = str(create_backend(run_cfg.model).fingerprint().get("fingerprint_id"))
-        except Exception as exc:  # noqa: BLE001 - fingerprint is best-effort here
-            log.warning("Backend fingerprint unavailable (%s); continuing without it", exc)
-    from .prompts.registry import PromptRegistry
-
-    registry = PromptRegistry(run_cfg.prompts)
+    calibrators = load_frozen_calibrators(run_cfg.frozen_protocol.calibrators)
     annotator = BenchmarkAnnotator(
         policy,
-        calibrators=load_frozen_calibrators(run_cfg.frozen_protocol.calibrators),
+        calibrators=calibrators,
         model_fingerprint=fingerprint_id,
         prompt_registry_hash=registry.registry_hash(),
     )
@@ -754,17 +815,54 @@ def cmd_build_annotate(args) -> int:
         for s in samples
     ]
     write_jsonl([s.to_dict() for s in annotated], annotated_path)
-    n_obs = sum(len(s.visual_attributes) for s in annotated)
-    n_labeled = sum(
-        1 for s in annotated for obs in s.visual_attributes.values() if obs.label is not None
-    )
+    write_jsonl([s.to_dict() for s in annotated], annotated_working)
+
+    # -- 3. Processed stage: whitelist-restricted labels (P0-2) ---------- #
+    if whitelist_attrs is not None:
+        processed_policy = AnnotationPolicy(
+            gated_attributes=whitelist_attrs,
+            bands=dict(run_cfg.build.confidence_bands) or None,
+            min_auto_accept_score=run_cfg.build.min_auto_accept_score,
+        )
+        processed_annotator = BenchmarkAnnotator(
+            processed_policy,
+            calibrators=calibrators,
+            model_fingerprint=fingerprint_id,
+            prompt_registry_hash=registry.registry_hash(),
+        )
+        processed = [
+            processed_annotator.annotate_sample(
+                s, scores_by_sample.get(s.source_sample_id, {})
+            )
+            for s in samples
+        ]
+        write_jsonl([s.to_dict() for s in processed], processed_path)
+        n_obs = sum(len(s.visual_attributes) for s in processed)
+        n_labeled = sum(
+            1 for s in processed for obs in s.visual_attributes.values()
+            if obs.label is not None
+        )
+    else:
+        # No whitelist: processed == annotated (P0-2: always write the
+        # processed artifact so downstream stages have a consistent path).
+        processed = annotated
+        write_jsonl([s.to_dict() for s in processed], processed_path)
+        n_obs = sum(len(s.visual_attributes) for s in processed)
+        n_labeled = sum(
+            1 for s in processed for obs in s.visual_attributes.values()
+            if obs.label is not None
+        )
+
     _print_json(
         {
             "dataset": args.dataset,
-            "samples": len(annotated),
+            "samples": len(processed),
             "observations": n_obs,
             "accepted_labels": n_labeled,
+            "whitelist_attributes": sorted(whitelist_attrs) if whitelist_attrs else "all",
+            "scores_path": str(scores_path),
             "annotated_path": str(annotated_path),
+            "processed_path": str(processed_path),
         }
     )
     return 0
@@ -773,7 +871,7 @@ def cmd_build_annotate(args) -> int:
 def cmd_build_qa(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
-    samples = _load_samples(dataset_dir, args.dataset)
+    samples = _load_processed_samples(dataset_dir, args.dataset)
     if args.limit:
         samples = samples[: args.limit]
     if args.dry_run:
@@ -790,8 +888,23 @@ def cmd_build_qa(args) -> int:
     if not attributes:
         raise ConfigError(f"No CelebA-40 observations in {dataset_dir}; run build annotate first")
     registry = QaTemplateRegistry.default_for(attributes)
-    train_rows = generate_qa_rows(samples, registry, split="train")
-    eval_rows = generate_qa_rows(samples, registry, split="validation")
+
+    # Deterministic, hash-based sample split: ~80 % train / ~20 % validation.
+    # Each sample is assigned to exactly one split so no image appears in both
+    # (P0-3: fixes train/eval visual-QA sample leakage).
+    import hashlib as _hashlib
+
+    train_samples = []
+    eval_samples = []
+    for s in samples:
+        h = int(_hashlib.sha256(s.source_sample_id.encode()).hexdigest()[:8], 16)
+        if h % 5 == 0:
+            eval_samples.append(s)
+        else:
+            train_samples.append(s)
+
+    train_rows = generate_qa_rows(train_samples, registry, split="train")
+    eval_rows = generate_qa_rows(eval_samples, registry, split="validation")
     train_path = dataset_dir / f"{args.dataset}_visual_qa_train.jsonl"
     eval_path = dataset_dir / f"{args.dataset}_visual_qa_eval.jsonl"
     write_jsonl(train_rows, train_path)
@@ -801,6 +914,8 @@ def cmd_build_qa(args) -> int:
             "dataset": args.dataset,
             "registry_hash": registry.registry_hash(),
             "registry_version": registry.version,
+            "train_samples": len(train_samples),
+            "eval_samples": len(eval_samples),
             "train_rows": len(train_rows),
             "eval_rows": len(eval_rows),
             "train_path": str(train_path),
@@ -813,7 +928,7 @@ def cmd_build_qa(args) -> int:
 def cmd_build_route_probes(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
-    samples = _load_samples(dataset_dir, args.dataset)
+    samples = _load_processed_samples(dataset_dir, args.dataset)
     if args.limit:
         samples = samples[: args.limit]
     if args.dry_run:
@@ -823,6 +938,7 @@ def cmd_build_route_probes(args) -> int:
     from .build.conflict_generation import (
         ConflictError,
         RouteProbeBuilder,
+        _accepted_visible_attributes,
         build_identity_probes,
         build_pair_manifest,
     )
@@ -841,22 +957,39 @@ def cmd_build_route_probes(args) -> int:
     identity_ids = sorted(by_identity)
     for identity_id in identity_ids:
         group = by_identity[identity_id]
-        wrong_names = [
+
+        # P0-13: pick a wrong name from an identity with multiple samples
+        # and accepted visible attributes (not just the first other group).
+        wrong_name_candidates = [
             (by_identity[other][0].identity_name or other)
             for other in identity_ids
-            if other != identity_id and by_identity[other]
+            if other != identity_id
+            and len(by_identity[other]) >= 2
+            and _accepted_visible_attributes(by_identity[other][0])
         ]
+        wrong_name = wrong_name_candidates[0] if wrong_name_candidates else None
+
         try:
             probes = build_identity_probes(
-                group, builder, wrong_identity_name=wrong_names[0] if wrong_names else None
+                group, builder, wrong_identity_name=wrong_name
             )
         except ConflictError as exc:
             skipped.append(f"{identity_id}: {exc}")
             continue
         for probe in probes:
             probe_rows.append(builder.probe_row(probe))
+
+        # P0-12: validate cross_image_attribute_state pairs — only emit a
+        # pair when the two samples actually differ on at least one accepted
+        # attribute label.
         if len(group) >= 2:
             for left, right in zip(group, group[1:]):
+                left_attrs = _accepted_visible_attributes(left)
+                right_attrs = _accepted_visible_attributes(right)
+                shared = set(left_attrs) & set(right_attrs)
+                differs = any(left_attrs[a] != right_attrs[a] for a in shared)
+                if not differs:
+                    continue
                 pair_specs.append(
                     {
                         "pair_type": "cross_image_attribute_state",
@@ -883,7 +1016,7 @@ def cmd_build_route_probes(args) -> int:
 def cmd_build_splits(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
-    samples = _load_samples(dataset_dir, args.dataset)
+    samples = _load_processed_samples(dataset_dir, args.dataset)
     if args.limit:
         samples = samples[: args.limit]
     if args.dry_run:
@@ -906,7 +1039,7 @@ def cmd_build_splits(args) -> int:
 def cmd_build_export(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
-    samples = _load_samples(dataset_dir, args.dataset)
+    samples = _load_processed_samples(dataset_dir, args.dataset)
     if args.limit:
         samples = samples[: args.limit]
     benchmark = _benchmark_of(args.dataset)
@@ -982,7 +1115,7 @@ def cmd_validate_dataset(args) -> int:
             dataset_dir = base / benchmark
     # Intermediate artifacts are named after the benchmark (``fairget``),
     # not the export name (``fairget_celeba40``).
-    samples = _load_samples(dataset_dir, benchmark)
+    samples = _load_processed_samples(dataset_dir, benchmark)
     if args.limit:
         samples = samples[: args.limit]
 
@@ -1027,7 +1160,7 @@ def cmd_card_render(args) -> int:
     dataset_dir = base / dataset
     if not dataset_dir.exists():
         dataset_dir = base / _benchmark_of(dataset)
-    samples = _load_samples(dataset_dir, _benchmark_of(dataset))
+    samples = _load_processed_samples(dataset_dir, _benchmark_of(dataset))
     if args.limit:
         samples = samples[: args.limit]
     benchmark = _benchmark_of(dataset)

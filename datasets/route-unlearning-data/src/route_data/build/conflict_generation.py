@@ -212,13 +212,22 @@ def build_identity_probes(
     """
     if not identity_samples:
         raise ConflictError("build_identity_probes requires at least one sample")
-    anchor = identity_samples[0]
-    facts = anchor.profile_facts
-    attributes = _accepted_visible_attributes(anchor)
-    if not attributes:
+
+    # P0-10: find an anchor with accepted visible attributes instead of
+    # blindly using identity_samples[0].
+    anchor = None
+    attributes: dict[str, bool] = {}
+    for s in identity_samples:
+        attrs = _accepted_visible_attributes(s)
+        if attrs:
+            anchor = s
+            attributes = attrs
+            break
+    if anchor is None:
         raise ConflictError(
-            f"Identity {anchor.identity_id} has no accepted visible attribute"
+            f"Identity {identity_samples[0].identity_id} has no accepted visible attribute"
         )
+    facts = anchor.profile_facts
     if not facts:
         raise ConflictError(f"Identity {anchor.identity_id} has no profile facts")
 
@@ -240,8 +249,29 @@ def build_identity_probes(
     if wrong_identity_name:
         probes.append(make("wrong_name", wrong_identity_name=wrong_identity_name))
     probes.append(make("visual_text_conflict", identity_name=identity_name, fact=fact))
+
+    # P0-11: cross_image must use a genuinely different image as the second
+    # sample, not the same anchor.
     if len(identity_samples) > 1:
-        probes.append(make("cross_image", identity_name=identity_name))
+        second = None
+        for s in identity_samples:
+            if s.source_sample_id != anchor.source_sample_id and s.image_uri != anchor.image_uri:
+                second = s
+                break
+        if second is not None:
+            question = builder.render_probe(
+                "cross_image", attribute=attribute, identity_name=identity_name
+            )
+            probes.append(
+                builder.probe_sample(
+                    second,
+                    "cross_image",
+                    question,
+                    attribute=attribute,
+                    paired_sample_id=anchor.source_sample_id,
+                    controlled_variables=["identity", "attribute"],
+                )
+            )
     return probes
 
 
