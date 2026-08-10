@@ -60,10 +60,18 @@ def _benchmark_of(dataset: str) -> str:
 def _default_build_dir(run_cfg: RunConfig) -> Path:
     return Path(run_cfg.build.output_dir)
 
+def _model_output_name(model_id: str) -> str:
+    return (
+        model_id
+        .replace("/", "_")
+        .replace(":", "_")
+        .replace("\\", "_")
+    )
 
 def _dataset_dir(args, run_cfg: RunConfig, dataset: str) -> Path:
     base = Path(args.output_dir) if args.output_dir else _default_build_dir(run_cfg)
-    return base / dataset
+    model_dir = _model_output_name(run_cfg.model.model_id)
+    return base / model_dir / dataset
 
 
 def _data_config_for(dataset: str, run_cfg: RunConfig):
@@ -925,7 +933,7 @@ def cmd_build_export(args) -> int:
 
     data_cfg = _data_config_for(args.dataset, run_cfg)
     exporter = ExtensionExporter(
-        Path(args.output_dir) if args.output_dir else _default_build_dir(run_cfg),
+        dataset_dir.parent,  # base / model_dir; exporter appends benchmark
         benchmark,
         source_version=data_cfg.source_version,
         registry_hash=registry_hash,
@@ -961,9 +969,17 @@ def cmd_validate_dataset(args) -> int:
     )
     dataset = args.dataset
     benchmark = _benchmark_of(dataset)
-    dataset_dir = base / dataset
-    if not dataset_dir.exists():
-        dataset_dir = base / benchmark
+    # Use model-specific output directory when run config is available
+    if run_cfg is not None:
+        model_dir = _model_output_name(run_cfg.model.model_id)
+        dataset_dir = base / model_dir / dataset
+        if not dataset_dir.exists():
+            # Fall back to benchmark name (e.g., fairget_celeba40 -> fairget)
+            dataset_dir = base / model_dir / benchmark
+    else:
+        dataset_dir = base / dataset
+        if not dataset_dir.exists():
+            dataset_dir = base / benchmark
     # Intermediate artifacts are named after the benchmark (``fairget``),
     # not the export name (``fairget_celeba40``).
     samples = _load_samples(dataset_dir, benchmark)

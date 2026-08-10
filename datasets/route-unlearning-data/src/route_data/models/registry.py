@@ -30,9 +30,12 @@ def available_backends() -> list[str]:
 
 
 def ensure_backends_loaded() -> list[str]:
-    """Trigger lazy backend imports and return the registered names."""
     try:
         from . import mllama  # noqa: F401
+    except ImportError:
+        pass
+    try:
+        from . import qwen  # noqa: F401
     except ImportError:
         pass
     try:

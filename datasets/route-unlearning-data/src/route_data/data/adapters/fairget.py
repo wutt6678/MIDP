@@ -340,7 +340,7 @@ class FairgetAdapter(BenchmarkAdapter):
                     record_key = (
                         f"{identity_id}:train:{media_type}:{attribute}:{item_index}"
                     )
-                    if media_type == "image":
+                    if "image" in media_type:
                         assignments = self._assign_views(record_key, train_views)
                         if not assignments:
                             raise AdapterError(
@@ -395,7 +395,7 @@ class FairgetAdapter(BenchmarkAdapter):
                             f"{identity_id}:eval:{media_type}:{task}:{attribute}"
                             f":{item_index}"
                         )
-                        if media_type == "image":
+                        if "image" in media_type:
                             assignments = self._assign_views(record_key, eval_views)
                             if not assignments:
                                 raise AdapterError(

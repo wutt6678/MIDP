@@ -13,6 +13,7 @@ from route_data.cli import main
 from route_data.data.io import read_jsonl
 
 STAGES = ("annotate", "qa", "route-probes", "splits", "export")
+_STUB_MODEL_DIR = "local_stub-vlm-v1"  # model_id "local/stub-vlm-v1" sanitized
 
 
 @pytest.fixture(scope="module")
@@ -79,7 +80,7 @@ class TestGoldenEndToEnd:
 
     def test_annotated_samples_and_labels(self, golden_run):
         rows = list(
-            read_jsonl(golden_run["out"] / "fairget" / "fairget_annotated.jsonl")
+            read_jsonl(golden_run["out"] / _STUB_MODEL_DIR / "fairget" / "fairget_annotated.jsonl")
         )
         assert len(rows) == 18  # 3 identities x 6 samples
         # 124 accepted labels overall (100 model celeba40 + 24 source
@@ -91,7 +92,7 @@ class TestGoldenEndToEnd:
         )
 
     def test_visual_qa_rows(self, golden_run):
-        dataset_dir = golden_run["out"] / "fairget"
+        dataset_dir = golden_run["out"] / _STUB_MODEL_DIR / "fairget"
         train = list(read_jsonl(dataset_dir / "fairget_visual_qa_train.jsonl"))
         eval_rows = list(read_jsonl(dataset_dir / "fairget_visual_qa_eval.jsonl"))
         # One QA row per accepted celeba40 observation, per split.
@@ -101,13 +102,13 @@ class TestGoldenEndToEnd:
     def test_route_probes(self, golden_run):
         probes = list(
             read_jsonl(
-                golden_run["out"] / "fairget" / "fairget_route_probes.jsonl"
+                golden_run["out"] / _STUB_MODEL_DIR / "fairget" / "fairget_route_probes.jsonl"
             )
         )
         assert len(probes) == 18  # 3 identities x 6 probe families
 
     def test_flat_export_artifacts(self, golden_run):
-        dataset_dir = golden_run["out"] / "fairget"
+        dataset_dir = golden_run["out"] / _STUB_MODEL_DIR / "fairget"
         for rel in (
             "fairget_celeba40_image_annotations.parquet",
             "fairget_celeba40_visual_qa_train.jsonl",
@@ -125,7 +126,7 @@ class TestGoldenEndToEnd:
     def test_split_manifest_invariants_clean(self, golden_run):
         payload = json.loads(
             (
-                golden_run["out"] / "fairget" / "fairget_split_manifest.json"
+                golden_run["out"] / _STUB_MODEL_DIR / "fairget" / "fairget_split_manifest.json"
             ).read_text()
         )
         assert len(payload["splits"]) == 3

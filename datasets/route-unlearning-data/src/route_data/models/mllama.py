@@ -135,7 +135,7 @@ class MllamaHFBackend(VisionLanguageModel):
             processor.tokenizer.padding_side = prev_side
         # Do not assume model.device covers sharded modules; anchor on the
         # text-embedding module (plan section 6.3).
-        device = self.model.get_input_embeddings().device
+        device = self.model.get_input_embeddings().weight.device
         inputs = {k: v.to(device) for k, v in inputs.items()}
         return inputs
 

@@ -1,0 +1,22 @@
+# Qwen3.5-9B annotation backend.
+# Prepared from the validated CelebA setup in MIDP commit 7e034b5.
+model:
+  backend: qwen_hf
+  model_id: Qwen/Qwen3.5-9B
+  revision: null
+  processor_id: null
+  trust_remote_code: false
+  dtype: bfloat16
+  device_map: auto
+  attn_implementation: sdpa
+  quantization:
+    enabled: false
+    mode: nf4
+    compute_dtype: bfloat16
+    double_quant: true
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 4
+  seed: 17

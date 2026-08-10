@@ -29,7 +29,12 @@ class ConfigError(ValueError):
 # Model configuration
 # --------------------------------------------------------------------------- #
 
-VALID_BACKENDS = {"mllama_hf", "example_vlm", "stub"}
+VALID_BACKENDS = {
+    "mllama_hf",
+    "qwen_hf",
+    "example_vlm",
+    "stub",
+}
 VALID_DTYPES = {"float16", "bfloat16", "float32"}
 VALID_QUANT_MODES = {"nf4", "fp4", "int8"}
 VALID_MODEL_ROLES = {"evaluator", "annotator", "unlearning_target"}

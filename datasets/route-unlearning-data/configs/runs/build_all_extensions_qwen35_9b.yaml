@@ -1,0 +1,60 @@
+# Prepare all extended benchmarks with Qwen3.5-9B.
+# DO NOT RUN until GPU resources and source datasets are available.
+run:
+  name: build_all_extensions_qwen35_9b
+  model_role: annotator
+  seed: 17
+
+model:
+  backend: qwen_hf
+  model_id: Qwen/Qwen3.5-9B
+  revision: null
+  processor_id: null
+  trust_remote_code: false
+  dtype: bfloat16
+  device_map: auto
+  attn_implementation: sdpa
+  quantization:
+    enabled: false
+    mode: nf4
+    compute_dtype: bfloat16
+    double_quant: true
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 4
+  seed: 17
+
+data:
+  name: celeba
+  root: ${CELEBA_ROOT}
+  source_version: celeba-2015-original
+
+prompts:
+  binary: configs/prompts/celeba_binary_v1.yaml
+  grouped: configs/prompts/celeba_grouped_json_v1.yaml
+  route_conflict: configs/prompts/route_conflict_v1.yaml
+
+thresholds: configs/thresholds/celeba_default.yaml
+
+frozen_protocol:
+  prompts_version: celeba_binary_v1
+  scoring: candidate
+  calibrators: null
+
+build:
+  datasets: [fairget, fiubench, mllmu, ppubench]
+  output_dir: data/processed
+  confidence_bands:
+    high: 0.85
+    medium: 0.60
+  min_auto_accept_score: 0.85
+  qa_registry_hash: null
+
+# The builder should resolve outputs as:
+# data/processed/Qwen_Qwen3.5-9B/<dataset>/...
+#
+# Raw model scores for all 40 attributes remain available inside that
+# model-specific directory; the processed dataset applies:
+# configs/whitelists/qwen35_9b_celeba.json

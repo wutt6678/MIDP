@@ -7,9 +7,8 @@
 data:
   name: ppubench
   hf_dataset_id: closerG/ppu-bench
-  hf_config_name: null               # REQUIRED at runtime: set the PPU-Bench
-                                     # HF configuration for this run (B27)
-  hf_split: null                     # REQUIRED at runtime (B27)
+  hf_config_name: ppu_eval_classification
+  hf_split: test
   hf_revision: ppu-bench-1.0         # pin the HF dataset revision when mirroring
   local_root: ${PPUBENCH_ROOT}       # optional cache dir
   # Pinned source revision (repair plan C1); replace with the exact HF
@@ -18,7 +17,7 @@ data:
   # Source-layout settings (repair plan C2). Released rows carry sample_id,
   # subject_id, subject, task_type, modality, question, answer_text,
   # answer_label, option_a..option_d and image/image_NNN columns (B28/B30).
-  source_file: null                  # REQUIRED at runtime for local loading
+  source_file: data/ppu_eval_classification.jsonl
   images_root: .
   adapter_version: ppubench-v2
   # Fields preserved verbatim in source_metadata on every canonical record.

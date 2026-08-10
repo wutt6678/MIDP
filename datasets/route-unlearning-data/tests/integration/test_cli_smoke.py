@@ -82,17 +82,20 @@ def _run_annotate(cfg: str, out: Path, *extra: str) -> int:
     )
 
 
+_STUB_MODEL_DIR = "local_stub-vlm-v1"  # model_id "local/stub-vlm-v1" sanitized
+
+
 class TestBuildCli:
     def test_annotate_limit_writes_capped_output(self, cfg, fairget_env, tmp_path):
         out = tmp_path / "out"
         assert _run_annotate(cfg, out, "--limit", "3") == 0
-        rows = list(read_jsonl(out / "fairget" / "fairget_annotated.jsonl"))
+        rows = list(read_jsonl(out / _STUB_MODEL_DIR / "fairget" / "fairget_annotated.jsonl"))
         assert len(rows) == 3
 
     def test_annotate_resume_second_run_succeeds(self, cfg, fairget_env, tmp_path):
         out = tmp_path / "out"
         assert _run_annotate(cfg, out) == 0
-        scores = out / "fairget" / "fairget_model_scores.jsonl"
+        scores = out / _STUB_MODEL_DIR / "fairget" / "fairget_model_scores.jsonl"
         assert scores.exists()
         first_count = len(list(read_jsonl(scores)))
         assert first_count > 0
@@ -102,7 +105,7 @@ class TestBuildCli:
     def test_custom_output_dir_honored(self, cfg, fairget_env, tmp_path):
         out = tmp_path / "custom" / "location"
         assert _run_annotate(cfg, out) == 0
-        assert (out / "fairget" / "fairget_annotated.jsonl").exists()
+        assert (out / _STUB_MODEL_DIR / "fairget" / "fairget_annotated.jsonl").exists()
 
     def test_downstream_dry_runs_after_annotate(self, cfg, fairget_env, tmp_path):
         out = tmp_path / "out"

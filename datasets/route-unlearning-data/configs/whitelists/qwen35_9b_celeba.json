@@ -1,0 +1,26 @@
+{
+  "model_id": "Qwen/Qwen3.5-9B",
+  "source_commit": "7e034b51239b5452bcb513a0184708586a5914c9",
+  "source_result": "celeba_test/results/huggan_CelebA-faces-with-attributes_Qwen_Qwen3.5-9B_20260805_032801.json",
+  "policy": "provisional_balanced_accuracy_ge_0.85",
+  "notes": [
+    "Derived from the existing 500-image CelebA train-split diagnostic.",
+    "Preserve all raw 40-attribute scores; only these labels are eligible in processed datasets.",
+    "Male is retained because gender/apparent-presentation analysis is part of the research question; treat it strictly as the CelebA dataset-defined Male label."
+  ],
+  "attributes": [
+    "Bald",
+    "Bangs",
+    "Blond_Hair",
+    "Eyeglasses",
+    "Gray_Hair",
+    "Male",
+    "Mustache",
+    "Sideburns",
+    "Smiling",
+    "Wearing_Earrings",
+    "Wearing_Hat",
+    "Wearing_Lipstick",
+    "Wearing_Necktie"
+  ]
+}
