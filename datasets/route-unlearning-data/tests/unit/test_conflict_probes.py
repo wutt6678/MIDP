@@ -151,3 +151,51 @@ class TestPairs:
         ]
         manifest = build_pair_manifest(pairs)
         assert [p["pair_id"] for p in manifest] == ["pair_000000", "pair_000001"]
+
+    def test_cross_image_pair_carries_attribute_and_labels(self):
+        """Fix 4: per-attribute cross_image pairs must record which attribute
+        changed and the left/right labels so the probe asks about exactly
+        that attribute."""
+        pair_spec = {
+            "pair_type": "cross_image_attribute_state",
+            "left_sample_id": "s1",
+            "right_sample_id": "s2",
+            "attribute": "Smiling",
+            "left_label": False,
+            "right_label": True,
+        }
+        manifest = build_pair_manifest([pair_spec])
+        assert len(manifest) == 1
+        entry = manifest[0]
+        assert entry["pair_type"] == "cross_image_attribute_state"
+        assert entry["attribute"] == "Smiling"
+        assert entry["left_label"] is False
+        assert entry["right_label"] is True
+        assert entry["left_sample_id"] == "s1"
+        assert entry["right_sample_id"] == "s2"
+
+    def test_cross_image_pair_multiple_attributes_emit_separate_entries(self):
+        """Fix 4: when two images differ on multiple attributes, one pair per
+        attribute is emitted (not a single opaque pair)."""
+        specs = [
+            {
+                "pair_type": "cross_image_attribute_state",
+                "left_sample_id": "a",
+                "right_sample_id": "b",
+                "attribute": "Bald",
+                "left_label": True,
+                "right_label": False,
+            },
+            {
+                "pair_type": "cross_image_attribute_state",
+                "left_sample_id": "a",
+                "right_sample_id": "b",
+                "attribute": "Smiling",
+                "left_label": False,
+                "right_label": True,
+            },
+        ]
+        manifest = build_pair_manifest(specs)
+        assert len(manifest) == 2
+        attrs = {e["attribute"] for e in manifest}
+        assert attrs == {"Bald", "Smiling"}

@@ -16,6 +16,7 @@ definition caveat in every card (plan 10.4).
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -179,6 +180,23 @@ class ExtensionExporter:
 
     # -- orchestration -------------------------------------------------- #
 
+    @staticmethod
+    def _sha256_file(path: str | Path) -> str:
+        """Compute SHA-256 hex digest of a file."""
+        h = hashlib.sha256()
+        p = Path(path)
+        if p.is_file():
+            h.update(p.read_bytes())
+            return h.hexdigest()
+        # For directories, hash sorted file list + contents.
+        if p.is_dir():
+            for child in sorted(p.rglob("*")):
+                if child.is_file():
+                    h.update(child.name.encode())
+                    h.update(child.read_bytes())
+            return h.hexdigest()
+        return ""
+
     def export_all(
         self,
         samples: Sequence[CanonicalSample],
@@ -187,6 +205,7 @@ class ExtensionExporter:
         eval_qa: Sequence[Mapping[str, Any]] = (),
         probe_rows: Sequence[Mapping[str, Any]] = (),
         split_results: Sequence[SplitResult] = (),
+        provenance: Mapping[str, Any] | None = None,
     ) -> ExportRecord:
         record = ExportRecord(benchmark=self.benchmark, output_dir=self.output_dir)
         record.paths["annotations"] = self.write_image_annotations(samples)
@@ -203,5 +222,21 @@ class ExtensionExporter:
         record.paths["splits"] = self.write_splits(split_results)
         record.counts["splits"] = len(split_results)
         record.paths["dataset_card"] = self.render_dataset_card(record.counts)
-        write_json(record.to_dict(), self._path(f"{self.benchmark}_export_manifest.json"))
+
+        # Fix 8: write build manifest with full provenance.
+        manifest = record.to_dict()
+        if provenance:
+            manifest["provenance"] = dict(provenance)
+        manifest_path = self._path(f"{self.benchmark}_export_manifest.json")
+        write_json(manifest, manifest_path)
+
+        # Fix 9: write checksums.json for all final artifacts so outputs
+        # can be audited and verified after copying between servers.
+        checksums: dict[str, str] = {}
+        for key, path_str in sorted(record.paths.items()):
+            checksums[path_str] = self._sha256_file(path_str)
+        checksums_path = self._path(f"{self.benchmark}_checksums.json")
+        write_json(checksums, checksums_path)
+        record.paths["checksums"] = str(checksums_path)
+
         return record

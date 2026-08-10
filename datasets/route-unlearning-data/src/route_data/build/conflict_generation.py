@@ -227,7 +227,16 @@ def build_identity_probes(
         raise ConflictError(
             f"Identity {identity_samples[0].identity_id} has no accepted visible attribute"
         )
-    facts = anchor.profile_facts
+
+    # Fix 5: aggregate profile facts across the complete identity group
+    # instead of taking only from the visual anchor.  Different samples for
+    # the same identity may carry different facts (e.g. one sample has image
+    # + visual labels, another has text-only profile facts).
+    facts_by_id: dict[str, ProfileFact] = {}
+    for s in identity_samples:
+        for fact in s.profile_facts:
+            facts_by_id[fact.fact_id] = fact
+    facts = list(facts_by_id.values())
     if not facts:
         raise ConflictError(f"Identity {anchor.identity_id} has no profile facts")
 
@@ -302,15 +311,22 @@ def make_pair(
 
 
 def build_pair_manifest(pairs: Iterable[Mapping[str, str]]) -> list[dict[str, Any]]:
-    """Assign stable ``pair_id`` values and validate each pair's type."""
+    """Assign stable ``pair_id`` values and validate each pair's type.
+
+    Extra fields (e.g. ``attribute``, ``left_label``, ``right_label`` for
+    per-attribute cross_image pairs — Fix 4) are preserved in the output.
+    """
     manifest: list[dict[str, Any]] = []
     for i, pair in enumerate(pairs):
-        manifest.append(
-            make_pair(
-                str(pair["pair_type"]),
-                str(pair["left_sample_id"]),
-                str(pair["right_sample_id"]),
-                index=i,
-            )
+        entry = make_pair(
+            str(pair["pair_type"]),
+            str(pair["left_sample_id"]),
+            str(pair["right_sample_id"]),
+            index=i,
         )
+        # Pass through extra fields beyond the standard pair keys.
+        for key in ("attribute", "left_label", "right_label"):
+            if key in pair:
+                entry[key] = pair[key]
+        manifest.append(entry)
     return manifest

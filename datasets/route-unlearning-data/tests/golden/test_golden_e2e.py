@@ -95,15 +95,23 @@ class TestGoldenEndToEnd:
         dataset_dir = golden_run["out"] / _STUB_MODEL_DIR / "fairget"
         train = list(read_jsonl(dataset_dir / "fairget_visual_qa_train.jsonl"))
         eval_rows = list(read_jsonl(dataset_dir / "fairget_visual_qa_eval.jsonl"))
-        # P0-3: samples are deterministically split ~80/20 with no overlap.
-        # Total QA rows == total accepted celeba40 observations (100).
+        # Fix 3: identity-level split — all images of the same person land in
+        # the same partition.  Total QA rows == total accepted celeba40
+        # observations (100).  With only 3 golden identities it is possible
+        # (by hash chance) that all land in train, so we do not assert
+        # len(eval) > 0 here.
         assert len(train) + len(eval_rows) == 100
         assert len(train) > 0
-        assert len(eval_rows) > 0
         # No sample may appear in both splits (no leakage).
         train_ids = {r["sample_id"] for r in train}
         eval_ids = {r["sample_id"] for r in eval_rows}
         assert not train_ids & eval_ids, "train/eval sample leakage detected"
+        # Identity-disjoint invariant: no identity in both splits.
+        train_identities = {r.get("identity_id") for r in train}
+        eval_identities = {r.get("identity_id") for r in eval_rows}
+        assert not (train_identities & eval_identities), (
+            "train/eval identity leakage detected"
+        )
 
     def test_route_probes(self, golden_run):
         probes = list(
@@ -122,8 +130,14 @@ class TestGoldenEndToEnd:
             "fairget_route_conflict_eval.jsonl",
             "fairget_extension_card.md",
             "fairget_export_manifest.json",
+            "fairget_checksums.json",
         ):
             assert (dataset_dir / rel).exists(), f"missing export artifact {rel}"
+        # Fix 9: verify checksums.json contains SHA-256 for all artifacts.
+        checksums = json.loads((dataset_dir / "fairget_checksums.json").read_text())
+        assert len(checksums) > 0
+        for path_str, digest in checksums.items():
+            assert len(digest) == 64, f"invalid SHA-256 for {path_str}"
         splits = sorted(
             (dataset_dir / "fairget_unlearning_splits").glob("*.json")
         )

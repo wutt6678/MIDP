@@ -95,22 +95,19 @@ def _load_samples(dataset_dir: Path, dataset: str):
 
 
 def _load_processed_samples(dataset_dir: Path, dataset: str):
-    """Load whitelist-processed samples (preferred) or fall back to annotated."""
+    """Load whitelist-processed samples.
+
+    Fail closed: if the processed artifact is missing, raise an error
+    instead of silently falling back to annotated. This guarantees that
+    all downstream operations use the processed dataset (Fix 7).
+    """
     from .data.schemas import CanonicalSample
 
     processed = dataset_dir / f"{dataset}_processed.jsonl"
     if processed.exists():
         return [CanonicalSample.from_dict(doc) for doc in read_jsonl(processed)]
-    annotated = dataset_dir / f"{dataset}_annotated.jsonl"
-    if annotated.exists():
-        log.warning(
-            "No processed artifact at %s; falling back to annotated. "
-            "Re-run 'build annotate' to produce the processed stage.",
-            processed,
-        )
-        return [CanonicalSample.from_dict(doc) for doc in read_jsonl(annotated)]
     raise ConfigError(
-        f"No samples at {dataset_dir}; run 'route-data build annotate' first"
+        f"Processed dataset missing at {processed}; rerun 'route-data build annotate'."
     )
 
 
@@ -141,6 +138,7 @@ def _load_image(uri: str | None, base: Path | None = None):
 
 def _p_positive(response) -> float | None:
     """Collapse candidate log-probabilities into P(' yes')."""
+    import math
     from .models.scoring import normalize_binary_scores
 
     if not response.candidate_scores:
@@ -152,7 +150,15 @@ def _p_positive(response) -> float | None:
     probs = normalize_binary_scores(logps)
     for candidate in (" yes", "yes"):
         if candidate in probs:
-            return float(probs[candidate])
+            p = float(probs[candidate])
+            # Validate probability (Fix 10)
+            if not math.isfinite(p) or p < 0.0 or p > 1.0:
+                log.warning(
+                    "Invalid probability for %s: p=%s (logps=%s)",
+                    candidate, p, logps,
+                )
+                return None
+            return p
     return None
 
 
@@ -237,6 +243,13 @@ def cmd_model_inspect(args) -> int:
     return 0
 
 
+def _image_sha256(image_path: str | Path) -> str:
+    """Compute SHA-256 hex digest of an image file."""
+    import hashlib
+    data = Path(image_path).read_bytes()
+    return hashlib.sha256(data).hexdigest()
+
+
 def cmd_model_smoke_test(args) -> int:
     cfg = load_model_config(args.config)
     if args.dry_run:
@@ -245,21 +258,64 @@ def cmd_model_smoke_test(args) -> int:
     from .models.registry import create_backend
 
     backend = create_backend(cfg)
-    image = _load_image(None)
-    prompt = "Is there a person in this image? Answer yes or no."
-    gen = backend.generate(image, prompt)
-    scored = backend.score_candidates(image, prompt, [" yes", " no"])
-    p = _p_positive(scored)
-    _print_json(
-        {
-            "fingerprint": backend.fingerprint(),
-            "generated_text": gen.text,
-            "candidate_log_probs": {
-                cs.candidate: cs.log_probability for cs in (scored.candidate_scores or [])
-            },
-            "p_positive": p,
+
+    # Fix 1: use a real image when --image is provided; fall back to placeholder
+    # only when no image path is given.
+    image_path = getattr(args, "image", None)
+    if image_path:
+        image = _load_image(image_path)
+        image_hash = _image_sha256(image_path)
+    else:
+        image = _load_image(None)
+        image_hash = "placeholder_gray_image"
+
+    # Load prompt registry for proper binary prompts
+    prompts_path = getattr(args, "prompts", None) or "configs/prompts/celeba_binary_v1.yaml"
+    from .prompts.registry import PromptRegistry
+    try:
+        registry = PromptRegistry(prompts_path)
+    except Exception as exc:
+        log.warning("Could not load prompt registry from %s: %s; using simple prompts", prompts_path, exc)
+        registry = None
+
+    # Three obvious attribute questions to verify visual discrimination.
+    smoke_attributes = ["Eyeglasses", "Smiling", "Wearing_Hat"]
+
+    results: list[dict[str, Any]] = []
+    for attr in smoke_attributes:
+        if registry is not None:
+            try:
+                prompt = registry.binary_prompt(attr)
+            except Exception:
+                prompt = f"Is this person showing {attr.replace('_', ' ').lower()}? Answer yes or no."
+        else:
+            prompt = f"Is this person showing {attr.replace('_', ' ').lower()}? Answer yes or no."
+
+        gen = backend.generate(image, prompt)
+        scored = backend.score_candidates(image, prompt, [" yes", " no"])
+        p = _p_positive(scored)
+        logps = {
+            cs.candidate: cs.log_probability for cs in (scored.candidate_scores or [])
         }
-    )
+        results.append({
+            "attribute": attr,
+            "prompt": prompt,
+            "generated_text": gen.text,
+            "log_p_yes": logps.get(" yes"),
+            "log_p_no": logps.get(" no"),
+            "p_positive": p,
+        })
+
+    fp = backend.fingerprint()
+    resolved_revision = getattr(backend, "_resolved_revision", None) or fp.get("revision", "n/a")
+
+    _print_json({
+        "model_fingerprint": fp,
+        "resolved_revision": resolved_revision,
+        "image_sha256": image_hash,
+        "image_path": image_path or "placeholder",
+        "smoke_results": results,
+    })
     return 0
 
 
@@ -736,25 +792,68 @@ def cmd_build_annotate(args) -> int:
 
     backend = create_backend(run_cfg.model)
     registry = PromptRegistry(run_cfg.prompts)
+
+    # Fix 2: force model load before fingerprint so _resolved_revision is
+    # populated (otherwise the Hub snapshot revision is "unresolved" because
+    # revision: null in the config).
+    try:
+        if hasattr(backend, "_load"):
+            backend._load()
+    except Exception as exc:  # noqa: BLE001 - model load may fail in dry envs
+        log.warning("Backend pre-load failed (%s); fingerprint may lack resolved revision", exc)
+
     fingerprint_id: str | None = None
     try:
         fingerprint_id = str(backend.fingerprint().get("fingerprint_id"))
     except Exception as exc:  # noqa: BLE001 - fingerprint is best-effort
         log.warning("Backend fingerprint unavailable (%s); continuing without it", exc)
 
-    # Cache key includes model fingerprint + prompt registry hash (P0-6).
-    cache_parts = [fingerprint_id or "nofp", registry.registry_hash()]
+    # Fix 2: comprehensive cache key that uniquely identifies the scoring
+    # identity.  Includes model fingerprint (which embeds model_id, resolved
+    # revision, dtype, quantization, transformers/torch versions), prompt
+    # registry hash, candidate-set hash, and scoring-code version.
+    from .models.scoring import SCORING_VERSION
+    import hashlib as _hashlib_cache
+
+    candidates_blob = json.dumps([" yes", " no"], sort_keys=True)
+    candidate_set_hash = _hashlib_cache.sha256(candidates_blob.encode()).hexdigest()[:12]
+
+    cache_parts = [
+        fingerprint_id or "nofp",
+        registry.registry_hash(),
+        candidate_set_hash,
+        f"sv{SCORING_VERSION}",
+    ]
     cache_key_suffix = "|".join(cache_parts)
+
+    image_base = Path(data_cfg.root or data_cfg.extras.get("local_root") or ".")
+
+    # Build sample_id -> image_sha256 lookup for per-row cache keys (Fix 2).
+    # Including image_sha256 ensures that replacing an image while keeping
+    # the same sample_id does not reuse stale cached scores.
+    image_sha_by_sample: dict[str, str] = {}
+    for s in samples:
+        sha = s.image_sha256 or ""
+        if not sha and s.image_uri:
+            try:
+                sha = _image_sha256(Path(image_base) / s.image_uri.removeprefix("file://"))
+            except Exception:  # noqa: BLE001
+                sha = ""
+        image_sha_by_sample[s.source_sample_id] = sha
+
+    def _row_cache_key(sample_id: str) -> str:
+        return f"{image_sha_by_sample.get(sample_id, '')}|{cache_key_suffix}"
 
     done_keys: set[tuple[str, str]] = set()
     score_rows: list[dict[str, Any]] = []
     if scores_path.exists() and args.resume:
         raw_rows = list(read_jsonl(scores_path))
         for r in raw_rows:
-            ck = (r.get("sample_id"), r.get("_cache_key", ""))
-            if ck[1] == cache_key_suffix:
+            sid = r.get("sample_id")
+            expected_key = _row_cache_key(sid) if sid else None
+            if r.get("_cache_key", "") == expected_key:
                 score_rows.append(r)
-                done_keys.add((ck[0], r["attribute"]))
+                done_keys.add((sid, r["attribute"]))
         if len(score_rows) < len(raw_rows):
             log.info(
                 "Resume: kept %d/%d cached rows matching current cache key",
@@ -770,7 +869,6 @@ def cmd_build_annotate(args) -> int:
         if s.image_uri
         and (s.source_sample_id, attr) not in done_keys
     ]
-    image_base = Path(data_cfg.root or data_cfg.extras.get("local_root") or ".")
     if pending:
         log.info(
             "Scoring %d (image, attribute) queries with backend=%s",
@@ -784,15 +882,23 @@ def cmd_build_annotate(args) -> int:
             p = _p_positive(resp)
             if p is None:
                 continue
+            # Reject inconsistent duplicates (Fix 10)
+            if (sample.source_sample_id, attr) in done_keys:
+                log.warning(
+                    "Duplicate score for (%s, %s); keeping first occurrence",
+                    sample.source_sample_id, attr,
+                )
+                continue
             score_rows.append(
                 {
                     "sample_id": sample.source_sample_id,
                     "attribute": attr,
                     "p_positive": p,
                     "raw_text": resp.text,
-                    "_cache_key": cache_key_suffix,
+                    "_cache_key": _row_cache_key(sample.source_sample_id),
                 }
             )
+            done_keys.add((sample.source_sample_id, attr))
     dataset_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl(score_rows, scores_path)
 
@@ -889,19 +995,36 @@ def cmd_build_qa(args) -> int:
         raise ConfigError(f"No CelebA-40 observations in {dataset_dir}; run build annotate first")
     registry = QaTemplateRegistry.default_for(attributes)
 
-    # Deterministic, hash-based sample split: ~80 % train / ~20 % validation.
-    # Each sample is assigned to exactly one split so no image appears in both
-    # (P0-3: fixes train/eval visual-QA sample leakage).
+    # Deterministic, hash-based identity-level split: ~80 % train / ~20 % validation.
+    # Each identity is assigned to exactly one split so all images of the same
+    # person land in the same partition (Fix 3: identity-disjoint split).
     import hashlib as _hashlib
+
+    train_identity_ids: set[str] = set()
+    eval_identity_ids: set[str] = set()
+    identity_to_split: dict[str, str] = {}
+    for s in samples:
+        iid = s.identity_id
+        if iid in identity_to_split:
+            continue
+        h = int(_hashlib.sha256(iid.encode()).hexdigest()[:8], 16)
+        split = "eval" if h % 5 == 0 else "train"
+        identity_to_split[iid] = split
+        if split == "train":
+            train_identity_ids.add(iid)
+        else:
+            eval_identity_ids.add(iid)
+
+    # Enforce identity-disjoint invariant
+    assert not (train_identity_ids & eval_identity_ids), "identity split leakage"
 
     train_samples = []
     eval_samples = []
     for s in samples:
-        h = int(_hashlib.sha256(s.source_sample_id.encode()).hexdigest()[:8], 16)
-        if h % 5 == 0:
-            eval_samples.append(s)
-        else:
+        if identity_to_split[s.identity_id] == "train":
             train_samples.append(s)
+        else:
+            eval_samples.append(s)
 
     train_rows = generate_qa_rows(train_samples, registry, split="train")
     eval_rows = generate_qa_rows(eval_samples, registry, split="validation")
@@ -958,15 +1081,20 @@ def cmd_build_route_probes(args) -> int:
     for identity_id in identity_ids:
         group = by_identity[identity_id]
 
-        # P0-13: pick a wrong name from an identity with multiple samples
-        # and accepted visible attributes (not just the first other group).
-        wrong_name_candidates = [
+        # P0-13 + Fix 6: pick a wrong name from an identity with multiple
+        # samples and accepted visible attributes.  Sort for deterministic
+        # selection (alphabetical by identity name) so results are
+        # reproducible.  NOTE: for research-grade causal analysis this
+        # should match the wrong identity on available visual properties
+        # or generate several wrong-name controls; the current approach is
+        # acceptable for engineering smoke tests only.
+        wrong_name_candidates = sorted(
             (by_identity[other][0].identity_name or other)
             for other in identity_ids
             if other != identity_id
             and len(by_identity[other]) >= 2
             and _accepted_visible_attributes(by_identity[other][0])
-        ]
+        )
         wrong_name = wrong_name_candidates[0] if wrong_name_candidates else None
 
         try:
@@ -979,24 +1107,27 @@ def cmd_build_route_probes(args) -> int:
         for probe in probes:
             probe_rows.append(builder.probe_row(probe))
 
-        # P0-12: validate cross_image_attribute_state pairs — only emit a
-        # pair when the two samples actually differ on at least one accepted
-        # attribute label.
+        # P0-12 + Fix 4: validate cross_image_attribute_state pairs and
+        # emit one explicit pair per differing target attribute so the
+        # attribute that changed is recorded, not just "some attribute
+        # differs".
         if len(group) >= 2:
             for left, right in zip(group, group[1:]):
                 left_attrs = _accepted_visible_attributes(left)
                 right_attrs = _accepted_visible_attributes(right)
                 shared = set(left_attrs) & set(right_attrs)
-                differs = any(left_attrs[a] != right_attrs[a] for a in shared)
-                if not differs:
-                    continue
-                pair_specs.append(
-                    {
-                        "pair_type": "cross_image_attribute_state",
-                        "left_sample_id": left.source_sample_id,
-                        "right_sample_id": right.source_sample_id,
-                    }
-                )
+                for attr_name in sorted(shared):
+                    if left_attrs[attr_name] != right_attrs[attr_name]:
+                        pair_specs.append(
+                            {
+                                "pair_type": "cross_image_attribute_state",
+                                "left_sample_id": left.source_sample_id,
+                                "right_sample_id": right.source_sample_id,
+                                "attribute": attr_name,
+                                "left_label": left_attrs[attr_name],
+                                "right_label": right_attrs[attr_name],
+                            }
+                        )
     pairs = build_pair_manifest(pair_specs)
     probes_path = dataset_dir / f"{args.dataset}_route_probes.jsonl"
     write_jsonl(probe_rows, probes_path)
@@ -1064,12 +1195,70 @@ def cmd_build_export(args) -> int:
     except ConfigError as exc:
         log.warning("Prompt registry unavailable (%s); exporting without hash", exc)
 
+    # Fix 8: extract model fingerprint from the samples' observations so the
+    # dataset card and manifest show the actual annotator identity instead of
+    # "n/a".
+    model_fingerprint: str | None = None
+    for s in samples:
+        for obs in s.visual_attributes.values():
+            if getattr(obs, "model_fingerprint", None):
+                model_fingerprint = obs.model_fingerprint
+                break
+        if model_fingerprint:
+            break
+
+    # Fix 8: build a provenance manifest capturing the full immutable
+    # generation identity so exports are auditable.
     data_cfg = _data_config_for(args.dataset, run_cfg)
+    provenance: dict[str, Any] = {
+        "model_id": run_cfg.model.model_id,
+        "model_backend": run_cfg.model.backend,
+        "model_revision": getattr(run_cfg.model, "revision", None),
+        "model_fingerprint": model_fingerprint,
+        "prompt_registry_hash": registry_hash,
+        "source_version": data_cfg.source_version,
+        "scoring_method": "candidate_sequence_log_probability",
+    }
+    # Optional: whitelist provenance.
+    if run_cfg.build.attribute_whitelist:
+        try:
+            from .build.whitelist import load_attribute_whitelist
+            wl_path = Path(run_cfg.build.attribute_whitelist)
+            if not wl_path.is_absolute():
+                wl_path = (Path(__file__).resolve().parents[2] / wl_path).resolve()
+            wl = load_attribute_whitelist(wl_path)
+            provenance["whitelist_sha256"] = wl.sha256
+            provenance["whitelist_attributes"] = sorted(wl.attributes)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Whitelist provenance unavailable (%s)", exc)
+    # Optional: library versions.
+    try:
+        import transformers
+        provenance["transformers_version"] = transformers.__version__
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import torch
+        provenance["torch_version"] = torch.__version__
+    except Exception:  # noqa: BLE001
+        pass
+    # Optional: MIDP git commit.
+    try:
+        import subprocess
+        midp_root = Path(__file__).resolve().parents[4]
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=midp_root, stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        provenance["midp_commit"] = sha
+    except Exception:  # noqa: BLE001
+        pass
+
     exporter = ExtensionExporter(
         dataset_dir.parent,  # base / model_dir; exporter appends benchmark
         benchmark,
         source_version=data_cfg.source_version,
         registry_hash=registry_hash,
+        model_fingerprint=model_fingerprint,
     )
     record = exporter.export_all(
         samples,
@@ -1077,6 +1266,7 @@ def cmd_build_export(args) -> int:
         eval_qa=eval_qa,
         probe_rows=probe_rows,
         split_results=split_results,
+        provenance=provenance,
     )
     _print_json(
         {
@@ -1216,6 +1406,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_model_inspect)
     p = model.add_parser("smoke-test", help="run a tiny generate+score sanity check")
     p.add_argument("--config", required=True)
+    p.add_argument("--image", default=None, help="path to a real test image (Fix 1)")
+    p.add_argument("--prompts", default=None, help="path to binary prompt registry YAML")
     _common_flags(p)
     p.set_defaults(func=cmd_model_smoke_test)
 

@@ -18,6 +18,12 @@ import math
 
 import torch
 
+# Increment whenever the scoring implementation changes in a way that
+# invalidates previously cached scores (e.g. different normalization,
+# tokenization, or sequence-log-prob algorithm).  The value is embedded
+# in the score-cache key so stale entries are automatically discarded.
+SCORING_VERSION = "1"
+
 
 def gather_sequence_log_probs(logits: torch.Tensor, target_ids: torch.Tensor) -> float:
     """Total log-probability of a token sequence.
