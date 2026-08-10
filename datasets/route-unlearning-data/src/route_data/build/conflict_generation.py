@@ -151,6 +151,7 @@ class RouteProbeBuilder:
         attribute: str | None = None,
         paired_sample_id: str | None = None,
         controlled_variables: Sequence[str] = (),
+        target_fact: ProfileFact | None = None,
     ) -> CanonicalSample:
         _, evidence = _FAMILY_TO_ROUTE[family]
         spec = self.prompt_registry.route_template(_FAMILY_TO_ROUTE[family][0])
@@ -165,6 +166,13 @@ class RouteProbeBuilder:
         new_meta = dict(base.source_metadata)
         if attribute is not None:
             new_meta["target_attribute"] = attribute
+        # P0-C9: for name_only probes, store the exact target fact so the
+        # expected answer is derived from the selected fact, not from
+        # whatever profile facts happen to remain on the visual anchor.
+        if target_fact is not None:
+            new_meta["target_fact_id"] = target_fact.fact_id
+            new_meta["target_fact_relation"] = target_fact.relation
+            new_meta["target_fact_value"] = target_fact.value
         # P0-6: for text_only modality probes, nullify image fields to
         # prevent visual leakage into text-only conditions.
         modality = str(spec.get("modality", base.modality))
@@ -203,7 +211,18 @@ class RouteProbeBuilder:
         }
         # P0-5: add expected answer fields so downstream consumers know the
         # correct answer for each probe without re-deriving it.
-        row["target_attribute"] = attribute
+        # P0-C9: for name_only, target_attribute is null and the answer
+        # comes from the stored target fact metadata.
+        if rp.probe_family == "name_only":
+            row["target_attribute"] = None
+            row["target_fact_id"] = probe.source_metadata.get("target_fact_id")
+            row["target_fact_relation"] = probe.source_metadata.get("target_fact_relation")
+            row["target_fact_value"] = probe.source_metadata.get("target_fact_value")
+        else:
+            row["target_attribute"] = attribute
+            row["target_fact_id"] = None
+            row["target_fact_relation"] = None
+            row["target_fact_value"] = None
         answer_label, answer_text = self._expected_answer(probe, attribute)
         row["answer_label"] = answer_label
         row["answer_text"] = answer_text
@@ -216,18 +235,22 @@ class RouteProbeBuilder:
         """Derive the expected (answer_label, answer_text) for a route probe.
 
         Visual probe families follow the image evidence; name_only follows
-        the profile fact value.
+        the stored target fact value from source_metadata (P0-C9).
         """
         from .annotate import CELEBA40_NAMESPACE
 
         family = probe.route_probe.probe_family if probe.route_probe else None
         if family == "name_only":
-            # Text-only: answer comes from the first available profile fact.
+            # P0-C9: use the exact target fact stored in source_metadata,
+            # not whatever profile_facts happen to remain on the anchor.
+            fact_value = probe.source_metadata.get("target_fact_value")
+            if fact_value is not None:
+                return None, str(fact_value)
+            # Legacy fallback for probes built before P0-C9.
             for fact in probe.profile_facts:
                 if attribute and fact.relation != attribute:
                     continue
                 return None, fact.value
-            # Fallback: first fact if attribute didn't match.
             if probe.profile_facts:
                 return None, probe.profile_facts[0].value
             return None, None
@@ -255,6 +278,110 @@ def _accepted_visible_attributes(sample: CanonicalSample) -> dict[str, bool]:
         if key.startswith(prefix) and obs.label is not None and obs.confidence_band == "high":
             out[key[len(prefix):]] = bool(obs.label)
     return out
+
+
+def _visual_attribute_jaccard(
+    attrs_a: Mapping[str, bool], attrs_b: Mapping[str, bool],
+) -> float:
+    """Jaccard similarity over the *agreed* attribute states.
+
+    Only attributes accepted (high-confidence) on *both* sides contribute.
+    Returns 0.0 when either side has no accepted attributes.
+    """
+    shared_keys = set(attrs_a) & set(attrs_b)
+    if not shared_keys:
+        return 0.0
+    agreeing = sum(1 for k in shared_keys if attrs_a[k] == attrs_b[k])
+    union_keys = set(attrs_a) | set(attrs_b)
+    return agreeing / len(union_keys)
+
+
+def select_matched_wrong_name(
+    identity_id: str,
+    by_identity: Mapping[str, Sequence[CanonicalSample]],
+    *,
+    candidates_per_sample: int = 3,
+) -> str | None:
+    """P2-19: select the best matched wrong-name control.
+
+    Instead of picking the alphabetically-first candidate, rank other
+    identities by visual-attribute similarity (Jaccard overlap of accepted
+    high-confidence labels) so the wrong-name control is visually matched.
+    Ties are broken by sorted identity name for determinism.
+
+    Returns the single best wrong identity name, or ``None`` when no
+    suitable candidate exists.
+    """
+    group = by_identity.get(identity_id, [])
+    if not group:
+        return None
+
+    # Aggregate anchor attributes across the identity group.
+    anchor_attrs: dict[str, bool] = {}
+    for s in group:
+        attrs = _accepted_visible_attributes(s)
+        if attrs:
+            anchor_attrs = attrs
+            break
+    if not anchor_attrs:
+        return None
+
+    scored: list[tuple[float, str, str]] = []
+    for other_id, other_group in by_identity.items():
+        if other_id == identity_id:
+            continue
+        if len(other_group) < 2:
+            continue
+        other_attrs = _accepted_visible_attributes(other_group[0])
+        if not other_attrs:
+            continue
+        sim = _visual_attribute_jaccard(anchor_attrs, other_attrs)
+        other_name = other_group[0].identity_name or other_id
+        scored.append((sim, other_name, other_id))
+
+    if not scored:
+        return None
+
+    # Sort by similarity descending, then name ascending for determinism.
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return scored[0][1]
+
+
+def select_multiple_wrong_names(
+    identity_id: str,
+    by_identity: Mapping[str, Sequence[CanonicalSample]],
+    *,
+    candidates_per_sample: int = 3,
+) -> list[str]:
+    """P2-19: return up to ``candidates_per_sample`` matched wrong names."""
+    group = by_identity.get(identity_id, [])
+    if not group:
+        return []
+
+    anchor_attrs: dict[str, bool] = {}
+    for s in group:
+        attrs = _accepted_visible_attributes(s)
+        if attrs:
+            anchor_attrs = attrs
+            break
+    if not anchor_attrs:
+        return []
+
+    scored: list[tuple[float, str, str]] = []
+    for other_id, other_group in by_identity.items():
+        if other_id == identity_id:
+            continue
+        if len(other_group) < 2:
+            continue
+        other_attrs = _accepted_visible_attributes(other_group[0])
+        if not other_attrs:
+            continue
+        sim = _visual_attribute_jaccard(anchor_attrs, other_attrs)
+        other_name = other_group[0].identity_name or other_id
+        scored.append((sim, other_name, other_id))
+
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return [name for _, name, _ in scored[:candidates_per_sample]]
 
 
 def build_identity_probes(
@@ -304,14 +431,27 @@ def build_identity_probes(
     fact = facts[0]
     probes: list[CanonicalSample] = []
 
-    def make(family: str, **render_fields: Any) -> CanonicalSample:
+    def make(
+        family: str,
+        *,
+        target_fact: ProfileFact | None = None,
+        **render_fields: Any,
+    ) -> CanonicalSample:
         question = builder.render_probe(family, attribute=attribute, **render_fields)
         return builder.probe_sample(
-            anchor, family, question, attribute=attribute, controlled_variables=["image"]
+            anchor,
+            family,
+            question,
+            attribute=attribute,
+            controlled_variables=["image"],
+            target_fact=target_fact,
         )
 
     probes.append(make("direct_visual"))
-    probes.append(make("name_only", identity_name=identity_name, fact=fact))
+    # P0-C9: pass the exact selected fact as target_fact so the probe
+    # stores it in source_metadata and the expected answer is derived
+    # from that fact, not from the anchor's profile_facts.
+    probes.append(make("name_only", target_fact=fact, identity_name=identity_name, fact=fact))
     probes.append(make("image_plus_name", identity_name=identity_name))
     if wrong_identity_name:
         probes.append(make("wrong_name", wrong_identity_name=wrong_identity_name))
@@ -399,20 +539,20 @@ def validate_pair_manifest(
     pairs: Sequence[Mapping[str, Any]],
     samples_by_id: Mapping[str, CanonicalSample],
 ) -> list[str]:
-    """Validate semantic constraints on a pair manifest.
+    """Validate semantic constraints on a pair manifest (P0-C10).
 
     Returns a list of human-readable issue strings (empty == all clean).
 
-    Checks performed per pair:
+    Checks are pair-type-specific:
 
-    - both ``left_sample_id`` and ``right_sample_id`` exist in *samples_by_id*;
-    - both samples belong to the same identity;
-    - the two samples reference different images (``image_uri``);
-    - for ``cross_image_attribute_state`` pairs, the target attribute must be
-      accepted (high-confidence visible) on both images and the left/right
-      labels must differ;
-    - ``left_label`` / ``right_label`` are present where the pair type
-      carries an ``attribute`` field.
+    - ``cross_image_attribute_state``: same identity, different image, same
+      target attribute accepted on both, differing label state.
+    - ``correct_name_vs_wrong_name``: same image, same identity, different
+      identity text (controlled image + question/relation).
+    - ``neutral_vs_conflict_text``: same image, same question, same expected
+      answer; only context text changes.
+    - ``visual_vs_fact_same_image``: same image, appropriate route/relation
+      change.
     """
     issues: list[str] = []
     for pair in pairs:
@@ -431,18 +571,15 @@ def validate_pair_manifest(
             issues.append(f"{pid}: right_sample_id {right_id} not found")
             continue
 
-        # Same identity.
-        if left.identity_id != right.identity_id:
-            issues.append(
-                f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
-            )
-
-        # Different images.
-        if left.image_uri == right.image_uri:
-            issues.append(f"{pid}: same image on both sides ({left.image_uri})")
-
-        # Attribute-level pairs: labels must be accepted and differ.
         if pair_type == "cross_image_attribute_state":
+            # Same identity, different image, same target attribute
+            # accepted on both, differing label state.
+            if left.identity_id != right.identity_id:
+                issues.append(
+                    f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+                )
+            if left.image_uri == right.image_uri:
+                issues.append(f"{pid}: same image on both sides ({left.image_uri})")
             attr = pair.get("attribute")
             if not attr:
                 issues.append(f"{pid}: cross_image pair missing 'attribute'")
@@ -450,27 +587,78 @@ def validate_pair_manifest(
                 left_attrs = _accepted_visible_attributes(left)
                 right_attrs = _accepted_visible_attributes(right)
                 if attr not in left_attrs:
-                    issues.append(
-                        f"{pid}: attribute {attr} not accepted on left image"
-                    )
+                    issues.append(f"{pid}: attribute {attr} not accepted on left image")
                 if attr not in right_attrs:
-                    issues.append(
-                        f"{pid}: attribute {attr} not accepted on right image"
-                    )
+                    issues.append(f"{pid}: attribute {attr} not accepted on right image")
                 if (
                     attr in left_attrs
                     and attr in right_attrs
                     and left_attrs[attr] == right_attrs[attr]
                 ):
-                    issues.append(
-                        f"{pid}: left/right labels identical for {attr}"
-                    )
-            # Explicit label fields should be present and differ.
+                    issues.append(f"{pid}: left/right labels identical for {attr}")
             left_label = pair.get("left_label")
             right_label = pair.get("right_label")
             if left_label is None or right_label is None:
                 issues.append(f"{pid}: missing left_label or right_label")
             elif left_label == right_label:
                 issues.append(f"{pid}: left_label == right_label ({left_label})")
+
+        elif pair_type == "correct_name_vs_wrong_name":
+            # Same image, same identity, different identity text.
+            if left.image_uri != right.image_uri:
+                issues.append(
+                    f"{pid}: correct_name_vs_wrong_name requires same image "
+                    f"({left.image_uri} vs {right.image_uri})"
+                )
+            if left.identity_id != right.identity_id:
+                issues.append(
+                    f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+                )
+
+        elif pair_type == "neutral_vs_conflict_text":
+            # Same image, same question, same expected answer; only context
+            # text changes.
+            if left.image_uri != right.image_uri:
+                issues.append(
+                    f"{pid}: neutral_vs_conflict_text requires same image "
+                    f"({left.image_uri} vs {right.image_uri})"
+                )
+            if left.identity_id != right.identity_id:
+                issues.append(
+                    f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+                )
+
+        elif pair_type == "visual_vs_fact_same_image":
+            # Same image, route/relation change.
+            if left.image_uri != right.image_uri:
+                issues.append(
+                    f"{pid}: visual_vs_fact_same_image requires same image "
+                    f"({left.image_uri} vs {right.image_uri})"
+                )
+            if left.identity_id != right.identity_id:
+                issues.append(
+                    f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+                )
+
+        elif pair_type == "image_vs_name_conditioned":
+            # Same fact, different conditioning.
+            if left.identity_id != right.identity_id:
+                issues.append(
+                    f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+                )
+
+        elif pair_type == "attribute_counterfactual":
+            # Same identity + prompt, different attribute state.
+            if left.identity_id != right.identity_id:
+                issues.append(
+                    f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+                )
+
+        else:
+            # Unknown pair type: basic sanity.
+            if left.identity_id != right.identity_id:
+                issues.append(
+                    f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+                )
 
     return issues

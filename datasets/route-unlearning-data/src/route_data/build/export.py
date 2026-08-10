@@ -223,27 +223,42 @@ class ExtensionExporter:
         record.counts["splits"] = len(split_results)
         record.paths["dataset_card"] = self.render_dataset_card(record.counts)
 
-        # Fix 8: write build manifest with full provenance.
+        # P1-15: finalization process —
+        # 1. Write checksums.json over all artifact paths (excludes itself
+        #    and the manifest, which hasn't been written yet).
+        # 2. Write the final export manifest including the checksums path.
+        # 3. Append the final manifest hash to checksums.json.
+        # All paths in checksums are relative to the output directory for
+        # portability across servers.
+
+        # Step 1: compute checksums for all current artifacts.
+        checksums: dict[str, str] = {}
+        for key, path_str in sorted(record.paths.items()):
+            rel = self._relative_path(path_str)
+            checksums[rel] = self._sha256_file(path_str)
+        checksums_path = self._path(f"{self.benchmark}_checksums.json")
+        write_json(checksums, checksums_path)
+        record.paths["checksums"] = str(checksums_path)
+
+        # Step 2: write the final export manifest including checksums path.
         manifest = record.to_dict()
         if provenance:
             manifest["provenance"] = dict(provenance)
         manifest_path = self._path(f"{self.benchmark}_export_manifest.json")
         write_json(manifest, manifest_path)
-        # P1-12: include the manifest in record.paths so it is covered by
-        # the checksum computation below.  Previously the manifest was
-        # written after record.paths was frozen, so it was missing from
-        # checksums.json.
         record.paths["manifest"] = str(manifest_path)
 
-        # Fix 9: write checksums.json for all final artifacts so outputs
-        # can be audited and verified after copying between servers.
-        # The checksums file itself is intentionally excluded (a file
-        # cannot contain its own hash).
-        checksums: dict[str, str] = {}
-        for key, path_str in sorted(record.paths.items()):
-            checksums[path_str] = self._sha256_file(path_str)
-        checksums_path = self._path(f"{self.benchmark}_checksums.json")
+        # Step 3: append the final manifest hash to checksums.json.
+        manifest_rel = self._relative_path(str(manifest_path))
+        checksums[manifest_rel] = self._sha256_file(manifest_path)
         write_json(checksums, checksums_path)
-        record.paths["checksums"] = str(checksums_path)
 
         return record
+
+    def _relative_path(self, path_str: str) -> str:
+        """Return a path relative to the output directory for portability."""
+        try:
+            return str(Path(path_str).relative_to(self.output_dir))
+        except ValueError:
+            # If the path is not under output_dir, return the filename.
+            return Path(path_str).name

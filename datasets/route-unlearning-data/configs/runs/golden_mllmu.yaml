@@ -1,0 +1,62 @@
+# Golden pipeline for MLLMU-Bench benchmark (plan section 19.5).
+# Full build chain: annotate → qa → route-probes → splits → export → validate.
+#
+# Usage:
+#   export MLLMU_ROOT=/path/to/mllmu
+#   PYTHONPATH=src python -m route_data.cli build annotate \
+#       --dataset mllmu --config configs/runs/golden_mllmu.yaml
+#   ... (qa, route-probes, splits, export)
+#   PYTHONPATH=src python -m route_data.cli validate dataset \
+#       --dataset mllmu_celeba40 --config configs/runs/golden_mllmu.yaml --strict
+run:
+  name: golden_mllmu
+  model_role: annotator
+  seed: 17
+
+model:
+  backend: stub
+  model_id: local/stub-vlm-v1
+  revision: null
+  processor_id: null
+  trust_remote_code: false
+  dtype: float16
+  device_map: null
+  attn_implementation: sdpa
+  quantization:
+    enabled: false
+    mode: nf4
+    compute_dtype: bfloat16
+    double_quant: false
+  generation:
+    do_sample: false
+    temperature: 0.0
+    max_new_tokens: 4
+  batch_size: 4
+  seed: 17
+
+data:
+  name: celeba
+  root: ${CELEBA_ROOT}
+  source_version: "celeba-2015-original"
+  compute_checksums: false
+
+prompts:
+  binary: configs/prompts/celeba_binary_v1.yaml
+  grouped: configs/prompts/celeba_grouped_json_v1.yaml
+  route_conflict: configs/prompts/route_conflict_v1.yaml
+
+thresholds: configs/thresholds/celeba_default.yaml
+
+frozen_protocol:
+  prompts_version: celeba_binary_v1
+  scoring: candidate
+  calibrators: null
+
+build:
+  datasets: [mllmu]
+  output_dir: data/processed_golden_mllmu
+  confidence_bands:
+    high: 0.85
+    medium: 0.60
+  min_auto_accept_score: 0.85
+  qa_registry_hash: null

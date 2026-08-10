@@ -97,6 +97,106 @@ def main_check() -> int:
         ],
     )
 
+    # -- P2-22: post-build artifact existence checks ---------------------- #
+    # Verify that every expected artifact was actually produced by the
+    # export stage.  This catches regressions in the export pipeline
+    # (e.g. missing checksums, manifest, or coverage report).
+    import json as _json
+
+    # Resolve the export directory: out / <model_dir> / fairget/
+    # The stub config uses local/stub-vlm-v1 as model_id.
+    model_dir_name = "local--stub-vlm-v1"
+    export_dir = out / model_dir_name / "fairget"
+    if not export_dir.exists():
+        # Fallback: try the benchmark name directly under out/.
+        export_dir = out / "fairget"
+
+    required_artifacts = [
+        "fairget_celeba40_image_annotations.parquet",
+        "fairget_celeba40_visual_qa_train.jsonl",
+        "fairget_celeba40_visual_qa_eval.jsonl",
+        "fairget_route_conflict_eval.jsonl",
+        "fairget_extension_card.md",
+        # P1-15: checksums and export manifest.
+        "fairget_checksums.json",
+        "fairget_export_manifest.json",
+    ]
+    for artifact in required_artifacts:
+        path = export_dir / artifact
+        label = f"artifact exists: {artifact}"
+        if not path.exists():
+            failures.append(label)
+            print(f"--- {label}: MISSING [{path}]")
+        else:
+            print(f"--- {label}: OK")
+
+    # P1-15: verify checksums.json does not contain itself.
+    checksums_path = export_dir / "fairget_checksums.json"
+    if checksums_path.exists():
+        label = "checksums.json excludes self-reference"
+        try:
+            ckdata = _json.loads(checksums_path.read_text())
+            self_ref = "fairget_checksums.json" in ckdata
+            if self_ref:
+                failures.append(label)
+                print(f"--- {label}: FAIL (self-reference found)")
+            else:
+                print(f"--- {label}: OK")
+        except Exception as exc:
+            failures.append(f"checksums.json parse: {exc}")
+
+    # P1-15: verify manifest contains checksums path.
+    manifest_path = export_dir / "fairget_export_manifest.json"
+    if manifest_path.exists():
+        label = "export manifest references checksums"
+        try:
+            mdata = _json.loads(manifest_path.read_text())
+            paths = mdata.get("paths", {})
+            if "checksums" in paths:
+                print(f"--- {label}: OK")
+            else:
+                failures.append(label)
+                print(f"--- {label}: FAIL (no checksums key in paths)")
+        except Exception as exc:
+            failures.append(f"manifest parse: {exc}")
+
+    # P1-18: route-probe coverage report must exist and have required keys.
+    intermediate_dir = out / model_dir_name if (out / model_dir_name).exists() else out
+    # The coverage report is in the intermediate (dataset) directory.
+    for candidate in [export_dir, intermediate_dir, out]:
+        report_path = candidate / "fairget_route_probe_report.json"
+        if report_path.exists():
+            break
+    # Also check the dataset_dir (before export) — the route-probes stage
+    # writes it alongside the other intermediate artifacts.
+    if not report_path.exists():
+        # Search recursively under out/.
+        for p in sorted(out.rglob("fairget_route_probe_report.json")):
+            report_path = p
+            break
+
+    label = "route-probe coverage report"
+    if report_path.exists():
+        try:
+            rdata = _json.loads(report_path.read_text())
+            required_keys = {
+                "identities_total",
+                "identities_with_visual_anchors",
+                "identities_with_profile_facts",
+                "probe_families",
+            }
+            missing = required_keys - set(rdata)
+            if missing:
+                failures.append(f"{label}: missing keys {missing}")
+                print(f"--- {label}: FAIL (missing {missing})")
+            else:
+                print(f"--- {label}: OK")
+        except Exception as exc:
+            failures.append(f"{label} parse: {exc}")
+    else:
+        failures.append(f"{label}: file not found")
+        print(f"--- {label}: MISSING")
+
     print("\n=== SUMMARY:", "ALL CHECKS PASSED" if not failures else f"FAILED: {failures}")
     return 1 if failures else 0
 

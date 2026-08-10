@@ -225,10 +225,13 @@ class TestValidatePairManifest:
         assert any("identity mismatch" in i for i in issues)
 
     def test_same_image_flagged(self):
+        """cross_image_attribute_state with same image on both sides is flagged."""
         s1 = _sample(source_sample_id="s1", image_uri="same.png")
         s2 = _sample(source_sample_id="s2", image_uri="same.png")
-        pairs = [{"pair_id": "p0", "pair_type": "visual_vs_fact_same_image",
-                   "left_sample_id": "s1", "right_sample_id": "s2"}]
+        pairs = [{"pair_id": "p0", "pair_type": "cross_image_attribute_state",
+                   "left_sample_id": "s1", "right_sample_id": "s2",
+                   "attribute": "Eyeglasses",
+                   "left_label": True, "right_label": False}]
         issues = validate_pair_manifest(pairs, {"s1": s1, "s2": s2})
         assert any("same image" in i for i in issues)
 
