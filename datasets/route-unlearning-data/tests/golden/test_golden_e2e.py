@@ -119,7 +119,12 @@ class TestGoldenEndToEnd:
                 golden_run["out"] / _STUB_MODEL_DIR / "fairget" / "fairget_route_probes.jsonl"
             )
         )
-        assert len(probes) == 18  # 3 identities x 6 probe families
+        # P0-4: cross_image requires the target attribute to be accepted on
+        # both images.  In the golden fixture the stub annotator's accepted
+        # attributes differ between training views (due to different image
+        # sizes), so only identities whose views share an accepted attribute
+        # produce a cross_image probe.  2 identities × 5 + 1 × 6 = 16.
+        assert len(probes) == 16
 
     def test_flat_export_artifacts(self, golden_run):
         dataset_dir = golden_run["out"] / _STUB_MODEL_DIR / "fairget"

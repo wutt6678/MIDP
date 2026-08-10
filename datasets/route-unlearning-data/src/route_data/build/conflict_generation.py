@@ -118,6 +118,7 @@ class RouteProbeBuilder:
         identity_name: str | None = None,
         fact: ProfileFact | None = None,
         wrong_identity_name: str | None = None,
+        visible_label: bool | None = None,
     ) -> str:
         if family not in _FAMILY_TO_ROUTE:
             raise ConflictError(f"Unknown probe family '{family}'")
@@ -131,8 +132,11 @@ class RouteProbeBuilder:
             fields["wrong_identity_name"] = wrong_identity_name
         if fact is not None:
             fields["fact_question"] = self.fact_question(fact)
+            # P0-3: use the actual visible label so the conflict claim
+            # genuinely contradicts the image evidence.
+            vl = visible_label if visible_label is not None else True
             fields["conflict_claim"] = conflict_claim_for(
-                attribute or fact.relation, visible_label=True
+                attribute or fact.relation, visible_label=vl
             )
         return self.prompt_registry.render_route(route_family, **fields)
 
@@ -156,18 +160,34 @@ class RouteProbeBuilder:
             expected_evidence_source=evidence,
             controlled_variables=list(controlled_variables),
         ).validate()
+        # P0-5: store the target attribute in source_metadata so probe_row
+        # can retrieve it without an explicit parameter.
+        new_meta = dict(base.source_metadata)
+        if attribute is not None:
+            new_meta["target_attribute"] = attribute
+        # P0-6: for text_only modality probes, nullify image fields to
+        # prevent visual leakage into text-only conditions.
+        modality = str(spec.get("modality", base.modality))
+        img_fields: dict[str, Any] = {}
+        if modality == "text_only":
+            img_fields = {"image_id": None, "image_uri": None, "image_sha256": None}
         return replace(
             base,
-            modality=str(spec.get("modality", base.modality)),
+            modality=modality,
             task_type="route_probe",
             question=question,
             route_probe=probe,
+            source_metadata=new_meta,
+            **img_fields,
         ).validate()
 
     def probe_row(self, probe: CanonicalSample, *, attribute: str | None = None) -> dict[str, Any]:
         rp = probe.route_probe
         assert rp is not None
-        return {
+        # P0-5: retrieve attribute from source_metadata if not explicitly given.
+        if attribute is None:
+            attribute = probe.source_metadata.get("target_attribute")
+        row: dict[str, Any] = {
             "probe_id": _probe_id(probe.source_sample_id, rp.probe_family, attribute or ""),
             "sample_id": probe.source_sample_id,
             "identity_id": probe.identity_id,
@@ -181,6 +201,44 @@ class RouteProbeBuilder:
             "image_uri": probe.image_uri,
             "registry_hash": self.registry_hash,
         }
+        # P0-5: add expected answer fields so downstream consumers know the
+        # correct answer for each probe without re-deriving it.
+        row["target_attribute"] = attribute
+        answer_label, answer_text = self._expected_answer(probe, attribute)
+        row["answer_label"] = answer_label
+        row["answer_text"] = answer_text
+        return row
+
+    @staticmethod
+    def _expected_answer(
+        probe: CanonicalSample, attribute: str | None
+    ) -> tuple[Any, str | None]:
+        """Derive the expected (answer_label, answer_text) for a route probe.
+
+        Visual probe families follow the image evidence; name_only follows
+        the profile fact value.
+        """
+        from .annotate import CELEBA40_NAMESPACE
+
+        family = probe.route_probe.probe_family if probe.route_probe else None
+        if family == "name_only":
+            # Text-only: answer comes from the first available profile fact.
+            for fact in probe.profile_facts:
+                if attribute and fact.relation != attribute:
+                    continue
+                return None, fact.value
+            # Fallback: first fact if attribute didn't match.
+            if probe.profile_facts:
+                return None, probe.profile_facts[0].value
+            return None, None
+        # Visual families: answer follows the image evidence.
+        if attribute:
+            prefix = CELEBA40_NAMESPACE + "."
+            key = prefix + attribute
+            obs = probe.visual_attributes.get(key)
+            if obs is not None and obs.label is not None:
+                return obs.label, "yes" if obs.label else "no"
+        return None, None
 
 
 # --------------------------------------------------------------------------- #
@@ -257,16 +315,21 @@ def build_identity_probes(
     probes.append(make("image_plus_name", identity_name=identity_name))
     if wrong_identity_name:
         probes.append(make("wrong_name", wrong_identity_name=wrong_identity_name))
-    probes.append(make("visual_text_conflict", identity_name=identity_name, fact=fact))
+    probes.append(make("visual_text_conflict", identity_name=identity_name, fact=fact,
+                        visible_label=visible_label))
 
     # P0-11: cross_image must use a genuinely different image as the second
     # sample, not the same anchor.
+    # P0-4: the target attribute must also be accepted (high-confidence) on
+    # the second image so the cross-image probe is meaningful.
     if len(identity_samples) > 1:
         second = None
         for s in identity_samples:
             if s.source_sample_id != anchor.source_sample_id and s.image_uri != anchor.image_uri:
-                second = s
-                break
+                second_attrs = _accepted_visible_attributes(s)
+                if attribute in second_attrs:
+                    second = s
+                    break
         if second is not None:
             question = builder.render_probe(
                 "cross_image", attribute=attribute, identity_name=identity_name
@@ -330,3 +393,84 @@ def build_pair_manifest(pairs: Iterable[Mapping[str, str]]) -> list[dict[str, An
                 entry[key] = pair[key]
         manifest.append(entry)
     return manifest
+
+
+def validate_pair_manifest(
+    pairs: Sequence[Mapping[str, Any]],
+    samples_by_id: Mapping[str, CanonicalSample],
+) -> list[str]:
+    """Validate semantic constraints on a pair manifest.
+
+    Returns a list of human-readable issue strings (empty == all clean).
+
+    Checks performed per pair:
+
+    - both ``left_sample_id`` and ``right_sample_id`` exist in *samples_by_id*;
+    - both samples belong to the same identity;
+    - the two samples reference different images (``image_uri``);
+    - for ``cross_image_attribute_state`` pairs, the target attribute must be
+      accepted (high-confidence visible) on both images and the left/right
+      labels must differ;
+    - ``left_label`` / ``right_label`` are present where the pair type
+      carries an ``attribute`` field.
+    """
+    issues: list[str] = []
+    for pair in pairs:
+        pid = pair.get("pair_id", "?")
+        left_id = pair.get("left_sample_id", "")
+        right_id = pair.get("right_sample_id", "")
+        pair_type = pair.get("pair_type", "")
+
+        # Both samples must exist.
+        left = samples_by_id.get(left_id)
+        right = samples_by_id.get(right_id)
+        if left is None:
+            issues.append(f"{pid}: left_sample_id {left_id} not found")
+            continue
+        if right is None:
+            issues.append(f"{pid}: right_sample_id {right_id} not found")
+            continue
+
+        # Same identity.
+        if left.identity_id != right.identity_id:
+            issues.append(
+                f"{pid}: identity mismatch ({left.identity_id} vs {right.identity_id})"
+            )
+
+        # Different images.
+        if left.image_uri == right.image_uri:
+            issues.append(f"{pid}: same image on both sides ({left.image_uri})")
+
+        # Attribute-level pairs: labels must be accepted and differ.
+        if pair_type == "cross_image_attribute_state":
+            attr = pair.get("attribute")
+            if not attr:
+                issues.append(f"{pid}: cross_image pair missing 'attribute'")
+            else:
+                left_attrs = _accepted_visible_attributes(left)
+                right_attrs = _accepted_visible_attributes(right)
+                if attr not in left_attrs:
+                    issues.append(
+                        f"{pid}: attribute {attr} not accepted on left image"
+                    )
+                if attr not in right_attrs:
+                    issues.append(
+                        f"{pid}: attribute {attr} not accepted on right image"
+                    )
+                if (
+                    attr in left_attrs
+                    and attr in right_attrs
+                    and left_attrs[attr] == right_attrs[attr]
+                ):
+                    issues.append(
+                        f"{pid}: left/right labels identical for {attr}"
+                    )
+            # Explicit label fields should be present and differ.
+            left_label = pair.get("left_label")
+            right_label = pair.get("right_label")
+            if left_label is None or right_label is None:
+                issues.append(f"{pid}: missing left_label or right_label")
+            elif left_label == right_label:
+                issues.append(f"{pid}: left_label == right_label ({left_label})")
+
+    return issues

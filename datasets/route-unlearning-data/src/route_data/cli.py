@@ -259,9 +259,13 @@ def cmd_model_smoke_test(args) -> int:
 
     backend = create_backend(cfg)
 
-    # Fix 1: use a real image when --image is provided; fall back to placeholder
-    # only when no image path is given.
+    # P0-2: real backends require a real image; only stub may use placeholder.
     image_path = getattr(args, "image", None)
+    if not image_path and cfg.backend != "stub":
+        raise ConfigError(
+            "--image is required for non-stub smoke tests "
+            f"(backend={cfg.backend})"
+        )
     if image_path:
         image = _load_image(image_path)
         image_hash = _image_sha256(image_path)
@@ -269,26 +273,23 @@ def cmd_model_smoke_test(args) -> int:
         image = _load_image(None)
         image_hash = "placeholder_gray_image"
 
-    # Load prompt registry for proper binary prompts
+    # P0-1: construct PromptRegistry with a proper PromptsConfig, not a raw
+    # string path.  The constructor expects a PromptsConfig dataclass.
     prompts_path = getattr(args, "prompts", None) or "configs/prompts/celeba_binary_v1.yaml"
+    from .config import PromptsConfig
     from .prompts.registry import PromptRegistry
-    try:
-        registry = PromptRegistry(prompts_path)
-    except Exception as exc:
-        log.warning("Could not load prompt registry from %s: %s; using simple prompts", prompts_path, exc)
-        registry = None
+
+    prompt_cfg = PromptsConfig(binary=prompts_path, grouped=None, route_conflict=None)
+    registry = PromptRegistry(prompt_cfg)
 
     # Three obvious attribute questions to verify visual discrimination.
     smoke_attributes = ["Eyeglasses", "Smiling", "Wearing_Hat"]
 
     results: list[dict[str, Any]] = []
     for attr in smoke_attributes:
-        if registry is not None:
-            try:
-                prompt = registry.binary_prompt(attr)
-            except Exception:
-                prompt = f"Is this person showing {attr.replace('_', ' ').lower()}? Answer yes or no."
-        else:
+        try:
+            prompt = registry.binary_prompt(attr)
+        except Exception:
             prompt = f"Is this person showing {attr.replace('_', ' ').lower()}? Answer yes or no."
 
         gen = backend.generate(image, prompt)
@@ -800,13 +801,36 @@ def cmd_build_annotate(args) -> int:
         if hasattr(backend, "_load"):
             backend._load()
     except Exception as exc:  # noqa: BLE001 - model load may fail in dry envs
-        log.warning("Backend pre-load failed (%s); fingerprint may lack resolved revision", exc)
+        if run_cfg.model.backend == "stub":
+            log.warning("Backend pre-load failed (%s); fingerprint may lack resolved revision", exc)
+        else:
+            raise ConfigError(f"Backend pre-load failed: {exc}") from exc
 
+    # P0-7: fingerprint and resolved revision are mandatory for real backends.
     fingerprint_id: str | None = None
+    fingerprint_data: dict[str, Any] = {}
     try:
-        fingerprint_id = str(backend.fingerprint().get("fingerprint_id"))
-    except Exception as exc:  # noqa: BLE001 - fingerprint is best-effort
-        log.warning("Backend fingerprint unavailable (%s); continuing without it", exc)
+        fingerprint_data = backend.fingerprint()
+        fingerprint_id = str(fingerprint_data.get("fingerprint_id"))
+    except Exception as exc:  # noqa: BLE001
+        if run_cfg.model.backend == "stub":
+            log.warning("Backend fingerprint unavailable (%s); continuing without it", exc)
+        else:
+            raise ConfigError(
+                f"Model fingerprint is required for backend={run_cfg.model.backend!r}"
+            ) from exc
+
+    if run_cfg.model.backend != "stub":
+        resolved_revision = fingerprint_data.get("revision") or getattr(
+            backend, "_resolved_revision", None
+        )
+        if not fingerprint_id:
+            raise ConfigError("Model fingerprint_id is required for real backends")
+        if not resolved_revision or resolved_revision == "unresolved":
+            raise ConfigError(
+                "Resolved model revision is required; ensure the model loads "
+                "successfully before annotation"
+            )
 
     # Fix 2: comprehensive cache key that uniquely identifies the scoring
     # identity.  Includes model fingerprint (which embeds model_id, resolved
@@ -900,7 +924,75 @@ def cmd_build_annotate(args) -> int:
             )
             done_keys.add((sample.source_sample_id, attr))
     dataset_dir.mkdir(parents=True, exist_ok=True)
+
+    # P1-11: strictly validate score-cache rows (resume path).  Reject
+    # NaN, Inf, out-of-range, and duplicate entries so stale or corrupt
+    # caches never silently contaminate downstream annotations.
+    import math as _math
+
+    validated_rows: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for r in score_rows:
+        p = r.get("p_positive")
+        sid = r.get("sample_id", "")
+        attr = r.get("attribute", "")
+        if p is None or not isinstance(p, (int, float)):
+            log.warning("Dropping score row (%s, %s): p_positive is not numeric", sid, attr)
+            continue
+        if _math.isnan(p) or _math.isinf(p):
+            log.warning("Dropping score row (%s, %s): p_positive=%s", sid, attr, p)
+            continue
+        if not (0.0 <= p <= 1.0):
+            log.warning("Dropping score row (%s, %s): p_positive=%s out of [0,1]", sid, attr, p)
+            continue
+        key = (sid, attr)
+        if key in seen_keys:
+            log.warning("Dropping duplicate score row (%s, %s)", sid, attr)
+            continue
+        seen_keys.add(key)
+        validated_rows.append(r)
+    if len(validated_rows) < len(score_rows):
+        log.info(
+            "Score validation: kept %d/%d rows after NaN/Inf/range/dedup checks",
+            len(validated_rows), len(score_rows),
+        )
+    score_rows = validated_rows
+
     write_jsonl(score_rows, scores_path)
+
+    # P1-10: write a dedicated score manifest capturing the full immutable
+    # scoring identity so the cache is auditable and reproducible.
+    # P1-15: compute a source-data hash to pin the exact source revision.
+    source_hash: str | None = None
+    try:
+        source_root = data_cfg.require_root()
+        _h = _hashlib_cache.sha256()
+        for p in sorted(source_root.rglob("*")):
+            if p.is_file() and not p.name.startswith("."):
+                _h.update(str(p.relative_to(source_root)).encode())
+                _h.update(p.read_bytes())
+        source_hash = _h.hexdigest()[:16]
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Source hash unavailable (%s); skipping source pinning", exc)
+
+    resolved_revision = fingerprint_data.get("revision") or getattr(
+        backend, "_resolved_revision", None
+    )
+    score_manifest = {
+        "dataset": args.dataset,
+        "model_fingerprint": fingerprint_id,
+        "resolved_revision": resolved_revision,
+        "prompt_registry_hash": registry.registry_hash(),
+        "scoring_version": SCORING_VERSION,
+        "candidate_set_hash": candidate_set_hash,
+        "backend": run_cfg.model.backend,
+        "model_id": run_cfg.model.model_id,
+        "score_rows": len(score_rows),
+        "source_version": data_cfg.source_version,
+        "source_hash": source_hash,
+    }
+    manifest_path = dataset_dir / f"{args.dataset}_score_manifest.json"
+    write_json(score_manifest, manifest_path)
 
     # -- 2. Frozen-protocol annotation (all 40 attributes) --------------- #
     policy = AnnotationPolicy(
@@ -995,14 +1087,31 @@ def cmd_build_qa(args) -> int:
         raise ConfigError(f"No CelebA-40 observations in {dataset_dir}; run build annotate first")
     registry = QaTemplateRegistry.default_for(attributes)
 
-    # Deterministic, hash-based identity-level split: ~80 % train / ~20 % validation.
-    # Each identity is assigned to exactly one split so all images of the same
-    # person land in the same partition (Fix 3: identity-disjoint split).
+    # Deterministic, identity-level split for QA generation.
+    # P1-8: respect official source partitions when available.  Identities
+    # with split == "retain_train" go to train, "retain_eval" go to eval.
+    # Identities with other splits (e.g. "forget", "unassigned") fall back
+    # to hash-based assignment.
+    # P1-9: guarantee at least 1 train + 1 eval identity even for tiny inputs.
     import hashlib as _hashlib
 
     train_identity_ids: set[str] = set()
     eval_identity_ids: set[str] = set()
     identity_to_split: dict[str, str] = {}
+
+    # Pass 1: honor official source partitions.
+    for s in samples:
+        iid = s.identity_id
+        if iid in identity_to_split:
+            continue
+        if s.split == "retain_train":
+            identity_to_split[iid] = "train"
+            train_identity_ids.add(iid)
+        elif s.split == "retain_eval":
+            identity_to_split[iid] = "eval"
+            eval_identity_ids.add(iid)
+
+    # Pass 2: hash-based fallback for identities without official assignment.
     for s in samples:
         iid = s.identity_id
         if iid in identity_to_split:
@@ -1014,6 +1123,26 @@ def cmd_build_qa(args) -> int:
             train_identity_ids.add(iid)
         else:
             eval_identity_ids.add(iid)
+
+    # P1-9: guarantee at least 1 identity in each split.  If one split is
+    # empty, move the identity with the most samples from the larger split.
+    if not eval_identity_ids and train_identity_ids:
+        # Pick the identity with the most samples to move to eval.
+        counts = {}
+        for s in samples:
+            counts[s.identity_id] = counts.get(s.identity_id, 0) + 1
+        donor = max(train_identity_ids, key=lambda iid: counts.get(iid, 0))
+        train_identity_ids.discard(donor)
+        eval_identity_ids.add(donor)
+        identity_to_split[donor] = "eval"
+    elif not train_identity_ids and eval_identity_ids:
+        counts = {}
+        for s in samples:
+            counts[s.identity_id] = counts.get(s.identity_id, 0) + 1
+        donor = max(eval_identity_ids, key=lambda iid: counts.get(iid, 0))
+        eval_identity_ids.discard(donor)
+        train_identity_ids.add(donor)
+        identity_to_split[donor] = "train"
 
     # Enforce identity-disjoint invariant
     assert not (train_identity_ids & eval_identity_ids), "identity split leakage"
@@ -1064,6 +1193,7 @@ def cmd_build_route_probes(args) -> int:
         _accepted_visible_attributes,
         build_identity_probes,
         build_pair_manifest,
+        validate_pair_manifest,
     )
     from .prompts.registry import PromptRegistry
 
@@ -1129,6 +1259,16 @@ def cmd_build_route_probes(args) -> int:
                             }
                         )
     pairs = build_pair_manifest(pair_specs)
+
+    # P1-13: semantic pair validation — verify same-identity, different-image,
+    # accepted labels, etc.  Issues are logged but do not block the build
+    # (the manifest is still written for downstream inspection).
+    samples_by_id = {s.source_sample_id: s for s in samples}
+    pair_issues = validate_pair_manifest(pairs, samples_by_id)
+    if pair_issues:
+        for issue in pair_issues:
+            log.warning("Pair validation issue: %s", issue)
+
     probes_path = dataset_dir / f"{args.dataset}_route_probes.jsonl"
     write_jsonl(probe_rows, probes_path)
     write_json(pairs, dataset_dir / f"{args.dataset}_pair_manifest.json")
@@ -1137,6 +1277,7 @@ def cmd_build_route_probes(args) -> int:
             "dataset": args.dataset,
             "probe_rows": len(probe_rows),
             "pairs": len(pairs),
+            "pair_validation_issues": len(pair_issues),
             "skipped_identities": skipped,
             "probes_path": str(probes_path),
         }
@@ -1219,6 +1360,28 @@ def cmd_build_export(args) -> int:
         "source_version": data_cfg.source_version,
         "scoring_method": "candidate_sequence_log_probability",
     }
+    # P1-15: propagate source_hash from score manifest (or compute fresh)
+    # so the export provenance pins the exact source data revision.
+    score_manifest_path = dataset_dir / f"{args.dataset}_score_manifest.json"
+    if score_manifest_path.exists():
+        try:
+            sm = read_json(score_manifest_path)
+            if sm.get("source_hash"):
+                provenance["source_hash"] = sm["source_hash"]
+        except Exception:  # noqa: BLE001
+            pass
+    if "source_hash" not in provenance:
+        try:
+            import hashlib as _hashlib_export
+            source_root = data_cfg.require_root()
+            _h = _hashlib_export.sha256()
+            for p in sorted(source_root.rglob("*")):
+                if p.is_file() and not p.name.startswith("."):
+                    _h.update(str(p.relative_to(source_root)).encode())
+                    _h.update(p.read_bytes())
+            provenance["source_hash"] = _h.hexdigest()[:16]
+        except Exception:  # noqa: BLE001
+            pass
     # Optional: whitelist provenance.
     if run_cfg.build.attribute_whitelist:
         try:

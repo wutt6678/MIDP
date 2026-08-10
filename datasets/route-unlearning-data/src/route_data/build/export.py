@@ -229,9 +229,16 @@ class ExtensionExporter:
             manifest["provenance"] = dict(provenance)
         manifest_path = self._path(f"{self.benchmark}_export_manifest.json")
         write_json(manifest, manifest_path)
+        # P1-12: include the manifest in record.paths so it is covered by
+        # the checksum computation below.  Previously the manifest was
+        # written after record.paths was frozen, so it was missing from
+        # checksums.json.
+        record.paths["manifest"] = str(manifest_path)
 
         # Fix 9: write checksums.json for all final artifacts so outputs
         # can be audited and verified after copying between servers.
+        # The checksums file itself is intentionally excluded (a file
+        # cannot contain its own hash).
         checksums: dict[str, str] = {}
         for key, path_str in sorted(record.paths.items()):
             checksums[path_str] = self._sha256_file(path_str)
