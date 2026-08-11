@@ -17,6 +17,7 @@ definition caveat in every card (plan 10.4).
 from __future__ import annotations
 
 import hashlib
+import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,39 @@ from ..constants.attribute_taxonomy import LOW_RELIABILITY, SENSITIVE_DATASET_LA
 from ..data.io import ensure_parent_dir, write_json, write_jsonl, write_parquet
 from ..data.schemas import CanonicalSample
 from .split_generation import SplitResult
+
+
+def _get_midp_git_info() -> dict[str, Any]:
+    """P3-25: retrieve MIDP git commit and dirty state for provenance."""
+    info: dict[str, Any] = {
+        "midp_git_commit": "unknown",
+        "git_dirty": None,
+    }
+    try:
+        # Get the current commit SHA
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=Path(__file__).parent,
+        )
+        if result.returncode == 0:
+            info["midp_git_commit"] = result.stdout.strip()
+
+        # Check if the working tree is dirty
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=Path(__file__).parent,
+        )
+        if result.returncode == 0:
+            info["git_dirty"] = bool(result.stdout.strip())
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        pass  # git not available or not in a git repo
+    return info
 
 
 @dataclass
@@ -240,6 +274,8 @@ class ExtensionExporter:
         manifest = record.to_dict()
         if provenance:
             manifest["provenance"] = dict(provenance)
+        # P3-25: include MIDP git commit and dirty state for provenance.
+        manifest["midp_provenance"] = _get_midp_git_info()
         write_json(manifest, manifest_path)
 
         # Step 2: checksums over all artifacts incl. the final manifest,

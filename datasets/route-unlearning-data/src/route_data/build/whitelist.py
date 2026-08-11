@@ -24,9 +24,11 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from ..config import ConfigError
 from ..constants.celeba_attributes import CELEBA_ATTRIBUTE_SET
+from ..config import ConfigError
+
 
 # --------------------------------------------------------------------------- #
 # Errors

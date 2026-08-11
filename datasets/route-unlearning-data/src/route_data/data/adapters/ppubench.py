@@ -30,7 +30,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..schemas import CanonicalSample
+from ..schemas import CanonicalSample, ProfileFact
 from .base import (
     AdapterError,
     BenchmarkAdapter,
@@ -163,6 +163,31 @@ class PpubenchAdapter(BenchmarkAdapter):
         key = str(raw).strip().lower()
         return _MODALITY_TABLE.get(key)
 
+    # -- profile facts ------------------------------------------------------ #
+
+    @staticmethod
+    def _profile_facts(row: Mapping[str, Any]) -> list[ProfileFact]:
+        """Derive profile facts from source row.
+
+        PPU-Bench rows do not carry a free-text biography, but the
+        ``subject`` field (the person's name) is an identity-linked fact
+        that route-probe generation requires.
+        """
+        facts: list[ProfileFact] = []
+        subject = row.get("subject")
+        if isinstance(subject, str) and subject.strip():
+            facts.append(
+                ProfileFact(
+                    fact_id="ppubench_subject",
+                    relation="subject_name",
+                    value=subject.strip(),
+                    privacy_class="identity_name",
+                    source="source_human",
+                    forgettable=True,
+                ).validate()
+            )
+        return facts
+
     # -- flattening --------------------------------------------------------- #
 
     def to_samples(
@@ -183,6 +208,7 @@ class PpubenchAdapter(BenchmarkAdapter):
         answer_label = row.get("answer_label")
         answer_text = row.get("answer_text")
         question = row.get("question")
+        facts = self._profile_facts(row)
 
         def base_metadata(image_field: str | None) -> dict[str, Any]:
             metadata = self.context_metadata(source_context)
@@ -221,6 +247,7 @@ class PpubenchAdapter(BenchmarkAdapter):
                 answer_text=str(answer_text) if answer_text not in (None, "") else None,
                 answer_label=answer_label,
                 options=options,
+                profile_facts=list(facts),
                 split=split,
                 source_metadata=base_metadata(image_field),
             ).validate()

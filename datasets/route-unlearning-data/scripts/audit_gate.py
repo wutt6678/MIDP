@@ -351,13 +351,176 @@ def audit_tiny_smoke_facts(dataset: str, output_dir: Path | None = None) -> list
         return []
 
 
+def _build_audit_items(
+    source_mappings: list[dict],
+    pos_labels: list[dict],
+    neg_labels: list[dict],
+    probes: list[dict],
+    pairs: list[dict],
+    facts: list[dict],
+    failures: list[str],
+) -> list[dict]:
+    """P2-24: convert raw audit data into structured review items.
+
+    Each item has: sample_id, identity_id, image_id, probe_family,
+    attribute_or_fact, review_outcome (pass/uncertain/fail), review_note.
+    """
+    items: list[dict] = []
+    failure_set = set(failures)
+
+    # Source-mapping items.
+    for row in source_mappings:
+        iid = row.get("identity_id", "unknown")
+        note = f"raw_split={row.get('raw_split')}, target={row.get('target_split')}"
+        outcome = "pass"
+        if row.get("target_split") == "hash":
+            outcome = "uncertain"
+            note += " (unassigned → hash)"
+        items.append({
+            "sample_id": None,
+            "identity_id": iid,
+            "image_id": row.get("image_path"),
+            "probe_family": "source_mapping",
+            "attribute_or_fact": f"split={row.get('raw_split')}",
+            "review_outcome": outcome,
+            "review_note": note,
+        })
+
+    # Positive weak-label items.
+    for row in pos_labels:
+        items.append({
+            "sample_id": None,
+            "identity_id": row.get("identity_id", "unknown"),
+            "image_id": None,
+            "probe_family": "weak_label_positive",
+            "attribute_or_fact": row.get("attribute", ""),
+            "review_outcome": "pass",
+            "review_note": f"score={row.get('score', 0):.4f}",
+        })
+
+    # Negative weak-label items.
+    for row in neg_labels:
+        items.append({
+            "sample_id": None,
+            "identity_id": row.get("identity_id", "unknown"),
+            "image_id": None,
+            "probe_family": "weak_label_negative",
+            "attribute_or_fact": row.get("attribute", ""),
+            "review_outcome": "pass",
+            "review_note": f"score={row.get('score', 0):.4f}",
+        })
+
+    # Conflict-probe items.
+    for row in probes:
+        pid = row.get("probe_id", "unknown")
+        outcome = "pass"
+        note = f"expected={row.get('expected_answer')}"
+        # Check if this probe has a known failure.
+        if any(pid in f for f in failure_set):
+            outcome = "fail"
+            note += " (flagged)"
+        items.append({
+            "sample_id": pid,
+            "identity_id": row.get("identity_id", "unknown"),
+            "image_id": row.get("image_uri"),
+            "probe_family": row.get("probe_family", "unknown"),
+            "attribute_or_fact": row.get("probe_family", ""),
+            "review_outcome": outcome,
+            "review_note": note,
+        })
+
+    # Cross-image pair items.
+    for row in pairs:
+        pid = row.get("pair_id", "unknown")
+        outcome = "pass"
+        note = f"attr={row.get('attribute')}, states={row.get('left_state')}→{row.get('right_state')}"
+        if row.get("left_image") == row.get("right_image"):
+            outcome = "fail"
+            note += " (same image on both sides)"
+        items.append({
+            "sample_id": pid,
+            "identity_id": row.get("identity_id", "unknown"),
+            "image_id": row.get("left_image"),
+            "probe_family": "cross_image_attribute_state",
+            "attribute_or_fact": row.get("attribute", ""),
+            "review_outcome": outcome,
+            "review_note": note,
+        })
+
+    # Name-only fact items.
+    for row in facts:
+        pid = row.get("probe_id", "unknown")
+        outcome = "pass"
+        note = f"expected={row.get('expected_answer')}"
+        if not row.get("expected_answer"):
+            outcome = "fail"
+            note += " (missing expected_answer)"
+        items.append({
+            "sample_id": pid,
+            "identity_id": row.get("identity_id", "unknown"),
+            "image_id": None,
+            "probe_family": "name_only",
+            "attribute_or_fact": row.get("fact_text", ""),
+            "review_outcome": outcome,
+            "review_note": note,
+        })
+
+    return items
+
+
+def _persist_audit_report(
+    dataset: str,
+    output_dir: Path | None,
+    items: list[dict],
+    failures: list[str],
+) -> Path | None:
+    """P2-24: write <dataset>_manual_audit_report.json.
+
+    The report contains every reviewed item with its outcome and a summary.
+    Pilot requires zero critical failures.
+    """
+    if output_dir is None:
+        return None
+
+    critical_failures = sum(1 for it in items if it["review_outcome"] == "fail")
+    uncertain_count = sum(1 for it in items if it["review_outcome"] == "uncertain")
+
+    report: dict = {
+        "dataset": dataset,
+        "total_items": len(items),
+        "critical_failures": critical_failures,
+        "uncertain_items": uncertain_count,
+        "gate_pass": critical_failures == 0 and len(failures) == 0,
+        "items": items,
+        "summary": {
+            "source_mappings": sum(1 for it in items if it["probe_family"] == "source_mapping"),
+            "weak_label_positive": sum(1 for it in items if it["probe_family"] == "weak_label_positive"),
+            "weak_label_negative": sum(1 for it in items if it["probe_family"] == "weak_label_negative"),
+            "conflict_probes": sum(1 for it in items if it["probe_family"] not in (
+                "source_mapping", "weak_label_positive", "weak_label_negative",
+                "cross_image_attribute_state", "name_only",
+            )),
+            "cross_image_pairs": sum(1 for it in items if it["probe_family"] == "cross_image_attribute_state"),
+            "name_only_facts": sum(1 for it in items if it["probe_family"] == "name_only"),
+        },
+    }
+
+    report_path = output_dir / f"{dataset}_manual_audit_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2, default=str) + "\n")
+    print(f"\n--- audit report persisted: {report_path}")
+    print(f"    total_items={len(items)}, critical_failures={critical_failures}, "
+          f"uncertain={uncertain_count}, gate={'PASS' if report['gate_pass'] else 'FAIL'}")
+    return report_path
+
+
 def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | None = None) -> int:
     """Run the full audit gate and produce a structured report."""
     print(f"\n{'#'*72}")
     print(f"# R20 MANUAL AUDIT GATE: {dataset.upper()}")
     print(f"{'#'*72}")
     
-    failures = []
+    failures: list[str] = []
     
     # 1. Audit source mappings
     source_mappings = audit_source_mappings(dataset, limit=20)
@@ -386,6 +549,12 @@ def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | N
         if not f["expected_answer"]:
             failures.append(f"name-only fact {f['probe_id']}: missing expected_answer")
     
+    # P2-24: build structured audit items and persist report.
+    audit_items = _build_audit_items(
+        source_mappings, pos_labels, neg_labels, probes, pairs, facts, failures,
+    )
+    _persist_audit_report(dataset, output_dir, audit_items, failures)
+
     # Summary
     print(f"\n{'#'*72}")
     print("# AUDIT SUMMARY")
@@ -396,14 +565,15 @@ def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | N
     print(f"Conflict probes inspected: {len(probes)}")
     print(f"Cross-image pairs inspected: {len(pairs)}")
     print(f"Name-only facts inspected: {len(facts)}")
+    print(f"Total audit items: {len(audit_items)}")
     
     if failures:
-        print(f"\n❌ AUDIT FAILED: {len(failures)} issues found")
+        print(f"\nAUDIT FAILED: {len(failures)} issues found")
         for f in failures:
             print(f"  - {f}")
         return 1
     else:
-        print("\n✓ AUDIT PASSED: all checks passed")
+        print("\nAUDIT PASSED: all checks passed")
         return 0
 
 

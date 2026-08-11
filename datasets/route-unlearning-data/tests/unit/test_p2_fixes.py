@@ -598,3 +598,42 @@ class TestProbeCoverageReport:
         # id1 has candidate id2 (2+ samples, accepted attrs) → 1
         # id2 has no candidate (id1 has only 1 sample) → 0
         assert report["wrong_name_availability"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# P3-25: MIDP git provenance in export manifest
+# --------------------------------------------------------------------------- #
+
+
+class TestMidpGitProvenance:
+    """P3-25: export manifest includes MIDP git commit and dirty state."""
+
+    def test_export_manifest_contains_midp_provenance(self, tmp_path):
+        """Export manifest should include midp_provenance with git info."""
+        from route_data.build.export import ExtensionExporter
+        from route_data.data.schemas import CanonicalSample, Provenance
+
+        samples = [
+            CanonicalSample(
+                source_sample_id="s1",
+                identity_id="id1",
+                identity_name="Test",
+                provenance=Provenance(source_dataset="test"),
+                image_uri="img.png",
+                modality="image_text",
+                visual_attributes={},
+                profile_facts=[],
+                benchmark="test",
+            ),
+        ]
+        exporter = ExtensionExporter(tmp_path, "test")
+        record = exporter.export_all(samples)
+
+        manifest = json.loads(Path(record.paths["manifest"]).read_text())
+        assert "midp_provenance" in manifest
+        provenance = manifest["midp_provenance"]
+        assert "midp_git_commit" in provenance
+        assert "git_dirty" in provenance
+        # git_dirty should be a boolean or None (if git unavailable)
+        assert provenance["git_dirty"] is None or isinstance(provenance["git_dirty"], bool)
+

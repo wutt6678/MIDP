@@ -105,6 +105,20 @@ class FiubenchAdapter(BenchmarkAdapter):
             files.append(split_path)
         return files
 
+    def iter_rows_with_context(
+        self,
+    ) -> Iterator[tuple[SourceContext, Mapping[str, Any]]]:
+        """Yield rows from the profile file only; the split file is metadata."""
+        source_path = self._source_path()
+        from .base import read_rows_from
+
+        rows = read_rows_from(source_path)
+        for index, row in enumerate(rows):
+            context = self.base_context(
+                source_file=str(source_path), source_row_index=index
+            )
+            yield context, row
+
     # -- official splits (plan B17) --------------------------------------- #
 
     def _split_lookup(self) -> dict[str, str]:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -158,3 +160,272 @@ class TestBuildCli:
         monkeypatch.setenv("FAIRGET_ROOT", str(root))
         rc = _run_annotate(cfg, tmp_path / "out")
         assert rc == 2
+
+
+def _make_image(path: Path, size: tuple[int, int] = (224, 224)) -> None:
+    """Create a tiny solid-colour PNG for smoke testing."""
+    from PIL import Image
+
+    img = Image.new("RGB", size, (50, 100, 150))
+    img.save(path)
+
+
+class TestMultiImageSmoke:
+    """P2-19: multi-image smoke test with --image (repeatable) and --image-list."""
+
+    def test_multiple_images_repeatable_flag(self, cfg, tmp_path):
+        """--image can be passed multiple times; per-image results are emitted."""
+        img_a = tmp_path / "a.png"
+        img_b = tmp_path / "b.png"
+        _make_image(img_a, (100, 100))
+        _make_image(img_b, (200, 200))
+
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--image",
+                str(img_a),
+                "--image",
+                str(img_b),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 0
+
+        artifact = out_dir / "smoke_test" / "golden_stub_model_smoke.json"
+        assert artifact.exists()
+        payload = json.loads(artifact.read_text())
+        assert payload["n_images"] == 2
+        assert len(payload["per_image"]) == 2
+        # Each per-image entry has its own results
+        for entry in payload["per_image"]:
+            assert len(entry["smoke_results"]) == 3
+            assert entry["image_sha256"] != "placeholder_gray_image"
+        # Cross-image variation should be populated
+        assert "cross_image_variation" in payload
+        for attr, variation in payload["cross_image_variation"].items():
+            assert "spread" in variation
+            assert variation["spread"] > 0
+
+    def test_image_list_file(self, cfg, tmp_path):
+        """--image-list reads paths from a text file."""
+        img_a = tmp_path / "x.png"
+        img_b = tmp_path / "y.png"
+        img_c = tmp_path / "z.png"
+        _make_image(img_a, (64, 64))
+        _make_image(img_b, (128, 256))
+        _make_image(img_c, (32, 32))
+
+        list_file = tmp_path / "images.txt"
+        list_file.write_text(
+            f"{img_a}\n# comment\n{img_b}\n\n{img_c}\n"
+        )
+
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--image-list",
+                str(list_file),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 0
+
+        artifact = out_dir / "smoke_test" / "golden_stub_model_smoke.json"
+        payload = json.loads(artifact.read_text())
+        assert payload["n_images"] == 3
+
+    def test_combined_image_and_image_list(self, cfg, tmp_path):
+        """--image and --image-list can be combined."""
+        img_a = tmp_path / "a.png"
+        img_b = tmp_path / "b.png"
+        _make_image(img_a, (100, 100))
+        _make_image(img_b, (200, 200))
+
+        list_file = tmp_path / "extra.txt"
+        img_c = tmp_path / "c.png"
+        _make_image(img_c, (300, 300))
+        list_file.write_text(f"{img_c}\n")
+
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--image",
+                str(img_a),
+                "--image",
+                str(img_b),
+                "--image-list",
+                str(list_file),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 0
+        artifact = out_dir / "smoke_test" / "golden_stub_model_smoke.json"
+        payload = json.loads(artifact.read_text())
+        assert payload["n_images"] == 3
+
+    def test_backward_compatible_single_image(self, cfg, tmp_path):
+        """Single --image still produces backward-compatible top-level fields."""
+        img = tmp_path / "single.png"
+        _make_image(img, (224, 224))
+
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--image",
+                str(img),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 0
+        artifact = out_dir / "smoke_test" / "golden_stub_model_smoke.json"
+        payload = json.loads(artifact.read_text())
+        assert payload["n_images"] == 1
+        # Backward-compatible top-level fields
+        assert payload["image_path"] != "placeholder"
+        assert payload["image_sha256"] != "placeholder_gray_image"
+        assert len(payload["smoke_results"]) == 3
+
+    def test_stub_no_images_uses_placeholder(self, cfg, tmp_path):
+        """Stub backend with no --image uses a placeholder (backward compat)."""
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 0
+        artifact = out_dir / "smoke_test" / "golden_stub_model_smoke.json"
+        payload = json.loads(artifact.read_text())
+        assert payload["n_images"] == 1
+        assert payload["image_path"] == "placeholder"
+        assert payload["image_sha256"] == "placeholder_gray_image"
+
+    def test_identical_images_fail_variation_check(self, cfg, tmp_path):
+        """Multiple images with identical size produce identical stub scores,
+        which should fail the cross-image variation check."""
+        img_a = tmp_path / "a.png"
+        img_b = tmp_path / "b.png"
+        # Same size → same stub hash → same scores
+        _make_image(img_a, (224, 224))
+        _make_image(img_b, (224, 224))
+
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--image",
+                str(img_a),
+                "--image",
+                str(img_b),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 2  # ConfigError: identical scores across images
+
+
+class TestSanityCheck:
+    """P2-20: image-conditioned sanity cases with --smoke-expected."""
+
+    def test_sanity_check_with_expected_labels(self, cfg, tmp_path):
+        """--smoke-expected compares predictions against known labels."""
+        img = tmp_path / "test.png"
+        _make_image(img, (150, 150))
+
+        # The stub backend produces deterministic scores based on image size.
+        # We don't know the exact prediction, but we can provide an expectation
+        # and verify the sanity_check section is populated.
+        expected_file = tmp_path / "expected.json"
+        expected_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "image": str(img),
+                        "expected": {"Eyeglasses": True, "Smiling": False},
+                    }
+                ]
+            )
+        )
+
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--image",
+                str(img),
+                "--smoke-expected",
+                str(expected_file),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 0
+
+        artifact = out_dir / "smoke_test" / "golden_stub_model_smoke.json"
+        payload = json.loads(artifact.read_text())
+        assert "sanity_check" in payload
+        sc = payload["sanity_check"]
+        assert sc["n_images_with_expectations"] == 1
+        assert sc["total_matches"] + sc["total_mismatches"] == 2
+        assert len(sc["results"]) == 1
+        assert len(sc["results"][0]["details"]) == 2
+        for detail in sc["results"][0]["details"]:
+            assert "attribute" in detail
+            assert "expected" in detail
+            assert "predicted" in detail
+            assert "match" in detail
+
+    def test_sanity_check_no_expectations(self, cfg, tmp_path):
+        """Without --smoke-expected, sanity_check is empty."""
+        img = tmp_path / "test.png"
+        _make_image(img, (100, 100))
+
+        out_dir = tmp_path / "smoke_out"
+        rc = main(
+            [
+                "model",
+                "smoke-test",
+                "--config",
+                cfg,
+                "--image",
+                str(img),
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        assert rc == 0
+        artifact = out_dir / "smoke_test" / "golden_stub_model_smoke.json"
+        payload = json.loads(artifact.read_text())
+        assert payload["sanity_check"] == {}

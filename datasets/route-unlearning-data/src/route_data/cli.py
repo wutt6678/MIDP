@@ -313,19 +313,31 @@ def cmd_model_smoke_test(args) -> int:
 
     backend = create_backend(cfg)
 
-    # P0-2: real backends require a real image; only stub may use placeholder.
-    image_path = getattr(args, "image", None)
-    if not image_path and cfg.backend != "stub":
+    # P2-19: collect image paths from --image (repeatable) and --image-list.
+    image_paths: list[str] = []
+    raw_images = getattr(args, "image", None) or []
+    if isinstance(raw_images, str):
+        raw_images = [raw_images]
+    image_paths.extend(raw_images)
+    image_list_file = getattr(args, "image_list", None)
+    if image_list_file:
+        from .data.io import read_jsonl as _read_lines
+
+        with open(image_list_file) as fh:
+            for line in fh:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    image_paths.append(stripped)
+
+    # P0-2: real backends require at least one real image; only stub may use
+    # placeholder.
+    if not image_paths and cfg.backend != "stub":
         raise ConfigError(
             "--image is required for non-stub smoke tests "
             f"(backend={cfg.backend})"
         )
-    if image_path:
-        image = _load_image(image_path)
-        image_hash = _image_sha256(image_path)
-    else:
-        image = _load_image(None)
-        image_hash = "placeholder_gray_image"
+    if not image_paths:
+        image_paths = [None]  # stub placeholder
 
     # P0-1: construct PromptRegistry with a proper PromptsConfig, not a raw
     # string path.  The constructor expects a PromptsConfig dataclass.
@@ -339,63 +351,73 @@ def cmd_model_smoke_test(args) -> int:
     # Three obvious attribute questions to verify visual discrimination.
     smoke_attributes = ["Eyeglasses", "Smiling", "Wearing_Hat"]
 
-    results: list[dict[str, Any]] = []
-    for attr in smoke_attributes:
-        # P0-A1: no fallback for real backends — a missing/malformed frozen
-        # prompt must raise so the smoke test exercises the same protocol
-        # as build annotate.
-        prompt = registry.binary_prompt(attr)
+    # P2-19: per-image results; the original single-image layout is preserved
+    # inside ``per_image`` so downstream consumers can still find it.
+    import math as _smoke_math
 
-        gen = backend.generate(image, prompt)
-        scored = backend.score_candidates(image, prompt, [" yes", " no"])
-        p = _p_positive(scored)
-        logps = {
-            cs.candidate: cs.log_probability for cs in (scored.candidate_scores or [])
-        }
-        log_p_yes = logps.get(" yes")
-        log_p_no = logps.get(" no")
-        # R2: candidate-scoring margin (log P(yes) - log P(no)) is the raw
-        # signal used for collapse detection; it is only defined when both
-        # candidate log-probabilities are present.
-        margin = (
-            log_p_yes - log_p_no
-            if (
-                isinstance(log_p_yes, (int, float))
-                and isinstance(log_p_no, (int, float))
+    per_image: list[dict[str, Any]] = []
+    all_results: list[dict[str, Any]] = []
+    for image_path in image_paths:
+        if image_path is not None:
+            image = _load_image(image_path)
+            image_hash = _image_sha256(image_path)
+        else:
+            image = _load_image(None)
+            image_hash = "placeholder_gray_image"
+
+        results: list[dict[str, Any]] = []
+        for attr in smoke_attributes:
+            prompt = registry.binary_prompt(attr)
+            gen = backend.generate(image, prompt)
+            scored = backend.score_candidates(image, prompt, [" yes", " no"])
+            p = _p_positive(scored)
+            logps = {
+                cs.candidate: cs.log_probability for cs in (scored.candidate_scores or [])
+            }
+            log_p_yes = logps.get(" yes")
+            log_p_no = logps.get(" no")
+            margin = (
+                log_p_yes - log_p_no
+                if (
+                    isinstance(log_p_yes, (int, float))
+                    and isinstance(log_p_no, (int, float))
+                )
+                else None
             )
-            else None
-        )
-        predicted_label = (
-            ("positive" if p >= 0.5 else "negative")
-            if isinstance(p, (int, float))
-            else None
-        )
-        results.append({
-            "attribute": attr,
-            "prompt": prompt,
-            "generated_text": gen.text,
-            "log_p_yes": log_p_yes,
-            "log_p_no": log_p_no,
-            "margin": margin,
-            "p_positive": p,
-            "predicted_label": predicted_label,
+            predicted_label = (
+                ("positive" if p >= 0.5 else "negative")
+                if isinstance(p, (int, float))
+                else None
+            )
+            results.append({
+                "attribute": attr,
+                "prompt": prompt,
+                "generated_text": gen.text,
+                "log_p_yes": log_p_yes,
+                "log_p_no": log_p_no,
+                "margin": margin,
+                "p_positive": p,
+                "predicted_label": predicted_label,
+            })
+
+        per_image.append({
+            "image_path": image_path or "placeholder",
+            "image_sha256": image_hash,
+            "smoke_results": results,
         })
+        all_results.extend(results)
 
     # R2: free-generation collapse checks belong in the smoke-test (not in
     # build annotate, where candidate scoring intentionally returns blank text).
-    # Fail if: all generated outputs blank; candidate score missing; NaN/Inf;
-    # all probabilities near 0.5; or all margins identical.
-    import math as _smoke_math
-
     smoke_failures: list[str] = []
-    gens = [(r.get("generated_text") or "").strip() for r in results]
+    gens = [(r.get("generated_text") or "").strip() for r in all_results]
     if gens and all(not g for g in gens):
         smoke_failures.append("all generated outputs blank")
-    if any(r["log_p_yes"] is None or r["log_p_no"] is None for r in results):
+    if any(r["log_p_yes"] is None or r["log_p_no"] is None for r in all_results):
         smoke_failures.append("candidate score missing")
     numeric_vals = [
         v
-        for r in results
+        for r in all_results
         for v in (r["log_p_yes"], r["log_p_no"], r["p_positive"])
         if isinstance(v, (int, float))
     ]
@@ -403,7 +425,7 @@ def cmd_model_smoke_test(args) -> int:
         smoke_failures.append("NaN/Inf in candidate scores")
     p_vals = [
         r["p_positive"]
-        for r in results
+        for r in all_results
         if isinstance(r["p_positive"], (int, float))
         and _smoke_math.isfinite(r["p_positive"])
     ]
@@ -411,11 +433,114 @@ def cmd_model_smoke_test(args) -> int:
         smoke_failures.append("all probabilities near 0.5")
     margins = [
         r["margin"]
-        for r in results
+        for r in all_results
         if isinstance(r["margin"], (int, float)) and _smoke_math.isfinite(r["margin"])
     ]
     if len(margins) > 1 and len({round(m, 6) for m in margins}) <= 1:
         smoke_failures.append("all margins identical")
+
+    # P2-19: cross-image variation check.  When multiple visually diverse
+    # images are provided, the same-attribute scores should not be
+    # effectively identical across every image.
+    cross_image_variation: dict[str, Any] = {}
+    if len(per_image) > 1:
+        for attr in smoke_attributes:
+            attr_p = [
+                r["p_positive"]
+                for entry in per_image
+                for r in entry["smoke_results"]
+                if r["attribute"] == attr
+                and isinstance(r["p_positive"], (int, float))
+            ]
+            if len(attr_p) >= 2:
+                spread = max(attr_p) - min(attr_p)
+                cross_image_variation[attr] = {
+                    "min": min(attr_p),
+                    "max": max(attr_p),
+                    "spread": spread,
+                }
+                if spread < 1e-6:
+                    smoke_failures.append(
+                        f"attribute '{attr}' has identical scores across all "
+                        f"{len(attr_p)} images (spread={spread:.2e})"
+                    )
+
+    # P2-20: image-conditioned sanity cases.  When --smoke-expected is
+    # provided, compare model predictions against known labels for specific
+    # images to verify the visual pathway is active.
+    sanity_check: dict[str, Any] = {}
+    expected_file = getattr(args, "smoke_expected", None)
+    if expected_file:
+        from .data.io import read_json as _read_json
+
+        expected_entries = _read_json(expected_file)
+        if not isinstance(expected_entries, list):
+            expected_entries = [expected_entries]
+
+        # Build a lookup from image path to expected labels
+        expected_by_image: dict[str, dict[str, bool]] = {}
+        for entry in expected_entries:
+            if isinstance(entry, dict) and "image" in entry and "expected" in entry:
+                expected_by_image[entry["image"]] = entry["expected"]
+
+        sanity_results: list[dict[str, Any]] = []
+        for entry in per_image:
+            img_path = entry["image_path"]
+            if img_path in expected_by_image:
+                expected = expected_by_image[img_path]
+                results_by_attr = {
+                    r["attribute"]: r for r in entry["smoke_results"]
+                }
+                matches = 0
+                mismatches = 0
+                details: list[dict[str, Any]] = []
+                for attr, expected_label in expected.items():
+                    if attr in results_by_attr:
+                        result = results_by_attr[attr]
+                        predicted = result["predicted_label"]
+                        # expected_label is True/False; predicted is "positive"/"negative"
+                        expected_pred = "positive" if expected_label else "negative"
+                        match = predicted == expected_pred
+                        if match:
+                            matches += 1
+                        else:
+                            mismatches += 1
+                        details.append({
+                            "attribute": attr,
+                            "expected": expected_label,
+                            "predicted": predicted,
+                            "p_positive": result["p_positive"],
+                            "match": match,
+                        })
+                if details:
+                    sanity_results.append({
+                        "image_path": img_path,
+                        "matches": matches,
+                        "mismatches": mismatches,
+                        "details": details,
+                    })
+
+        if sanity_results:
+            total_matches = sum(r["matches"] for r in sanity_results)
+            total_mismatches = sum(r["mismatches"] for r in sanity_results)
+            sanity_check = {
+                "n_images_with_expectations": len(sanity_results),
+                "total_matches": total_matches,
+                "total_mismatches": total_mismatches,
+                "results": sanity_results,
+            }
+            if total_mismatches > 0:
+                log.warning(
+                    "Sanity check: %d/%d expected labels mismatched",
+                    total_mismatches,
+                    total_matches + total_mismatches,
+                )
+            else:
+                log.info(
+                    "Sanity check: all %d expected labels matched",
+                    total_matches,
+                )
+
     if smoke_failures:
         raise ConfigError(
             "Model smoke-test collapse detected: " + "; ".join(smoke_failures)
@@ -424,21 +549,27 @@ def cmd_model_smoke_test(args) -> int:
     fp = backend.fingerprint()
     resolved_revision = getattr(backend, "_resolved_revision", None) or fp.get("revision", "n/a")
 
+    # Backward-compatible top-level fields use the first image.
+    first = per_image[0] if per_image else {}
     payload = {
         "model_fingerprint": fp,
         "resolved_revision": resolved_revision,
-        "image_sha256": image_hash,
-        "image_path": image_path or "placeholder",
-        "smoke_results": results,
+        "image_sha256": first.get("image_sha256", "n/a"),
+        "image_path": first.get("image_path", "placeholder"),
+        "smoke_results": first.get("smoke_results", []),
         "checks": {
             "generated_non_blank": sum(1 for g in gens if g),
             "candidate_scores_present": sum(
-                1 for r in results if r["log_p_yes"] is not None and r["log_p_no"] is not None
+                1 for r in all_results if r["log_p_yes"] is not None and r["log_p_no"] is not None
             ),
             "finite_scores": all(_smoke_math.isfinite(v) for v in numeric_vals),
             "probabilities_near_half": bool(p_vals) and all(abs(p - 0.5) < 0.01 for p in p_vals),
             "margins_distinct": len({round(m, 6) for m in margins}) > 1,
         },
+        "n_images": len(per_image),
+        "per_image": per_image,
+        "cross_image_variation": cross_image_variation,
+        "sanity_check": sanity_check,
     }
 
     # R2: persist a machine-readable smoke artifact, e.g.
@@ -2142,8 +2273,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_model_inspect)
     p = model.add_parser("smoke-test", help="run a tiny generate+score sanity check")
     p.add_argument("--config", required=True)
-    p.add_argument("--image", default=None, help="path to a real test image (Fix 1)")
+    p.add_argument(
+        "--image",
+        action="append",
+        default=None,
+        help="path to a real test image (repeatable for multi-image smoke)",
+    )
+    p.add_argument(
+        "--image-list",
+        dest="image_list",
+        default=None,
+        help="path to a text file with one image path per line",
+    )
     p.add_argument("--prompts", default=None, help="path to binary prompt registry YAML")
+    p.add_argument(
+        "--smoke-expected",
+        dest="smoke_expected",
+        default=None,
+        help="path to JSON file with expected labels for sanity-check images",
+    )
     _common_flags(p)
     p.set_defaults(func=cmd_model_smoke_test)
 
