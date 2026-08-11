@@ -6,8 +6,9 @@ single auditable report for one benchmark extension.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from ..build.split_generation import SplitResult, validate_split_invariants
 from ..data.schemas import CanonicalSample

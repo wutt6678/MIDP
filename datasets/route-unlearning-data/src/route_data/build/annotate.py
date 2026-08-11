@@ -20,8 +20,9 @@ policy stays explicit and configurable.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any, Mapping
+from typing import Any
 
 from ..config import BuildConfig, ConfigError
 from ..constants.attribute_taxonomy import group_of, is_reliability_flagged
@@ -118,7 +119,7 @@ class AnnotationPolicy:
         *,
         gated_attributes: frozenset[str] | None = None,
         human_overrides: dict[tuple[str, str], bool] | None = None,
-    ) -> "AnnotationPolicy":
+    ) -> AnnotationPolicy:
         bands = build.confidence_bands or DEFAULT_BANDS
         return cls(
             gated_attributes=gated_attributes,

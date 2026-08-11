@@ -16,8 +16,8 @@ All checks return :class:`ValidationIssue` lists and never raise unless
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
 
 from ..data.schemas import CanonicalSample
 from .common import ValidationError, ValidationIssue
@@ -137,7 +137,7 @@ def average_hash(path: str | Path, hash_size: int = 8) -> int:
 
 
 def hamming_distance(a: int, b: int) -> int:
-    return bin(a ^ b).count("1")
+    return (a ^ b).bit_count()
 
 
 def check_perceptual_duplicates(

@@ -19,7 +19,7 @@ _SRC = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from route_data.cli import main  # noqa: E402
+from route_data.cli import main
 
 _STAGES = ("annotate", "qa", "route-probes", "splits", "export")
 

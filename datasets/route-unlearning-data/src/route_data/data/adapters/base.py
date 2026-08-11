@@ -25,9 +25,10 @@ import hashlib
 import io
 import json
 from abc import ABC
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Iterable, Iterator, Mapping, Sequence
+from typing import Any, ClassVar
 
 from ...config import DataConfig
 from ..schemas import CanonicalSample, Provenance

@@ -56,7 +56,6 @@ class MllamaHFBackend(VisionLanguageModel):
 
         # Resolve and record the exact commit SHA used (plan section 5.2).
         local_dir = snapshot_download(cfg.model_id, revision=cfg.revision, allow_patterns=None)
-        import os
 
         self._resolved_revision = cfg.revision or _read_head_commit(local_dir)
 

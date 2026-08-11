@@ -11,7 +11,6 @@ from route_data.build.conflict_generation import (
     build_identity_probes,
     build_pair_manifest,
     validate_pair_manifest,
-    _accepted_visible_attributes,
 )
 from route_data.config import PromptsConfig
 from route_data.data.schemas import (

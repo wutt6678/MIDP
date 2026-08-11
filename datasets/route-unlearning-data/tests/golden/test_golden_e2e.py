@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 
 import pytest
-
 from fixtures.golden_fixture import build_golden_fixture
+
 from route_data.cli import main
 from route_data.data.io import read_jsonl
 

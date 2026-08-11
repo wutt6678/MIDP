@@ -84,7 +84,7 @@ def _verify_score_manifest(export_dir: Path, benchmark: str, failures: list[str]
         if resolved and resolved != "unknown":
             print(f"--- resolved revision present: OK ({resolved})")
         else:
-            print(f"--- resolved revision present: SKIP (not found in manifest)")
+            print("--- resolved revision present: SKIP (not found in manifest)")
     except Exception as exc:
         failures.append(f"score manifest parse: {exc}")
 
@@ -99,14 +99,14 @@ def _verify_scores_per_image(export_dir: Path, benchmark: str, failures: list[st
     """
     parquet_path = export_dir / f"{benchmark}_celeba40_image_annotations.parquet"
     if not parquet_path.exists():
-        print(f"--- 40 scores per image: SKIP (parquet not found)")
+        print("--- 40 scores per image: SKIP (parquet not found)")
         return
 
     try:
         import pandas as pd
         df = pd.read_parquet(parquet_path)
         if df.empty:
-            print(f"--- 40 scores per image: SKIP (parquet is empty)")
+            print("--- 40 scores per image: SKIP (parquet is empty)")
             return
 
         # Long format: count distinct attribute names per image.
@@ -128,14 +128,14 @@ def _verify_scores_per_image(export_dir: Path, benchmark: str, failures: list[st
                 print(f"--- 40 scores per image: FAIL ({total_attrs} distinct attributes)")
         elif "score" in df.columns:
             # Fallback: wide format with score columns.
-            score_cols = [c for c in df.columns if c.startswith("score_") or c.startswith("p_")]
+            score_cols = [c for c in df.columns if c.startswith(("score_", "p_"))]
             if len(score_cols) >= 30:
                 print(f"--- 40 scores per image: OK ({len(score_cols)} score columns)")
             else:
                 print(f"--- 40 scores per image: SKIP ({len(score_cols)} score columns; "
                       f"stub fixture may not produce all 40)")
         else:
-            print(f"--- 40 scores per image: SKIP (no attribute/score columns found)")
+            print("--- 40 scores per image: SKIP (no attribute/score columns found)")
     except Exception as exc:
         failures.append(f"40 scores per image: {exc}")
 
@@ -154,7 +154,7 @@ def _verify_whitelist_invariant(export_dir: Path, benchmark: str, failures: list
     # This is a semantic check; for now verify the whitelist was loaded.
     manifest_path = export_dir / f"{benchmark}_export_manifest.json"
     if not manifest_path.exists():
-        print(f"--- whitelist invariant: SKIP (manifest not found)")
+        print("--- whitelist invariant: SKIP (manifest not found)")
         return
     
     try:
@@ -163,7 +163,7 @@ def _verify_whitelist_invariant(export_dir: Path, benchmark: str, failures: list
         if wl_attrs:
             print(f"--- whitelist invariant: OK ({len(wl_attrs)} attributes)")
         else:
-            print(f"--- whitelist invariant: SKIP (no whitelist)")
+            print("--- whitelist invariant: SKIP (no whitelist)")
     except Exception as exc:
         failures.append(f"whitelist invariant: {exc}")
 
@@ -195,7 +195,7 @@ def _verify_identity_disjointness(export_dir: Path, benchmark: str, failures: li
     eval_qa = export_dir / f"{benchmark}_celeba40_visual_qa_eval.jsonl"
     
     if not (train_qa.exists() and eval_qa.exists()):
-        print(f"--- identity disjointness: SKIP (files missing)")
+        print("--- identity disjointness: SKIP (files missing)")
         return
     
     train_ids = set()
@@ -224,7 +224,7 @@ def _verify_route_expected_answers(export_dir: Path, benchmark: str, failures: l
     """R19 check 8: route expected answers (conflict eval has expected_answer)."""
     route_eval = export_dir / f"{benchmark}_route_conflict_eval.jsonl"
     if not route_eval.exists():
-        print(f"--- route expected answers: SKIP (file missing)")
+        print("--- route expected answers: SKIP (file missing)")
         return
     
     with open(route_eval) as f:
@@ -239,14 +239,14 @@ def _verify_route_expected_answers(export_dir: Path, benchmark: str, failures: l
     if has_expected > 0:
         print(f"--- route expected answers: OK ({has_expected}/{len(lines)} rows)")
     else:
-        print(f"--- route expected answers: SKIP (no expected_answer field)")
+        print("--- route expected answers: SKIP (no expected_answer field)")
 
 
 def _verify_text_only_image_absence(export_dir: Path, benchmark: str, failures: list[str]) -> None:
     """R19 check 9: text-only image absence (text-only QA has no image_uri)."""
     train_qa = export_dir / f"{benchmark}_celeba40_visual_qa_train.jsonl"
     if not train_qa.exists():
-        print(f"--- text-only image absence: SKIP (file missing)")
+        print("--- text-only image absence: SKIP (file missing)")
         return
     
     text_only_count = 0
@@ -271,7 +271,7 @@ def _verify_pair_semantics(export_dir: Path, benchmark: str, failures: list[str]
     """R19 check 10: pair semantics (route probes have correct pair types)."""
     route_eval = export_dir / f"{benchmark}_route_conflict_eval.jsonl"
     if not route_eval.exists():
-        print(f"--- pair semantics: SKIP (file missing)")
+        print("--- pair semantics: SKIP (file missing)")
         return
     
     with open(route_eval) as f:
@@ -286,13 +286,13 @@ def _verify_pair_semantics(export_dir: Path, benchmark: str, failures: list[str]
     if pair_types:
         print(f"--- pair semantics: OK (types: {sorted(pair_types)})")
     else:
-        print(f"--- pair semantics: SKIP (no pair_type field)")
+        print("--- pair semantics: SKIP (no pair_type field)")
 
 
 def _verify_split_invariants(export_dir: Path, benchmark: str, failures: list[str]) -> None:
     """R19 check 11: split invariants (train/eval counts match expectations)."""
     # Already checked in _verify_source_split_invariant
-    print(f"--- split invariants: OK (see source split invariant)")
+    print("--- split invariants: OK (see source split invariant)")
 
 
 def _verify_export_manifest(export_dir: Path, benchmark: str, failures: list[str]) -> None:
@@ -306,10 +306,10 @@ def _verify_export_manifest(export_dir: Path, benchmark: str, failures: list[str
         mdata = json.loads(manifest_path.read_text())
         paths = mdata.get("paths", {})
         if "checksums" in paths:
-            print(f"--- export manifest references checksums: OK")
+            print("--- export manifest references checksums: OK")
         else:
             failures.append("export manifest: no checksums key in paths")
-            print(f"--- export manifest references checksums: FAIL")
+            print("--- export manifest references checksums: FAIL")
     except Exception as exc:
         failures.append(f"export manifest parse: {exc}")
 
@@ -327,16 +327,16 @@ def _verify_checksums(export_dir: Path, benchmark: str, failures: list[str]) -> 
         self_ref = f"{benchmark}_checksums.json"
         if self_ref in ckdata:
             failures.append("checksums: self-reference found")
-            print(f"--- checksums self-exclusion: FAIL")
+            print("--- checksums self-exclusion: FAIL")
         else:
-            print(f"--- checksums self-exclusion: OK")
+            print("--- checksums self-exclusion: OK")
         
         # Check 2: contains manifest
         manifest_ref = f"{benchmark}_export_manifest.json"
         if manifest_ref in ckdata:
-            print(f"--- checksums includes manifest: OK")
+            print("--- checksums includes manifest: OK")
         else:
-            print(f"--- checksums includes manifest: SKIP (not found)")
+            print("--- checksums includes manifest: SKIP (not found)")
         
         print(f"--- checksums: OK ({len(ckdata)} entries)")
     except Exception as exc:
@@ -345,8 +345,9 @@ def _verify_checksums(export_dir: Path, benchmark: str, failures: list[str]) -> 
 
 def verify_benchmark(benchmark: str, config: str, output_dir: Path, failures: list[str]) -> None:
     """Run all R19 checks for a specific benchmark."""
-    from route_data.naming import model_output_name
     import yaml
+
+    from route_data.naming import model_output_name
     
     # Resolve the export directory
     with open(config) as f:

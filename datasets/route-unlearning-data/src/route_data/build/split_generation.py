@@ -18,8 +18,8 @@ train/eval partition) so a split is reproducible without storing large state.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Iterable, Sequence
 
 from ..data.schemas import CanonicalSample
 
@@ -49,7 +49,7 @@ class SplitSpec:
     attribute: str | None = None
     eval_fraction: float = _DEFAULT_EVAL_FRACTION
 
-    def validate(self) -> "SplitSpec":
+    def validate(self) -> SplitSpec:
         if not self.name:
             raise SplitError("SplitSpec.name must be non-empty")
         if self.forget_scope not in FORGET_SCOPES:

@@ -10,7 +10,8 @@ high/medium/low-confidence labels.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from typing import Any, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
 from ..build.split_generation import SplitResult
 from ..data.schemas import CanonicalSample

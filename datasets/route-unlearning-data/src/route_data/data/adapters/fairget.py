@@ -30,8 +30,9 @@ Flattening rules:
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any
 
 from ..schemas import AttributeObservation, CanonicalSample, ProfileFact
 from .base import AdapterError, BenchmarkAdapter, SourceContext, register_adapter
@@ -254,7 +255,6 @@ class FairgetAdapter(BenchmarkAdapter):
                 f"[fairget] {partition}/{media_type}/{attribute}[{item_index}] "
                 "is not a QA item object"
             )
-        task_part = task if task else "qa"
         source_id = (
             f"fairget:{identity_id}:{partition}:{media_type}:{attribute}"
             f":{item_index}:{view_id}"

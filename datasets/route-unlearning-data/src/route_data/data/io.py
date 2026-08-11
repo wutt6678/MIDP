@@ -17,10 +17,12 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any
 
 import pandas as pd
+from typing_extensions import Self
 
 
 def ensure_parent_dir(path: str | Path) -> Path:
@@ -166,7 +168,7 @@ class ParquetShardWriter:
     def rows_written(self) -> int:
         return self._written
 
-    def __enter__(self) -> "ParquetShardWriter":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:

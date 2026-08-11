@@ -6,12 +6,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
-
-import pytest
 
 from route_data.build.conflict_generation import (
-    _accepted_visible_attributes,
     _visual_attribute_jaccard,
     select_matched_wrong_name,
     select_multiple_wrong_names,

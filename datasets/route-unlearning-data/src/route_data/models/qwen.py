@@ -22,7 +22,6 @@ from .base import CandidateScore, VisionLanguageModel, VisionResponse
 from .registry import register_backend
 from .scoring import gather_sequence_log_probs
 
-
 _DTYPE_MAP = {
     "float16": "float16",
     "bfloat16": "bfloat16",
@@ -45,7 +44,6 @@ class QwenHFBackend(VisionLanguageModel):
     def _load(self):
         if self._model is not None:
             return
-        import os
         import torch
         from huggingface_hub import snapshot_download
         from transformers import AutoModelForImageTextToText, AutoProcessor

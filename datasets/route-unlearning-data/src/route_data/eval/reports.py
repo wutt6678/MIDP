@@ -31,9 +31,9 @@ from ..data.io import ensure_parent_dir, write_json
 
 __all__ = [
     "collect_environment",
-    "write_metrics_bundle",
-    "write_fingerprints",
     "render_report_md",
+    "write_fingerprints",
+    "write_metrics_bundle",
     "write_run_bundle",
 ]
 

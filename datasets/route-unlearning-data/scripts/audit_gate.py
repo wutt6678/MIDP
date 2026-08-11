@@ -79,7 +79,7 @@ def audit_source_mappings(dataset: str, limit: int = 20) -> list[dict]:
         adapter = load_adapter(dataset)
         samples = list(adapter.samples())
         print(f"Loaded {len(samples)} samples from adapter")
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"WARNING: could not load adapter samples: {exc}")
         print("Falling back to config-based inspection")
     
@@ -148,7 +148,7 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
             
             # Positive weak labels: high-confidence accepted annotations
             # (score > 0.8 or similar threshold)
-            score_cols = [c for c in df.columns if c.startswith("score_") or c.startswith("p_")]
+            score_cols = [c for c in df.columns if c.startswith(("score_", "p_"))]
             if score_cols:
                 # Find rows with high-confidence positive labels
                 positive_rows = []
@@ -174,14 +174,14 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
                                 })
                 
                 # Print positive weak labels
-                print(f"\nPositive weak labels (high-confidence, score > 0.8):")
+                print("\nPositive weak labels (high-confidence, score > 0.8):")
                 print(f"{'identity_id':<40} {'attribute':<30} {'score':<10}")
                 print("-" * 80)
                 for row in positive_rows[:limit]:
                     print(f"{row['identity_id']:<40} {row['attribute']:<30} {row['score']:<10.4f}")
                 
                 # Print negative weak labels
-                print(f"\nNegative weak labels (low-confidence, score < 0.2):")
+                print("\nNegative weak labels (low-confidence, score < 0.2):")
                 print(f"{'identity_id':<40} {'attribute':<30} {'score':<10}")
                 print("-" * 80)
                 for row in negative_rows[:limit]:
@@ -191,7 +191,7 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
                 return positive_rows[:limit], negative_rows[:limit]
             else:
                 print("WARNING: no score columns found in parquet")
-        except Exception as exc:
+        except (OSError, ValueError, ImportError) as exc:
             print(f"ERROR: could not load parquet: {exc}")
     else:
         print(f"Parquet not found: {parquet_path}")
@@ -227,7 +227,7 @@ def audit_tiny_smoke_probes(dataset: str, output_dir: Path | None = None) -> lis
             fam = p.get("probe_family", "unknown")
             families.setdefault(fam, []).append(p)
         
-        print(f"\nProbe families:")
+        print("\nProbe families:")
         for fam, items in sorted(families.items()):
             print(f"  {fam}: {len(items)} probes")
         
@@ -388,7 +388,7 @@ def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | N
     
     # Summary
     print(f"\n{'#'*72}")
-    print(f"# AUDIT SUMMARY")
+    print("# AUDIT SUMMARY")
     print(f"{'#'*72}")
     print(f"Source mappings inspected: {len(source_mappings)}")
     print(f"Positive weak labels inspected: {len(pos_labels)}")
@@ -403,7 +403,7 @@ def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | N
             print(f"  - {f}")
         return 1
     else:
-        print(f"\n✓ AUDIT PASSED: all checks passed")
+        print("\n✓ AUDIT PASSED: all checks passed")
         return 0
 
 

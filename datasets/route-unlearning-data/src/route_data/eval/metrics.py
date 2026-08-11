@@ -18,12 +18,12 @@ from typing import Any
 import numpy as np
 
 __all__ = [
-    "compute_binary_metrics",
-    "macro_average",
-    "expected_calibration_error",
-    "brier_score",
-    "prevalence",
     "always_negative_baseline",
+    "brier_score",
+    "compute_binary_metrics",
+    "expected_calibration_error",
+    "macro_average",
+    "prevalence",
     "prevalence_threshold_baseline",
 ]
 

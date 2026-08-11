@@ -32,8 +32,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any
 
 from ..schemas import CanonicalSample, ProfileFact
 from .base import AdapterError, BenchmarkAdapter, SourceContext, register_adapter
@@ -298,17 +299,17 @@ class FiubenchAdapter(BenchmarkAdapter):
                     f"[fiubench] qa_list[{qa_index}] for "
                     f"{identity_name or identity_id} is not a QA item object"
                 )
-            base_kwargs = dict(
-                identity_id=identity_id,
-                identity_name=identity_name,
-                image_uri=image_uri,
-                gender=gender,
-                facts=facts,
-                split=split,
-                qa_index=qa_index,
-                item=item,
-                context=source_context,
-            )
+            base_kwargs = {
+                "identity_id": identity_id,
+                "identity_name": identity_name,
+                "image_uri": image_uri,
+                "gender": gender,
+                "facts": facts,
+                "split": split,
+                "qa_index": qa_index,
+                "item": item,
+                "context": source_context,
+            }
             base_qa_id = f"fiubench:{identity_id}:qa:{qa_index}:original"
             yield self._qa_sample(
                 **base_kwargs,

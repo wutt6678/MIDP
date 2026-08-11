@@ -8,7 +8,6 @@ import yaml
 from route_data.config import (
     ConfigError,
     DataConfig,
-    ModelConfig,
     RunConfig,
     expand_env,
     load_run_config,

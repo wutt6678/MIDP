@@ -17,10 +17,10 @@ associations, never real-world facts.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field, replace
-from typing import Any, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from typing import Any
 
-from ..config import ConfigError
 from ..data.schemas import CanonicalSample, ProfileFact, RouteProbe
 from ..prompts.registry import PromptRegistry
 
@@ -484,7 +484,7 @@ def build_identity_probes(
     if not facts:
         raise ConflictError(f"Identity {anchor.identity_id} has no profile facts")
 
-    attribute = sorted(attributes)[0]
+    attribute = min(attributes)
     visible_label = attributes[attribute]
     identity_name = anchor.identity_name or anchor.identity_id
     fact = facts[0]

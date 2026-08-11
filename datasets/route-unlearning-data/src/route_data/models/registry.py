@@ -7,7 +7,7 @@ circular evaluation (a model must not be evaluated by itself in the same role).
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from ..config import ModelConfig
 from .base import VisionLanguageModel

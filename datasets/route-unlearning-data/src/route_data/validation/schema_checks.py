@@ -16,8 +16,9 @@ validators (see ``data/schemas.py``) so the checks below play the same role.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from ..constants.celeba_attributes import CELEBA_ATTRIBUTES
 from ..data.schemas import (

@@ -73,7 +73,7 @@ class AttributeObservation:
     confidence_band: str = "unknown"
     attribute_class: str = "unknown"
 
-    def validate(self) -> "AttributeObservation":
+    def validate(self) -> AttributeObservation:
         _require_nonempty(self.name, "AttributeObservation.name")
         _check_literal(self.source, ATTRIBUTE_SOURCES, "AttributeObservation.source")
         _check_literal(
@@ -89,7 +89,7 @@ class AttributeObservation:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AttributeObservation":
+    def from_dict(cls, data: dict[str, Any]) -> AttributeObservation:
         return cls(
             name=data["name"],
             label=data.get("label"),
@@ -113,7 +113,7 @@ class ProfileFact:
     source: str = "source_human"
     forgettable: bool = False
 
-    def validate(self) -> "ProfileFact":
+    def validate(self) -> ProfileFact:
         _require_nonempty(self.fact_id, "ProfileFact.fact_id")
         _require_nonempty(self.relation, "ProfileFact.relation")
         return self
@@ -122,7 +122,7 @@ class ProfileFact:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ProfileFact":
+    def from_dict(cls, data: dict[str, Any]) -> ProfileFact:
         return cls(
             fact_id=data["fact_id"],
             relation=data["relation"],
@@ -142,7 +142,7 @@ class RouteProbe:
     expected_evidence_source: str = "unknown"
     controlled_variables: list[str] = field(default_factory=list)
 
-    def validate(self) -> "RouteProbe":
+    def validate(self) -> RouteProbe:
         _check_literal(self.probe_family, PROBE_FAMILIES, "RouteProbe.probe_family")
         _check_literal(
             self.expected_evidence_source,
@@ -155,7 +155,7 @@ class RouteProbe:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RouteProbe":
+    def from_dict(cls, data: dict[str, Any]) -> RouteProbe:
         return cls(
             probe_family=data["probe_family"],
             paired_sample_id=data.get("paired_sample_id"),
@@ -177,7 +177,7 @@ class Provenance:
     created_utc: str | None = None
     notes: str | None = None
 
-    def validate(self) -> "Provenance":
+    def validate(self) -> Provenance:
         _require_nonempty(self.source_dataset, "Provenance.source_dataset")
         return self
 
@@ -185,7 +185,7 @@ class Provenance:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Provenance":
+    def from_dict(cls, data: dict[str, Any]) -> Provenance:
         return cls(
             source_dataset=data["source_dataset"],
             source_version=data.get("source_version", "unknown"),
@@ -232,7 +232,7 @@ class CanonicalSample:
     # answer label, source file, etc. (repair plan B3). JSON-safe values only.
     source_metadata: dict[str, Any] = field(default_factory=dict)
 
-    def validate(self) -> "CanonicalSample":
+    def validate(self) -> CanonicalSample:
         _require_nonempty(self.benchmark, "CanonicalSample.benchmark")
         _require_nonempty(self.source_sample_id, "CanonicalSample.source_sample_id")
         _require_nonempty(self.identity_id, "CanonicalSample.identity_id")
@@ -275,7 +275,7 @@ class CanonicalSample:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CanonicalSample":
+    def from_dict(cls, data: dict[str, Any]) -> CanonicalSample:
         visual = {
             k: AttributeObservation.from_dict(v)
             for k, v in (data.get("visual_attributes") or {}).items()

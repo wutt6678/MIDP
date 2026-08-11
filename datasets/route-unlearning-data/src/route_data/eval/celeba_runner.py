@@ -25,8 +25,8 @@ from typing import Any
 import pandas as pd
 
 from ..config import ConfigError, EvaluationConfig, RunConfig
-from ..constants.celeba_attributes import CELEBA_ATTRIBUTES, CELEBA_ATTRIBUTE_SET
-from ..data.io import ParquetShardWriter, read_shards, write_json
+from ..constants.celeba_attributes import CELEBA_ATTRIBUTE_SET, CELEBA_ATTRIBUTES
+from ..data.io import ParquetShardWriter, read_shards
 from ..models.base import VisionLanguageModel
 from ..models.scoring import binary_probability
 from ..prompts.parsers import (
@@ -38,7 +38,7 @@ from ..prompts.registry import PromptRegistry
 from .metrics import compute_binary_metrics, macro_average
 from .reports import write_run_bundle
 
-__all__ = ["CelebaRunner", "CANDIDATES"]
+__all__ = ["CANDIDATES", "CelebaRunner"]
 
 # Full candidate strings scored in candidate mode (plan section 8.4). Neither is
 # assumed to be a single token.
@@ -146,7 +146,7 @@ class CelebaRunner:
 
     @property
     def n_images(self) -> int:
-        return int(len(self._images))
+        return len(self._images)
 
     # ------------------------------------------------------------------ #
     # Cache / resumption keys (plan section 8.5)
@@ -323,9 +323,9 @@ class CelebaRunner:
         per_attribute: dict[str, dict[str, Any]] = {}
         for attribute in sorted(df["attribute"].unique()):
             sub = df[df["attribute"] == attribute]
-            total_queries = int(len(sub))
+            total_queries = len(sub)
             parseable = sub[sub["parse_status"] == PARSE_OK].copy()
-            parse_failures = total_queries - int(len(parseable))
+            parse_failures = total_queries - len(parseable)
             y_true = parseable["label"].astype("Int64")
             y_pred = parseable["prediction"].astype("Int64")
             # Drop rows lacking a ground-truth label or a hard prediction.
@@ -362,7 +362,7 @@ class CelebaRunner:
             "dataset": self.run_config.data.name,
             "source_version": self.run_config.data.source_version,
             "split": self.eval_cfg.split,
-            "n_images": int(len(images)),
+            "n_images": len(images),
             "n_attributes": len(self.selected_attributes()),
             "data_fingerprint_id": digest,
             "parts": parts,

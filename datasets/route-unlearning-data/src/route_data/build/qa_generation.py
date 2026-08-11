@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from ..config import ConfigError
 from ..constants.celeba_attributes import CELEBA_ATTRIBUTE_SET
@@ -106,7 +107,7 @@ class QaTemplateRegistry:
     # -- construction --------------------------------------------------- #
 
     @classmethod
-    def from_dict(cls, doc: Mapping[str, Any]) -> "QaTemplateRegistry":
+    def from_dict(cls, doc: Mapping[str, Any]) -> QaTemplateRegistry:
         """Build from a YAML-style mapping (plan 16.1 example format)."""
         version = str(doc.get("version", "qa_v1"))
         templates: list[QaTemplate] = []
@@ -116,7 +117,7 @@ class QaTemplateRegistry:
         for entry in entries:
             attribute = entry.get("attribute")
             template_id = entry.get("id")
-            answers = entry.get("answers", {})
+            entry.get("answers", {})
             if not attribute or not template_id:
                 raise QaError(f"QA template entry missing id/attribute: {entry!r}")
             for split in PROTECTED_SPLITS:
@@ -132,7 +133,7 @@ class QaTemplateRegistry:
         return cls(templates, version)
 
     @classmethod
-    def default_for(cls, attributes: Sequence[str], version: str = "qa_v1") -> "QaTemplateRegistry":
+    def default_for(cls, attributes: Sequence[str], version: str = "qa_v1") -> QaTemplateRegistry:
         """Deterministic built-in templates (train/val/test are disjoint)."""
         templates: list[QaTemplate] = []
         for attribute in attributes:

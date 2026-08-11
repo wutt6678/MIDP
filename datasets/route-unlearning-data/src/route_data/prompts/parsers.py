@@ -58,8 +58,7 @@ def parse_grouped_json(raw_text: str, expected_keys: list[str]) -> tuple[dict[st
     # Tolerate code fences around the JSON object.
     if text.startswith("```"):
         text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
+        text = text.removeprefix("json")
         text = text.strip()
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:

@@ -23,8 +23,9 @@ import itertools
 import json
 import logging
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import pandas as pd
 import yaml
@@ -54,7 +55,7 @@ def _print_json(payload: Any) -> None:
 
 
 def _benchmark_of(dataset: str) -> str:
-    return dataset[: -len(CARD_SUFFIX)] if dataset.endswith(CARD_SUFFIX) else dataset
+    return dataset.removesuffix(CARD_SUFFIX)
 
 
 def _runtime_environment() -> dict[str, Any]:
@@ -86,7 +87,7 @@ def _runtime_environment() -> dict[str, Any]:
         if _torch.cuda.is_available():
             env["cuda_runtime"] = _torch.version.cuda
             env["gpu_model"] = _torch.cuda.get_device_name(0)
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     try:
         import subprocess as _sp
@@ -97,7 +98,7 @@ def _runtime_environment() -> dict[str, Any]:
         ).decode().strip().splitlines()
         if _drv:
             env["driver"] = _drv[0].strip()
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     for key, mod in (
         ("transformers", "transformers"),
@@ -107,7 +108,7 @@ def _runtime_environment() -> dict[str, Any]:
     ):
         try:
             env[key] = __import__(mod).__version__
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
     return env
 
@@ -117,7 +118,8 @@ def _default_build_dir(run_cfg: RunConfig) -> Path:
 
 # R7: delegate to the single shared sanitizer so CLI, tests, and final_verify
 # always agree on the model-output directory name.
-from .naming import model_output_name as _model_output_name  # noqa: E402
+from .naming import model_output_name as _model_output_name
+
 
 def _dataset_dir(args, run_cfg: RunConfig, dataset: str) -> Path:
     base = Path(args.output_dir) if args.output_dir else _default_build_dir(run_cfg)
@@ -190,6 +192,7 @@ def _load_image(uri: str | None, base: Path | None = None):
 def _p_positive(response) -> float | None:
     """Collapse candidate log-probabilities into P(' yes')."""
     import math
+
     from .models.scoring import normalize_binary_scores
 
     if not response.candidate_scores:
@@ -450,7 +453,7 @@ def cmd_model_smoke_test(args) -> int:
         write_json(payload, artifact_path)
         log.info("Smoke-test artifact written: %s", artifact_path)
         payload["artifact_path"] = str(artifact_path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("Could not write smoke artifact: %s", exc)
 
     _print_json(payload)
@@ -511,7 +514,7 @@ def cmd_celeba_prepare(args) -> int:
     write_parquet(long.to_dict(orient="records"), out_dir / "celeba_manifest_long.parquet")
     summary = {
         "root": str(root),
-        "images": int(len(wide)),
+        "images": len(wide),
         "splits": wide["split"].value_counts().to_dict(),
         "attributes": int(sum(1 for c in wide.columns if c.startswith("attr::"))),
     }
@@ -592,7 +595,7 @@ def _predictions_for_bundle(bundle_dir: Path) -> pd.DataFrame:
             df = read_shards(candidate, prefix="part")
             if len(df):
                 return df
-        except Exception:  # noqa: BLE001 - keep scanning
+        except Exception:
             continue
     raise ConfigError(f"No prediction shards found for run bundle {bundle_dir}")
 
@@ -620,12 +623,12 @@ def cmd_celeba_report(args) -> int:
             y_pred,
             p_positive=p.tolist() if p.notna().any() else None,
             parse_failures=int((rows["parse_status"] != "ok").sum()),
-            total_queries=int(len(rows)),
+            total_queries=len(rows),
             latency_ms=rows["latency_ms"].dropna().tolist() or None,
         )
     macro = macro_average(per_attribute)
-    from .eval.reports import write_metrics_bundle, render_report_md
     from .data.io import ensure_parent_dir
+    from .eval.reports import render_report_md, write_metrics_bundle
 
     if args.dry_run:
         log.info("[dry-run] would rewrite metrics bundle under %s", bundle_dir)
@@ -938,7 +941,7 @@ def cmd_build_annotate(args) -> int:
     try:
         if hasattr(backend, "_load"):
             backend._load()
-    except Exception as exc:  # noqa: BLE001 - model load may fail in dry envs
+    except Exception as exc:
         if run_cfg.model.backend == "stub":
             log.warning("Backend pre-load failed (%s); fingerprint may lack resolved revision", exc)
         else:
@@ -960,7 +963,7 @@ def cmd_build_annotate(args) -> int:
             fingerprint_id = str(raw_fp_id)
     except ConfigError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if run_cfg.model.backend == "stub":
             log.warning("Backend fingerprint unavailable (%s); continuing without it", exc)
         else:
@@ -984,8 +987,9 @@ def cmd_build_annotate(args) -> int:
     # identity.  Includes model fingerprint (which embeds model_id, resolved
     # revision, dtype, quantization, transformers/torch versions), prompt
     # registry hash, candidate-set hash, and scoring-code version.
-    from .models.scoring import SCORING_VERSION
     import hashlib as _hashlib_cache
+
+    from .models.scoring import SCORING_VERSION
 
     candidates_blob = json.dumps([" yes", " no"], sort_keys=True)
     candidate_set_hash = _hashlib_cache.sha256(candidates_blob.encode()).hexdigest()[:12]
@@ -1009,7 +1013,7 @@ def cmd_build_annotate(args) -> int:
         if not sha and s.image_uri:
             try:
                 sha = _image_sha256(Path(image_base) / s.image_uri.removeprefix("file://"))
-            except Exception:  # noqa: BLE001
+            except Exception:
                 sha = ""
         image_sha_by_sample[s.source_sample_id] = sha
 
@@ -1265,7 +1269,7 @@ def cmd_build_annotate(args) -> int:
         source_hash = _h.hexdigest()
         source_provenance["hash_strategy"] = "metadata_full_image_paths"
         source_provenance["metadata_file_count"] = len(_meta_files)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("Source hash unavailable (%s); skipping source pinning", exc)
 
     # P1-14: complete the score manifest with all fields needed for
@@ -1299,12 +1303,12 @@ def cmd_build_annotate(args) -> int:
     try:
         import transformers as _tx
         score_manifest["transformers_version"] = _tx.__version__
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     try:
         import torch as _torch
         score_manifest["torch_version"] = _torch.__version__
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     try:
         import subprocess as _sp
@@ -1314,7 +1318,7 @@ def cmd_build_annotate(args) -> int:
             stderr=_sp.DEVNULL,
         ).decode().strip()
         score_manifest["midp_commit"] = _sha
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     # R12: record the true whitelist-file SHA-256 (from whitelist loading)
     # plus full provenance, not a hash of the sorted attribute list alone.
@@ -1765,7 +1769,7 @@ def cmd_build_route_probes(args) -> int:
         # attribute that changed is recorded, not just "some attribute
         # differs".
         if len(group) >= 2:
-            for left, right in zip(group, group[1:]):
+            for left, right in itertools.pairwise(group):
                 left_attrs = _accepted_visible_attributes(left)
                 right_attrs = _accepted_visible_attributes(right)
                 shared = set(left_attrs) & set(right_attrs)
@@ -1896,7 +1900,7 @@ def cmd_build_export(args) -> int:
     if score_manifest_path.exists():
         try:
             score_manifest = read_json(score_manifest_path)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     provenance: dict[str, Any] = {
@@ -1949,7 +1953,7 @@ def cmd_build_export(args) -> int:
                 "hash_strategy": "metadata_full_image_paths",
                 "metadata_file_count": _meta_count,
             }
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
     # Optional: whitelist provenance.
     if run_cfg.build.attribute_whitelist:
@@ -1961,18 +1965,18 @@ def cmd_build_export(args) -> int:
             wl = load_attribute_whitelist(wl_path)
             provenance["whitelist_sha256"] = wl.sha256
             provenance["whitelist_attributes"] = sorted(wl.attributes)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("Whitelist provenance unavailable (%s)", exc)
     # Optional: library versions.
     try:
         import transformers
         provenance["transformers_version"] = transformers.__version__
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     try:
         import torch
         provenance["torch_version"] = torch.__version__
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     # Optional: MIDP git commit.
     try:
@@ -1982,7 +1986,7 @@ def cmd_build_export(args) -> int:
             ["git", "rev-parse", "HEAD"], cwd=midp_root, stderr=subprocess.DEVNULL,
         ).decode().strip()
         provenance["midp_commit"] = sha
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
     exporter = ExtensionExporter(

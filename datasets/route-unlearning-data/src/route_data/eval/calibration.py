@@ -23,11 +23,11 @@ import numpy as np
 
 __all__ = [
     "Calibrator",
-    "PlattCalibrator",
     "IsotonicCalibrator",
+    "PlattCalibrator",
     "fit_calibrator",
-    "save_calibrators",
     "load_calibrators",
+    "save_calibrators",
 ]
 
 _METHODS = ("platt", "isotonic")
@@ -78,7 +78,7 @@ class PlattCalibrator:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PlattCalibrator":
+    def from_dict(cls, data: dict[str, Any]) -> PlattCalibrator:
         return cls(
             weight=float(data["weight"]),
             bias=float(data["bias"]),
@@ -143,7 +143,7 @@ class IsotonicCalibrator:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "IsotonicCalibrator":
+    def from_dict(cls, data: dict[str, Any]) -> IsotonicCalibrator:
         return cls(
             x_thresholds=[float(v) for v in data["x_thresholds"]],
             y_values=[float(v) for v in data["y_values"]],

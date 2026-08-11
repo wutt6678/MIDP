@@ -17,9 +17,10 @@ definition caveat in every card (plan 10.4).
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from ..constants.attribute_taxonomy import LOW_RELIABILITY, SENSITIVE_DATASET_LABELS
 from ..data.io import ensure_parent_dir, write_json, write_jsonl, write_parquet
@@ -159,8 +160,8 @@ class ExtensionExporter:
             "human-verified, or unlabeled/uncertain (`label: null`).",
             "",
             "## Sensitive and low-reliability labels",
-            f"- Subjective/sensitive (inherit CelebA definitions and limitations): "
-            f"{sorted(SENSITIVE_DATASET_LABELS)}",
+            (f"- Subjective/sensitive (inherit CelebA definitions and limitations): "
+            f"{sorted(SENSITIVE_DATASET_LABELS)}"),
             f"- Low-reliability source labels: {sorted(LOW_RELIABILITY)}",
             "`Male` is the CelebA binary annotation, not a person's self-identified",
             "gender. These labels must not be interpreted as ground-truth identity.",

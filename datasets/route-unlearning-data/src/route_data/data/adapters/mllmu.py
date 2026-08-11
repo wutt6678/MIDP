@@ -24,8 +24,9 @@ Reads the released MLLMU-Bench layout instead of assuming a flat source:
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any
 
 from ..schemas import CanonicalSample, ProfileFact
 from .base import (
@@ -388,24 +389,24 @@ class MllmuAdapter(BenchmarkAdapter):
                         answer_text = options_map[label_str]
                     else:
                         answer_text = label
-                    record_kwargs = dict(
-                        identity_id=identity_id,
-                        identity_name=identity_name,
-                        config=config,
-                        subset=subset,
-                        split=split,
-                        facts=facts,
-                        task_family="classification_qa",
-                        item_index=item_index,
-                        question=item.get("Question") or item.get("question"),
-                        answer_text=answer_text,
-                        answer_label=label,
-                        options=ordered or None,
-                        task_source=f"Classification_Task.{group}",
-                        item_type=None,
-                        directory=directory,
-                        context=source_context,
-                    )
+                    record_kwargs = {
+                        "identity_id": identity_id,
+                        "identity_name": identity_name,
+                        "config": config,
+                        "subset": subset,
+                        "split": split,
+                        "facts": facts,
+                        "task_family": "classification_qa",
+                        "item_index": item_index,
+                        "question": item.get("Question") or item.get("question"),
+                        "answer_text": answer_text,
+                        "answer_label": label,
+                        "options": ordered or None,
+                        "task_source": f"Classification_Task.{group}",
+                        "item_type": None,
+                        "directory": directory,
+                        "context": source_context,
+                    }
                     where = f"Classification_Task.{group}[{item_index}]"
                     yield from self._emit_with_views(
                         views=views,
@@ -424,24 +425,24 @@ class MllmuAdapter(BenchmarkAdapter):
                 if isinstance(item, Mapping)
                 else item_type
             )
-            record_kwargs = dict(
-                identity_id=identity_id,
-                identity_name=identity_name,
-                config=config,
-                subset=subset,
-                split=split,
-                facts=facts,
-                task_family="generation_qa",
-                item_index=emitted,
-                question=item.get("Question") or item.get("question") if isinstance(item, Mapping) else None,
-                answer_text=item.get("Ground_Truth") or item.get("Answer") if isinstance(item, Mapping) else None,
-                answer_label=None,
-                options=None,
-                task_source="Generation_Task",
-                item_type=str(resolved_type) if resolved_type else None,
-                directory=directory,
-                context=source_context,
-            )
+            record_kwargs = {
+                "identity_id": identity_id,
+                "identity_name": identity_name,
+                "config": config,
+                "subset": subset,
+                "split": split,
+                "facts": facts,
+                "task_family": "generation_qa",
+                "item_index": emitted,
+                "question": item.get("Question") or item.get("question") if isinstance(item, Mapping) else None,
+                "answer_text": item.get("Ground_Truth") or item.get("Answer") if isinstance(item, Mapping) else None,
+                "answer_label": None,
+                "options": None,
+                "task_source": "Generation_Task",
+                "item_type": str(resolved_type) if resolved_type else None,
+                "directory": directory,
+                "context": source_context,
+            }
             yield from self._emit_with_views(
                 views=views,
                 modality="image_text" if views else "text_only",
@@ -457,24 +458,24 @@ class MllmuAdapter(BenchmarkAdapter):
                 if isinstance(item, Mapping)
                 else item_type
             )
-            record_kwargs = dict(
-                identity_id=identity_id,
-                identity_name=identity_name,
-                config=config,
-                subset=subset,
-                split=split,
-                facts=facts,
-                task_family="mask_qa",
-                item_index=emitted,
-                question=item.get("Question") or item.get("question") if isinstance(item, Mapping) else None,
-                answer_text=item.get("Ground_Truth") or item.get("Answer") if isinstance(item, Mapping) else None,
-                answer_label=None,
-                options=None,
-                task_source="Mask_Task",
-                item_type=str(resolved_type) if resolved_type else None,
-                directory=directory,
-                context=source_context,
-            )
+            record_kwargs = {
+                "identity_id": identity_id,
+                "identity_name": identity_name,
+                "config": config,
+                "subset": subset,
+                "split": split,
+                "facts": facts,
+                "task_family": "mask_qa",
+                "item_index": emitted,
+                "question": item.get("Question") or item.get("question") if isinstance(item, Mapping) else None,
+                "answer_text": item.get("Ground_Truth") or item.get("Answer") if isinstance(item, Mapping) else None,
+                "answer_label": None,
+                "options": None,
+                "task_source": "Mask_Task",
+                "item_type": str(resolved_type) if resolved_type else None,
+                "directory": directory,
+                "context": source_context,
+            }
             yield from self._emit_with_views(
                 views=views,
                 modality="image_text" if views else "text_only",
@@ -487,24 +488,24 @@ class MllmuAdapter(BenchmarkAdapter):
         question = row.get("question")
         answer = row.get("answer")
         if emitted == 0 and question not in (None, ""):
-            record_kwargs = dict(
-                identity_id=identity_id,
-                identity_name=identity_name,
-                config=config,
-                subset=subset,
-                split=split,
-                facts=facts,
-                task_family="profile_qa",
-                item_index=0,
-                question=question,
-                answer_text=answer,
-                answer_label=None,
-                options=None,
-                task_source="row",
-                item_type=None,
-                directory=directory,
-                context=source_context,
-            )
+            record_kwargs = {
+                "identity_id": identity_id,
+                "identity_name": identity_name,
+                "config": config,
+                "subset": subset,
+                "split": split,
+                "facts": facts,
+                "task_family": "profile_qa",
+                "item_index": 0,
+                "question": question,
+                "answer_text": answer,
+                "answer_label": None,
+                "options": None,
+                "task_source": "row",
+                "item_type": None,
+                "directory": directory,
+                "context": source_context,
+            }
             yield from self._emit_with_views(
                 views=views,
                 modality="image_text" if views else "text_only",

@@ -26,8 +26,9 @@ revision (plan B27); released rows carry:
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any
 
 from ..schemas import CanonicalSample
 from .base import (

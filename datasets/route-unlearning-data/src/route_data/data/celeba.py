@@ -23,7 +23,6 @@ from typing import Any
 import pandas as pd
 
 from ..constants.celeba_attributes import (
-    CELEBA_ATTRIBUTES,
     EXPECTED_IMAGE_COUNT,
     PARTITION_TO_SPLIT,
     verify_attribute_header,
@@ -45,7 +44,7 @@ class CelebaRoot:
     landmarks_file: Path | None = None
 
     @classmethod
-    def discover(cls, root: str | Path) -> "CelebaRoot":
+    def discover(cls, root: str | Path) -> CelebaRoot:
         root = Path(root)
         image_dir = root / "img_align_celeba"
         attr_file = root / "list_attr_celeba.txt"
@@ -193,7 +192,7 @@ def validate_raw(
     if report.errors:
         return report
 
-    header, attrs = parse_attribute_file(celeba.attr_file)
+    _header, attrs = parse_attribute_file(celeba.attr_file)
     partitions = parse_partition_file(celeba.partition_file)
     identities = (
         parse_identity_file(celeba.identity_file) if celeba.identity_file else None
@@ -254,7 +253,7 @@ def validate_raw(
             try:
                 with Image.open(celeba.image_dir / name) as im:
                     im.convert("RGB")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 report.errors.append(f"Cannot open/convert {name}: {exc}")
 
     return report

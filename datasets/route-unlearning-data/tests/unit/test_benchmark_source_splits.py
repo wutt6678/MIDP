@@ -11,9 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import yaml
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_CONFIGS_DIR = REPO_ROOT / "configs" / "data"

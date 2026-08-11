@@ -14,8 +14,8 @@ without a logged exclusion reason.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
 
 from ..data.checksums import verify_checksum
 from ..data.schemas import CanonicalSample

@@ -23,8 +23,8 @@ import numpy as np
 
 __all__ = [
     "VariantPredictions",
-    "stability_report",
     "select_production_prompt",
+    "stability_report",
 ]
 
 

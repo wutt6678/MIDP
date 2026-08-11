@@ -39,5 +39,21 @@ where = ["src"]
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.lint]
+# Ignore non-critical rules that require runtime behavior changes
+ignore = [
+    "BLE001",     # Do not catch blind exception (requires context-specific handling)
+    "EXE001",     # Shebang is present but file is not executable (CI handles this)
+    "S110",       # `except Exception` (acceptable for error handling in scripts)
+    "S112",       # `except Exception` with try-except-except (acceptable pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can use dict() constructors and unused imports
+"tests/unit/test_conflict_probes.py" = ["C408"]
+"tests/unit/test_p1_fixes.py" = ["C408", "RUF015", "F841"]
+"tests/unit/test_p2_fixes.py" = ["F401"]
+"tests/unit/test_r8_r20_fixes.py" = ["C408", "RUF012", "PLW1510", "F841"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

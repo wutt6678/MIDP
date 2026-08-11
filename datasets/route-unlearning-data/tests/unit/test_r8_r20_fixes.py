@@ -34,7 +34,6 @@ class TestModelFingerprintPayload:
         from route_data.data.schemas import (
             AttributeObservation,
             CanonicalSample,
-            ProfileFact,
             Provenance,
         )
 
