@@ -12,6 +12,12 @@ data:
   # Pinned source revision (repair plan C1); replace with the exact upstream
   # commit hash when mirroring the real source.
   source_version: fiubench-1.0
+  # R10: immutable source revision components. Replace PENDING values with
+  # exact hashes before pilot/full generation.
+  immutable_revision:
+    git_commit_sha: PENDING              # exact Git/release commit SHA
+    profile_file_sha256: PENDING         # SHA-256 of data/fiubench_profiles.jsonl
+    split_file_sha256: PENDING           # SHA-256 of splits/official.json
   # Source-layout settings (repair plan C2).
   source_file: data/fiubench_profiles.jsonl
   split_file: splits/official.json   # official forget/retain/evaluation grouping
@@ -23,6 +29,15 @@ data:
   reuse_official_splits: true
   include_attack_templates: true
   domain_shift_audit_images: 100
+  # R4 (Fix List for f59a9c1): explicit source-partition mapping for FIUBench's
+  # released vocabulary.  FIUBench's official grouping is forget / retain /
+  # evaluation.  forget -> exclude (never in ordinary QA), retain -> train,
+  # evaluation -> eval.  Verified against splits/official.json.
+  extras:
+    source_mapping:
+      forget: exclude
+      retain: train
+      evaluation: eval
   multiview:
     enabled: false                   # fiubench_multiview is opt-in and versioned
     images_per_identity: [5, 10]

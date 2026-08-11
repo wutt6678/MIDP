@@ -6,6 +6,7 @@ directory, for the redistributable golden fixture) on ``sys.path``.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -18,6 +19,10 @@ TESTS_DIR = Path(__file__).resolve().parent
 for _path in (SRC, TESTS_DIR):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
+
+
+# R10: skip immutable_revision validation in tests (golden fixture uses PENDING).
+os.environ["ROUTE_DATA_SKIP_IMMUTABLE_CHECK"] = "1"
 
 
 @pytest.fixture(scope="session")

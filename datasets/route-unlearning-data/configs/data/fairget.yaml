@@ -14,6 +14,12 @@ data:
   # C1). Must never be null or "unknown" at runtime; replace with the exact
   # upstream commit hash when mirroring the real source.
   source_version: fairget-2026.07
+  # R10: immutable source revision components. Replace PENDING values with
+  # exact hashes before pilot/full generation.
+  immutable_revision:
+    git_commit_sha: PENDING          # exact Git commit SHA of mirrored source
+    dataset_json_sha256: PENDING     # SHA-256 of data/dataset.json
+    official_split_sha256: PENDING   # SHA-256 of splits/official.json
   # Source-layout settings (repair plan C2) — the adapter reads the released
   # nested layout, not a guessed flat field map.
   source_file: data/dataset.json

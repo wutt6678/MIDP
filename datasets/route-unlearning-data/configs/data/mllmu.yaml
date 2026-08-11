@@ -15,6 +15,13 @@ data:
   # Pinned source revision (repair plan C1); replace with the exact upstream
   # commit hash when mirroring the real source.
   source_version: mllmu-bench-1.0
+  # R10: immutable source revision components. Replace PENDING values with
+  # exact HF revision SHA before pilot/full generation.
+  immutable_revision:
+    hf_dataset_id: null                # HF dataset ID (e.g. org/mllmu-bench)
+    hf_config: Full_Set                # HF configuration name
+    hf_split: test                     # HF split
+    hf_revision_sha: PENDING           # exact HF revision SHA
   # Source-layout settings (repair plan C2). source_file must track the
   # pinned hf_config_name; rows carry image/images, ID, Directory, biography
   # and nested Classification_Task/Generation_Task/Mask_Task blocks (B20).

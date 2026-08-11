@@ -1,4 +1,13 @@
-name: CI
+# route-data CI
+#
+# R5 (Fix List for f59a9c1): GitHub Actions only discovers workflows under the
+# repository-root .github/workflows/, so this file lives at the MIDP repo root
+# (not under datasets/route-unlearning-data/.github/workflows/).
+#
+# R6: installation failures are fatal.  No `|| true`, no silent fallbacks that
+# hide missing dependencies.  The package is installed editable with the dev
+# extra so pytest and ruff are available; if that fails, the build fails.
+name: route-data CI
 
 on:
   push:
@@ -14,6 +23,10 @@ jobs:
         python-version: ["3.10", "3.11"]
       fail-fast: false
 
+    defaults:
+      run:
+        working-directory: datasets/route-unlearning-data
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,34 +35,29 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install package (fatal on failure)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt 2>/dev/null || pip install pytest pyyaml Pillow
-          # Install the package in development mode if setup.py/pyproject.toml exists
-          pip install -e . 2>/dev/null || true
+          # R6: editable install with the dev extra (pytest, ruff).  Any
+          # failure here fails the job; there is intentionally no fallback.
+          pip install -e ".[dev]"
 
       - name: Run unit tests
-        working-directory: datasets/route-unlearning-data
-        run: |
-          python -m pytest tests/unit/ -v --tb=short
+        run: python -m pytest -q tests/unit
 
       - name: Run golden e2e tests
-        working-directory: datasets/route-unlearning-data
-        run: |
-          python -m pytest tests/golden/ -v --tb=short
+        run: python -m pytest -q tests/golden
 
       - name: Run integration tests
-        working-directory: datasets/route-unlearning-data
-        run: |
-          python -m pytest tests/integration/ -v --tb=short
+        run: python -m pytest -q tests/integration
 
       - name: Run final verification script
-        working-directory: datasets/route-unlearning-data
-        run: |
-          python scripts/final_verify.py
+        run: python scripts/final_verify.py
 
-  lint:
+      - name: Lint (ruff)
+        run: ruff check src tests scripts
+
+  syntax:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +70,10 @@ jobs:
       - name: Check Python syntax
         run: |
           python -m py_compile datasets/route-unlearning-data/src/route_data/cli.py
+          python -m py_compile datasets/route-unlearning-data/src/route_data/naming.py
           python -m py_compile datasets/route-unlearning-data/src/route_data/build/export.py
           python -m py_compile datasets/route-unlearning-data/src/route_data/build/conflict_generation.py
           python -m py_compile datasets/route-unlearning-data/src/route_data/build/split_generation.py
           python -m py_compile datasets/route-unlearning-data/scripts/final_verify.py
+          python -m py_compile datasets/route-unlearning-data/scripts/ci_evidence.py
+          python -m py_compile datasets/route-unlearning-data/scripts/audit_gate.py

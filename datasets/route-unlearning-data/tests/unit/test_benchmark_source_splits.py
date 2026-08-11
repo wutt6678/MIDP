@@ -87,6 +87,14 @@ class TestFairgetSourceMapping:
         assert sv and sv != "unknown"
         assert sv == "fairget-2026.07"
 
+    def test_immutable_revision_fields_present(self):
+        # R10: immutable_revision block must exist with the required fields.
+        cfg = _load_data_config("fairget")
+        ir = cfg["data"].get("immutable_revision", {})
+        assert "git_commit_sha" in ir
+        assert "dataset_json_sha256" in ir
+        assert "official_split_sha256" in ir
+
     def test_split_file_defined(self):
         cfg = _load_data_config("fairget")
         assert cfg["data"]["split_file"] == "splits/official.json"
@@ -102,6 +110,16 @@ class TestFairgetSourceMapping:
     def test_mapping_includes_train(self):
         mapping = _resolve_mapping("fairget")
         assert mapping["train"] == "train"
+
+    def test_released_bucket_resolution_exact(self):
+        # R9: FAIRGET's released split file maps identity -> bucket and the
+        # adapter reuses bucket names verbatim (fairget._split_lookup); the
+        # effective resolution of every bucket must therefore be pinned here.
+        mapping = _resolve_mapping("fairget")
+        assert mapping["forget"] == "exclude"  # official unbalanced forget
+        assert mapping["train"] == "train"     # released training partition
+        # Identities absent from the split file fall back to "unassigned".
+        assert mapping["unassigned"] == "hash"
 
     def test_images_root_is_dot(self):
         cfg = _load_data_config("fairget")
@@ -123,6 +141,14 @@ class TestFIUBenchSourceMapping:
         sv = cfg["data"]["source_version"]
         assert sv == "fiubench-1.0"
 
+    def test_immutable_revision_fields_present(self):
+        # R10: immutable_revision block must exist with the required fields.
+        cfg = _load_data_config("fiubench")
+        ir = cfg["data"].get("immutable_revision", {})
+        assert "git_commit_sha" in ir
+        assert "profile_file_sha256" in ir
+        assert "split_file_sha256" in ir
+
     def test_split_file_defined(self):
         cfg = _load_data_config("fiubench")
         assert cfg["data"]["split_file"] == "splits/official.json"
@@ -135,11 +161,33 @@ class TestFIUBenchSourceMapping:
         mapping = _resolve_mapping("fiubench")
         assert mapping["forget"] == "exclude"
 
-    def test_mapping_includes_eval(self):
+    def test_released_split_vocabulary_exact(self):
+        # R9: FIUBench's official grouping is exactly forget / retain /
+        # evaluation (splits/official.json).  The config must declare the
+        # full vocabulary and nothing else.
+        cfg = _load_data_config("fiubench")
+        extras_mapping = cfg["data"]["extras"]["source_mapping"]
+        assert extras_mapping == {
+            "forget": "exclude",
+            "retain": "train",
+            "evaluation": "eval",
+        }
+
+    def test_released_labels_resolve_exactly(self):
+        # R9: each of the three actual FIUBench labels must resolve to the
+        # documented target — forget never enters ordinary QA, retain trains,
+        # evaluation evaluates.
         mapping = _resolve_mapping("fiubench")
-        # FIUBench uses "evaluation" which should map to eval
-        # Either via default "eval" key or benchmark-specific override
-        assert "eval" in mapping.values() or "evaluation" in mapping
+        assert mapping["forget"] == "exclude"
+        assert mapping["retain"] == "train"
+        assert mapping["evaluation"] == "eval"
+
+    def test_no_released_label_leaks_to_hash(self):
+        # Every official FIUBench label is explicitly mapped; none may fall
+        # through to the unassigned/hash fallback (R3/R9).
+        mapping = _resolve_mapping("fiubench")
+        for label in ("forget", "retain", "evaluation"):
+            assert mapping[label] != "hash", f"fiubench {label} leaked to hash"
 
     def test_adapter_version(self):
         cfg = _load_data_config("fiubench")
@@ -161,6 +209,15 @@ class TestMLLMUSourceMapping:
         cfg = _load_data_config("mllmu")
         sv = cfg["data"]["source_version"]
         assert sv == "mllmu-bench-1.0"
+
+    def test_immutable_revision_fields_present(self):
+        # R10: immutable_revision block must exist with the required HF fields.
+        cfg = _load_data_config("mllmu")
+        ir = cfg["data"].get("immutable_revision", {})
+        assert "hf_dataset_id" in ir
+        assert "hf_config" in ir
+        assert "hf_split" in ir
+        assert "hf_revision_sha" in ir
 
     def test_hf_config_name_pinned(self):
         cfg = _load_data_config("mllmu")
@@ -186,6 +243,48 @@ class TestMLLMUSourceMapping:
         assert mapping["test"] == "eval"
         assert mapping["forget"] == "exclude"
 
+    def test_adapter_split_table_exact(self):
+        # R9: the adapter's per-configuration split semantics are the real
+        # released vocabulary; pin the complete table.
+        from route_data.data.adapters.mllmu import _KNOWN_CONFIGS, _SPLIT_BY_CONFIG
+
+        assert _SPLIT_BY_CONFIG == {
+            "forget_5": "forget",
+            "forget_10": "forget",
+            "forget_15": "forget",
+            "retain_85": "retain_train",
+            "retain_90": "retain_train",
+            "retain_95": "retain_train",
+            "Retain_Set": "retain_eval",
+            "Test_Set": "test",
+            "ft_Data": "finetune",
+            "Full_Set": "unassigned",
+        }
+        assert set(_SPLIT_BY_CONFIG) == set(_KNOWN_CONFIGS)
+
+    def test_emitted_labels_resolve_exactly(self):
+        # R9: every split label the MLLMU adapter can emit must resolve to
+        # the documented target through the effective mapping (cmd_build_qa
+        # falls back to "hash" for labels absent from the mapping, which is
+        # the documented resolution for "finetune").
+        from route_data.data.adapters.mllmu import _SPLIT_BY_CONFIG
+
+        mapping = _resolve_mapping("mllmu")
+        expected = {
+            "forget": "exclude",        # forget_5/10/15
+            "retain_train": "train",    # retain_85/90/95
+            "retain_eval": "eval",      # Retain_Set
+            "test": "eval",             # Test_Set
+            "unassigned": "hash",       # Full_Set
+            "finetune": "hash",         # ft_Data: no mapping entry -> hash
+        }
+        for label in set(_SPLIT_BY_CONFIG.values()):
+            resolved = mapping.get(label, "hash")
+            assert resolved == expected[label], (
+                f"mllmu split label {label!r} resolved to {resolved!r}, "
+                f"expected {expected[label]!r}"
+            )
+
 
 class TestPPUBenchSourceMapping:
     """PPU-Bench: real public figures with ppu_eval_classification."""
@@ -197,6 +296,15 @@ class TestPPUBenchSourceMapping:
         cfg = _load_data_config("ppubench")
         sv = cfg["data"]["source_version"]
         assert sv == "ppu-bench-1.0"
+
+    def test_immutable_revision_fields_present(self):
+        # R10: immutable_revision block must exist with the required HF fields.
+        cfg = _load_data_config("ppubench")
+        ir = cfg["data"].get("immutable_revision", {})
+        assert "hf_dataset_id" in ir
+        assert "hf_config" in ir
+        assert "hf_split" in ir
+        assert "hf_revision_sha" in ir
 
     def test_hf_dataset_id_set(self):
         cfg = _load_data_config("ppubench")
@@ -231,6 +339,18 @@ class TestPPUBenchSourceMapping:
         mapping = _resolve_mapping("ppubench")
         assert mapping["train"] == "train"
         assert mapping["test"] == "eval"
+
+    def test_released_split_vocabulary_exact(self):
+        # R9: PPU-Bench releases a single evaluation split; the adapter tags
+        # every row with the pinned hf_split value (ppubench._split_name),
+        # so the complete released vocabulary is exactly {"test"} and every
+        # row must resolve to eval — never train, exclude, or hash.
+        cfg = _load_data_config("ppubench")
+        released_labels = {cfg["data"]["hf_split"]}
+        assert released_labels == {"test"}
+        mapping = _resolve_mapping("ppubench")
+        for label in released_labels:
+            assert mapping[label] == "eval"
 
 
 class TestCrossBenchmarkConsistency:

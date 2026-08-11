@@ -223,34 +223,31 @@ class ExtensionExporter:
         record.counts["splits"] = len(split_results)
         record.paths["dataset_card"] = self.render_dataset_card(record.counts)
 
-        # P1-15: finalization process —
-        # 1. Write checksums.json over all artifact paths (excludes itself
-        #    and the manifest, which hasn't been written yet).
-        # 2. Write the final export manifest including the checksums path.
-        # 3. Append the final manifest hash to checksums.json.
-        # All paths in checksums are relative to the output directory for
-        # portability across servers.
+        # R13: fully self-consistent finalization —
+        # 1. Register checksums/manifest paths *before* serialization so the
+        #    on-disk manifest matches the returned in-memory path map.
+        # 2. Write the final export manifest (references checksums.json).
+        # 3. Write checksums.json once: covers every released artifact
+        #    including the final manifest, excludes itself, relative paths.
 
-        # Step 1: compute checksums for all current artifacts.
-        checksums: dict[str, str] = {}
-        for key, path_str in sorted(record.paths.items()):
-            rel = self._relative_path(path_str)
-            checksums[rel] = self._sha256_file(path_str)
         checksums_path = self._path(f"{self.benchmark}_checksums.json")
-        write_json(checksums, checksums_path)
+        manifest_path = self._path(f"{self.benchmark}_export_manifest.json")
         record.paths["checksums"] = str(checksums_path)
+        record.paths["manifest"] = str(manifest_path)
 
-        # Step 2: write the final export manifest including checksums path.
+        # Step 1: write the final export manifest.
         manifest = record.to_dict()
         if provenance:
             manifest["provenance"] = dict(provenance)
-        manifest_path = self._path(f"{self.benchmark}_export_manifest.json")
         write_json(manifest, manifest_path)
-        record.paths["manifest"] = str(manifest_path)
 
-        # Step 3: append the final manifest hash to checksums.json.
-        manifest_rel = self._relative_path(str(manifest_path))
-        checksums[manifest_rel] = self._sha256_file(manifest_path)
+        # Step 2: checksums over all artifacts incl. the final manifest,
+        # excluding checksums.json itself; relative paths for portability.
+        checksums: dict[str, str] = {}
+        for key, path_str in sorted(record.paths.items()):
+            if key == "checksums":
+                continue  # checksums.json never hashes itself
+            checksums[self._relative_path(path_str)] = self._sha256_file(path_str)
         write_json(checksums, checksums_path)
 
         return record

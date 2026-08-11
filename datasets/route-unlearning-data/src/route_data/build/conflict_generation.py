@@ -283,9 +283,24 @@ def _accepted_visible_attributes(sample: CanonicalSample) -> dict[str, bool]:
 def _visual_attribute_jaccard(
     attrs_a: Mapping[str, bool], attrs_b: Mapping[str, bool],
 ) -> float:
-    """Jaccard similarity over the *agreed* attribute states.
+    """R15: matching similarity metric, documented precisely.
 
-    Only attributes accepted (high-confidence) on *both* sides contribute.
+    Metric: agreement-over-union on *signed attribute states*.  Each accepted
+    (high-confidence) label is treated as a signed state such as
+    ``("Eyeglasses", True)`` or ``("Smiling", False)``.  For the attributes
+    accepted on both sides we count states that agree (same attribute *and*
+    same polarity), then divide by the total number of attributes accepted on
+    *either* side (the union).  Attributes accepted on only one side therefore
+    count against similarity, and disagreeing polarity counts against it.
+
+    Consequences:
+
+    - The score lies in ``[0, 1]``; 1.0 means both sides accept exactly the
+      same attribute set with identical states.
+    - It is symmetric: ``sim(a, b) == sim(b, a)``.
+    - It returns 0.0 when either side has no accepted attributes (or the
+      accepted attribute sets are disjoint).
+
     Returns 0.0 when either side has no accepted attributes.
     """
     shared_keys = set(attrs_a) & set(attrs_b)
@@ -294,6 +309,83 @@ def _visual_attribute_jaccard(
     agreeing = sum(1 for k in shared_keys if attrs_a[k] == attrs_b[k])
     union_keys = set(attrs_a) | set(attrs_b)
     return agreeing / len(union_keys)
+
+
+def _first_eligible_visual_attrs(
+    group: Sequence[CanonicalSample],
+) -> dict[str, bool]:
+    """R14/R16: first sample in ``group`` with accepted visible attributes.
+
+    Mirrors the visual-anchor selection used by ``build_identity_probes`` so
+    wrong-name matching and coverage reporting never depend on ``group[0]``
+    (which may be a text-only record with no visual labels).
+    """
+    for s in group:
+        attrs = _accepted_visible_attributes(s)
+        if attrs:
+            return attrs
+    return {}
+
+
+def matched_wrong_name_details(
+    identity_id: str,
+    by_identity: Mapping[str, Sequence[CanonicalSample]],
+    *,
+    candidates_per_sample: int = 3,
+) -> dict[str, Any] | None:
+    """R14: best matched wrong-name control with research metadata.
+
+    Searches *every* sample of each other identity group for the first
+    eligible visual sample (an identity is no longer excluded merely because
+    its first canonical record is text-only), ranks candidates by the
+    signed-state similarity metric (:func:`_visual_attribute_jaccard`), and
+    returns the best match with audit metadata:
+
+    - ``wrong_identity_name`` / ``matched_wrong_identity_id``
+    - ``matching_similarity``
+    - ``matching_attributes`` (accepted attributes shared by both sides)
+    - ``candidate_rank`` (1-based rank among all scored candidates)
+
+    Ties are broken by sorted identity name for determinism.
+    """
+    group = by_identity.get(identity_id, [])
+    if not group:
+        return None
+
+    anchor_attrs = _first_eligible_visual_attrs(group)
+    if not anchor_attrs:
+        return None
+
+    scored: list[tuple[float, str, str, list[str]]] = []
+    for other_id, other_group in by_identity.items():
+        if other_id == identity_id:
+            continue
+        if len(other_group) < 2:
+            continue
+        # R14: search the whole group, not just other_group[0].
+        other_attrs = _first_eligible_visual_attrs(other_group)
+        if not other_attrs:
+            continue
+        sim = _visual_attribute_jaccard(anchor_attrs, other_attrs)
+        shared = sorted(set(anchor_attrs) & set(other_attrs))
+        other_name = other_group[0].identity_name or other_id
+        scored.append((sim, other_name, other_id, shared))
+
+    if not scored:
+        return None
+
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    best_sim, best_name, best_id, best_shared = scored[0]
+    return {
+        "wrong_identity_name": best_name,
+        "matched_wrong_identity_id": best_id,
+        "matching_similarity": best_sim,
+        "matching_attributes": best_shared,
+        "candidate_rank": 1,
+        "candidates_considered": len(scored),
+        "candidates_per_sample": candidates_per_sample,
+        "matching_strategy": "visual_attribute_signed_state_jaccard",
+    }
 
 
 def select_matched_wrong_name(
@@ -312,39 +404,10 @@ def select_matched_wrong_name(
     Returns the single best wrong identity name, or ``None`` when no
     suitable candidate exists.
     """
-    group = by_identity.get(identity_id, [])
-    if not group:
-        return None
-
-    # Aggregate anchor attributes across the identity group.
-    anchor_attrs: dict[str, bool] = {}
-    for s in group:
-        attrs = _accepted_visible_attributes(s)
-        if attrs:
-            anchor_attrs = attrs
-            break
-    if not anchor_attrs:
-        return None
-
-    scored: list[tuple[float, str, str]] = []
-    for other_id, other_group in by_identity.items():
-        if other_id == identity_id:
-            continue
-        if len(other_group) < 2:
-            continue
-        other_attrs = _accepted_visible_attributes(other_group[0])
-        if not other_attrs:
-            continue
-        sim = _visual_attribute_jaccard(anchor_attrs, other_attrs)
-        other_name = other_group[0].identity_name or other_id
-        scored.append((sim, other_name, other_id))
-
-    if not scored:
-        return None
-
-    # Sort by similarity descending, then name ascending for determinism.
-    scored.sort(key=lambda t: (-t[0], t[1]))
-    return scored[0][1]
+    details = matched_wrong_name_details(
+        identity_id, by_identity, candidates_per_sample=candidates_per_sample
+    )
+    return details["wrong_identity_name"] if details else None
 
 
 def select_multiple_wrong_names(
@@ -358,12 +421,7 @@ def select_multiple_wrong_names(
     if not group:
         return []
 
-    anchor_attrs: dict[str, bool] = {}
-    for s in group:
-        attrs = _accepted_visible_attributes(s)
-        if attrs:
-            anchor_attrs = attrs
-            break
+    anchor_attrs = _first_eligible_visual_attrs(group)
     if not anchor_attrs:
         return []
 
@@ -373,7 +431,8 @@ def select_multiple_wrong_names(
             continue
         if len(other_group) < 2:
             continue
-        other_attrs = _accepted_visible_attributes(other_group[0])
+        # R14: search the whole group, not just other_group[0].
+        other_attrs = _first_eligible_visual_attrs(other_group)
         if not other_attrs:
             continue
         sim = _visual_attribute_jaccard(anchor_attrs, other_attrs)

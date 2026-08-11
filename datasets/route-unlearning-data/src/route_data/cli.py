@@ -57,16 +57,67 @@ def _benchmark_of(dataset: str) -> str:
     return dataset[: -len(CARD_SUFFIX)] if dataset.endswith(CARD_SUFFIX) else dataset
 
 
+def _runtime_environment() -> dict[str, Any]:
+    """R17: capture the full runtime environment for auditability.
+
+    Records Python, CUDA runtime, GPU model, driver, torch, transformers,
+    accelerate, huggingface_hub, Pillow and platform.  Every probe is
+    defensive: unavailable values are ``None`` rather than fatal.
+    """
+    import platform as _platform
+    import sys as _sys
+
+    env: dict[str, Any] = {
+        "python": _sys.version.split()[0],
+        "platform": _platform.platform(),
+        "cuda_runtime": None,
+        "gpu_model": None,
+        "driver": None,
+        "torch": None,
+        "transformers": None,
+        "accelerate": None,
+        "huggingface_hub": None,
+        "pillow": None,
+    }
+    try:
+        import torch as _torch
+
+        env["torch"] = _torch.__version__
+        if _torch.cuda.is_available():
+            env["cuda_runtime"] = _torch.version.cuda
+            env["gpu_model"] = _torch.cuda.get_device_name(0)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import subprocess as _sp
+
+        _drv = _sp.check_output(
+            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+            stderr=_sp.DEVNULL,
+        ).decode().strip().splitlines()
+        if _drv:
+            env["driver"] = _drv[0].strip()
+    except Exception:  # noqa: BLE001
+        pass
+    for key, mod in (
+        ("transformers", "transformers"),
+        ("accelerate", "accelerate"),
+        ("huggingface_hub", "huggingface_hub"),
+        ("pillow", "PIL"),
+    ):
+        try:
+            env[key] = __import__(mod).__version__
+        except Exception:  # noqa: BLE001
+            pass
+    return env
+
+
 def _default_build_dir(run_cfg: RunConfig) -> Path:
     return Path(run_cfg.build.output_dir)
 
-def _model_output_name(model_id: str) -> str:
-    return (
-        model_id
-        .replace("/", "_")
-        .replace(":", "_")
-        .replace("\\", "_")
-    )
+# R7: delegate to the single shared sanitizer so CLI, tests, and final_verify
+# always agree on the model-output directory name.
+from .naming import model_output_name as _model_output_name  # noqa: E402
 
 def _dataset_dir(args, run_cfg: RunConfig, dataset: str) -> Path:
     base = Path(args.output_dir) if args.output_dir else _default_build_dir(run_cfg)
@@ -298,25 +349,111 @@ def cmd_model_smoke_test(args) -> int:
         logps = {
             cs.candidate: cs.log_probability for cs in (scored.candidate_scores or [])
         }
+        log_p_yes = logps.get(" yes")
+        log_p_no = logps.get(" no")
+        # R2: candidate-scoring margin (log P(yes) - log P(no)) is the raw
+        # signal used for collapse detection; it is only defined when both
+        # candidate log-probabilities are present.
+        margin = (
+            log_p_yes - log_p_no
+            if (
+                isinstance(log_p_yes, (int, float))
+                and isinstance(log_p_no, (int, float))
+            )
+            else None
+        )
+        predicted_label = (
+            ("positive" if p >= 0.5 else "negative")
+            if isinstance(p, (int, float))
+            else None
+        )
         results.append({
             "attribute": attr,
             "prompt": prompt,
             "generated_text": gen.text,
-            "log_p_yes": logps.get(" yes"),
-            "log_p_no": logps.get(" no"),
+            "log_p_yes": log_p_yes,
+            "log_p_no": log_p_no,
+            "margin": margin,
             "p_positive": p,
+            "predicted_label": predicted_label,
         })
+
+    # R2: free-generation collapse checks belong in the smoke-test (not in
+    # build annotate, where candidate scoring intentionally returns blank text).
+    # Fail if: all generated outputs blank; candidate score missing; NaN/Inf;
+    # all probabilities near 0.5; or all margins identical.
+    import math as _smoke_math
+
+    smoke_failures: list[str] = []
+    gens = [(r.get("generated_text") or "").strip() for r in results]
+    if gens and all(not g for g in gens):
+        smoke_failures.append("all generated outputs blank")
+    if any(r["log_p_yes"] is None or r["log_p_no"] is None for r in results):
+        smoke_failures.append("candidate score missing")
+    numeric_vals = [
+        v
+        for r in results
+        for v in (r["log_p_yes"], r["log_p_no"], r["p_positive"])
+        if isinstance(v, (int, float))
+    ]
+    if any(not _smoke_math.isfinite(v) for v in numeric_vals):
+        smoke_failures.append("NaN/Inf in candidate scores")
+    p_vals = [
+        r["p_positive"]
+        for r in results
+        if isinstance(r["p_positive"], (int, float))
+        and _smoke_math.isfinite(r["p_positive"])
+    ]
+    if p_vals and all(abs(p - 0.5) < 0.01 for p in p_vals):
+        smoke_failures.append("all probabilities near 0.5")
+    margins = [
+        r["margin"]
+        for r in results
+        if isinstance(r["margin"], (int, float)) and _smoke_math.isfinite(r["margin"])
+    ]
+    if len(margins) > 1 and len({round(m, 6) for m in margins}) <= 1:
+        smoke_failures.append("all margins identical")
+    if smoke_failures:
+        raise ConfigError(
+            "Model smoke-test collapse detected: " + "; ".join(smoke_failures)
+        )
 
     fp = backend.fingerprint()
     resolved_revision = getattr(backend, "_resolved_revision", None) or fp.get("revision", "n/a")
 
-    _print_json({
+    payload = {
         "model_fingerprint": fp,
         "resolved_revision": resolved_revision,
         "image_sha256": image_hash,
         "image_path": image_path or "placeholder",
         "smoke_results": results,
-    })
+        "checks": {
+            "generated_non_blank": sum(1 for g in gens if g),
+            "candidate_scores_present": sum(
+                1 for r in results if r["log_p_yes"] is not None and r["log_p_no"] is not None
+            ),
+            "finite_scores": all(_smoke_math.isfinite(v) for v in numeric_vals),
+            "probabilities_near_half": bool(p_vals) and all(abs(p - 0.5) < 0.01 for p in p_vals),
+            "margins_distinct": len({round(m, 6) for m in margins}) > 1,
+        },
+    }
+
+    # R2: persist a machine-readable smoke artifact, e.g.
+    # outputs/smoke_test/qwen35_9b_model_smoke.json (name from config stem).
+    smoke_name = Path(args.config).stem
+    smoke_root = (
+        Path(args.output_dir) if args.output_dir else (REPO_ROOT / "outputs")
+    ) / "smoke_test"
+    try:
+        smoke_root.mkdir(parents=True, exist_ok=True)
+        artifact_path = smoke_root / f"{smoke_name}_model_smoke.json"
+        write_json(payload, artifact_path)
+        log.info("Smoke-test artifact written: %s", artifact_path)
+        payload["artifact_path"] = str(artifact_path)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not write smoke artifact: %s", exc)
+
+    _print_json(payload)
     return 0
 
 
@@ -770,6 +907,7 @@ def cmd_build_annotate(args) -> int:
 
     # -- 0. Load whitelist (P0-1) ---------------------------------------- #
     whitelist_attrs: frozenset[str] | None = None
+    wl = None  # R12: keep the full record for the score manifest.
     if run_cfg.build.attribute_whitelist:
         from .build.whitelist import load_attribute_whitelist
 
@@ -1033,7 +1171,15 @@ def cmd_build_annotate(args) -> int:
     score_rows = validated_rows
 
     # P0-A3: model-collapse diagnostics — detect when the backend produces
-    # degenerate scores (all ~0.5, all identical margins, blank generations).
+    # degenerate scores (all ~0.5, all identical margins, constant probability).
+    #
+    # R1 (Fix List for f59a9c1): candidate scoring via backend.score_candidates
+    # intentionally returns text="" because it computes candidate sequence
+    # likelihoods rather than free-generating an answer.  Blank generation text
+    # is therefore NOT a valid collapse signal here — free-generation checks
+    # belong in the model smoke-test (R2).  Health checks are restricted to
+    # probability-based invariants: finite P(yes), P(yes) in [0,1], std(P(yes)),
+    # unique rounded P(yes), predicted-positive rate, and min/max P(yes).
     if score_rows and run_cfg.model.backend != "stub":
         import statistics as _stats
 
@@ -1042,14 +1188,13 @@ def cmd_build_annotate(args) -> int:
             mean_p = _stats.mean(p_vals)
             std_p = _stats.pstdev(p_vals) if len(p_vals) > 1 else 0.0
             pos_rate = sum(1 for p in p_vals if p >= 0.5) / len(p_vals)
+            min_p = min(p_vals)
+            max_p = max(p_vals)
             collapse_reasons: list[str] = []
             if std_p < 1e-6 and len(p_vals) > 1:
                 collapse_reasons.append(f"all P(yes) identical (std={std_p:.2e})")
             if all(abs(p - 0.5) < 0.01 for p in p_vals):
                 collapse_reasons.append("all P(yes) near 0.5")
-            raw_texts = {r.get("raw_text", "") for r in score_rows if r.get("raw_text")}
-            if not raw_texts:
-                collapse_reasons.append("all generations blank")
             unique_rounded = {round(p, 3) for p in p_vals}
             if len(unique_rounded) <= 1 and len(p_vals) > 1:
                 collapse_reasons.append(f"all rounded scores identical ({unique_rounded})")
@@ -1057,12 +1202,12 @@ def cmd_build_annotate(args) -> int:
                 raise ConfigError(
                     f"Model collapse detected: {'; '.join(collapse_reasons)}. "
                     f"positive_rate={pos_rate:.3f}, mean_p={mean_p:.4f}, std_p={std_p:.4f}, "
-                    f"unique_generations={len(raw_texts)}"
+                    f"min_p={min_p:.4f}, max_p={max_p:.4f}, n={len(p_vals)}"
                 )
             log.info(
                 "Collapse diagnostics: pos_rate=%.3f, mean_p=%.4f, std_p=%.4f, "
-                "unique_gens=%d, unique_rounded=%d",
-                pos_rate, mean_p, std_p, len(raw_texts), len(unique_rounded),
+                "min_p=%.4f, max_p=%.4f, unique_rounded=%d",
+                pos_rate, mean_p, std_p, min_p, max_p, len(unique_rounded),
             )
 
     # P1-16: score-completion invariant — every image sample must have all 40
@@ -1133,6 +1278,8 @@ def cmd_build_annotate(args) -> int:
         "resolved_revision": resolved_revision,
         "model_fingerprint": fingerprint_id,
         "fingerprint_id": fingerprint_id,
+        # R11: preserve the complete backend fingerprint, not only its ID.
+        "model_fingerprint_payload": fingerprint_data,
         "prompt_registry_hash": registry.registry_hash(),
         "scoring_version": SCORING_VERSION,
         "candidate_set_hash": candidate_set_hash,
@@ -1140,6 +1287,8 @@ def cmd_build_annotate(args) -> int:
         "source_version": data_cfg.source_version,
         "source_hash": source_hash,
         "source_provenance": source_provenance,
+        # R17: full runtime environment for reproducibility audits.
+        "runtime_environment": _runtime_environment(),
     }
     # Optional: dtype, quantization.
     if getattr(run_cfg.model, "dtype", None):
@@ -1167,17 +1316,26 @@ def cmd_build_annotate(args) -> int:
         score_manifest["midp_commit"] = _sha
     except Exception:  # noqa: BLE001
         pass
-    # Whitelist attributes.
-    if whitelist_attrs:
+    # R12: record the true whitelist-file SHA-256 (from whitelist loading)
+    # plus full provenance, not a hash of the sorted attribute list alone.
+    if wl is not None:
+        import hashlib as _hl
+
+        score_manifest["whitelist_path"] = str(wl.path) if wl.path else None
+        score_manifest["whitelist_file_sha256"] = wl.sha256
+        score_manifest["whitelist_attributes"] = sorted(wl.attributes)
+        score_manifest["whitelist_attributes_sha256"] = _hl.sha256(
+            "|".join(sorted(wl.attributes)).encode()
+        ).hexdigest()
+        score_manifest["whitelist_source_commit"] = wl.source_commit
+        score_manifest["whitelist_policy"] = wl.policy
+    elif whitelist_attrs:
+        import hashlib as _hl
+
         score_manifest["whitelist_attributes"] = sorted(whitelist_attrs)
-        try:
-            import hashlib as _hl
-            wl_text = "|".join(sorted(whitelist_attrs))
-            score_manifest["whitelist_sha256"] = _hl.sha256(
-                wl_text.encode()
-            ).hexdigest()
-        except Exception:  # noqa: BLE001
-            pass
+        score_manifest["whitelist_attributes_sha256"] = _hl.sha256(
+            "|".join(sorted(whitelist_attrs)).encode()
+        ).hexdigest()
     manifest_path = dataset_dir / f"{args.dataset}_score_manifest.json"
     write_json(score_manifest, manifest_path)
 
@@ -1385,10 +1543,21 @@ def cmd_build_qa(args) -> int:
     train_samples = []
     eval_samples = []
     for s in samples:
-        if identity_to_split[s.identity_id] == "train":
+        # R3: explicit branching — forget/exclude identities must appear in
+        # neither ordinary QA train nor QA eval.  Previously an else-branch
+        # routed every non-train assignment (including "exclude") into eval.
+        assignment = identity_to_split[s.identity_id]
+        if assignment == "train":
             train_samples.append(s)
-        else:
+        elif assignment == "eval":
             eval_samples.append(s)
+        elif assignment == "exclude":
+            continue
+        else:
+            raise ConfigError(
+                f"Unexpected QA split assignment '{assignment}' for identity "
+                f"{s.identity_id}; expected 'train', 'eval', or 'exclude'"
+            )
 
     train_rows = generate_qa_rows(train_samples, registry, split="train")
     eval_rows = generate_qa_rows(eval_samples, registry, split="validation")
@@ -1425,7 +1594,10 @@ def _build_probe_coverage_report(
     Captures per-family probe counts, pair counts, identity coverage,
     and per-attribute positive/negative/state-change coverage.
     """
-    from .build.conflict_generation import _accepted_visible_attributes
+    from .build.conflict_generation import (
+        _accepted_visible_attributes,
+        _first_eligible_visual_attrs,
+    )
 
     total_identities = len(by_identity)
 
@@ -1436,27 +1608,37 @@ def _build_probe_coverage_report(
     wrong_name_available = 0
 
     for iid, group in by_identity.items():
-        has_anchor = any(_accepted_visible_attributes(s) for s in group)
-        if has_anchor:
+        # R16: use the same visual-anchor selection logic as route-probe
+        # construction — the first sample with accepted visible attributes,
+        # never blindly group[0] (which may be text-only).
+        anchor_sample = None
+        for s in group:
+            if _accepted_visible_attributes(s):
+                anchor_sample = s
+                break
+        if anchor_sample is not None:
             identities_with_visual_anchor += 1
         if any(s.profile_facts for s in group):
             identities_with_profile_facts += 1
-        # Second valid image: different image_uri with accepted attrs.
-        anchor_attrs = None
-        for s in group:
-            attrs = _accepted_visible_attributes(s)
-            if attrs and anchor_attrs is None:
-                anchor_attrs = attrs
-            elif attrs and anchor_attrs is not None and s.image_uri != group[0].image_uri:
-                identities_with_second_valid_image += 1
-                break
+        # Second valid image: a different image_uri than the *actual visual
+        # anchor* (not group[0]) carrying accepted attributes.
+        if anchor_sample is not None:
+            for s in group:
+                if s.source_sample_id == anchor_sample.source_sample_id:
+                    continue
+                if s.image_uri == anchor_sample.image_uri:
+                    continue
+                if _accepted_visible_attributes(s):
+                    identities_with_second_valid_image += 1
+                    break
         # Wrong-name availability: at least one other identity with
-        # multiple samples and accepted visible attributes.
+        # multiple samples and an eligible visual sample anywhere in its
+        # group (R14/R16: not only the first canonical record).
         other_candidates = [
             other for other in by_identity
             if other != iid
             and len(by_identity[other]) >= 2
-            and _accepted_visible_attributes(by_identity[other][0])
+            and _first_eligible_visual_attrs(by_identity[other])
         ]
         if other_candidates:
             wrong_name_available += 1
@@ -1529,7 +1711,7 @@ def cmd_build_route_probes(args) -> int:
         _accepted_visible_attributes,
         build_identity_probes,
         build_pair_manifest,
-        select_matched_wrong_name,
+        matched_wrong_name_details,
         validate_pair_manifest,
     )
     from .prompts.registry import PromptRegistry
@@ -1548,12 +1730,15 @@ def cmd_build_route_probes(args) -> int:
     for identity_id in identity_ids:
         group = by_identity[identity_id]
 
-        # P2-19: matched wrong-name control — select the identity with
-        # the most similar visual attribute profile (Jaccard overlap of
-        # accepted high-confidence labels) instead of alphabetically-first.
-        # This produces better causal-analysis controls because the wrong
-        # name is visually matched to the target identity.
-        wrong_name = select_matched_wrong_name(identity_id, by_identity)
+        # P2-19 / R14: matched wrong-name control — select the identity with
+        # the most similar visual attribute profile (signed-state Jaccard of
+        # accepted high-confidence labels), searching every sample of each
+        # candidate group for an eligible visual sample.  The match metadata
+        # is recorded on the wrong_name probe rows for causal analysis.
+        wrong_details = matched_wrong_name_details(identity_id, by_identity)
+        wrong_name = (
+            wrong_details["wrong_identity_name"] if wrong_details else None
+        )
 
         try:
             probes = build_identity_probes(
@@ -1563,7 +1748,17 @@ def cmd_build_route_probes(args) -> int:
             skipped.append(f"{identity_id}: {exc}")
             continue
         for probe in probes:
-            probe_rows.append(builder.probe_row(probe))
+            row = builder.probe_row(probe)
+            # R14: attach wrong-name matching audit metadata.
+            if wrong_details and row.get("probe_family") == "wrong_name":
+                row["matched_wrong_identity_id"] = wrong_details[
+                    "matched_wrong_identity_id"
+                ]
+                row["matching_similarity"] = wrong_details["matching_similarity"]
+                row["matching_attributes"] = wrong_details["matching_attributes"]
+                row["candidate_rank"] = wrong_details["candidate_rank"]
+                row["matching_strategy"] = wrong_details["matching_strategy"]
+            probe_rows.append(row)
 
         # P0-12 + Fix 4: validate cross_image_attribute_state pairs and
         # emit one explicit pair per differing target attribute so the

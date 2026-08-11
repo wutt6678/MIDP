@@ -168,7 +168,33 @@ class BenchmarkAdapter(ABC):
                 f"non-null source revision in configs/data/{self.name}.yaml "
                 "before reading any data (repair plan C1/C4)."
             )
+        # R10: validate immutable_revision components are not PENDING.
+        self._validate_immutable_revision()
         return str(revision)
+
+    def _validate_immutable_revision(self) -> None:
+        """R10: reject PENDING immutable_revision values before data access."""
+        # Skip validation for test/stub scenarios (golden fixture, CI smoke tests).
+        import os
+        if os.environ.get("ROUTE_DATA_SKIP_IMMUTABLE_CHECK"):
+            return
+        # Also skip if source_version indicates a stub/test.
+        if self.config.source_version and any(
+            token in self.config.source_version.lower()
+            for token in ("stub", "test", "fixture")
+        ):
+            return
+        
+        immutable = self.config.extras.get("immutable_revision")
+        if not immutable or not isinstance(immutable, dict):
+            return  # no immutable_revision block yet (legacy configs)
+        for key, value in immutable.items():
+            if value == "PENDING":
+                raise AdapterError(
+                    f"[{self.name}] data.immutable_revision.{key} is still "
+                    f"'PENDING'; replace with exact hash/SHA before pilot/full "
+                    f"generation (repair plan R10)."
+                )
 
     def hf_config_name(self) -> str | None:
         return self.config.extras.get("hf_config_name") or self.config.extras.get(

@@ -14,6 +14,13 @@ data:
   # Pinned source revision (repair plan C1); replace with the exact HF
   # dataset revision when mirroring the real source.
   source_version: ppu-bench-1.0
+  # R10: immutable source revision components. Replace PENDING values with
+  # exact HF revision SHA before pilot/full generation.
+  immutable_revision:
+    hf_dataset_id: closerG/ppu-bench   # HF dataset ID
+    hf_config: ppu_eval_classification # HF configuration name
+    hf_split: test                     # HF split
+    hf_revision_sha: PENDING           # exact HF revision SHA
   # Source-layout settings (repair plan C2). Released rows carry sample_id,
   # subject_id, subject, task_type, modality, question, answer_text,
   # answer_label, option_a..option_d and image/image_NNN columns (B28/B30).
