@@ -985,7 +985,7 @@ def ag():
 
 
 class TestAuditGateBuildItems:
-    """P2-24: audit_gate._build_audit_items produces structured items."""
+    """P2-6: audit_gate._build_audit_items produces structured items."""
 
     def test_build_items_from_source_mappings(self, ag):
         items = ag._build_audit_items(
@@ -993,32 +993,37 @@ class TestAuditGateBuildItems:
             pos_labels=[], neg_labels=[], probes=[], pairs=[], facts=[], failures=[],
         )
         assert len(items) == 1
-        assert items[0]["probe_family"] == "source_mapping"
-        assert items[0]["review_outcome"] == "pass"
+        assert items[0]["category"] == "source_mapping"
+        assert items[0]["review_outcome"] == "unreviewed"
 
-    def test_build_items_flags_failed_pairs(self, ag):
+    def test_build_items_pair_schema_valid(self, ag):
         pairs = [{
             "pair_id": "p1", "pair_type": "cross_image_attribute_state",
-            "identity_id": "id1", "attribute": "Eyeglasses",
-            "left_image": "same.jpg", "right_image": "same.jpg",
-            "left_state": True, "right_state": False,
+            "left_sample_id": "s1", "right_sample_id": "s2",
+            "attribute": "Eyeglasses",
+            "controlled": ["attribute"], "changed": ["state"],
+            "expected_route_effect": "flip",
+            "left_label": True, "right_label": False,
         }]
         items = ag._build_audit_items([], [], [], [], pairs, [], failures=[])
-        pair_item = next(it for it in items if it["probe_family"] == "cross_image_attribute_state")
-        assert pair_item["review_outcome"] == "fail"
+        pair_item = next(it for it in items if it["category"] == "pair")
+        assert pair_item["automatic_checks"]["schema_valid"] is True
+        assert pair_item["review_outcome"] == "unreviewed"
 
     def test_persist_audit_report_writes_json(self, tmp_path, ag):
         items = [{
-            "sample_id": "s1", "identity_id": "id1", "image_id": None,
-            "probe_family": "source_mapping", "attribute_or_fact": "split=train",
-            "review_outcome": "pass", "review_note": "ok",
+            "audit_id": "src-0001", "category": "source_mapping",
+            "sample_id": "s1", "identity_id": "id1", "image_uri": None,
+            "attribute_or_fact": "split=train",
+            "automatic_checks": {},
+            "review_outcome": "unreviewed", "review_note": "ok",
         }]
         path = ag._persist_audit_report("testbench", tmp_path, items, failures=[])
         assert path is not None
         assert path.exists()
         report = json.loads(path.read_text())
         assert report["total_items"] == 1
-        assert report["critical_failures"] == 0
+        assert report["unreviewed_items"] == 1
         assert report["gate_pass"] is True
 
 

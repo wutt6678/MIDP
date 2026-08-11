@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -208,7 +206,7 @@ class TestMultiImageSmoke:
             assert entry["image_sha256"] != "placeholder_gray_image"
         # Cross-image variation should be populated
         assert "cross_image_variation" in payload
-        for attr, variation in payload["cross_image_variation"].items():
+        for variation in payload["cross_image_variation"].values():
             assert "spread" in variation
             assert variation["spread"] > 0
 

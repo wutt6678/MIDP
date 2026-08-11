@@ -38,6 +38,9 @@ class StubVisionModel(VisionLanguageModel):
     def __init__(self, config: ModelConfig, role_name: str = "stub") -> None:
         self.config = config
         self.role_name = role_name
+        # P0-4: stable immutable revision so score manifests carry a
+        # deterministic resolved_revision for the stub backend.
+        self._resolved_revision = getattr(config, "revision", None) or "stub-v1"
 
     # ------------------------------------------------------------------ #
     # Inference
@@ -83,6 +86,7 @@ class StubVisionModel(VisionLanguageModel):
         payload = {
             "backend": self.role_name,
             "model_id": self.config.model_id,
+            "revision": self._resolved_revision,
             "seed": self.config.seed,
             "generation": {
                 "do_sample": self.config.generation.do_sample,

@@ -43,6 +43,7 @@ def _get_midp_git_info() -> dict[str, Any]:
             text=True,
             timeout=5,
             cwd=Path(__file__).parent,
+            check=False,
         )
         if result.returncode == 0:
             info["midp_git_commit"] = result.stdout.strip()
@@ -54,6 +55,7 @@ def _get_midp_git_info() -> dict[str, Any]:
             text=True,
             timeout=5,
             cwd=Path(__file__).parent,
+            check=False,
         )
         if result.returncode == 0:
             info["git_dirty"] = bool(result.stdout.strip())
@@ -270,6 +272,11 @@ class ExtensionExporter:
         record.paths["checksums"] = str(checksums_path)
         record.paths["manifest"] = str(manifest_path)
 
+        # Convert all stored absolute paths to paths relative to output_dir
+        # so the export manifest is portable and verifiable.
+        for key in list(record.paths):
+            record.paths[key] = self._relative_path(record.paths[key])
+
         # Step 1: write the final export manifest.
         manifest = record.to_dict()
         if provenance:
@@ -281,10 +288,12 @@ class ExtensionExporter:
         # Step 2: checksums over all artifacts incl. the final manifest,
         # excluding checksums.json itself; relative paths for portability.
         checksums: dict[str, str] = {}
-        for key, path_str in sorted(record.paths.items()):
+        for key, rel_path in sorted(record.paths.items()):
             if key == "checksums":
                 continue  # checksums.json never hashes itself
-            checksums[self._relative_path(path_str)] = self._sha256_file(path_str)
+            checksums[rel_path] = self._sha256_file(
+                self.output_dir / rel_path
+            )
         write_json(checksums, checksums_path)
 
         return record

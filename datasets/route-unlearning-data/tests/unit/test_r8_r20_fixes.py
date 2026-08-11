@@ -77,7 +77,7 @@ class TestModelFingerprintPayload:
         }
         record = exporter.export_all(samples, provenance=provenance)
 
-        manifest = json.loads(Path(record.paths["manifest"]).read_text())
+        manifest = json.loads((record.output_dir / record.paths["manifest"]).read_text())
         assert "model_fingerprint_payload" in manifest["provenance"]
         assert manifest["provenance"]["model_fingerprint_payload"]["model_id"] == "test-model"
         assert manifest["provenance"]["model_fingerprint_payload"]["dtype"] == "float16"
@@ -135,7 +135,7 @@ class TestWhitelistFileSHA256:
         }
         record = exporter.export_all(samples, provenance=provenance)
 
-        manifest = json.loads(Path(record.paths["manifest"]).read_text())
+        manifest = json.loads((record.output_dir / record.paths["manifest"]).read_text())
         assert "whitelist_file_sha256" in manifest["provenance"]
         assert "whitelist_attributes" in manifest["provenance"]
 
@@ -194,7 +194,7 @@ class TestRuntimeEnvironment:
         }
         record = exporter.export_all(samples, provenance=provenance)
 
-        manifest = json.loads(Path(record.paths["manifest"]).read_text())
+        manifest = json.loads((record.output_dir / record.paths["manifest"]).read_text())
         assert "runtime_environment" in manifest["provenance"]
         assert manifest["provenance"]["runtime_environment"]["python_version"] == "3.11.0"
 

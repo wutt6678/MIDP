@@ -71,7 +71,47 @@ class CheckRecord:
 
 
 # --------------------------------------------------------------------------- #
-# Smoke subset selection (P0-3)
+# Shared split resolution (P1-4)
+# --------------------------------------------------------------------------- #
+
+# Canonical source mapping: benchmark split names -> internal bucket names.
+# Mirrors cli.py DEFAULT_SOURCE_MAPPING and supports FIUBench vocabulary.
+_SOURCE_MAPPING: dict[str, str] = {
+    "train": "train",
+    "retain_train": "train",
+    "retain": "train",
+    "validation": "eval",
+    "val": "eval",
+    "eval": "eval",
+    "retain_eval": "eval",
+    "evaluation": "eval",
+    "test": "eval",
+    "forget": "exclude",
+    "exclude": "exclude",
+    "unassigned": "hash",
+}
+
+
+def _resolve_effective_split(sample: dict[str, Any]) -> str | None:
+    """Resolve the effective split bucket for a canonical sample.
+
+    Checks ``source_split``, ``source_metadata.source_split``, and
+    ``split`` fields, then maps through the canonical source mapping.
+    Returns the mapped bucket name (``train``, ``eval``, ``exclude``,
+    ``hash``) or the raw value if no mapping exists.
+    """
+    raw = (
+        sample.get("source_split")
+        or sample.get("source_metadata", {}).get("source_split")
+        or sample.get("split")
+    )
+    if raw is None:
+        return None
+    return _SOURCE_MAPPING.get(raw, raw)
+
+
+# --------------------------------------------------------------------------- #
+# Smoke subset selection (P0-3, P1-3, P1-4)
 # --------------------------------------------------------------------------- #
 
 
@@ -85,10 +125,14 @@ def select_smoke_subset(
     require_exclude: bool = True,
     require_visual: bool = True,
     require_profile_fact: bool = True,
-    require_wrong_name: bool = True,
+    require_wrong_name: bool = False,
     require_multiview: bool = False,
 ) -> dict[str, Any]:
     """Select a coverage-aware smoke subset from canonical samples.
+
+    Uses iterative greedy scoring: each candidate is scored against the
+    *current* selection state, not the initial empty state.  Input samples
+    are never mutated.
 
     Returns a dict with ``selected`` (list of sample dicts), ``coverage``
     (summary counts), and ``issues`` (list of unmet requirements).
@@ -101,17 +145,19 @@ def select_smoke_subset(
     has_fact = False
     has_multiview = False
 
-    # First pass: categorize samples.
-    for s in samples:
-        sid = s.get("source_sample_id", "")
+    # Track remaining candidates by index so we never mutate inputs.
+    remaining = list(range(len(samples)))
+
+    def _score_sample(idx: int) -> int:
+        """Score a sample against the *current* selection state."""
+        s = samples[idx]
         iid = s.get("identity_id", "")
         img = s.get("image_uri")
-        split = s.get("source_split") or s.get("source_metadata", {}).get("source_split")
+        split = _resolve_effective_split(s)
         facts = s.get("profile_facts", [])
         meta = s.get("source_metadata", {})
         is_multiview = meta.get("is_multiview", False)
 
-        # Score each sample by how many unmet requirements it fills.
         score = 0
         if iid not in identity_ids:
             score += 3
@@ -123,18 +169,23 @@ def select_smoke_subset(
             score += 1
         if is_multiview and not has_multiview:
             score += 1
+        return score
 
-        s["_smoke_score"] = score
+    # Iterative greedy selection: re-score remaining candidates each round.
+    max_select = min(12, len(samples))
+    while len(selected) < max_select and remaining:
+        # Score all remaining against current state.
+        scored = [(idx, _score_sample(idx)) for idx in remaining]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        best_idx = scored[0][0]
+        if scored[0][1] <= 0 and len(selected) >= min_identities:
+            break  # No more coverage benefit.
 
-    # Greedy selection: pick highest-scoring samples first.
-    ranked = sorted(samples, key=lambda s: s.get("_smoke_score", 0), reverse=True)
-    for s in ranked:
-        if len(selected) >= 12:
-            break
+        s = samples[best_idx]
         sid = s.get("source_sample_id", "")
         iid = s.get("identity_id", "")
         img = s.get("image_uri")
-        split = s.get("source_split") or s.get("source_metadata", {}).get("source_split")
+        split = _resolve_effective_split(s)
         facts = s.get("profile_facts", [])
         meta = s.get("source_metadata", {})
 
@@ -149,10 +200,7 @@ def select_smoke_subset(
             has_fact = True
         if meta.get("is_multiview", False):
             has_multiview = True
-
-    # Clean up temporary scoring key.
-    for s in samples:
-        s.pop("_smoke_score", None)
+        remaining.remove(best_idx)
 
     # Check coverage requirements.
     issues: list[str] = []
@@ -170,6 +218,26 @@ def select_smoke_subset(
         issues.append("no image-bearing identity in smoke subset")
     if require_profile_fact and not has_fact:
         issues.append("no identity with profile facts in smoke subset")
+
+    # P1-5: enforce require_wrong_name — need >=2 distinct identities with
+    # valid visual target/control pairing.
+    if require_wrong_name and len(image_bearing) < 2:
+        issues.append(
+            f"require_wrong_name: need >=2 image-bearing identities, have {len(image_bearing)}"
+        )
+
+    # P1-6: enforce require_multiview — need >=1 identity with >=2 image URIs.
+    if require_multiview and not has_multiview:
+        # Check from selected samples whether any identity has >=2 images.
+        id_image_count: dict[str, int] = {}
+        for s in selected:
+            img = s.get("image_uri")
+            if img:
+                iid = s.get("identity_id", "")
+                id_image_count[iid] = id_image_count.get(iid, 0) + 1
+        multi = any(c >= 2 for c in id_image_count.values())
+        if not multi:
+            issues.append("require_multiview: no identity with >=2 distinct image URIs")
 
     coverage = {
         "selected_samples": len(selected),
@@ -285,10 +353,20 @@ def _verify_scores_per_image(export_dir: Path, benchmark: str, failures: list[st
 
         if "attribute" in df.columns and "image_uri" in df.columns:
             from route_data.constants.celeba_attributes import CELEBA_ATTRIBUTE_SET
-            attrs_per_image = df.groupby("image_uri")["attribute"].apply(set)
+            CELEBA40_PREFIX = "extended_attributes.celeba40."
+            # Skip text-only rows (image_uri is null/NaN).
+            df_visual = df.dropna(subset=["image_uri"])
+            attrs_per_image = df_visual.groupby("image_uri")["attribute"].apply(set)
             bad_images = []
             for img_uri, attr_set in attrs_per_image.items():
-                celeba_attrs = {a for a in attr_set if a in CELEBA_ATTRIBUTE_SET}
+                # Normalize namespaced attributes by stripping the prefix.
+                celeba_attrs = set()
+                for a in attr_set:
+                    if a.startswith(CELEBA40_PREFIX):
+                        celeba_attrs.add(a[len(CELEBA40_PREFIX):])
+                    elif a in CELEBA_ATTRIBUTE_SET:
+                        celeba_attrs.add(a)
+                    # else: unknown attribute, ignore for set-equality check
                 if celeba_attrs != CELEBA_ATTRIBUTE_SET:
                     missing = CELEBA_ATTRIBUTE_SET - celeba_attrs
                     extra = celeba_attrs - CELEBA_ATTRIBUTE_SET
@@ -689,12 +767,26 @@ def _verify_export_manifest(export_dir: Path, benchmark: str, failures: list[str
 
     # Verify every referenced artifact exists on disk.
     missing = 0
-    for rel_path in paths:
-        if rel_path == f"{benchmark}_checksums.json":
+    for logical_name, rel_path in paths.items():
+        if not isinstance(rel_path, str):
+            failures.append(f"export manifest: non-string path for {logical_name}: {rel_path!r}")
+            missing += 1
+            continue
+        # Reject absolute paths and parent traversal.
+        if rel_path.startswith(("/", "\\")):
+            failures.append(f"export manifest: absolute path rejected: {rel_path}")
+            missing += 1
+            continue
+        resolved = (export_dir / rel_path).resolve()
+        if not str(resolved).startswith(str(export_dir.resolve())):
+            failures.append(f"export manifest: path traversal rejected: {rel_path}")
+            missing += 1
+            continue
+        if logical_name == f"{benchmark}_checksums.json" or rel_path.endswith(f"{benchmark}_checksums.json"):
             continue  # checksums file is self-excluded from its own listing
         artifact = export_dir / rel_path
         if not artifact.exists():
-            failures.append(f"export manifest: artifact missing: {rel_path}")
+            failures.append(f"export manifest: artifact missing: {rel_path} (key={logical_name})")
             missing += 1
 
     if missing > 0:
@@ -1111,9 +1203,20 @@ def _persist_smoke_manifest(
     selected: list[dict[str, Any]],
     coverage: dict[str, Any],
 ) -> Path:
-    """P0-4: persist <dataset>_smoke_subset_manifest.json."""
+    """P1-7: persist <dataset>_smoke_subset_manifest.json.
+
+    The manifest contains both the full sample details and flat ID lists
+    (``selected_source_sample_ids``, ``selected_identity_ids``) so that
+    every build stage can consume the same allowlist.
+    """
+    selected_ids = [s.get("source_sample_id") for s in selected if s.get("source_sample_id")]
+    selected_iids = sorted({s.get("identity_id") for s in selected if s.get("identity_id")})
+
     manifest: dict[str, Any] = {
         "dataset": benchmark,
+        "selection_version": "smoke_v1",
+        "selected_source_sample_ids": selected_ids,
+        "selected_identity_ids": selected_iids,
         "samples": [
             {
                 "sample_id": s.get("source_sample_id"),
@@ -1169,10 +1272,10 @@ def main_check(
         build_golden_fixture(golden_root)
         os.environ["FAIRGET_ROOT"] = str(golden_root)
 
-    # P0-3: coverage-aware smoke sampling.
-    # For the golden fixture, --limit 3 is acceptable since the fixture is
-    # small.  For real benchmarks, we would use select_smoke_subset().
-    limit = "3" if is_golden_fixture else "10"
+    # P0-5: for the golden fixture, process ALL samples to guarantee coverage
+    # of all 3 identities (forget, retain_train, retain_eval) and all splits.
+    # The golden fixture has 18 samples (3 identities × 6 each).
+    limit = "100" if is_golden_fixture else "10"
 
     # Run the build pipeline.
     for stage in ("annotate", "qa", "route-probes", "splits", "export"):
@@ -1213,8 +1316,10 @@ def main_check(
             _persist_smoke_manifest(_export_dir, dataset, _result["selected"], _result["coverage"])
             if _result["issues"]:
                 print(f"--- smoke subset: coverage issues: {_result['issues']}")
-        except Exception:
-            pass
+        except Exception as _exc:
+            msg = f"smoke-manifest generation failed: {_exc}"
+            print(f"WARNING: {msg}")
+            failures.append(msg)
 
     # Summary.
     print(f"\n{'=' * 72}")

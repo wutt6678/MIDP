@@ -336,7 +336,7 @@ class TestExportManifestChecksums:
         exporter = ExtensionExporter(tmp_path, "test")
         record = exporter.export_all(samples)
 
-        checksums_path = Path(record.paths["checksums"])
+        checksums_path = record.output_dir / record.paths["checksums"]
         checksums = json.loads(checksums_path.read_text())
 
         # checksums.json must not reference itself.
@@ -370,7 +370,7 @@ class TestExportManifestChecksums:
         exporter = ExtensionExporter(tmp_path, "test")
         record = exporter.export_all(samples)
 
-        manifest_path = Path(record.paths["manifest"])
+        manifest_path = record.output_dir / record.paths["manifest"]
         manifest = json.loads(manifest_path.read_text())
         assert "checksums" in manifest.get("paths", {})
 
@@ -395,7 +395,7 @@ class TestExportManifestChecksums:
         provenance = {"model_id": "test-model", "source_version": "v1"}
         record = exporter.export_all(samples, provenance=provenance)
 
-        manifest = json.loads(Path(record.paths["manifest"]).read_text())
+        manifest = json.loads((record.output_dir / record.paths["manifest"]).read_text())
         assert manifest["provenance"]["model_id"] == "test-model"
         assert manifest["provenance"]["source_version"] == "v1"
 
@@ -419,7 +419,7 @@ class TestExportManifestChecksums:
         exporter = ExtensionExporter(tmp_path, "test")
         record = exporter.export_all(samples)
 
-        checksums = json.loads(Path(record.paths["checksums"]).read_text())
+        checksums = json.loads((record.output_dir / record.paths["checksums"]).read_text())
         for key in checksums:
             assert not Path(key).is_absolute(), f"absolute path in checksums: {key}"
 
@@ -443,7 +443,7 @@ class TestExportManifestChecksums:
         exporter = ExtensionExporter(tmp_path, "test")
         record = exporter.export_all(samples)
 
-        checksums = json.loads(Path(record.paths["checksums"]).read_text())
+        checksums = json.loads((record.output_dir / record.paths["checksums"]).read_text())
         for path_key, digest in checksums.items():
             assert len(digest) == 64, f"bad SHA-256 for {path_key}: {digest!r}"
             assert all(c in "0123456789abcdef" for c in digest)
@@ -468,9 +468,9 @@ class TestExportManifestChecksums:
         exporter = ExtensionExporter(tmp_path, "test")
         record = exporter.export_all(samples)
 
-        checksums = json.loads(Path(record.paths["checksums"]).read_text())
+        checksums = json.loads((record.output_dir / record.paths["checksums"]).read_text())
         # Must contain the manifest hash.
-        manifest_rel = Path(record.paths["manifest"]).name
+        manifest_rel = record.paths["manifest"]
         found = any(manifest_rel in key for key in checksums)
         assert found, f"manifest hash not in checksums; keys: {list(checksums)}"
 
@@ -629,7 +629,7 @@ class TestMidpGitProvenance:
         exporter = ExtensionExporter(tmp_path, "test")
         record = exporter.export_all(samples)
 
-        manifest = json.loads(Path(record.paths["manifest"]).read_text())
+        manifest = json.loads((record.output_dir / record.paths["manifest"]).read_text())
         assert "midp_provenance" in manifest
         provenance = manifest["midp_provenance"]
         assert "midp_git_commit" in provenance

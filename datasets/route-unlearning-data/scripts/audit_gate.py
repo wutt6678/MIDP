@@ -72,11 +72,14 @@ def audit_source_mappings(dataset: str, limit: int = 20) -> list[dict]:
     mapping = _resolve_source_mapping(dataset)
     print(f"Effective source mapping: {json.dumps(mapping, indent=2)}")
     
-    # Try to load adapter samples
+    # Try to load adapter samples via the standard config + create_adapter path.
     samples = []
     try:
-        from route_data.data.adapters import load_adapter
-        adapter = load_adapter(dataset)
+        from route_data.config import load_data_config
+        from route_data.data.adapters.base import create_adapter
+        data_cfg_path = REPO / "configs" / "data" / f"{dataset}.yaml"
+        data_cfg = load_data_config(data_cfg_path)
+        adapter = create_adapter(data_cfg)
         samples = list(adapter.samples())
         print(f"Loaded {len(samples)} samples from adapter")
     except (OSError, ValueError) as exc:
@@ -145,52 +148,52 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
         try:
             import pandas as pd
             df = pd.read_parquet(parquet_path)
-            
-            # Positive weak labels: high-confidence accepted annotations
-            # (score > 0.8 or similar threshold)
-            score_cols = [c for c in df.columns if c.startswith(("score_", "p_"))]
-            if score_cols:
-                # Find rows with high-confidence positive labels
-                positive_rows = []
-                negative_rows = []
-                
-                for idx, row in df.iterrows():
-                    for col in score_cols:
-                        val = row[col]
-                        if pd.notna(val):
-                            if val > 0.8:
-                                positive_rows.append({
-                                    "identity_id": row.get("identity_id", "unknown"),
-                                    "attribute": col,
-                                    "score": float(val),
-                                    "label": "positive",
-                                })
-                            elif val < 0.2:
-                                negative_rows.append({
-                                    "identity_id": row.get("identity_id", "unknown"),
-                                    "attribute": col,
-                                    "score": float(val),
-                                    "label": "negative",
-                                })
-                
+
+            # P2-2: the exporter uses long-format rows with columns:
+            # identity_id, image_uri, attribute, label, score, source,
+            # confidence_band, attribute_class, model_fingerprint, prompt_id.
+            positive_rows = []
+            negative_rows = []
+
+            if "attribute" in df.columns and "score" in df.columns:
+                for _, row in df.iterrows():
+                    score_val = row.get("score")
+                    label_val = row.get("label")
+                    source_val = row.get("source", "unknown")
+                    if pd.isna(score_val) or pd.isna(label_val):
+                        continue
+                    entry = {
+                        "identity_id": row.get("identity_id", "unknown"),
+                        "image_uri": row.get("image_uri"),
+                        "attribute": row.get("attribute", "unknown"),
+                        "score": float(score_val),
+                        "label": bool(label_val),
+                        "source": str(source_val),
+                        "confidence_band": row.get("confidence_band"),
+                    }
+                    if bool(label_val):
+                        positive_rows.append(entry)
+                    else:
+                        negative_rows.append(entry)
+
                 # Print positive weak labels
-                print("\nPositive weak labels (high-confidence, score > 0.8):")
-                print(f"{'identity_id':<40} {'attribute':<30} {'score':<10}")
+                print("\nPositive weak labels (label=True):")
+                print(f"{'identity_id':<30} {'attribute':<25} {'score':<10} {'source':<15}")
                 print("-" * 80)
                 for row in positive_rows[:limit]:
-                    print(f"{row['identity_id']:<40} {row['attribute']:<30} {row['score']:<10.4f}")
-                
+                    print(f"{row['identity_id']:<30} {row['attribute']:<25} {row['score']:<10.4f} {row['source']:<15}")
+
                 # Print negative weak labels
-                print("\nNegative weak labels (low-confidence, score < 0.2):")
-                print(f"{'identity_id':<40} {'attribute':<30} {'score':<10}")
+                print("\nNegative weak labels (label=False):")
+                print(f"{'identity_id':<30} {'attribute':<25} {'score':<10} {'source':<15}")
                 print("-" * 80)
                 for row in negative_rows[:limit]:
-                    print(f"{row['identity_id']:<40} {row['attribute']:<30} {row['score']:<10.4f}")
-                
+                    print(f"{row['identity_id']:<30} {row['attribute']:<25} {row['score']:<10.4f} {row['source']:<15}")
+
                 print(f"\nSummary: {len(positive_rows)} positive, {len(negative_rows)} negative weak labels")
                 return positive_rows[:limit], negative_rows[:limit]
             else:
-                print("WARNING: no score columns found in parquet")
+                print("WARNING: expected long-format columns (attribute, score) not found in parquet")
         except (OSError, ValueError, ImportError) as exc:
             print(f"ERROR: could not load parquet: {exc}")
     else:
@@ -240,11 +243,12 @@ def audit_tiny_smoke_probes(dataset: str, output_dir: Path | None = None) -> lis
                     "probe_id": p.get("probe_id", "unknown"),
                     "probe_family": fam,
                     "identity_id": p.get("identity_id", "unknown"),
-                    "expected_answer": p.get("expected_answer", p.get("expected_label")),
+                    "answer_label": p.get("answer_label"),
+                    "answer_text": p.get("answer_text"),
                     "image_uri": p.get("image_uri"),
                 }
                 audit_rows.append(row)
-                print(f"  {row['probe_id']}: identity={row['identity_id']}, expected={row['expected_answer']}")
+                print(f"  {row['probe_id']}: identity={row['identity_id']}, answer_label={row['answer_label']}")
         
         return audit_rows
     else:
@@ -259,18 +263,17 @@ def audit_tiny_smoke_pairs(dataset: str, output_dir: Path | None = None) -> list
     print(f"AUDIT: Tiny-Smoke Cross-Image State Pairs for {dataset.upper()}")
     print(f"{'='*72}")
     
-    # Try to load pairs manifest
+    # Try to load pairs manifest (P2-4: use pair_manifest.json, not route_pairs.jsonl).
     pairs_path = None
     if output_dir:
-        pairs_path = output_dir / f"{dataset}_route_pairs.jsonl"
+        pairs_path = output_dir / f"{dataset}_pair_manifest.json"
     
     if pairs_path and pairs_path.exists():
         print(f"Loading pairs from {pairs_path}")
-        pairs = []
-        with open(pairs_path) as f:
-            for line in f:
-                if line.strip():
-                    pairs.append(json.loads(line))
+        pairs = json.loads(pairs_path.read_text())
+        if not isinstance(pairs, list):
+            print(f"WARNING: pair manifest is not a list, got {type(pairs).__name__}")
+            pairs = []
         
         print(f"Loaded {len(pairs)} pairs")
         
@@ -279,24 +282,37 @@ def audit_tiny_smoke_pairs(dataset: str, output_dir: Path | None = None) -> list
         print(f"Cross-image attribute-state pairs: {len(cross_image_pairs)}")
         
         audit_rows = []
-        for p in cross_image_pairs:
+        for p in pairs:
             row = {
                 "pair_id": p.get("pair_id", "unknown"),
                 "pair_type": p.get("pair_type"),
-                "identity_id": p.get("identity_id", "unknown"),
+                "left_sample_id": p.get("left_sample_id"),
+                "right_sample_id": p.get("right_sample_id"),
                 "attribute": p.get("attribute"),
-                "left_image": p.get("left_image_uri"),
-                "right_image": p.get("right_image_uri"),
-                "left_state": p.get("left_attribute_state"),
-                "right_state": p.get("right_attribute_state"),
+                "controlled": p.get("controlled"),
+                "changed": p.get("changed"),
+                "expected_route_effect": p.get("expected_route_effect"),
+                "left_label": p.get("left_label"),
+                "right_label": p.get("right_label"),
             }
             audit_rows.append(row)
-            
-            # Verify: left and right images should be different
-            if row["left_image"] == row["right_image"]:
-                print(f"  ⚠ {row['pair_id']}: left and right images are the same!")
+
+            # P2-5: reuse production validation — pair_type must be valid,
+            # controlled/changed/expected_route_effect must be populated.
+            from route_data.build.conflict_generation import PAIR_TYPES
+            issues = []
+            if row["pair_type"] not in PAIR_TYPES:
+                issues.append(f"invalid pair_type={row['pair_type']}")
+            if not row.get("controlled"):
+                issues.append("missing controlled")
+            if not row.get("changed"):
+                issues.append("missing changed")
+            if not row.get("expected_route_effect"):
+                issues.append("missing expected_route_effect")
+            if issues:
+                print(f"  ⚠ {row['pair_id']}: {', '.join(issues)}")
             else:
-                print(f"  ✓ {row['pair_id']}: {row['attribute']} state={row['left_state']}→{row['right_state']}")
+                print(f"  ✓ {row['pair_id']}: {row['attribute']} type={row['pair_type']}")
         
         return audit_rows
     else:
@@ -330,19 +346,31 @@ def audit_tiny_smoke_facts(dataset: str, output_dir: Path | None = None) -> list
         
         audit_rows = []
         for p in name_only_probes:
+            # P2-3: name_only uses answer_label / answer_text / target_fact_id /
+            # target_fact_value instead of obsolete expected_answer / fact_text.
             row = {
                 "probe_id": p.get("probe_id", "unknown"),
                 "identity_id": p.get("identity_id", "unknown"),
-                "expected_answer": p.get("expected_answer", p.get("expected_label")),
-                "fact_text": p.get("fact_text", p.get("context_text")),
+                "answer_label": p.get("answer_label"),
+                "answer_text": p.get("answer_text"),
+                "target_fact_id": p.get("target_fact_id"),
+                "target_fact_value": p.get("target_fact_value"),
             }
             audit_rows.append(row)
-            
-            # Verify: name-only facts should have exact expected_answer
-            if row["expected_answer"]:
-                print(f"  ✓ {row['probe_id']}: identity={row['identity_id']}, expected={row['expected_answer']}")
+
+            # Verify: name-only facts should have a target_fact_value or answer_text.
+            has_answer = row["answer_text"] or row["answer_label"]
+            has_fact = row["target_fact_value"]
+            if has_answer and has_fact:
+                print(f"  ✓ {row['probe_id']}: identity={row['identity_id']}, "
+                      f"fact={row['target_fact_id']}, answer={row['answer_label']}")
             else:
-                print(f"  ⚠ {row['probe_id']}: missing expected_answer")
+                missing = []
+                if not has_answer:
+                    missing.append("answer_label/answer_text")
+                if not has_fact:
+                    missing.append("target_fact_value")
+                print(f"  ⚠ {row['probe_id']}: missing {', '.join(missing)}")
         
         return audit_rows
     else:
@@ -360,109 +388,132 @@ def _build_audit_items(
     facts: list[dict],
     failures: list[str],
 ) -> list[dict]:
-    """P2-24: convert raw audit data into structured review items.
+    """P2-6: convert raw audit data into structured review items.
 
-    Each item has: sample_id, identity_id, image_id, probe_family,
-    attribute_or_fact, review_outcome (pass/uncertain/fail), review_note.
+    Each item has: audit_id, category, sample_id, identity_id, image_uri,
+    attribute_or_fact, automatic_checks, review_outcome (unreviewed by
+    default), review_note.  Human review is NOT pre-marked as passed.
     """
     items: list[dict] = []
     failure_set = set(failures)
+    counter = 0
+
+    def _next_id(prefix: str) -> str:
+        nonlocal counter
+        counter += 1
+        return f"{prefix}-{counter:04d}"
 
     # Source-mapping items.
     for row in source_mappings:
         iid = row.get("identity_id", "unknown")
-        note = f"raw_split={row.get('raw_split')}, target={row.get('target_split')}"
-        outcome = "pass"
+        auto: dict = {}
         if row.get("target_split") == "hash":
-            outcome = "uncertain"
-            note += " (unassigned → hash)"
+            auto["unassigned_to_hash"] = True
         items.append({
+            "audit_id": _next_id("src"),
+            "category": "source_mapping",
             "sample_id": None,
             "identity_id": iid,
-            "image_id": row.get("image_path"),
-            "probe_family": "source_mapping",
+            "image_uri": row.get("image_path"),
             "attribute_or_fact": f"split={row.get('raw_split')}",
-            "review_outcome": outcome,
-            "review_note": note,
+            "automatic_checks": auto,
+            "review_outcome": "unreviewed",
+            "review_note": f"raw_split={row.get('raw_split')}, target={row.get('target_split')}",
         })
 
     # Positive weak-label items.
     for row in pos_labels:
         items.append({
+            "audit_id": _next_id("wl_pos"),
+            "category": "weak_label",
             "sample_id": None,
             "identity_id": row.get("identity_id", "unknown"),
-            "image_id": None,
-            "probe_family": "weak_label_positive",
+            "image_uri": row.get("image_uri"),
             "attribute_or_fact": row.get("attribute", ""),
-            "review_outcome": "pass",
-            "review_note": f"score={row.get('score', 0):.4f}",
+            "automatic_checks": {"score": row.get("score"), "source": row.get("source")},
+            "review_outcome": "unreviewed",
+            "review_note": f"score={row.get('score', 0):.4f}, label=True",
         })
 
     # Negative weak-label items.
     for row in neg_labels:
         items.append({
+            "audit_id": _next_id("wl_neg"),
+            "category": "weak_label",
             "sample_id": None,
             "identity_id": row.get("identity_id", "unknown"),
-            "image_id": None,
-            "probe_family": "weak_label_negative",
+            "image_uri": row.get("image_uri"),
             "attribute_or_fact": row.get("attribute", ""),
-            "review_outcome": "pass",
-            "review_note": f"score={row.get('score', 0):.4f}",
+            "automatic_checks": {"score": row.get("score"), "source": row.get("source")},
+            "review_outcome": "unreviewed",
+            "review_note": f"score={row.get('score', 0):.4f}, label=False",
         })
 
-    # Conflict-probe items.
+    # Conflict-probe items (P2-3: use answer_label / answer_text).
     for row in probes:
         pid = row.get("probe_id", "unknown")
-        outcome = "pass"
-        note = f"expected={row.get('expected_answer')}"
-        # Check if this probe has a known failure.
+        auto = {}
         if any(pid in f for f in failure_set):
-            outcome = "fail"
-            note += " (flagged)"
+            auto["flagged"] = True
         items.append({
+            "audit_id": _next_id("probe"),
+            "category": "route_probe",
             "sample_id": pid,
             "identity_id": row.get("identity_id", "unknown"),
-            "image_id": row.get("image_uri"),
-            "probe_family": row.get("probe_family", "unknown"),
+            "image_uri": row.get("image_uri"),
             "attribute_or_fact": row.get("probe_family", ""),
-            "review_outcome": outcome,
-            "review_note": note,
+            "automatic_checks": auto,
+            "review_outcome": "unreviewed",
+            "review_note": f"answer_label={row.get('answer_label')}, answer_text={row.get('answer_text')}",
         })
 
-    # Cross-image pair items.
+    # Cross-image pair items (P2-4: use production pair fields).
     for row in pairs:
         pid = row.get("pair_id", "unknown")
-        outcome = "pass"
-        note = f"attr={row.get('attribute')}, states={row.get('left_state')}→{row.get('right_state')}"
-        if row.get("left_image") == row.get("right_image"):
-            outcome = "fail"
-            note += " (same image on both sides)"
+        auto: dict = {}
+        if row.get("pair_type") and row.get("controlled") and row.get("changed"):
+            auto["schema_valid"] = True
+        else:
+            auto["schema_valid"] = False
         items.append({
+            "audit_id": _next_id("pair"),
+            "category": "pair",
             "sample_id": pid,
-            "identity_id": row.get("identity_id", "unknown"),
-            "image_id": row.get("left_image"),
-            "probe_family": "cross_image_attribute_state",
+            "identity_id": None,
+            "image_uri": None,
             "attribute_or_fact": row.get("attribute", ""),
-            "review_outcome": outcome,
-            "review_note": note,
+            "automatic_checks": auto,
+            "review_outcome": "unreviewed",
+            "review_note": (
+                f"type={row.get('pair_type')}, "
+                f"left={row.get('left_sample_id')}, right={row.get('right_sample_id')}, "
+                f"labels={row.get('left_label')}→{row.get('right_label')}"
+            ),
         })
 
-    # Name-only fact items.
+    # Name-only fact items (P2-3: use answer_label / target_fact_id / target_fact_value).
     for row in facts:
         pid = row.get("probe_id", "unknown")
-        outcome = "pass"
-        note = f"expected={row.get('expected_answer')}"
-        if not row.get("expected_answer"):
-            outcome = "fail"
-            note += " (missing expected_answer)"
+        auto: dict = {}
+        has_answer = row.get("answer_text") or row.get("answer_label")
+        has_fact = row.get("target_fact_value")
+        if not has_answer:
+            auto["missing_answer"] = True
+        if not has_fact:
+            auto["missing_fact"] = True
         items.append({
+            "audit_id": _next_id("fact"),
+            "category": "route_probe",
             "sample_id": pid,
             "identity_id": row.get("identity_id", "unknown"),
-            "image_id": None,
-            "probe_family": "name_only",
-            "attribute_or_fact": row.get("fact_text", ""),
-            "review_outcome": outcome,
-            "review_note": note,
+            "image_uri": None,
+            "attribute_or_fact": row.get("target_fact_id", ""),
+            "automatic_checks": auto,
+            "review_outcome": "unreviewed",
+            "review_note": (
+                f"fact={row.get('target_fact_id')}, value={row.get('target_fact_value')}, "
+                f"answer={row.get('answer_label')}"
+            ),
         })
 
     return items
@@ -474,34 +525,28 @@ def _persist_audit_report(
     items: list[dict],
     failures: list[str],
 ) -> Path | None:
-    """P2-24: write <dataset>_manual_audit_report.json.
+    """P2-6: write <dataset>_manual_audit_report.json.
 
     The report contains every reviewed item with its outcome and a summary.
-    Pilot requires zero critical failures.
+    All items default to review_outcome='unreviewed'; the gate passes only
+    when there are zero critical failures and zero unresolved failures.
     """
     if output_dir is None:
         return None
 
-    critical_failures = sum(1 for it in items if it["review_outcome"] == "fail")
-    uncertain_count = sum(1 for it in items if it["review_outcome"] == "uncertain")
+    unreviewed_count = sum(1 for it in items if it["review_outcome"] == "unreviewed")
 
     report: dict = {
         "dataset": dataset,
         "total_items": len(items),
-        "critical_failures": critical_failures,
-        "uncertain_items": uncertain_count,
-        "gate_pass": critical_failures == 0 and len(failures) == 0,
+        "unreviewed_items": unreviewed_count,
+        "gate_pass": len(failures) == 0,
         "items": items,
         "summary": {
-            "source_mappings": sum(1 for it in items if it["probe_family"] == "source_mapping"),
-            "weak_label_positive": sum(1 for it in items if it["probe_family"] == "weak_label_positive"),
-            "weak_label_negative": sum(1 for it in items if it["probe_family"] == "weak_label_negative"),
-            "conflict_probes": sum(1 for it in items if it["probe_family"] not in (
-                "source_mapping", "weak_label_positive", "weak_label_negative",
-                "cross_image_attribute_state", "name_only",
-            )),
-            "cross_image_pairs": sum(1 for it in items if it["probe_family"] == "cross_image_attribute_state"),
-            "name_only_facts": sum(1 for it in items if it["probe_family"] == "name_only"),
+            "source_mappings": sum(1 for it in items if it["category"] == "source_mapping"),
+            "weak_label": sum(1 for it in items if it["category"] == "weak_label"),
+            "route_probe": sum(1 for it in items if it["category"] == "route_probe"),
+            "pair": sum(1 for it in items if it["category"] == "pair"),
         },
     }
 
@@ -509,8 +554,8 @@ def _persist_audit_report(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, default=str) + "\n")
     print(f"\n--- audit report persisted: {report_path}")
-    print(f"    total_items={len(items)}, critical_failures={critical_failures}, "
-          f"uncertain={uncertain_count}, gate={'PASS' if report['gate_pass'] else 'FAIL'}")
+    print(f"    total_items={len(items)}, unreviewed={unreviewed_count}, "
+          f"gate={'PASS' if report['gate_pass'] else 'FAIL'}")
     return report_path
 
 
@@ -537,17 +582,21 @@ def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | N
     
     # 4. Audit tiny-smoke cross-image state pairs
     pairs = audit_tiny_smoke_pairs(dataset, output_dir)
-    # Verify: cross-image pairs should have different images
+    # Verify: cross-image pairs should have different sample IDs on each side.
     for p in pairs:
-        if p["left_image"] == p["right_image"]:
-            failures.append(f"cross-image pair {p['pair_id']}: same image on both sides")
-    
+        if p.get("left_sample_id") and p["left_sample_id"] == p.get("right_sample_id"):
+            failures.append(f"cross-image pair {p['pair_id']}: same sample_id on both sides")
+
     # 5. Audit tiny-smoke name-only facts
     facts = audit_tiny_smoke_facts(dataset, output_dir)
-    # Verify: name-only facts should have exact expected_answer
+    # Verify: name-only facts should have answer and fact data (P2-3).
     for f in facts:
-        if not f["expected_answer"]:
-            failures.append(f"name-only fact {f['probe_id']}: missing expected_answer")
+        has_answer = f.get("answer_text") or f.get("answer_label")
+        has_fact = f.get("target_fact_value")
+        if not has_answer:
+            failures.append(f"name-only fact {f['probe_id']}: missing answer_label/answer_text")
+        if not has_fact:
+            failures.append(f"name-only fact {f['probe_id']}: missing target_fact_value")
     
     # P2-24: build structured audit items and persist report.
     audit_items = _build_audit_items(

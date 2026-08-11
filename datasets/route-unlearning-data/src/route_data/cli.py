@@ -321,8 +321,6 @@ def cmd_model_smoke_test(args) -> int:
     image_paths.extend(raw_images)
     image_list_file = getattr(args, "image_list", None)
     if image_list_file:
-        from .data.io import read_jsonl as _read_lines
-
         with open(image_list_file) as fh:
             for line in fh:
                 stripped = line.strip()
@@ -1015,6 +1013,32 @@ def cmd_build_annotate(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     data_cfg, samples = _adapter_samples(args, run_cfg, args.dataset)
+
+    # P1-2: coverage-aware selection — restrict to manifest allowlist.
+    smoke_manifest_path = getattr(args, "smoke_manifest", None)
+    if smoke_manifest_path:
+        manifest_p = Path(smoke_manifest_path)
+        if not manifest_p.is_absolute():
+            manifest_p = (Path(args.config).resolve().parent / manifest_p).resolve()
+        if not manifest_p.exists():
+            raise ConfigError(f"Smoke manifest not found: {manifest_p}")
+        import json as _json_sm
+
+        sm_data = _json_sm.loads(manifest_p.read_text())
+        allowed_ids = set(sm_data.get("selected_source_sample_ids", []))
+        if allowed_ids:
+            before = len(samples)
+            samples = [
+                s for s in samples
+                if s.get("source_sample_id") in allowed_ids
+            ]
+            log.info(
+                "Smoke manifest filter: %d/%d samples retained (%s)",
+                len(samples), before, manifest_p.name,
+            )
+        else:
+            log.warning("Smoke manifest has empty selected_source_sample_ids; using all samples")
+
     scores_path = dataset_dir / f"{args.dataset}_model_scores.jsonl"
     annotated_path = dataset_dir / f"{args.dataset}_annotated_all.jsonl"
     annotated_working = dataset_dir / f"{args.dataset}_annotated.jsonl"
@@ -2254,6 +2278,12 @@ def _common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=None, help="cap the number of processed rows")
     parser.add_argument("--resume", action="store_true", help="reuse cached intermediate artifacts")
     parser.add_argument("--output-dir", default=None, help="override the configured output directory")
+    parser.add_argument(
+        "--smoke-manifest",
+        dest="smoke_manifest",
+        default=None,
+        help="path to a smoke subset manifest JSON; restrict processing to the listed sample IDs",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
