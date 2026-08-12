@@ -71,44 +71,13 @@ class CheckRecord:
 
 
 # --------------------------------------------------------------------------- #
-# Shared split resolution (P1-4)
+# Shared split resolution (P1-4, P1-10: centralized)
 # --------------------------------------------------------------------------- #
 
-# Canonical source mapping: benchmark split names -> internal bucket names.
-# Mirrors cli.py DEFAULT_SOURCE_MAPPING and supports FIUBench vocabulary.
-_SOURCE_MAPPING: dict[str, str] = {
-    "train": "train",
-    "retain_train": "train",
-    "retain": "train",
-    "validation": "eval",
-    "val": "eval",
-    "eval": "eval",
-    "retain_eval": "eval",
-    "evaluation": "eval",
-    "test": "eval",
-    "forget": "exclude",
-    "exclude": "exclude",
-    "unassigned": "hash",
-}
-
-
-def _resolve_effective_split(sample: dict[str, Any]) -> str | None:
-    """Resolve the effective split bucket for a canonical sample.
-
-    Checks ``source_split``, ``source_metadata.source_split``, and
-    ``split`` fields, then maps through the canonical source mapping.
-    Returns the mapped bucket name (``train``, ``eval``, ``exclude``,
-    ``hash``) or the raw value if no mapping exists.
-    """
-    raw = (
-        sample.get("source_split")
-        or sample.get("source_metadata", {}).get("source_split")
-        or sample.get("split")
-    )
-    if raw is None:
-        return None
-    return _SOURCE_MAPPING.get(raw, raw)
-
+from route_data.build.conflict_generation import (
+    find_wrong_name_candidates as _find_wrong_name_candidates,
+)
+from route_data.data.split_mapping import resolve_effective_split as _resolve_effective_split
 
 # --------------------------------------------------------------------------- #
 # Smoke subset selection (P0-3, P1-3, P1-4)
@@ -143,7 +112,8 @@ def select_smoke_subset(
     image_bearing: set[str] = set()
     splits_seen: set[str] = set()
     has_fact = False
-    has_multiview = False
+    # P1-7: track distinct image URIs per identity for true multiview detection.
+    images_by_identity: dict[str, set[str]] = {}
 
     # Track remaining candidates by index so we never mutate inputs.
     remaining = list(range(len(samples)))
@@ -155,8 +125,6 @@ def select_smoke_subset(
         img = s.get("image_uri")
         split = _resolve_effective_split(s)
         facts = s.get("profile_facts", [])
-        meta = s.get("source_metadata", {})
-        is_multiview = meta.get("is_multiview", False)
 
         score = 0
         if iid not in identity_ids:
@@ -167,8 +135,14 @@ def select_smoke_subset(
             score += 2
         if facts and not has_fact:
             score += 1
-        if is_multiview and not has_multiview:
-            score += 1
+        # P1-8: actively seek a second distinct image for already-selected identities.
+        if (
+            require_multiview
+            and iid in identity_ids
+            and img
+            and img not in images_by_identity.get(iid, set())
+        ):
+            score += 5
         return score
 
     # Iterative greedy selection: re-score remaining candidates each round.
@@ -179,7 +153,19 @@ def select_smoke_subset(
         scored.sort(key=lambda x: x[1], reverse=True)
         best_idx = scored[0][0]
         if scored[0][1] <= 0 and len(selected) >= min_identities:
-            break  # No more coverage benefit.
+            # P1-8: do not stop merely because identity minimum is reached;
+            # check if any unmet coverage condition can still be improved.
+            can_improve = False
+            if require_multiview and not any(len(imgs) >= 2 for imgs in images_by_identity.values()):
+                for idx in remaining:
+                    s = samples[idx]
+                    iid = s.get("identity_id", "")
+                    img = s.get("image_uri")
+                    if iid in identity_ids and img and img not in images_by_identity.get(iid, set()):
+                        can_improve = True
+                        break
+            if not can_improve:
+                break
 
         s = samples[best_idx]
         sid = s.get("source_sample_id", "")
@@ -187,19 +173,18 @@ def select_smoke_subset(
         img = s.get("image_uri")
         split = _resolve_effective_split(s)
         facts = s.get("profile_facts", [])
-        meta = s.get("source_metadata", {})
 
         selected.append(s)
         selected_ids.add(sid)
         identity_ids.add(iid)
         if img:
             image_bearing.add(iid)
+            # P1-7: track distinct URIs per identity.
+            images_by_identity.setdefault(iid, set()).add(img)
         if split:
             splits_seen.add(split)
         if facts:
             has_fact = True
-        if meta.get("is_multiview", False):
-            has_multiview = True
         remaining.remove(best_idx)
 
     # Check coverage requirements.
@@ -219,25 +204,26 @@ def select_smoke_subset(
     if require_profile_fact and not has_fact:
         issues.append("no identity with profile facts in smoke subset")
 
-    # P1-5: enforce require_wrong_name — need >=2 distinct identities with
-    # valid visual target/control pairing.
-    if require_wrong_name and len(image_bearing) < 2:
+    # P1-9: enforce require_wrong_name using the same eligibility logic as
+    # production route-probe generation (visual anchor, >=2 samples, Jaccard
+    # matching).  Build by_identity from selected samples.
+    _by_identity: dict[str, list] = {}
+    for _s in selected:
+        _iid = _s.get("identity_id", "")
+        if _iid:
+            _by_identity.setdefault(_iid, []).append(_s)
+    wrong_name_pairs = _find_wrong_name_candidates(_by_identity)
+
+    if require_wrong_name and not wrong_name_pairs:
         issues.append(
-            f"require_wrong_name: need >=2 image-bearing identities, have {len(image_bearing)}"
+            "require_wrong_name: no valid wrong-name target/control pair found "
+            f"(image-bearing identities: {len(image_bearing)})"
         )
 
-    # P1-6: enforce require_multiview — need >=1 identity with >=2 image URIs.
+    # P1-7: enforce require_multiview — need >=1 identity with >=2 distinct image URIs.
+    has_multiview = any(len(imgs) >= 2 for imgs in images_by_identity.values())
     if require_multiview and not has_multiview:
-        # Check from selected samples whether any identity has >=2 images.
-        id_image_count: dict[str, int] = {}
-        for s in selected:
-            img = s.get("image_uri")
-            if img:
-                iid = s.get("identity_id", "")
-                id_image_count[iid] = id_image_count.get(iid, 0) + 1
-        multi = any(c >= 2 for c in id_image_count.values())
-        if not multi:
-            issues.append("require_multiview: no identity with >=2 distinct image URIs")
+        issues.append("require_multiview: no identity with >=2 distinct image URIs")
 
     coverage = {
         "selected_samples": len(selected),
@@ -246,6 +232,10 @@ def select_smoke_subset(
         "splits_seen": sorted(splits_seen),
         "has_profile_facts": has_fact,
         "has_multiview": has_multiview,
+        "wrong_name_pairs": [
+            {"target": t, "control": c, "similarity": round(sim, 4)}
+            for t, c, sim in wrong_name_pairs[:5]
+        ],
     }
 
     return {"selected": selected, "coverage": coverage, "issues": issues}
@@ -1099,13 +1089,14 @@ def _verify_route_balance(export_dir: Path, benchmark: str, failures: list[str])
 
 
 def _verify_manual_audit_report(export_dir: Path, benchmark: str, failures: list[str]) -> CheckRecord:
-    """P2-24: verify <dataset>_manual_audit_report.json exists and has zero critical failures.
+    """P2-9/P2-10: verify <dataset>_manual_audit_report.json.
 
-    The report must contain an ``items`` list where each item has at minimum:
-    sample_id, identity_id, image_id, probe_family, attribute_or_fact,
-    review_outcome (pass/uncertain/fail), review_note.
+    The report must have ``audit_report_version == "v1"`` and an ``items`` list
+    where each item has at minimum: audit_id, category, sample_id, identity_id,
+    image_uri, attribute_or_fact, automatic_checks, review_outcome
+    (pass/uncertain/fail/unreviewed), review_note.
 
-    Pilot requires ``critical_failures == 0``.
+    Pilot requires ``critical_failures == 0`` and ``unreviewed_items == 0``.
     """
     report_path = export_dir / f"{benchmark}_manual_audit_report.json"
     if not report_path.exists():
@@ -1121,15 +1112,20 @@ def _verify_manual_audit_report(export_dir: Path, benchmark: str, failures: list
         failures.append(f"manual audit report parse: {exc}")
         return CheckRecord("manual audit report parse", CheckResult.FAIL, str(exc))
 
+    # P2-10: check report version.
+    if report.get("audit_report_version") != "v1":
+        failures.append("manual audit report: missing or wrong audit_report_version")
+        return CheckRecord("manual audit report version", CheckResult.FAIL, "wrong version")
+
     items = report.get("items", [])
     if not isinstance(items, list):
         failures.append("manual audit report: items is not a list")
         return CheckRecord("manual audit report items", CheckResult.FAIL, "not a list")
 
-    # Validate schema of each item.
-    required_keys = {"sample_id", "identity_id", "image_id", "probe_family",
-                     "attribute_or_fact", "review_outcome", "review_note"}
-    valid_outcomes = {"pass", "uncertain", "fail"}
+    # P2-10: validate schema of each item (v1 fields).
+    required_keys = {"audit_id", "category", "sample_id", "identity_id", "image_uri",
+                     "attribute_or_fact", "automatic_checks", "review_outcome", "review_note"}
+    valid_outcomes = {"pass", "uncertain", "fail", "unreviewed"}
     bad_items = 0
     for idx, item in enumerate(items):
         missing = required_keys - set(item.keys())
@@ -1143,13 +1139,130 @@ def _verify_manual_audit_report(export_dir: Path, benchmark: str, failures: list
         failures.append(f"manual audit report: {bad_items} items with invalid schema")
         return CheckRecord("manual audit report schema", CheckResult.FAIL, f"{bad_items} bad items")
 
+    # P2-9: gate requires zero unreviewed and zero critical.
+    unreviewed = report.get("unreviewed_items", sum(1 for it in items if it.get("review_outcome") == "unreviewed"))
+    if unreviewed > 0:
+        failures.append(f"manual audit report: {unreviewed} unreviewed items")
+        return CheckRecord("manual audit report", CheckResult.FAIL, f"{unreviewed} unreviewed items")
+
     critical = report.get("critical_failures", sum(1 for it in items if it.get("review_outcome") == "fail"))
     if critical > 0:
         failures.append(f"manual audit report: {critical} critical failures")
         return CheckRecord("manual audit report", CheckResult.FAIL, f"{critical} critical failures")
 
-    print(f"--- manual audit report: OK ({len(items)} items, 0 critical failures)")
+    print(f"--- manual audit report: OK ({len(items)} items, 0 critical, 0 unreviewed)")
     return CheckRecord("manual audit report", CheckResult.PASS, f"{len(items)} items")
+
+
+# --------------------------------------------------------------------------- #
+# P1-12: Verify output conforms to prebuilt smoke manifest
+# --------------------------------------------------------------------------- #
+
+
+def _verify_smoke_manifest_conformance(
+    export_dir: Path,
+    benchmark: str,
+    failures: list[str],
+    *,
+    smoke_manifest_path: Path | None = None,
+) -> CheckRecord:
+    """P1-12: verify that build outputs conform to the prebuilt smoke manifest.
+
+    Checks:
+    1. All output sample IDs belong to the manifest allowlist.
+    2. All selected image-bearing samples were scored.
+    3. No unexpected source sample IDs appear.
+    4. Selection manifest SHA matches build provenance.
+    """
+    if smoke_manifest_path is None:
+        return CheckRecord(
+            "smoke manifest conformance", CheckResult.NOT_APPLICABLE,
+            "no --smoke-manifest provided", required=False,
+        )
+
+    if not smoke_manifest_path.exists():
+        failures.append(f"smoke manifest conformance: file not found: {smoke_manifest_path}")
+        return CheckRecord("smoke manifest conformance", CheckResult.FAIL, "file not found")
+
+    try:
+        manifest = json.loads(smoke_manifest_path.read_text())
+    except Exception as exc:
+        failures.append(f"smoke manifest conformance: parse error: {exc}")
+        return CheckRecord("smoke manifest conformance parse", CheckResult.FAIL, str(exc))
+
+    allowed_ids = set(manifest.get("selected_source_sample_ids", []))
+    if not allowed_ids:
+        failures.append("smoke manifest conformance: empty selected_source_sample_ids")
+        return CheckRecord("smoke manifest conformance", CheckResult.FAIL, "empty allowlist")
+
+    # Load processed output to check sample IDs.
+    processed_path = export_dir / f"{benchmark}_processed.jsonl"
+    if not processed_path.exists():
+        failures.append(f"smoke manifest conformance: no processed JSONL at {processed_path}")
+        return CheckRecord("smoke manifest conformance", CheckResult.FAIL, "no processed JSONL")
+
+    output_samples = [
+        json.loads(line)
+        for line in processed_path.read_text().splitlines()
+        if line.strip()
+    ]
+    output_ids = {s.get("source_sample_id") for s in output_samples if s.get("source_sample_id")}
+
+    # Check 1 & 3: all output IDs must belong to manifest (no unexpected IDs).
+    unexpected = output_ids - allowed_ids
+    if unexpected:
+        failures.append(
+            f"smoke manifest conformance: {len(unexpected)} unexpected output sample IDs: "
+            f"{sorted(unexpected)[:10]}{'...' if len(unexpected) > 10 else ''}"
+        )
+        return CheckRecord("smoke manifest conformance", CheckResult.FAIL, f"{len(unexpected)} unexpected IDs")
+
+    # Check 2: all image-bearing manifest samples were scored.
+    manifest_image_ids = set()
+    for s in manifest.get("samples", []):
+        if s.get("image_uri"):
+            sid = s.get("sample_id")
+            if sid:
+                manifest_image_ids.add(sid)
+
+    scored_image_ids = set()
+    for s in output_samples:
+        if s.get("image_uri"):
+            sid = s.get("source_sample_id")
+            if sid:
+                scored_image_ids.add(sid)
+
+    unscored = manifest_image_ids - scored_image_ids
+    if unscored:
+        failures.append(
+            f"smoke manifest conformance: {len(unscored)} image-bearing samples not scored: "
+            f"{sorted(unscored)[:10]}{'...' if len(unscored) > 10 else ''}"
+        )
+        return CheckRecord("smoke manifest conformance", CheckResult.FAIL, f"{len(unscored)} unscored image samples")
+
+    # Check 4: selection manifest SHA matches build provenance.
+    score_manifest_path = export_dir / f"{benchmark}_score_manifest.json"
+    if score_manifest_path.exists():
+        try:
+            score_m = json.loads(score_manifest_path.read_text())
+            expected_sha = score_m.get("selection_manifest_sha256")
+            if expected_sha:
+                actual_sha = hashlib.sha256(smoke_manifest_path.read_bytes()).hexdigest()
+                if actual_sha != expected_sha:
+                    failures.append(
+                        f"smoke manifest conformance: SHA mismatch "
+                        f"(provenance={expected_sha[:16]}..., actual={actual_sha[:16]}...)"
+                    )
+                    return CheckRecord("smoke manifest conformance SHA", CheckResult.FAIL, "SHA mismatch")
+        except Exception:
+            pass  # SHA check is best-effort if score manifest is malformed.
+
+    print(
+        f"--- smoke manifest conformance: OK "
+        f"({len(output_ids)} output IDs ⊆ {len(allowed_ids)} manifest IDs, "
+        f"{len(manifest_image_ids)} image samples scored)"
+    )
+    return CheckRecord("smoke manifest conformance", CheckResult.PASS, f"{len(output_ids)} IDs verified")
 
 
 # --------------------------------------------------------------------------- #
@@ -1157,7 +1270,14 @@ def _verify_manual_audit_report(export_dir: Path, benchmark: str, failures: list
 # --------------------------------------------------------------------------- #
 
 
-def verify_benchmark(benchmark: str, config: str, output_dir: Path, failures: list[str]) -> list[CheckRecord]:
+def verify_benchmark(
+    benchmark: str,
+    config: str,
+    output_dir: Path,
+    failures: list[str],
+    *,
+    smoke_manifest_path: Path | None = None,
+) -> list[CheckRecord]:
     """Run all verification checks for a specific benchmark."""
     import yaml
 
@@ -1193,6 +1313,10 @@ def verify_benchmark(benchmark: str, config: str, output_dir: Path, failures: li
     records.append(_verify_coverage(export_dir, benchmark, failures))
     records.append(_verify_route_balance(export_dir, benchmark, failures))
     records.append(_verify_manual_audit_report(export_dir, benchmark, failures))
+    # P1-12: verify output conforms to prebuilt smoke manifest.
+    records.append(_verify_smoke_manifest_conformance(
+        export_dir, benchmark, failures, smoke_manifest_path=smoke_manifest_path,
+    ))
 
     return records
 
@@ -1241,6 +1365,7 @@ def main_check(
     output_dir: Path | None = None,
     *,
     strict: bool = False,
+    smoke_manifest: Path | None = None,
 ) -> int:
     """Run the full verification pipeline."""
     failures: list[str] = []
@@ -1278,17 +1403,24 @@ def main_check(
     limit = "100" if is_golden_fixture else "10"
 
     # Run the build pipeline.
+    # P1-12: pass --smoke-manifest to every stage when a prebuilt manifest is provided.
     for stage in ("annotate", "qa", "route-probes", "splits", "export"):
+        stage_argv = ["build", stage, "--dataset", dataset, "--config", config,
+                      "--output-dir", str(out), "--limit", limit]
+        if smoke_manifest:
+            stage_argv.extend(["--smoke-manifest", str(smoke_manifest)])
         _run_cli(
             f"build {stage} --limit {limit}",
-            ["build", stage, "--dataset", dataset, "--config", config,
-             "--output-dir", str(out), "--limit", limit],
+            stage_argv,
             expect=0,
             failures=failures,
         )
 
     # Run verification checks.
-    records = verify_benchmark(dataset, config, out, failures)
+    records = verify_benchmark(
+        dataset, config, out, failures,
+        smoke_manifest_path=smoke_manifest,
+    )
 
     # P1-14: under strict mode, required checks that are NOT_APPLICABLE
     # are treated as failures.
@@ -1297,29 +1429,31 @@ def main_check(
             if rec.required and rec.result == CheckResult.NOT_APPLICABLE:
                 failures.append(f"strict: required check '{rec.name}' was NOT_APPLICABLE")
 
-    # Persist smoke subset manifest if we have processed data.
-    import yaml as _yaml
+    # Persist smoke subset manifest if we have processed data and no prebuilt manifest.
+    # P1-12: when a prebuilt manifest was provided, skip post-hoc generation.
+    if not smoke_manifest:
+        import yaml as _yaml
 
-    from route_data.naming import model_output_name as _mon
+        from route_data.naming import model_output_name as _mon
 
-    with open(config) as _f:
-        _cfg = _yaml.safe_load(_f)
-    _mid = _cfg.get("model", {}).get("model_id", "unknown")
-    _export_dir = out / _mon(_mid) / dataset
-    if not _export_dir.exists():
-        _export_dir = out / dataset
-    processed_path = _export_dir / f"{dataset}_processed.jsonl"
-    if processed_path.exists():
-        try:
-            _samples = [json.loads(l) for l in processed_path.read_text().splitlines() if l.strip()]
-            _result = select_smoke_subset(_samples)
-            _persist_smoke_manifest(_export_dir, dataset, _result["selected"], _result["coverage"])
-            if _result["issues"]:
-                print(f"--- smoke subset: coverage issues: {_result['issues']}")
-        except Exception as _exc:
-            msg = f"smoke-manifest generation failed: {_exc}"
-            print(f"WARNING: {msg}")
-            failures.append(msg)
+        with open(config) as _f:
+            _cfg = _yaml.safe_load(_f)
+        _mid = _cfg.get("model", {}).get("model_id", "unknown")
+        _export_dir = out / _mon(_mid) / dataset
+        if not _export_dir.exists():
+            _export_dir = out / dataset
+        processed_path = _export_dir / f"{dataset}_processed.jsonl"
+        if processed_path.exists():
+            try:
+                _samples = [json.loads(l) for l in processed_path.read_text().splitlines() if l.strip()]
+                _result = select_smoke_subset(_samples)
+                _persist_smoke_manifest(_export_dir, dataset, _result["selected"], _result["coverage"])
+                if _result["issues"]:
+                    print(f"--- smoke subset: coverage issues: {_result['issues']}")
+            except Exception as _exc:
+                msg = f"smoke-manifest generation failed: {_exc}"
+                print(f"WARNING: {msg}")
+                failures.append(msg)
 
     # Summary.
     print(f"\n{'=' * 72}")
@@ -1397,6 +1531,9 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=Path, help="Output directory")
     parser.add_argument("--strict", action="store_true",
                         help="Required checks cannot SKIP")
+    # P1-12: consume the prebuilt smoke manifest.
+    parser.add_argument("--smoke-manifest", type=Path, default=None,
+                        help="Prebuilt smoke manifest JSON (skip post-hoc selection)")
     args = parser.parse_args()
 
     sys.exit(main_check(
@@ -1404,4 +1541,5 @@ if __name__ == "__main__":
         config=args.config,
         output_dir=args.output_dir,
         strict=args.strict,
+        smoke_manifest=args.smoke_manifest,
     ))

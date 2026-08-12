@@ -721,3 +721,84 @@ def validate_pair_manifest(
                 )
 
     return issues
+
+
+# --------------------------------------------------------------------------- #
+# P1-9: shared wrong-name eligibility (dict-compatible)
+# --------------------------------------------------------------------------- #
+
+
+def _accepted_visible_attrs_dict(sample) -> dict[str, bool]:
+    """Dict-compatible version of ``_accepted_visible_attributes``.
+
+    Works on both plain dicts and CanonicalSample objects.
+    """
+    from .annotate import CELEBA40_NAMESPACE
+
+    prefix = CELEBA40_NAMESPACE + "."
+    va = sample.get("visual_attributes", {}) if isinstance(sample, Mapping) else {}
+    out: dict[str, bool] = {}
+    if isinstance(va, Mapping):
+        for key, obs in va.items():
+            if not key.startswith(prefix):
+                continue
+            if isinstance(obs, Mapping):
+                label = obs.get("label")
+                band = obs.get("confidence_band")
+            else:
+                label = getattr(obs, "label", None)
+                band = getattr(obs, "confidence_band", None)
+            if label is not None and band == "high":
+                out[key[len(prefix):]] = bool(label)
+    return out
+
+
+def _first_eligible_visual_attrs_dict(
+    group: Sequence,
+) -> dict[str, bool]:
+    """Dict-compatible version of ``_first_eligible_visual_attrs``."""
+    for s in group:
+        attrs = _accepted_visible_attrs_dict(s)
+        if attrs:
+            return attrs
+    return {}
+
+
+def find_wrong_name_candidates(
+    by_identity: Mapping[str, Sequence],
+) -> list[tuple[str, str, float]]:
+    """P1-9: return ``(target_id, control_id, similarity)`` triples.
+
+    Uses the *same* eligibility logic as production route-probe generation:
+
+    - target identity must have an eligible visual anchor (accepted
+      high-confidence CelebA attributes);
+    - control identity must differ from target, have ``>= 2`` samples, and
+      also carry an eligible visual anchor;
+    - similarity is the Jaccard matching ratio on signed attribute states.
+
+    Returns an empty list when no valid pair exists.  The list is sorted by
+    descending similarity, then alphabetically by target/control name.
+    """
+    # Step 1: find the visual anchor attrs for every identity.
+    anchor_attrs: dict[str, dict[str, bool]] = {}
+    for iid, group in by_identity.items():
+        attrs = _first_eligible_visual_attrs_dict(group)
+        if attrs:
+            anchor_attrs[iid] = attrs
+
+    # Step 2: build scored candidate pairs.
+    triples: list[tuple[float, str, str]] = []
+    eligible_ids = sorted(anchor_attrs)
+    for i, target_id in enumerate(eligible_ids):
+        for control_id in eligible_ids[i + 1:]:
+            # At least one side must have >= 2 samples (production rule).
+            if len(by_identity[target_id]) < 2 and len(by_identity[control_id]) < 2:
+                continue
+            sim = _visual_attribute_jaccard(
+                anchor_attrs[target_id], anchor_attrs[control_id],
+            )
+            triples.append((sim, target_id, control_id))
+
+    triples.sort(key=lambda t: (-t[0], t[1], t[2]))
+    return [(target, control, sim) for sim, target, control in triples]

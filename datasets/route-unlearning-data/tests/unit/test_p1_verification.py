@@ -753,6 +753,156 @@ class TestSelectSmokeSubset:
 
 
 # --------------------------------------------------------------------------- #
+# P1-11: FIUBench smoke-selection integration test
+# --------------------------------------------------------------------------- #
+
+
+class TestFIUBenchSmokeSelection:
+    """P1-11: integration test with a realistic FIUBench-like fixture.
+
+    Fixture:
+    - identity A = retain (→ train), 2 distinct images (multiview)
+    - identity B = evaluation (→ eval), 1 image
+    - identity C = forget (→ exclude), 1 image
+    - identity D = retain (→ train), 2 samples, similar visual attrs to A
+    """
+
+    _NS = "extended_attributes.celeba40"
+
+    def _va(self, **attrs: bool) -> dict:
+        """Build visual_attributes dict with high-confidence celeba40 entries."""
+        return {
+            f"{self._NS}.{k}": {"label": v, "confidence_band": "high"}
+            for k, v in attrs.items()
+        }
+
+    def _make_fixture(self) -> list[dict]:
+        return [
+            # Identity A: retain → train, image 1
+            {
+                "source_sample_id": "A-1",
+                "identity_id": "identity_A",
+                "image_uri": "A_img1.jpg",
+                "source_split": "retain",
+                "profile_facts": [{"fact": "wears glasses"}],
+                "visual_attributes": self._va(Eyeglasses=True, Smiling=False),
+            },
+            # Identity A: second distinct image (multiview)
+            {
+                "source_sample_id": "A-2",
+                "identity_id": "identity_A",
+                "image_uri": "A_img2.jpg",
+                "source_split": "retain",
+                "profile_facts": [],
+                "visual_attributes": self._va(Eyeglasses=True, Smiling=False),
+            },
+            # Identity B: evaluation → eval
+            {
+                "source_sample_id": "B-1",
+                "identity_id": "identity_B",
+                "image_uri": "B_img1.jpg",
+                "source_split": "evaluation",
+                "profile_facts": [],
+                "visual_attributes": self._va(Eyeglasses=False, Smiling=True),
+            },
+            # Identity C: forget → exclude
+            {
+                "source_sample_id": "C-1",
+                "identity_id": "identity_C",
+                "image_uri": "C_img1.jpg",
+                "source_split": "forget",
+                "profile_facts": [],
+                "visual_attributes": self._va(Eyeglasses=False, Smiling=False),
+            },
+            # Identity D: retain → train, wrong-name candidate for A
+            {
+                "source_sample_id": "D-1",
+                "identity_id": "identity_D",
+                "image_uri": "D_img1.jpg",
+                "source_split": "retain",
+                "profile_facts": [],
+                "visual_attributes": self._va(Eyeglasses=True, Smiling=True),
+            },
+            # Identity D: second sample (needed for wrong-name eligibility)
+            {
+                "source_sample_id": "D-2",
+                "identity_id": "identity_D",
+                "image_uri": "D_img2.jpg",
+                "source_split": "retain",
+                "profile_facts": [],
+                "visual_attributes": self._va(Eyeglasses=True, Smiling=True),
+            },
+        ]
+
+    def test_fiubench_smoke_all_splits(self, fv):
+        """Selector covers train, eval, and exclude splits."""
+        samples = self._make_fixture()
+        result = fv.select_smoke_subset(
+            samples, min_identities=3, require_multiview=False,
+        )
+        cov = result["coverage"]
+        assert "train" in cov["splits_seen"]
+        assert "eval" in cov["splits_seen"]
+        assert "exclude" in cov["splits_seen"]
+
+    def test_fiubench_smoke_identity_minimum(self, fv):
+        """Selector selects >= 3 identities."""
+        samples = self._make_fixture()
+        result = fv.select_smoke_subset(samples, min_identities=3)
+        assert len(result["coverage"]["identities"]) >= 3
+
+    def test_fiubench_smoke_profile_fact(self, fv):
+        """At least one selected identity has profile facts."""
+        samples = self._make_fixture()
+        result = fv.select_smoke_subset(samples, min_identities=3)
+        assert result["coverage"]["has_profile_facts"] is True
+
+    def test_fiubench_smoke_wrong_name(self, fv):
+        """Wrong-name candidate pair exists in the fixture data.
+
+        The production ``find_wrong_name_candidates`` helper operates on
+        identity groups.  We verify the fixture provides valid pairs from
+        the full data (selector coverage is a separate concern).
+        """
+        from route_data.build.conflict_generation import find_wrong_name_candidates
+        samples = self._make_fixture()
+        by_identity: dict[str, list] = {}
+        for s in samples:
+            by_identity.setdefault(s["identity_id"], []).append(s)
+        pairs = find_wrong_name_candidates(by_identity)
+        assert len(pairs) > 0, "fixture should have valid wrong-name pairs"
+        # At least one pair should involve identity_A or identity_D.
+        ids_in_pairs = {t for t, _, _ in pairs} | {c for _, c, _ in pairs}
+        assert "identity_A" in ids_in_pairs or "identity_D" in ids_in_pairs
+
+    def test_fiubench_smoke_multiview(self, fv):
+        """Multiview is satisfied when requested (identity A has 2 images)."""
+        samples = self._make_fixture()
+        result = fv.select_smoke_subset(
+            samples, min_identities=3, require_multiview=True,
+        )
+        assert result["coverage"]["has_multiview"] is True
+        # No multiview issue should be raised.
+        assert not any("multiview" in iss for iss in result["issues"])
+
+    def test_fiubench_smoke_no_issues(self, fv):
+        """Full coverage: no issues for splits, multiview, identities, facts."""
+        samples = self._make_fixture()
+        result = fv.select_smoke_subset(
+            samples,
+            min_identities=3,
+            require_multiview=True,
+        )
+        # All core coverage conditions are met.
+        assert not any("train" in iss for iss in result["issues"])
+        assert not any("eval" in iss for iss in result["issues"])
+        assert not any("exclude" in iss for iss in result["issues"])
+        assert not any("multiview" in iss for iss in result["issues"])
+        assert not any("identities" in iss for iss in result["issues"])
+        assert not any("profile facts" in iss for iss in result["issues"])
+
+
+# --------------------------------------------------------------------------- #
 # P0-2: Immutable-revision bypass restricted to golden fixture
 # --------------------------------------------------------------------------- #
 
@@ -893,27 +1043,32 @@ class TestManualAuditReport:
 
     def test_pass_with_valid_report(self, tmp_path, fv):
         report = {
+            "audit_report_version": "v1",
             "dataset": BENCHMARK,
             "total_items": 2,
+            "unreviewed_items": 0,
             "critical_failures": 0,
-            "uncertain_items": 0,
             "gate_pass": True,
             "items": [
                 {
+                    "audit_id": "src-0001",
+                    "category": "source_mapping",
                     "sample_id": "s1",
                     "identity_id": "id1",
-                    "image_id": "img1.jpg",
-                    "probe_family": "direct_visual",
+                    "image_uri": "img1.jpg",
                     "attribute_or_fact": "Eyeglasses",
+                    "automatic_checks": {},
                     "review_outcome": "pass",
                     "review_note": "OK",
                 },
                 {
+                    "audit_id": "probe-0001",
+                    "category": "route_probe",
                     "sample_id": "s2",
                     "identity_id": "id2",
-                    "image_id": None,
-                    "probe_family": "name_only",
+                    "image_uri": None,
                     "attribute_or_fact": "fact1",
+                    "automatic_checks": {},
                     "review_outcome": "pass",
                     "review_note": "OK",
                 },
@@ -929,18 +1084,21 @@ class TestManualAuditReport:
 
     def test_fail_with_critical_failures(self, tmp_path, fv):
         report = {
+            "audit_report_version": "v1",
             "dataset": BENCHMARK,
             "total_items": 1,
+            "unreviewed_items": 0,
             "critical_failures": 1,
-            "uncertain_items": 0,
             "gate_pass": False,
             "items": [
                 {
+                    "audit_id": "src-0001",
+                    "category": "source_mapping",
                     "sample_id": "s1",
                     "identity_id": "id1",
-                    "image_id": "img1.jpg",
-                    "probe_family": "direct_visual",
+                    "image_uri": "img1.jpg",
                     "attribute_or_fact": "Eyeglasses",
+                    "automatic_checks": {},
                     "review_outcome": "fail",
                     "review_note": "bad",
                 },
@@ -956,6 +1114,7 @@ class TestManualAuditReport:
 
     def test_fail_with_invalid_item_schema(self, tmp_path, fv):
         report = {
+            "audit_report_version": "v1",
             "dataset": BENCHMARK,
             "total_items": 1,
             "critical_failures": 0,
@@ -1011,6 +1170,7 @@ class TestAuditGateBuildItems:
         assert pair_item["review_outcome"] == "unreviewed"
 
     def test_persist_audit_report_writes_json(self, tmp_path, ag):
+        # P2-9: unreviewed items block the gate.
         items = [{
             "audit_id": "src-0001", "category": "source_mapping",
             "sample_id": "s1", "identity_id": "id1", "image_uri": None,
@@ -1024,7 +1184,21 @@ class TestAuditGateBuildItems:
         report = json.loads(path.read_text())
         assert report["total_items"] == 1
         assert report["unreviewed_items"] == 1
+        assert report["gate_pass"] is False
+
+    def test_persist_audit_report_gate_pass_when_all_reviewed(self, tmp_path, ag):
+        """P2-9: gate passes when zero failures, zero unreviewed, zero critical."""
+        items = [{
+            "audit_id": "src-0001", "category": "source_mapping",
+            "sample_id": "s1", "identity_id": "id1", "image_uri": None,
+            "attribute_or_fact": "split=train",
+            "automatic_checks": {},
+            "review_outcome": "pass", "review_note": "ok",
+        }]
+        path = ag._persist_audit_report("testbench", tmp_path, items, failures=[])
+        report = json.loads(path.read_text())
         assert report["gate_pass"] is True
+        assert report["unreviewed_items"] == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -1086,4 +1260,173 @@ class TestPreGenerationGate:
         assert "strict_verification_failures" in gate["failing_conditions"]
         assert "checksum_mismatches" in gate["failing_conditions"]
         assert "manual_audit_critical_failures" in gate["failing_conditions"]
+
+
+# --------------------------------------------------------------------------- #
+# P1-12: smoke manifest conformance verification
+# --------------------------------------------------------------------------- #
+
+
+class TestSmokeManifestConformance:
+    """P1-12: _verify_smoke_manifest_conformance checks."""
+
+    @pytest.fixture(scope="class")
+    def fv(self):
+        spec = importlib.util.spec_from_file_location(
+            "final_verify", SCRIPTS_DIR / "final_verify.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def _make_manifest(self, tmp_path: Path, sample_ids: list[str], image_ids: list[str | None] | None = None) -> Path:
+        """Create a minimal smoke manifest JSON.
+
+        ``image_ids`` is aligned with ``sample_ids``; ``None`` entries (or a
+        ``None`` list) mean no image for that sample.
+        """
+        samples = []
+        for i, sid in enumerate(sample_ids):
+            img = image_ids[i] if image_ids is not None and i < len(image_ids) else None
+            samples.append({
+                "sample_id": sid,
+                "identity_id": f"id_{sid}",
+                "image_uri": img,
+            })
+        manifest = {
+            "dataset": "test",
+            "selection_version": "smoke_v1",
+            "selected_source_sample_ids": sample_ids,
+            "selected_identity_ids": sorted({f"id_{s}" for s in sample_ids}),
+            "samples": samples,
+            "coverage": {},
+        }
+        path = tmp_path / "smoke_manifest.json"
+        path.write_text(json.dumps(manifest))
+        return path
+
+    def _make_export_dir(self, tmp_path: Path, output_ids: list[str], image_ids: list[str | None] | None = None) -> Path:
+        """Create a minimal export directory with processed.jsonl.
+
+        ``image_ids`` is aligned with ``output_ids``; ``None`` entries mean no image.
+        """
+        export_dir = tmp_path / "export"
+        export_dir.mkdir()
+        lines = []
+        for i, sid in enumerate(output_ids):
+            img = image_ids[i] if image_ids is not None and i < len(image_ids) else None
+            lines.append(json.dumps({
+                "source_sample_id": sid,
+                "identity_id": f"id_{sid}",
+                "image_uri": img,
+            }))
+        (export_dir / "test_processed.jsonl").write_text("\n".join(lines) + "\n")
+        return export_dir
+
+    def test_not_applicable_without_manifest(self, fv, tmp_path):
+        """Without a smoke manifest, the check is NOT_APPLICABLE."""
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            tmp_path, "test", failures, smoke_manifest_path=None,
+        )
+        assert rec.result == fv.CheckResult.NOT_APPLICABLE
+        assert failures == []
+
+    def test_fail_when_manifest_missing(self, fv, tmp_path):
+        """Fail when the manifest file does not exist."""
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            tmp_path, "test", failures,
+            smoke_manifest_path=tmp_path / "nonexistent.json",
+        )
+        assert rec.result == fv.CheckResult.FAIL
+        assert len(failures) == 1
+
+    def test_fail_on_empty_allowlist(self, fv, tmp_path):
+        """Fail when manifest has empty selected_source_sample_ids."""
+        manifest_path = tmp_path / "empty_manifest.json"
+        manifest_path.write_text(json.dumps({
+            "dataset": "test",
+            "selected_source_sample_ids": [],
+            "samples": [],
+        }))
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            tmp_path, "test", failures, smoke_manifest_path=manifest_path,
+        )
+        assert rec.result == fv.CheckResult.FAIL
+        assert "empty" in failures[0].lower()
+
+    def test_pass_when_output_subset_of_manifest(self, fv, tmp_path):
+        """Pass when all output IDs are in the manifest."""
+        manifest_path = self._make_manifest(tmp_path, ["s1", "s2", "s3"])
+        export_dir = self._make_export_dir(tmp_path, ["s1", "s2"])
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            export_dir, "test", failures, smoke_manifest_path=manifest_path,
+        )
+        assert rec.result == fv.CheckResult.PASS
+        assert failures == []
+
+    def test_fail_on_unexpected_output_ids(self, fv, tmp_path):
+        """Fail when output contains IDs not in the manifest."""
+        manifest_path = self._make_manifest(tmp_path, ["s1", "s2"])
+        export_dir = self._make_export_dir(tmp_path, ["s1", "s2", "s99"])
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            export_dir, "test", failures, smoke_manifest_path=manifest_path,
+        )
+        assert rec.result == fv.CheckResult.FAIL
+        assert "unexpected" in failures[0].lower()
+
+    def test_fail_when_image_bearing_sample_unscored(self, fv, tmp_path):
+        """Fail when a manifest image-bearing sample is not in the output."""
+        # Manifest has s1 (image), s2 (image), s3 (image).
+        manifest_path = self._make_manifest(
+            tmp_path, ["s1", "s2", "s3"],
+            image_ids=["img1.jpg", "img2.jpg", "img3.jpg"],
+        )
+        # Output only has s1 and s2 — s3 image-bearing sample was not scored.
+        export_dir = self._make_export_dir(
+            tmp_path, ["s1", "s2"],
+            image_ids=["img1.jpg", "img2.jpg"],
+        )
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            export_dir, "test", failures, smoke_manifest_path=manifest_path,
+        )
+        assert rec.result == fv.CheckResult.FAIL
+        assert "not scored" in failures[0].lower()
+
+    def test_sha_mismatch_with_score_manifest(self, fv, tmp_path):
+        """Fail when manifest SHA does not match score manifest provenance."""
+        manifest_path = self._make_manifest(tmp_path, ["s1"])
+        export_dir = self._make_export_dir(tmp_path, ["s1"])
+        # Write a score manifest with a wrong SHA.
+        score_m = {
+            "selection_manifest_sha256": "deadbeef" * 8,
+        }
+        (export_dir / "test_score_manifest.json").write_text(json.dumps(score_m))
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            export_dir, "test", failures, smoke_manifest_path=manifest_path,
+        )
+        assert rec.result == fv.CheckResult.FAIL
+        assert "SHA" in failures[0]
+
+    def test_sha_match_passes(self, fv, tmp_path):
+        """Pass when manifest SHA matches score manifest provenance."""
+        manifest_path = self._make_manifest(tmp_path, ["s1"])
+        export_dir = self._make_export_dir(tmp_path, ["s1"])
+        actual_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        score_m = {
+            "selection_manifest_sha256": actual_sha,
+        }
+        (export_dir / "test_score_manifest.json").write_text(json.dumps(score_m))
+        failures: list[str] = []
+        rec = fv._verify_smoke_manifest_conformance(
+            export_dir, "test", failures, smoke_manifest_path=manifest_path,
+        )
+        assert rec.result == fv.CheckResult.PASS
+        assert failures == []
 

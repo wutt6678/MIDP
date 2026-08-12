@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -388,3 +389,101 @@ class TestCrossBenchmarkConsistency:
             mapping = _resolve_mapping(name)
             assert "forget" in mapping, f"{name} missing 'forget' mapping"
             assert mapping["forget"] == "exclude"
+
+
+# --------------------------------------------------------------------------- #
+# P2-12: production-config provenance checks (CI gate)
+# --------------------------------------------------------------------------- #
+
+import re
+
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+_VALID_EFFECTIVE_SPLITS = {"train", "eval", "exclude", "hash"}
+
+
+class TestProductionConfigProvenance:
+    """P2-12: CI checks for production benchmark config provenance.
+
+    These checks run in CI without real restricted source data.  They
+    verify configuration structure, hash format, and revision pinning.
+    """
+
+    BENCHMARKS = ("fairget", "fiubench", "mllmu", "ppubench")
+
+    @pytest.mark.xfail(
+        reason="P2-11: configs still have PENDING until real source access",
+        strict=False,
+    )
+    def test_no_pending_in_immutable_revision(self):
+        """P2-11/P2-12: no production config may contain PENDING.
+
+        This test is xfail until P2-11 (freeze all benchmark revisions) is
+        completed with real source access.
+        """
+        for name in self.BENCHMARKS:
+            cfg = _load_data_config(name)
+            imm = cfg["data"].get("immutable_revision", {})
+            for key, val in imm.items():
+                if isinstance(val, str):
+                    assert val != "PENDING", (
+                        f"{name}.immutable_revision.{key} is still PENDING — "
+                        "freeze the source revision before pilot"
+                    )
+
+    def test_hash_fields_are_64_char_hex(self):
+        """Hash fields must be 64-character lowercase hex strings."""
+        hash_field_names = {
+            "git_commit_sha", "profile_file_sha256", "split_file_sha256",
+            "dataset_json_sha256", "official_split_sha256", "hf_revision_sha",
+        }
+        for name in self.BENCHMARKS:
+            cfg = _load_data_config(name)
+            imm = cfg["data"].get("immutable_revision", {})
+            for key in hash_field_names:
+                val = imm.get(key)
+                if val is None or val == "PENDING":
+                    continue  # P2-11 will catch PENDING; here check format only
+                assert isinstance(val, str), f"{name}.{key} is not a string"
+                assert _HEX64_RE.match(val), (
+                    f"{name}.{key} = {val!r} is not a 64-char hex SHA-256"
+                )
+
+    @pytest.mark.xfail(
+        reason="P2-11: revision SHAs are PENDING until real source access",
+        strict=False,
+    )
+    def test_git_or_hf_revision_explicit(self):
+        """Each config must pin either a Git SHA or an HF revision SHA."""
+        for name in self.BENCHMARKS:
+            cfg = _load_data_config(name)
+            imm = cfg["data"].get("immutable_revision", {})
+            has_git = bool(imm.get("git_commit_sha")) and imm["git_commit_sha"] != "PENDING"
+            has_hf = bool(imm.get("hf_revision_sha")) and imm["hf_revision_sha"] != "PENDING"
+            assert has_git or has_hf, (
+                f"{name}: immutable_revision must have git_commit_sha or hf_revision_sha"
+            )
+
+    def test_source_mapping_values_valid(self):
+        """All source mapping values must be valid effective splits."""
+        for name in self.BENCHMARKS:
+            mapping = _resolve_mapping(name)
+            for src_label, effective in mapping.items():
+                assert effective in _VALID_EFFECTIVE_SPLITS, (
+                    f"{name}: mapping[{src_label!r}] = {effective!r} "
+                    f"not in {sorted(_VALID_EFFECTIVE_SPLITS)}"
+                )
+
+    def test_source_version_not_unknown(self):
+        """source_version must be set and not 'unknown' or empty."""
+        for name in self.BENCHMARKS:
+            cfg = _load_data_config(name)
+            sv = cfg["data"].get("source_version", "")
+            assert sv, f"{name} missing source_version"
+            assert sv != "unknown", f"{name} source_version is 'unknown'"
+
+    def test_adapter_version_present(self):
+        """adapter_version must be set."""
+        for name in self.BENCHMARKS:
+            cfg = _load_data_config(name)
+            av = cfg["data"].get("adapter_version", "")
+            assert av, f"{name} missing adapter_version"

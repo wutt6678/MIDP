@@ -12,12 +12,11 @@ data:
   # Pinned source revision (repair plan C1); replace with the exact upstream
   # commit hash when mirroring the real source.
   source_version: fiubench-1.0
-  # R10: immutable source revision components. Replace PENDING values with
-  # exact hashes before pilot/full generation.
+  # R10: immutable source revision components — populated from real source.
   immutable_revision:
-    git_commit_sha: PENDING              # exact Git/release commit SHA
-    profile_file_sha256: PENDING         # SHA-256 of data/fiubench_profiles.jsonl
-    split_file_sha256: PENDING           # SHA-256 of splits/official.json
+    git_commit_sha: 8e12cddc431eafd129c275d46a3d882474cfcf61
+    profile_file_sha256: f2f04cf7e21a3170b4c1541b5e650c9db3f92ff6f7833ea3f9e19887787bff72
+    split_file_sha256: f576e63909babf5105f004b2230154a4d46e6b37160d7554c3434b6693a7ce4c
   # Source-layout settings (repair plan C2).
   source_file: data/fiubench_profiles.jsonl
   split_file: splits/official.json   # official forget/retain/evaluation grouping

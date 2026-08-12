@@ -164,6 +164,60 @@ def _load_processed_samples(dataset_dir: Path, dataset: str):
     )
 
 
+def _get_source_sample_id(sample) -> str | None:
+    """Extract source_sample_id from a dict or CanonicalSample."""
+    if isinstance(sample, dict):
+        return sample.get("source_sample_id")
+    return getattr(sample, "source_sample_id", None)
+
+
+def _filter_by_smoke_manifest(samples, args) -> list:
+    """P1-5: filter samples by --smoke-manifest allowlist.
+
+    Works with both raw dicts (annotation stage) and CanonicalSample objects
+    (downstream stages).  Fails closed on empty manifests (P1-3) and unknown
+    sample IDs (P1-4).
+    """
+    smoke_manifest_path = getattr(args, "smoke_manifest", None)
+    if not smoke_manifest_path:
+        return samples
+
+    manifest_p = Path(smoke_manifest_path)
+    config_path = getattr(args, "config", None)
+    if not manifest_p.is_absolute() and config_path:
+        manifest_p = (Path(config_path).resolve().parent / manifest_p).resolve()
+    if not manifest_p.exists():
+        raise ConfigError(f"Smoke manifest not found: {manifest_p}")
+
+    import json as _json_sm
+    sm_data = _json_sm.loads(manifest_p.read_text())
+    allowed_ids = set(sm_data.get("selected_source_sample_ids", []))
+
+    # P1-3: fail closed on empty or malformed manifests.
+    if not allowed_ids:
+        raise ConfigError(
+            f"Smoke manifest has empty selected_source_sample_ids: {manifest_p}. "
+            "Refusing to fall back to full-data annotation."
+        )
+
+    # P1-4: fail on unknown sample IDs (do not silently drop).
+    actual_ids = {_get_source_sample_id(s) for s in samples}
+    unknown = allowed_ids - actual_ids
+    if unknown:
+        raise ConfigError(
+            f"Smoke manifest references {len(unknown)} unknown sample IDs: "
+            f"{sorted(unknown)[:10]}{'...' if len(unknown) > 10 else ''}"
+        )
+
+    before = len(samples)
+    filtered = [s for s in samples if _get_source_sample_id(s) in allowed_ids]
+    log.info(
+        "Smoke manifest filter: %d/%d samples retained (%s)",
+        len(filtered), before, manifest_p.name,
+    )
+    return filtered
+
+
 def _load_image(uri: str | None, base: Path | None = None):
     """Best-effort PIL image load; raise when the image is missing or corrupt.
 
@@ -995,6 +1049,236 @@ def cmd_source_inspect(args) -> int:
     return exit_code
 
 
+def cmd_source_make_smoke_manifest(args) -> int:
+    """P1-1: generate a coverage-aware smoke manifest before model annotation.
+
+    Loads the source adapter, resolves splits, selects a minimal coverage-aware
+    subset, and writes the manifest JSON.  Exits without loading any model.
+    """
+    import hashlib as _hashlib
+    import json as _json
+
+    data_cfg = _data_config_for(args.dataset, load_run_config(args.config))
+    from .data.adapters.base import create_adapter
+    from .data.split_mapping import load_source_mapping, resolve_effective_split
+
+    adapter = create_adapter(data_cfg)
+    raw_samples = list(adapter.load())
+    if not raw_samples:
+        raise ConfigError(f"No samples loaded from adapter for {args.dataset}")
+
+    # Convert to dicts for selection logic.
+    samples = [s.to_dict() if hasattr(s, "to_dict") else s for s in raw_samples]
+
+    # Resolve splits for each sample.
+    source_mapping = load_source_mapping(data_cfg)
+    for s in samples:
+        s["_effective_split"] = resolve_effective_split(
+            s, source_mapping=source_mapping,
+        )
+
+    # Greedy coverage-aware selection.
+    min_identities = getattr(args, "min_identities", 3) or 3
+    min_image_bearing = getattr(args, "min_image_bearing", 2) or 2
+    require_multiview = getattr(args, "require_multiview", False)
+
+    selected: list[dict] = []
+    selected_ids: set[str] = set()
+    identity_ids: set[str] = set()
+    image_bearing: set[str] = set()
+    splits_seen: set[str] = set()
+    has_fact = False
+    images_by_identity: dict[str, set[str]] = {}
+    remaining = list(range(len(samples)))
+
+    def _score(idx: int) -> int:
+        s = samples[idx]
+        iid = s.get("identity_id", "")
+        img = s.get("image_uri")
+        split = s.get("_effective_split")
+        facts = s.get("profile_facts", [])
+        score = 0
+        if iid not in identity_ids:
+            score += 3
+        if img and iid not in image_bearing:
+            score += 2
+        if split and split not in splits_seen:
+            score += 2
+        if facts and not has_fact:
+            score += 1
+        if require_multiview and iid in identity_ids and img and img not in images_by_identity.get(iid, set()):
+            score += 5
+        return score
+
+    max_select = min(12, len(samples))
+    while len(selected) < max_select and remaining:
+        scored = [(idx, _score(idx)) for idx in remaining]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        best_idx = scored[0][0]
+        if scored[0][1] <= 0 and len(selected) >= min_identities:
+            break
+        s = samples[best_idx]
+        sid = s.get("source_sample_id", "")
+        iid = s.get("identity_id", "")
+        img = s.get("image_uri")
+        split = s.get("_effective_split")
+        facts = s.get("profile_facts", [])
+        selected.append(s)
+        selected_ids.add(sid)
+        identity_ids.add(iid)
+        if img:
+            image_bearing.add(iid)
+            images_by_identity.setdefault(iid, set()).add(img)
+        if split:
+            splits_seen.add(split)
+        if facts:
+            has_fact = True
+        remaining.remove(best_idx)
+
+    # P1-9: compute wrong-name availability using production eligibility logic.
+    from .build.conflict_generation import find_wrong_name_candidates
+    _sel_by_identity: dict[str, list] = {}
+    for _s in selected:
+        _iid = _s.get("identity_id", "")
+        if _iid:
+            _sel_by_identity.setdefault(_iid, []).append(_s)
+    _wn_pairs = find_wrong_name_candidates(_sel_by_identity)
+
+    # Build source revision info.
+    source_revision: dict[str, Any] = {}
+    if hasattr(data_cfg, "source_version") and data_cfg.source_version:
+        sv = data_cfg.source_version
+        if isinstance(sv, dict):
+            source_revision = dict(sv)
+        else:
+            source_revision = {"source_version": str(sv)}
+
+    # Compute manifest SHA256 (of the canonical content, before adding the hash).
+    manifest_body: dict[str, Any] = {
+        "dataset": args.dataset,
+        "selection_version": "smoke_v2",
+        "selected_source_sample_ids": sorted(selected_ids),
+        "selected_identity_ids": sorted(identity_ids),
+        "coverage": {
+            "selected_samples": len(selected),
+            "identities": sorted(identity_ids),
+            "image_bearing_identities": sorted(image_bearing),
+            "splits_seen": sorted(splits_seen),
+            "has_profile_facts": has_fact,
+            "has_multiview": any(len(imgs) >= 2 for imgs in images_by_identity.values()),
+            "wrong_name_pairs": [
+                {"target": t, "control": c, "similarity": round(sim, 4)}
+                for t, c, sim in _wn_pairs[:5]
+            ],
+        },
+        "selection_policy": {
+            "min_identities": min_identities,
+            "min_image_bearing": min_image_bearing,
+            "require_multiview": require_multiview,
+        },
+        "source_revision": source_revision,
+    }
+    canonical = _json.dumps(manifest_body, sort_keys=True, separators=(",", ":"))
+    manifest_body["manifest_sha256"] = _hashlib.sha256(canonical.encode()).hexdigest()
+
+    # Write output.
+    output_path = Path(args.output) if args.output else None
+    if not output_path:
+        raise ConfigError("--output is required for make-smoke-manifest")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(_json.dumps(manifest_body, indent=2) + "\n")
+
+    log.info(
+        "Smoke manifest written: %d samples, %d identities, %d image-bearing (%s)",
+        len(selected), len(identity_ids), len(image_bearing), output_path,
+    )
+    _print_json(manifest_body)
+    return 0
+
+
+def cmd_source_verify_revision(args) -> int:
+    """P0-2: verify configured immutable_revision against the actual source.
+
+    Checks:
+    - configured Git SHA == source HEAD
+    - configured profile SHA == recomputed profile SHA
+    - configured split SHA == recomputed split SHA
+
+    Fails before any model is loaded.
+    """
+    import hashlib as _hashlib
+    import subprocess as _sp
+
+    data_cfg = _data_config_for(args.dataset, load_run_config(args.config))
+    from .data.adapters.base import create_adapter
+
+    adapter = create_adapter(data_cfg)
+    immutable = data_cfg.extras.get("immutable_revision")
+    if not immutable or not isinstance(immutable, dict):
+        raise ConfigError(
+            f"No immutable_revision configured for {args.dataset}; "
+            "populate git_commit_sha, profile_file_sha256, split_file_sha256"
+        )
+
+    errors: list[str] = []
+    verified: dict[str, Any] = {}
+
+    # 1. Git commit SHA.
+    source_root = data_cfg.require_root()
+    configured_git = immutable.get("git_commit_sha", "")
+    try:
+        actual_git = _sp.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(source_root),
+            stderr=_sp.DEVNULL,
+        ).decode().strip()
+    except Exception as exc:
+        actual_git = f"ERROR: {exc}"
+    verified["git_commit_sha"] = {
+        "configured": configured_git,
+        "actual": actual_git,
+        "match": configured_git == actual_git,
+    }
+    if configured_git != actual_git:
+        errors.append(f"git_commit_sha mismatch: configured={configured_git}, actual={actual_git}")
+
+    # 2. File hashes (profile + split).
+    try:
+        source_files = adapter.source_files()
+    except Exception as exc:
+        raise ConfigError(f"Cannot enumerate source files: {exc}")
+
+    file_hash_keys = ["profile_file_sha256", "split_file_sha256"]
+    for i, key in enumerate(file_hash_keys):
+        configured = immutable.get(key, "")
+        if i < len(source_files):
+            fpath = source_files[i]
+            try:
+                actual = _hashlib.sha256(fpath.read_bytes()).hexdigest()
+            except Exception as exc:
+                actual = f"ERROR: {exc}"
+        else:
+            actual = "N/A (no file)"
+        verified[key] = {
+            "configured": configured,
+            "actual": actual,
+            "file": str(source_files[i]) if i < len(source_files) else None,
+            "match": configured == actual,
+        }
+        if configured != actual:
+            errors.append(f"{key} mismatch: configured={configured}, actual={actual}")
+
+    result = {
+        "dataset": args.dataset,
+        "source_root": str(source_root),
+        "verified": verified,
+        "all_match": len(errors) == 0,
+        "errors": errors,
+    }
+    _print_json(result)
+    return 0 if not errors else 1
+
+
 # --------------------------------------------------------------------------- #
 # build ...
 # --------------------------------------------------------------------------- #
@@ -1014,30 +1298,8 @@ def cmd_build_annotate(args) -> int:
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     data_cfg, samples = _adapter_samples(args, run_cfg, args.dataset)
 
-    # P1-2: coverage-aware selection — restrict to manifest allowlist.
-    smoke_manifest_path = getattr(args, "smoke_manifest", None)
-    if smoke_manifest_path:
-        manifest_p = Path(smoke_manifest_path)
-        if not manifest_p.is_absolute():
-            manifest_p = (Path(args.config).resolve().parent / manifest_p).resolve()
-        if not manifest_p.exists():
-            raise ConfigError(f"Smoke manifest not found: {manifest_p}")
-        import json as _json_sm
-
-        sm_data = _json_sm.loads(manifest_p.read_text())
-        allowed_ids = set(sm_data.get("selected_source_sample_ids", []))
-        if allowed_ids:
-            before = len(samples)
-            samples = [
-                s for s in samples
-                if s.get("source_sample_id") in allowed_ids
-            ]
-            log.info(
-                "Smoke manifest filter: %d/%d samples retained (%s)",
-                len(samples), before, manifest_p.name,
-            )
-        else:
-            log.warning("Smoke manifest has empty selected_source_sample_ids; using all samples")
+    # P1-2/P1-5: coverage-aware selection — restrict to manifest allowlist.
+    samples = _filter_by_smoke_manifest(samples, args)
 
     scores_path = dataset_dir / f"{args.dataset}_model_scores.jsonl"
     annotated_path = dataset_dir / f"{args.dataset}_annotated_all.jsonl"
@@ -1495,6 +1757,29 @@ def cmd_build_annotate(args) -> int:
         score_manifest["whitelist_attributes_sha256"] = _hl.sha256(
             "|".join(sorted(whitelist_attrs)).encode()
         ).hexdigest()
+    # P1-6: record selection manifest identity in build provenance.
+    _sm_path = getattr(args, "smoke_manifest", None)
+    if _sm_path:
+        import hashlib as _hl_sm
+        _sm_p = Path(_sm_path)
+        if not _sm_p.is_absolute():
+            _sm_p = (Path(args.config).resolve().parent / _sm_p).resolve()
+        if _sm_p.exists():
+            _sm_bytes = _sm_p.read_bytes()
+            score_manifest["selection_manifest_path"] = str(_sm_p)
+            score_manifest["selection_manifest_sha256"] = _hl_sm.sha256(_sm_bytes).hexdigest()
+            import json as _json_sm
+            _sm_data = _json_sm.loads(_sm_bytes)
+            _sel_ids = _sm_data.get("selected_source_sample_ids", [])
+            _sel_iids = _sm_data.get("selected_identity_ids", [])
+            score_manifest["selected_source_sample_count"] = len(_sel_ids)
+            score_manifest["selected_identity_count"] = len(_sel_iids)
+            score_manifest["selected_source_sample_ids_hash"] = _hl_sm.sha256(
+                "|".join(sorted(_sel_ids)).encode()
+            ).hexdigest()
+            score_manifest["selected_identity_ids_hash"] = _hl_sm.sha256(
+                "|".join(sorted(_sel_iids)).encode()
+            ).hexdigest()
     manifest_path = dataset_dir / f"{args.dataset}_score_manifest.json"
     write_json(score_manifest, manifest_path)
 
@@ -1574,6 +1859,8 @@ def cmd_build_qa(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P1-5: downstream stages honor --smoke-manifest.
+    samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
         samples = samples[: args.limit]
     if args.dry_run:
@@ -1600,25 +1887,11 @@ def cmd_build_qa(args) -> int:
     import hashlib as _hashlib
 
     # Default source mapping covering common benchmark partition vocabularies.
-    # Benchmarks can override via data.extras["source_mapping"] in their
-    # data config YAML.
-    DEFAULT_SOURCE_MAPPING: dict[str, str] = {
-        "train": "train",
-        "retain_train": "train",
-        "validation": "eval",
-        "val": "eval",
-        "eval": "eval",
-        "retain_eval": "eval",
-        "test": "eval",
-        "forget": "exclude",
-        "unassigned": "hash",
-    }
-    source_mapping = DEFAULT_SOURCE_MAPPING.copy()
-    # Allow benchmark-specific overrides from data config extras.
+    # P1-10: use centralized split mapping module.
+    from .data.split_mapping import load_source_mapping
+
     data_cfg = _data_config_for(args.dataset, run_cfg)
-    extra_mapping = data_cfg.extras.get("source_mapping") if hasattr(data_cfg, "extras") else None
-    if extra_mapping and isinstance(extra_mapping, dict):
-        source_mapping.update(extra_mapping)
+    source_mapping = load_source_mapping(data_cfg)
 
     train_identity_ids: set[str] = set()
     eval_identity_ids: set[str] = set()
@@ -1858,6 +2131,8 @@ def cmd_build_route_probes(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P1-5: downstream stages honor --smoke-manifest.
+    samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
         samples = samples[: args.limit]
     if args.dry_run:
@@ -1986,6 +2261,8 @@ def cmd_build_splits(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P1-5: downstream stages honor --smoke-manifest.
+    samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
         samples = samples[: args.limit]
     if args.dry_run:
@@ -2009,6 +2286,8 @@ def cmd_build_export(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P1-5: downstream stages honor --smoke-manifest.
+    samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
         samples = samples[: args.limit]
     benchmark = _benchmark_of(args.dataset)
@@ -2365,6 +2644,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _common_flags(p)
     p.set_defaults(func=cmd_source_inspect)
+
+    # P1-1: pre-inference smoke manifest generation.
+    p = source.add_parser(
+        "make-smoke-manifest",
+        help="generate a coverage-aware smoke manifest before model annotation",
+    )
+    p.add_argument("--dataset", required=True)
+    p.add_argument("--config", required=True)
+    p.add_argument("--output", required=True, help="output manifest JSON path")
+    p.add_argument("--min-identities", type=int, default=3, dest="min_identities")
+    p.add_argument("--min-image-bearing", type=int, default=2, dest="min_image_bearing")
+    p.add_argument("--require-multiview", action="store_true", dest="require_multiview")
+    _common_flags(p)
+    p.set_defaults(func=cmd_source_make_smoke_manifest)
+
+    # P0-2: fast source-revision verification before model loading.
+    p = source.add_parser(
+        "verify-revision",
+        help="verify configured immutable_revision against the actual source",
+    )
+    p.add_argument("--dataset", required=True)
+    p.add_argument("--config", required=True)
+    _common_flags(p)
+    p.set_defaults(func=cmd_source_verify_revision)
 
     # build
     build = sub.add_parser("build", help="extension construction pipeline").add_subparsers(

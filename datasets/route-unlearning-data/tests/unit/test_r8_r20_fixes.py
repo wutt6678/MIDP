@@ -298,11 +298,12 @@ class TestAuditGateScript:
         assert "audit_tiny_smoke_facts" in content
 
     def test_audit_gate_resolves_source_mapping(self):
-        """audit_gate.py should resolve effective source mapping."""
+        """audit_gate.py should resolve effective source mapping (P1-10: centralized)."""
         script_path = REPO_ROOT / "scripts" / "audit_gate.py"
         content = script_path.read_text()
         assert "_resolve_source_mapping" in content
-        assert "DEFAULT_SOURCE_MAPPING" in content
+        # P1-10: mapping is now imported from centralized module.
+        assert "split_mapping" in content or "DEFAULT_SOURCE_MAPPING" in content
 
 
 # --------------------------------------------------------------------------- #
