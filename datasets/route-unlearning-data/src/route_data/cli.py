@@ -973,6 +973,22 @@ def cmd_source_inspect(args) -> int:
     n_samples = 0
     n_rows_with_images = 0
     first_row: dict[str, Any] | None = None
+    # P1-9: FIUBench-specific counters.
+    is_fiubench = args.dataset == "fiubench"
+    fiu_subject_ids: set[str] = set()
+    fiu_membership_counts: dict[str, int] = {}
+    fiu_effective_split_counts: dict[str, int] = {}
+    fiu_qa_original = 0
+    fiu_qa_paraphrase = 0
+    fiu_qa_perturbed = 0
+    fiu_profile_fact_count = 0
+    fiu_identities_with_images: set[str] = set()
+    # P1-10: duplicate / collision tracking.
+    seen_source_sample_ids: dict[str, int] = {}
+    seen_qa_variant_ids: dict[str, int] = {}
+    identity_id_by_record_id: dict[str, str] = {}
+    split_role_by_subject: dict[str, str] = {}
+    collision_errors: list[str] = []
     rows = itertools.islice(adapter.iter_rows_with_context(), limit)
     for context, row in rows:
         n_rows += 1
@@ -1007,11 +1023,74 @@ def cmd_source_inspect(args) -> int:
             modalities.add(sample.modality)
             if sample.image_uri:
                 n_rows_with_images += 1
+                fiu_identities_with_images.add(sample.identity_id)
             elif sample.modality != "text_only":
                 warnings.append(
                     f"row {n_rows}: sample '{sample.source_sample_id}' has modality "
                     f"'{sample.modality}' but no image_uri"
                 )
+            # P1-10: duplicate source_sample_id check.
+            prev = seen_source_sample_ids.get(sample.source_sample_id)
+            if prev is not None:
+                collision_errors.append(
+                    f"duplicate source_sample_id '{sample.source_sample_id}' "
+                    f"at rows {prev} and {n_rows}"
+                )
+            else:
+                seen_source_sample_ids[sample.source_sample_id] = n_rows
+            # P1-10: stable identity_id per source record.
+            rec_id = sample.source_record_id
+            if rec_id:
+                prev_iid = identity_id_by_record_id.get(rec_id)
+                if prev_iid and prev_iid != sample.identity_id:
+                    collision_errors.append(
+                        f"identity_id unstable for record '{rec_id}': "
+                        f"'{prev_iid}' vs '{sample.identity_id}'"
+                    )
+                else:
+                    identity_id_by_record_id[rec_id] = sample.identity_id
+            # P1-9 / P1-10: FIUBench-specific tracking.
+            if is_fiubench:
+                smeta = sample.source_metadata or {}
+                sid = smeta.get("source_subject_id")
+                if sid:
+                    fiu_subject_ids.add(str(sid))
+                for b in smeta.get("official_memberships") or []:
+                    fiu_membership_counts[str(b)] = (
+                        fiu_membership_counts.get(str(b), 0) + 1
+                    )
+                eff = sample.split or "unassigned"
+                fiu_effective_split_counts[eff] = (
+                    fiu_effective_split_counts.get(eff, 0) + 1
+                )
+                # Conflicting split role: same subject ID mapped to
+                # different effective splits via different rows.
+                if sid:
+                    prev_role = split_role_by_subject.get(str(sid))
+                    if prev_role and prev_role != eff:
+                        collision_errors.append(
+                            f"conflicting split role for subject {sid}: "
+                            f"'{prev_role}' vs '{eff}'"
+                        )
+                    else:
+                        split_role_by_subject[str(sid)] = eff
+                vt = smeta.get("variant_type", "original")
+                if vt == "paraphrase":
+                    fiu_qa_paraphrase += 1
+                elif vt == "perturbed":
+                    fiu_qa_perturbed += 1
+                else:
+                    fiu_qa_original += 1
+                # P1-10: duplicate QA variant ID check.
+                if sample.source_sample_id in seen_qa_variant_ids:
+                    collision_errors.append(
+                        f"duplicate QA variant ID '{sample.source_sample_id}' "
+                        f"at rows {seen_qa_variant_ids[sample.source_sample_id]} "
+                        f"and {n_rows}"
+                    )
+                else:
+                    seen_qa_variant_ids[sample.source_sample_id] = n_rows
+                fiu_profile_fact_count += len(sample.profile_facts or [])
     report.update(
         {
             "rows_inspected": n_rows,
@@ -1031,6 +1110,25 @@ def cmd_source_inspect(args) -> int:
             "warnings": sorted(set(warnings)),
         }
     )
+    # P1-10: report collision / duplicate errors and fail the inspect.
+    if collision_errors:
+        report["collision_errors"] = collision_errors
+        mapping_errors.extend(collision_errors)
+    # P1-9: FIUBench-specific inspection summary.
+    if is_fiubench:
+        report["fiubench_inspection"] = {
+            "unique_subject_ids": len(fiu_subject_ids),
+            "unique_identity_ids": len(identities),
+            "official_membership_counts": dict(sorted(fiu_membership_counts.items())),
+            "effective_split_counts": dict(sorted(fiu_effective_split_counts.items())),
+            "qa_variant_counts": {
+                "original": fiu_qa_original,
+                "paraphrase": fiu_qa_paraphrase,
+                "perturbed": fiu_qa_perturbed,
+            },
+            "image_bearing_identities": len(fiu_identities_with_images),
+            "profile_fact_count": fiu_profile_fact_count,
+        }
     # Persist the inspection snapshot for schema-drift checks (repair plan D2).
     snapshot_path = Path(args.snapshot) if args.snapshot else (
         REPO_ROOT / "outputs" / "source_inspection" / args.dataset / f"{Path(args.config).stem}.json"
@@ -1144,6 +1242,39 @@ def cmd_source_make_smoke_manifest(args) -> int:
             _sel_by_identity.setdefault(_iid, []).append(_s)
     _wn_pairs = find_wrong_name_candidates(_sel_by_identity)
 
+    # P1-4: verify protocol role coverage when a protocol is defined.
+    proto = data_cfg.extras.get("fiubench_protocol")
+    protocol_coverage: dict[str, Any] = {}
+    if proto and isinstance(proto, dict):
+        source_mapping = load_source_mapping(data_cfg)
+        role_identities: dict[str, set[str]] = {}
+        for _s in selected:
+            _iid = _s.get("identity_id", "")
+            _split = _s.get("_effective_split", "")
+            if _iid and _split:
+                role_identities.setdefault(_split, set()).add(_iid)
+        required_roles = set()
+        if proto.get("forget_bucket"):
+            required_roles.add(source_mapping.get(proto["forget_bucket"], "exclude"))
+        if proto.get("train_bucket"):
+            required_roles.add(source_mapping.get(proto["train_bucket"], "train"))
+        if proto.get("eval_bucket"):
+            required_roles.add(source_mapping.get(proto["eval_bucket"], "eval"))
+        missing_roles = required_roles - set(role_identities.keys())
+        protocol_coverage = {
+            "role_identity_counts": {
+                k: len(v) for k, v in sorted(role_identities.items())
+            },
+            "required_roles": sorted(required_roles),
+            "missing_roles": sorted(missing_roles),
+        }
+        if missing_roles:
+            warnings_list = [f"P1-4: no selected identity for role(s): {sorted(missing_roles)}"]
+        else:
+            warnings_list = []
+    else:
+        warnings_list = []
+
     # Build source revision info.
     source_revision: dict[str, Any] = {}
     if hasattr(data_cfg, "source_version") and data_cfg.source_version:
@@ -1153,10 +1284,49 @@ def cmd_source_make_smoke_manifest(args) -> int:
         else:
             source_revision = {"source_version": str(sv)}
 
+    # P1-3: record the experiment protocol for FIUBench (or any benchmark
+    # that declares one in extras).
+    source_protocol: dict[str, Any] | None = None
+    proto = data_cfg.extras.get("fiubench_protocol")
+    if proto and isinstance(proto, dict):
+        source_protocol = dict(proto)
+    # Also record immutable_revision pointers when available.
+    ir = data_cfg.extras.get("immutable_revision")
+    if ir and isinstance(ir, dict):
+        source_revision.setdefault("immutable_revision", ir)
+
+    # P1-6 / P1-7: validate selected images and record their hashes.
+    selected_images: list[dict[str, str]] = []
+    image_errors: list[str] = []
+    for _s in selected:
+        _img = _s.get("image_uri")
+        if not _img:
+            continue
+        _sid = _s.get("source_sample_id", "")
+        _p = Path(_img)
+        if not _p.exists():
+            image_errors.append(f"image not found for '{_sid}': {_img}")
+            continue
+        try:
+            from PIL import Image as _PILImage
+            with _PILImage.open(_p) as _im:
+                _im.verify()
+        except Exception as exc:
+            image_errors.append(f"image unreadable for '{_sid}': {_img} ({exc})")
+            continue
+        _ih = _hashlib.sha256(_p.read_bytes()).hexdigest()
+        selected_images.append({
+            "source_sample_id": _sid,
+            "image_uri": _img,
+            "sha256": _ih,
+        })
+    if image_errors:
+        warnings_list.extend(image_errors)
+
     # Compute manifest SHA256 (of the canonical content, before adding the hash).
     manifest_body: dict[str, Any] = {
         "dataset": args.dataset,
-        "selection_version": "smoke_v2",
+        "selection_version": "smoke_v3",
         "selected_source_sample_ids": sorted(selected_ids),
         "selected_identity_ids": sorted(identity_ids),
         "coverage": {
@@ -1178,6 +1348,15 @@ def cmd_source_make_smoke_manifest(args) -> int:
         },
         "source_revision": source_revision,
     }
+    if source_protocol is not None:
+        manifest_body["source_protocol"] = source_protocol
+    if protocol_coverage:
+        manifest_body["protocol_coverage"] = protocol_coverage
+    # P1-7: record selected image hashes.
+    if selected_images:
+        manifest_body["selected_images"] = selected_images
+    if image_errors:
+        manifest_body["image_errors"] = image_errors
     canonical = _json.dumps(manifest_body, sort_keys=True, separators=(",", ":"))
     manifest_body["manifest_sha256"] = _hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -1197,12 +1376,13 @@ def cmd_source_make_smoke_manifest(args) -> int:
 
 
 def cmd_source_verify_revision(args) -> int:
-    """P0-2: verify configured immutable_revision against the actual source.
+    """P0-2/P0-13: verify configured immutable_revision against actual source.
 
-    Checks:
-    - configured Git SHA == source HEAD
-    - configured profile SHA == recomputed profile SHA
-    - configured split SHA == recomputed split SHA
+    Supports two formats:
+    - Path-bound (P0-13): ``immutable_revision.files`` maps relative paths
+      to ``{sha256: ...}`` objects.  Each file is verified independently.
+    - Positional (legacy): ``profile_file_sha256`` / ``split_file_sha256``
+      mapped onto ``adapter.source_files()`` by index.
 
     Fails before any model is loaded.
     """
@@ -1217,7 +1397,7 @@ def cmd_source_verify_revision(args) -> int:
     if not immutable or not isinstance(immutable, dict):
         raise ConfigError(
             f"No immutable_revision configured for {args.dataset}; "
-            "populate git_commit_sha, profile_file_sha256, split_file_sha256"
+            "populate git_commit_sha and file hashes"
         )
 
     errors: list[str] = []
@@ -1242,31 +1422,59 @@ def cmd_source_verify_revision(args) -> int:
     if configured_git != actual_git:
         errors.append(f"git_commit_sha mismatch: configured={configured_git}, actual={actual_git}")
 
-    # 2. File hashes (profile + split).
-    try:
-        source_files = adapter.source_files()
-    except Exception as exc:
-        raise ConfigError(f"Cannot enumerate source files: {exc}")
-
-    file_hash_keys = ["profile_file_sha256", "split_file_sha256"]
-    for i, key in enumerate(file_hash_keys):
-        configured = immutable.get(key, "")
-        if i < len(source_files):
-            fpath = source_files[i]
-            try:
-                actual = _hashlib.sha256(fpath.read_bytes()).hexdigest()
-            except Exception as exc:
-                actual = f"ERROR: {exc}"
-        else:
-            actual = "N/A (no file)"
-        verified[key] = {
-            "configured": configured,
-            "actual": actual,
-            "file": str(source_files[i]) if i < len(source_files) else None,
-            "match": configured == actual,
-        }
-        if configured != actual:
-            errors.append(f"{key} mismatch: configured={configured}, actual={actual}")
+    # 2. File hashes.
+    files_block = immutable.get("files")
+    if files_block and isinstance(files_block, dict):
+        # P0-13: path-bound verification.
+        for rel_path, spec in files_block.items():
+            if not isinstance(spec, dict):
+                errors.append(f"files.{rel_path} must be a dict with 'sha256'")
+                continue
+            configured = spec.get("sha256", "")
+            fpath = source_root / rel_path
+            if not fpath.exists():
+                actual = "N/A (file missing)"
+            else:
+                try:
+                    actual = _hashlib.sha256(fpath.read_bytes()).hexdigest()
+                except Exception as exc:
+                    actual = f"ERROR: {exc}"
+            verified[f"files.{rel_path}"] = {
+                "configured": configured,
+                "actual": actual,
+                "file": str(fpath),
+                "match": configured == actual,
+            }
+            if configured != actual:
+                errors.append(
+                    f"{rel_path} sha256 mismatch: "
+                    f"configured={configured}, actual={actual}"
+                )
+    else:
+        # Legacy positional mapping (profile_file_sha256, split_file_sha256).
+        try:
+            source_files = adapter.source_files()
+        except Exception as exc:
+            raise ConfigError(f"Cannot enumerate source files: {exc}")
+        file_hash_keys = ["profile_file_sha256", "split_file_sha256"]
+        for i, key in enumerate(file_hash_keys):
+            configured = immutable.get(key, "")
+            if i < len(source_files):
+                fpath = source_files[i]
+                try:
+                    actual = _hashlib.sha256(fpath.read_bytes()).hexdigest()
+                except Exception as exc:
+                    actual = f"ERROR: {exc}"
+            else:
+                actual = "N/A (no file)"
+            verified[key] = {
+                "configured": configured,
+                "actual": actual,
+                "file": str(source_files[i]) if i < len(source_files) else None,
+                "match": configured == actual,
+            }
+            if configured != actual:
+                errors.append(f"{key} mismatch: configured={configured}, actual={actual}")
 
     result = {
         "dataset": args.dataset,
@@ -1279,9 +1487,211 @@ def cmd_source_verify_revision(args) -> int:
     return 0 if not errors else 1
 
 
-# --------------------------------------------------------------------------- #
-# build ...
-# --------------------------------------------------------------------------- #
+def cmd_source_preflight(args) -> int:
+    """P1-11: CPU-only gate before GPU use.
+
+    Runs every pre-annotation check without loading a model:
+      1. revision verification
+      2. source schema validation (adapter construction + row iteration)
+      3. split-membership validation
+      4. variant flattening validation (to_samples on every row)
+      5. image existence validation
+      6. smoke-selection feasibility
+      7. wrong-name feasibility
+    """
+    from .data.adapters.base import AdapterError, available_adapters, create_adapter
+
+    data_cfg = _data_config_for(args.dataset, load_run_config(args.config))
+    if args.dataset not in available_adapters():
+        raise ConfigError(
+            f"Unknown dataset '{args.dataset}'; available: {available_adapters()}"
+        )
+    adapter = create_adapter(data_cfg)
+
+    report: dict[str, Any] = {
+        "dataset": args.dataset,
+        "adapter": adapter.name,
+        "adapter_version": adapter.adapter_version,
+        "source_revision": data_cfg.source_version,
+        "checks": {},
+        "errors": [],
+    }
+    errors: list[str] = report["errors"]
+
+    # 1. Revision verification (delegate to verify-revision logic).
+    try:
+        immutable = data_cfg.extras.get("immutable_revision")
+        if immutable and isinstance(immutable, dict):
+            import hashlib as _hashlib
+            import subprocess as _sp
+
+            source_root = data_cfg.require_root()
+            configured_git = immutable.get("git_commit_sha", "")
+            try:
+                actual_git = _sp.check_output(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=str(source_root),
+                    stderr=_sp.DEVNULL,
+                ).decode().strip()
+            except Exception:
+                actual_git = "unknown"
+            git_ok = configured_git == actual_git
+            report["checks"]["revision_git"] = {
+                "configured": configured_git,
+                "actual": actual_git,
+                "pass": git_ok,
+            }
+            if not git_ok:
+                errors.append(f"git_commit_sha mismatch: {configured_git} vs {actual_git}")
+            # File hashes.
+            files_block = immutable.get("files", {})
+            for rel_path, spec in files_block.items():
+                if not isinstance(spec, dict):
+                    continue
+                cfg_hash = spec.get("sha256", "")
+                fpath = source_root / rel_path
+                actual_hash = (
+                    _hashlib.sha256(fpath.read_bytes()).hexdigest()
+                    if fpath.exists()
+                    else "MISSING"
+                )
+                ok = cfg_hash == actual_hash
+                report["checks"][f"revision_file:{rel_path}"] = {"pass": ok}
+                if not ok:
+                    errors.append(f"{rel_path} hash mismatch")
+        else:
+            report["checks"]["revision"] = {"pass": False, "reason": "no immutable_revision"}
+            errors.append("no immutable_revision configured")
+    except Exception as exc:
+        report["checks"]["revision"] = {"pass": False, "reason": str(exc)}
+        errors.append(f"revision check failed: {exc}")
+
+    # 2. Source schema validation: iterate rows.
+    n_rows = 0
+    row_errors: list[str] = []
+    try:
+        for _ctx, _row in adapter.iter_rows_with_context():
+            n_rows += 1
+    except Exception as exc:
+        row_errors.append(str(exc))
+    report["checks"]["source_schema"] = {
+        "rows": n_rows,
+        "pass": len(row_errors) == 0,
+        "errors": row_errors,
+    }
+    errors.extend(row_errors)
+
+    # 3+4. Split membership + variant flattening.
+    n_samples = 0
+    split_counts: dict[str, int] = {}
+    variant_counts: dict[str, int] = {}
+    seen_ids: set[str] = set()
+    dup_ids: list[str] = []
+    flatten_errors: list[str] = []
+    try:
+        for _ctx, _row in adapter.iter_rows_with_context():
+            try:
+                samples = list(adapter.to_samples(_row, source_context=_ctx))
+            except AdapterError as exc:
+                flatten_errors.append(str(exc))
+                continue
+            for _s in samples:
+                n_samples += 1
+                split_counts[_s.split] = split_counts.get(_s.split, 0) + 1
+                vt = (_s.source_metadata or {}).get("variant_type", "original")
+                variant_counts[vt] = variant_counts.get(vt, 0) + 1
+                if _s.source_sample_id in seen_ids:
+                    dup_ids.append(_s.source_sample_id)
+                seen_ids.add(_s.source_sample_id)
+    except Exception as exc:
+        flatten_errors.append(str(exc))
+    report["checks"]["split_membership"] = {
+        "effective_split_counts": dict(sorted(split_counts.items())),
+        "pass": len(flatten_errors) == 0,
+    }
+    report["checks"]["variant_flattening"] = {
+        "total_samples": n_samples,
+        "variant_counts": dict(sorted(variant_counts.items())),
+        "duplicate_ids": len(dup_ids),
+        "pass": len(flatten_errors) == 0 and len(dup_ids) == 0,
+        "errors": flatten_errors[:10],
+    }
+    errors.extend(flatten_errors)
+    if dup_ids:
+        errors.append(f"{len(dup_ids)} duplicate source_sample_id(s)")
+
+    # 5. Image existence.
+    n_with_images = 0
+    missing_images: list[str] = []
+    try:
+        for _ctx, _row in adapter.iter_rows_with_context():
+            try:
+                samples = list(adapter.to_samples(_row, source_context=_ctx))
+            except AdapterError:
+                continue
+            for _s in samples:
+                if _s.image_uri:
+                    n_with_images += 1
+                    from pathlib import Path as _Path
+                    if not _Path(_s.image_uri).exists() and len(missing_images) < 20:
+                        missing_images.append(_s.image_uri)
+    except Exception:
+        pass
+    report["checks"]["image_existence"] = {
+        "samples_with_images": n_with_images,
+        "missing_images": len(missing_images),
+        "pass": len(missing_images) == 0,
+    }
+    if missing_images:
+        errors.append(f"{len(missing_images)} missing image(s) (first: {missing_images[0]})")
+
+    # 6+7. Smoke-selection feasibility + wrong-name feasibility.
+    try:
+        from .build.conflict_generation import find_wrong_name_candidates
+        from .data.split_mapping import load_source_mapping, resolve_effective_split
+
+        all_samples = list(adapter.load())
+        src_map = load_source_mapping(data_cfg)
+        for _s in all_samples:
+            d = _s.to_dict() if hasattr(_s, "to_dict") else _s
+            d["_effective_split"] = resolve_effective_split(d, source_mapping=src_map)
+        identities = set()
+        image_bearing = set()
+        splits_seen: set[str] = set()
+        has_facts = False
+        for _s in all_samples:
+            d = _s.to_dict() if hasattr(_s, "to_dict") else _s
+            identities.add(d.get("identity_id", ""))
+            if d.get("image_uri"):
+                image_bearing.add(d.get("identity_id", ""))
+            splits_seen.add(d.get("_effective_split", ""))
+            if d.get("profile_facts"):
+                has_facts = True
+        by_identity: dict[str, list] = {}
+        for _s in all_samples:
+            d = _s.to_dict() if hasattr(_s, "to_dict") else _s
+            iid = d.get("identity_id", "")
+            if iid:
+                by_identity.setdefault(iid, []).append(d)
+        wn_pairs = find_wrong_name_candidates(by_identity)
+        report["checks"]["smoke_feasibility"] = {
+            "total_identities": len(identities),
+            "image_bearing_identities": len(image_bearing),
+            "splits_seen": sorted(splits_seen),
+            "has_profile_facts": has_facts,
+            "pass": len(identities) >= 3 and len(image_bearing) >= 2,
+        }
+        report["checks"]["wrong_name_feasibility"] = {
+            "candidate_pairs": len(wn_pairs),
+            "pass": len(wn_pairs) > 0,
+        }
+    except Exception as exc:
+        report["checks"]["smoke_feasibility"] = {"pass": False, "reason": str(exc)}
+        errors.append(f"smoke feasibility check failed: {exc}")
+
+    report["all_pass"] = len(errors) == 0
+    _print_json(report)
+    return 0 if report["all_pass"] else 1
 
 
 def _adapter_samples(args, run_cfg, dataset: str):
@@ -2668,6 +3078,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", required=True)
     _common_flags(p)
     p.set_defaults(func=cmd_source_verify_revision)
+
+    # P1-11: CPU-only preflight gate before GPU use.
+    p = source.add_parser(
+        "preflight",
+        help="run all pre-annotation checks without loading a model (P1-11)",
+    )
+    p.add_argument("--dataset", required=True)
+    p.add_argument("--config", required=True)
+    _common_flags(p)
+    p.set_defaults(func=cmd_source_preflight)
 
     # build
     build = sub.add_parser("build", help="extension construction pipeline").add_subparsers(

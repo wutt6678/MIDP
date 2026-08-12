@@ -3,9 +3,9 @@
 Materializes the released FIUBench profile-level source layout so the fixture
 exercises the real :class:`~route_data.data.adapters.fiubench.FiubenchAdapter`:
 
-    data/fiubench_profiles.jsonl   # one JSONL row per identity
-    splits/official.json           # forget / retain / evaluation grouping
-    images/<file>                  # identity images referenced by image_path
+    dataset/full.json      # one JSONL row per identity
+    dataset/split.json     # forget / retain / evaluation grouping
+    images/<file>          # identity images referenced by image_path
 
 Each JSONL row carries the released fields:
 
@@ -136,8 +136,7 @@ def _draw_face(identity_index: int, size: int = IMAGE_SIZE):
 def build_fiubench_fixture(root: str | Path) -> dict:
     """Materialize the FIUBench fixture under *root*; return ground truth."""
     root = Path(root)
-    (root / "data").mkdir(parents=True, exist_ok=True)
-    (root / "splits").mkdir(parents=True, exist_ok=True)
+    (root / "dataset").mkdir(parents=True, exist_ok=True)
     (root / "images").mkdir(parents=True, exist_ok=True)
 
     split_buckets: dict[str, list[str]] = {
@@ -145,7 +144,7 @@ def build_fiubench_fixture(root: str | Path) -> dict:
         "retain": [],
         "evaluation": [],
     }
-    source_path = root / "data" / "fiubench_profiles.jsonl"
+    source_path = root / "dataset" / "full.json"
     with open(source_path, "w") as fh:
         for identity_index, identity in enumerate(IDENTITIES):
             image_path_rel = f"images/{identity['image_file']}"
@@ -161,7 +160,7 @@ def build_fiubench_fixture(root: str | Path) -> dict:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             split_buckets[identity["split"]].append(identity["name"])
 
-    split_path = root / "splits" / "official.json"
+    split_path = root / "dataset" / "split.json"
     with open(split_path, "w") as fh:
         json.dump(split_buckets, fh, indent=2)
 

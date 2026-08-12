@@ -130,7 +130,7 @@ class TestFairgetSourceMapping:
 
 
 class TestFIUBenchSourceMapping:
-    """FIUBench: official forget/retain/evaluation grouping."""
+    """FIUBench: released split buckets (forget1/5/10, retain5/15)."""
 
     def test_config_exists(self):
         assert (DATA_CONFIGS_DIR / "fiubench.yaml").exists()
@@ -138,19 +138,22 @@ class TestFIUBenchSourceMapping:
     def test_source_version_pinned(self):
         cfg = _load_data_config("fiubench")
         sv = cfg["data"]["source_version"]
-        assert sv == "fiubench-1.0"
+        assert sv == "fiubench-8e12cdd"
 
     def test_immutable_revision_fields_present(self):
-        # R10: immutable_revision block must exist with the required fields.
+        # P0-2/P0-13: path-bound immutable_revision with files block.
         cfg = _load_data_config("fiubench")
         ir = cfg["data"].get("immutable_revision", {})
         assert "git_commit_sha" in ir
-        assert "profile_file_sha256" in ir
-        assert "split_file_sha256" in ir
+        files = ir.get("files", {})
+        assert "dataset/full.json" in files
+        assert "dataset/split.json" in files
+        assert "sha256" in files["dataset/full.json"]
+        assert "sha256" in files["dataset/split.json"]
 
     def test_split_file_defined(self):
         cfg = _load_data_config("fiubench")
-        assert cfg["data"]["split_file"] == "splits/official.json"
+        assert cfg["data"]["split_file"] == "dataset/split.json"
 
     def test_reuse_official_splits(self):
         cfg = _load_data_config("fiubench")
@@ -161,36 +164,40 @@ class TestFIUBenchSourceMapping:
         assert mapping["forget"] == "exclude"
 
     def test_released_split_vocabulary_exact(self):
-        # R9: FIUBench's official grouping is exactly forget / retain /
-        # evaluation (splits/official.json).  The config must declare the
-        # full vocabulary and nothing else.
+        # P0-3: FIUBench's released split vocabulary is forget1/5/10 +
+        # retain5/15.  The config must declare the full vocabulary plus
+        # backward-compat entries for the golden fixture.
         cfg = _load_data_config("fiubench")
         extras_mapping = cfg["data"]["extras"]["source_mapping"]
-        assert extras_mapping == {
-            "forget": "exclude",
-            "retain": "train",
-            "evaluation": "eval",
-        }
+        # Released buckets.
+        assert extras_mapping["forget1"] == "exclude"
+        assert extras_mapping["forget5"] == "exclude"
+        assert extras_mapping["forget10"] == "exclude"
+        assert extras_mapping["retain5"] == "train"
+        assert extras_mapping["retain15"] == "train"
+        # Backward-compat for golden fixture.
+        assert extras_mapping["forget"] == "exclude"
+        assert extras_mapping["retain"] == "train"
 
     def test_released_labels_resolve_exactly(self):
-        # R9: each of the three actual FIUBench labels must resolve to the
-        # documented target — forget never enters ordinary QA, retain trains,
-        # evaluation evaluates.
+        # P0-3: each released bucket must resolve to the documented target.
         mapping = _resolve_mapping("fiubench")
-        assert mapping["forget"] == "exclude"
-        assert mapping["retain"] == "train"
-        assert mapping["evaluation"] == "eval"
+        assert mapping["forget1"] == "exclude"
+        assert mapping["forget5"] == "exclude"
+        assert mapping["forget10"] == "exclude"
+        assert mapping["retain5"] == "train"
+        assert mapping["retain15"] == "train"
 
     def test_no_released_label_leaks_to_hash(self):
-        # Every official FIUBench label is explicitly mapped; none may fall
+        # Every official FIUBench bucket is explicitly mapped; none may fall
         # through to the unassigned/hash fallback (R3/R9).
         mapping = _resolve_mapping("fiubench")
-        for label in ("forget", "retain", "evaluation"):
+        for label in ("forget1", "forget5", "forget10", "retain5", "retain15"):
             assert mapping[label] != "hash", f"fiubench {label} leaked to hash"
 
     def test_adapter_version(self):
         cfg = _load_data_config("fiubench")
-        assert cfg["data"]["adapter_version"] == "fiubench-v2"
+        assert cfg["data"]["adapter_version"] == "fiubench-v3"
 
     def test_multiview_opt_in(self):
         cfg = _load_data_config("fiubench")
@@ -447,7 +454,7 @@ class TestProductionConfigProvenance:
             cfg = _load_data_config(name)
             imm = cfg["data"].get("immutable_revision", {})
             
-            # Check SHA-256 fields
+            # Check SHA-256 fields (legacy positional format).
             for key in sha256_field_names:
                 val = imm.get(key)
                 if val is None or val == "PENDING":
@@ -456,6 +463,19 @@ class TestProductionConfigProvenance:
                 assert _HEX64_RE.match(val), (
                     f"{name}.{key} = {val!r} is not a 64-char hex SHA-256"
                 )
+            
+            # P0-13: path-bound file hashes (files block).
+            files_block = imm.get("files", {})
+            if isinstance(files_block, dict):
+                for rel_path, spec in files_block.items():
+                    if isinstance(spec, dict):
+                        sha = spec.get("sha256")
+                        if sha is not None and sha != "PENDING":
+                            assert isinstance(sha, str)
+                            assert _HEX64_RE.match(sha), (
+                                f"{name}.files.{rel_path}.sha256 = {sha!r} "
+                                f"is not a 64-char hex SHA-256"
+                            )
             
             # Check git_commit_sha field (40-char SHA-1)
             git_val = imm.get(git_commit_sha_field)

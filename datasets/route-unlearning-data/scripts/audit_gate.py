@@ -213,7 +213,9 @@ def audit_wrong_name_coverage(dataset: str, limit: int = 10) -> list[dict]:
     return audit_rows
 
 
-def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int = 20) -> tuple[list[dict], list[dict]]:
+def audit_weak_labels(
+    dataset: str, output_dir: Path | None = None, limit: int = 20,
+) -> tuple[list[dict], list[dict], dict[str, int]]:
     """Audit 20 positive and 20 negative weak labels.
 
     P2-5: default to ``source == "source_model"``; report other categories
@@ -222,6 +224,10 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
     P2-6: positive weak label = source_model + label==True + confidence_band==high.
     Negative weak label = source_model + label==False + confidence_band==high.
     ``label==None`` is NOT treated as negative.
+
+    P2-2: returns a *coverage* dict with ``positive_available``,
+    ``negative_available``, ``positive_requested``, ``negative_requested``
+    so the caller can fail when audit targets are not met.
     """
     print(f"\n{'='*72}")
     print(f"AUDIT: Weak Labels for {dataset.upper()}")
@@ -254,12 +260,19 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
                     if pd.isna(score_val):
                         continue
 
+                    # P2-1: normalize Pandas/NumPy booleans to Python bool
+                    # before identity comparison.
+                    if pd.isna(label_val):
+                        label_bool = None
+                    else:
+                        label_bool = bool(label_val)
+
                     entry = {
                         "identity_id": row.get("identity_id", "unknown"),
                         "image_uri": row.get("image_uri"),
                         "attribute": row.get("attribute", "unknown"),
                         "score": float(score_val),
-                        "label": bool(label_val) if pd.notna(label_val) else None,
+                        "label": label_bool,
                         "source": source_val,
                         "confidence_band": str(band_val) if pd.notna(band_val) else None,
                     }
@@ -270,10 +283,10 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
                         continue
 
                     # P2-6: precise positive/negative definitions.
-                    # label==None is NOT treated as negative.
-                    if label_val is True and band_val == "high":
+                    # label_bool==None is NOT treated as negative.
+                    if label_bool is True and band_val == "high":
                         positive_rows.append(entry)
-                    elif label_val is False and band_val == "high":
+                    elif label_bool is False and band_val == "high":
                         negative_rows.append(entry)
                     # else: source_model but not high-confidence or label==None → skip
 
@@ -299,9 +312,18 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
                 for row in negative_rows[:limit]:
                     print(f"{row['identity_id']:<30} {row['attribute']:<25} {row['score']:<10.4f} {row['source']:<15}")
 
+                # P2-2: coverage reporting.
+                coverage = {
+                    "positive_available": len(positive_rows),
+                    "negative_available": len(negative_rows),
+                    "positive_requested": limit,
+                    "negative_requested": limit,
+                }
                 print(f"\nSummary: {len(positive_rows)} positive, {len(negative_rows)} negative, "
                       f"{len(other_source_rows)} other-source weak labels")
-                return positive_rows[:limit], negative_rows[:limit]
+                print(f"P2-2 coverage: positive {coverage['positive_available']}/{coverage['positive_requested']}, "
+                      f"negative {coverage['negative_available']}/{coverage['negative_requested']}")
+                return positive_rows[:limit], negative_rows[:limit], coverage
             else:
                 print("WARNING: expected long-format columns (attribute, score) not found in parquet")
         except (OSError, ValueError, ImportError) as exc:
@@ -310,7 +332,8 @@ def audit_weak_labels(dataset: str, output_dir: Path | None = None, limit: int =
         print(f"Parquet not found: {parquet_path}")
         print("Skipping weak label audit (run 'build annotate' first)")
 
-    return [], []
+    return [], [], {"positive_available": 0, "negative_available": 0,
+                    "positive_requested": limit, "negative_requested": limit}
 
 
 def audit_tiny_smoke_probes(dataset: str, output_dir: Path | None = None) -> list[dict]:
@@ -723,12 +746,16 @@ def _persist_audit_report(
 
     unreviewed_count = sum(1 for it in items if it["review_outcome"] == "unreviewed")
     critical_count = sum(1 for it in items if it["review_outcome"] == "fail")
+    # P2-3: uncertain items are flagged for second review but do NOT block
+    # the gate.  They are recorded for traceability.
+    uncertain_count = sum(1 for it in items if it["review_outcome"] == "uncertain")
 
     report: dict = {
         "audit_report_version": AUDIT_REPORT_VERSION,
         "dataset": dataset,
         "total_items": len(items),
         "unreviewed_items": unreviewed_count,
+        "uncertain_items": uncertain_count,
         "critical_failures": critical_count,
         "gate_pass": len(failures) == 0 and unreviewed_count == 0 and critical_count == 0,
         "items": items,
@@ -753,48 +780,242 @@ def _persist_audit_report(
     report_path.write_text(json.dumps(report, indent=2, default=str) + "\n")
     print(f"\n--- audit report persisted: {report_path}")
     print(f"    version={AUDIT_REPORT_VERSION}, total_items={len(items)}, "
-          f"unreviewed={unreviewed_count}, critical={critical_count}, "
+          f"unreviewed={unreviewed_count}, uncertain={uncertain_count}, "
+          f"critical={critical_count}, "
           f"gate={'PASS' if report['gate_pass'] else 'FAIL'}")
     return report_path
 
 
-def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | None = None) -> int:
-    """Run the full audit gate and produce a structured report."""
+# --------------------------------------------------------------------------- #
+# P2-5: per-attribute target-state balance
+# --------------------------------------------------------------------------- #
+
+
+def _report_attribute_balance(
+    pos_labels: list[dict],
+    neg_labels: list[dict],
+    pairs: list[dict],
+) -> dict[str, dict[str, int]]:
+    """P2-5: report per-attribute positive / negative / usable-pair counts.
+
+    For attributes used in cross-image / state causal analysis, both states
+    should be present where feasible.  Attributes lacking one polarity are
+    flagged but NOT treated as failures (the source subset may genuinely
+    lack one polarity).
+    """
+    pos_by_attr: dict[str, int] = {}
+    neg_by_attr: dict[str, int] = {}
+    for r in pos_labels:
+        a = r.get("attribute", "unknown")
+        pos_by_attr[a] = pos_by_attr.get(a, 0) + 1
+    for r in neg_labels:
+        a = r.get("attribute", "unknown")
+        neg_by_attr[a] = neg_by_attr.get(a, 0) + 1
+
+    pair_by_attr: dict[str, int] = {}
+    for p in pairs:
+        a = p.get("attribute")
+        if a:
+            pair_by_attr[a] = pair_by_attr.get(a, 0) + 1
+
+    all_attrs = sorted(set(pos_by_attr) | set(neg_by_attr) | set(pair_by_attr))
+    balance: dict[str, dict[str, int]] = {}
+    if all_attrs:
+        print(f"\n{'='*72}")
+        print("P2-5: Per-attribute target-state balance")
+        print(f"{'='*72}")
+        print(f"{'attribute':<25} {'positive':>10} {'negative':>10} {'pairs':>10}")
+        print("-" * 60)
+    for a in all_attrs:
+        pc = pos_by_attr.get(a, 0)
+        nc = neg_by_attr.get(a, 0)
+        prc = pair_by_attr.get(a, 0)
+        balance[a] = {"positive": pc, "negative": nc, "usable_pairs": prc}
+        flag = ""
+        if pc > 0 and nc == 0:
+            flag = " ⚠ no negative"
+        elif nc > 0 and pc == 0:
+            flag = " ⚠ no positive"
+        if all_attrs:
+            print(f"{a:<25} {pc:>10} {nc:>10} {prc:>10}{flag}")
+    return balance
+
+
+# --------------------------------------------------------------------------- #
+# P2-6/7/8: provenance freeze — no PENDING values
+# --------------------------------------------------------------------------- #
+
+
+def _check_provenance_frozen(dataset: str, config: str | None = None) -> list[str]:
+    """P2-6/7/8: verify that ``immutable_revision`` has no PENDING values.
+
+    Returns a list of error strings (empty == frozen).
+    """
+    errors: list[str] = []
+    try:
+        data_cfg = _load_data_config(dataset)
+    except SystemExit:
+        return errors  # config not found → skip (non-fatal)
+
+    immutable = (data_cfg.get("data") or {}).get("immutable_revision")
+    if not immutable or not isinstance(immutable, dict):
+        # No immutable block → nothing to freeze-check.
+        return errors
+
+    def _walk(obj: dict, prefix: str) -> None:
+        for key, val in obj.items():
+            path = f"{prefix}.{key}" if prefix else key
+            if isinstance(val, dict):
+                _walk(val, path)
+            elif isinstance(val, str) and val.strip().upper() == "PENDING":
+                errors.append(f"P2-6/7/8: {path} is still PENDING for {dataset}")
+
+    _walk(immutable, "immutable_revision")
+    if errors:
+        print(f"\n--- P2-6/7/8: provenance NOT frozen for {dataset}")
+        for e in errors:
+            print(f"    {e}")
+    else:
+        if immutable:
+            print(f"\n--- P2-6/7/8: provenance frozen for {dataset}")
+    return errors
+
+
+# --------------------------------------------------------------------------- #
+# P2-10: archive real-smoke evidence bundle
+# --------------------------------------------------------------------------- #
+
+
+def _archive_evidence_bundle(
+    dataset: str,
+    config: str | None,
+    output_dir: Path,
+    audit_items: list[dict],
+    failures: list[str],
+) -> Path | None:
+    """P2-10: write ``<dataset>_evidence_bundle.json``.
+
+    Collects: MIDP GIT SHA, dataset name, audit summary, failure list,
+    file hashes of key artifacts in *output_dir*, and runtime environment
+    info.  This is the minimum evidence bundle for later research
+    reproducibility.
+    """
+    import hashlib as _hashlib
+    import subprocess as _sp
+    import sys as _sys
+
+    bundle: dict = {"dataset": dataset}
+
+    # 1. MIDP GIT SHA.
+    repo_root = REPO.parent
+    try:
+        midp_sha = _sp.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root), stderr=_sp.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        midp_sha = "unknown"
+    bundle["midp_git_sha"] = midp_sha
+
+    # 2. Key artifact hashes.
+    artifact_files = [
+        f"{dataset}_manual_audit_report.json",
+        f"{dataset}_export_manifest.json",
+        f"{dataset}_pair_manifest.json",
+        f"{dataset}_processed.jsonl",
+    ]
+    artifact_hashes: dict[str, str] = {}
+    for fname in artifact_files:
+        fpath = output_dir / fname
+        if fpath.exists():
+            artifact_hashes[fname] = _hashlib.sha256(fpath.read_bytes()).hexdigest()
+    bundle["artifact_sha256"] = artifact_hashes
+
+    # 3. Audit summary.
+    bundle["audit_total_items"] = len(audit_items)
+    bundle["audit_unreviewed"] = sum(1 for it in audit_items if it["review_outcome"] == "unreviewed")
+    bundle["audit_critical_failures"] = sum(1 for it in audit_items if it["review_outcome"] == "fail")
+    bundle["audit_automatic_failures"] = len(failures)
+
+    # 4. Runtime environment.
+    bundle["runtime"] = {
+        "python": _sys.version,
+        "platform": _sys.platform,
+    }
+    # Optional: package versions.
+    for pkg in ("torch", "transformers", "PIL"):
+        try:
+            mod = __import__(pkg)
+            bundle["runtime"][pkg] = getattr(mod, "__version__", "unknown")
+        except ImportError:
+            bundle["runtime"][pkg] = "not installed"
+
+    bundle_path = output_dir / f"{dataset}_evidence_bundle.json"
+    bundle_path.parent.mkdir(parents=True, exist_ok=True)
+    bundle_path.write_text(json.dumps(bundle, indent=2, default=str) + "\n")
+    print(f"\n--- P2-10: evidence bundle archived: {bundle_path}")
+    return bundle_path
+
+
+def run_full_audit(
+    dataset: str, config: str | None = None, output_dir: Path | None = None,
+    strict: bool = False,
+) -> int:
+    """Run the full audit gate and produce a structured report.
+
+    P2-4: when *strict* is True the gate additionally fails if weak-label
+    coverage is insufficient or route coverage minimums are not met.
+    """
     print(f"\n{'#'*72}")
     print(f"# R20 MANUAL AUDIT GATE: {dataset.upper()}")
+    if strict:
+        print("# MODE: --strict (research-strict / pilot)")
     print(f"{'#'*72}")
-    
+
     failures: list[str] = []
-    
+
     # 1. Audit source mappings
     source_mappings = audit_source_mappings(dataset, limit=20)
     if not source_mappings:
         failures.append("source mappings: no samples found")
-    
+
     # 1b. P1-9: audit wrong-name coverage using production eligibility logic.
     wrong_name_pairs = audit_wrong_name_coverage(dataset, limit=10)
 
-    # 2. Audit weak labels
-    pos_labels, neg_labels = audit_weak_labels(dataset, output_dir, limit=20)
-    # Weak labels are optional (may not exist before annotation)
-    
+    # 2. Audit weak labels (P2-2: now returns coverage dict).
+    pos_labels, neg_labels, weak_coverage = audit_weak_labels(
+        dataset, output_dir, limit=20,
+    )
+    # P2-2: under strict mode, fail when available < requested.
+    if strict:
+        pos_avail = weak_coverage.get("positive_available", 0)
+        pos_req = weak_coverage.get("positive_requested", 20)
+        neg_avail = weak_coverage.get("negative_available", 0)
+        neg_req = weak_coverage.get("negative_requested", 20)
+        if pos_avail < pos_req:
+            failures.append(
+                f"P2-2: insufficient positive weak labels: "
+                f"{pos_avail} available < {pos_req} requested"
+            )
+        if neg_avail < neg_req:
+            failures.append(
+                f"P2-2: insufficient negative weak labels: "
+                f"{neg_avail} available < {neg_req} requested"
+            )
+
     # 3. Audit tiny-smoke conflict probes
     probes = audit_tiny_smoke_probes(dataset, output_dir)
-    # Probes are optional (may not exist before route-probes stage)
-    
+
     # 4. Audit tiny-smoke cross-image state pairs
     pairs, pair_production_issues = audit_tiny_smoke_pairs(dataset, output_dir)
-    # P2-3: production pair validation issues are failures.
     for iss in pair_production_issues:
         failures.append(f"pair validation: {iss}")
-    # Verify: cross-image pairs should have different sample IDs on each side.
     for p in pairs:
         if p.get("left_sample_id") and p["left_sample_id"] == p.get("right_sample_id"):
             failures.append(f"cross-image pair {p['pair_id']}: same sample_id on both sides")
 
     # 5. Audit tiny-smoke name-only facts
     facts = audit_tiny_smoke_facts(dataset, output_dir)
-    # Verify: name-only facts should have answer and fact data (P2-3).
     for f in facts:
         has_answer = f.get("answer_text") or f.get("answer_label")
         has_fact = f.get("target_fact_value")
@@ -802,17 +1023,29 @@ def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | N
             failures.append(f"name-only fact {f['probe_id']}: missing answer_label/answer_text")
         if not has_fact:
             failures.append(f"name-only fact {f['probe_id']}: missing target_fact_value")
-    
-    # P2-10: build structured audit items and persist report.
+
+    # P2-5: per-attribute target-state balance report.
+    _report_attribute_balance(pos_labels, neg_labels, pairs)
+
+    # P2-6/7/8: provenance freeze check (no PENDING values).
+    prov_errors = _check_provenance_frozen(dataset, config)
+    failures.extend(prov_errors)
+
+    # Build structured audit items and persist report.
     audit_items = _build_audit_items(
         source_mappings, pos_labels, neg_labels, probes, pairs, facts, failures,
     )
     _persist_audit_report(dataset, output_dir, audit_items, failures)
 
-    # P2-9: gate requires zero failures, zero unreviewed, zero critical.
+    # Gate requires zero failures, zero unreviewed, zero critical.
     unreviewed_count = sum(1 for it in audit_items if it["review_outcome"] == "unreviewed")
+    uncertain_count = sum(1 for it in audit_items if it["review_outcome"] == "uncertain")
     critical_count = sum(1 for it in audit_items if it["review_outcome"] == "fail")
     gate_pass = len(failures) == 0 and unreviewed_count == 0 and critical_count == 0
+
+    # P2-10: archive evidence bundle when gate passes or strict mode.
+    if output_dir and (gate_pass or strict):
+        _archive_evidence_bundle(dataset, config, output_dir, audit_items, failures)
 
     # Summary
     print(f"\n{'#'*72}")
@@ -822,15 +1055,20 @@ def run_full_audit(dataset: str, config: str | None = None, output_dir: Path | N
     print(f"Wrong-name candidate pairs: {len(wrong_name_pairs)}")
     print(f"Positive weak labels inspected: {len(pos_labels)}")
     print(f"Negative weak labels inspected: {len(neg_labels)}")
+    print(f"  P2-2 coverage: pos {weak_coverage.get('positive_available', 0)}/"
+          f"{weak_coverage.get('positive_requested', 20)}, "
+          f"neg {weak_coverage.get('negative_available', 0)}/"
+          f"{weak_coverage.get('negative_requested', 20)}")
     print(f"Conflict probes inspected: {len(probes)}")
     print(f"Cross-image pairs inspected: {len(pairs)}")
     print(f"  production validation issues: {len(pair_production_issues)}")
     print(f"Name-only facts inspected: {len(facts)}")
     print(f"Total audit items: {len(audit_items)}")
     print(f"Unreviewed items: {unreviewed_count}")
+    print(f"Uncertain items (second review): {uncertain_count}")
     print(f"Critical failures: {critical_count}")
     print(f"Automatic check failures: {len(failures)}")
-    
+
     if gate_pass:
         print("\nAUDIT PASSED: all checks passed, all items reviewed")
         return 0
@@ -855,6 +1093,15 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", required=True, help="Benchmark name (e.g., fairget, fiubench, mllmu, ppubench)")
     parser.add_argument("--config", help="Run config YAML path")
     parser.add_argument("--output-dir", type=Path, help="Output directory containing generated artifacts")
+    # P2-4: research-strict / pilot mode.
+    parser.add_argument(
+        "--strict", "--research-strict", "--pilot",
+        action="store_true", dest="strict", default=False,
+        help="fail when weak-label coverage or route minimums are insufficient (P2-4)",
+    )
     args = parser.parse_args()
-    
-    sys.exit(run_full_audit(dataset=args.dataset, config=args.config, output_dir=args.output_dir))
+
+    sys.exit(run_full_audit(
+        dataset=args.dataset, config=args.config,
+        output_dir=args.output_dir, strict=args.strict,
+    ))

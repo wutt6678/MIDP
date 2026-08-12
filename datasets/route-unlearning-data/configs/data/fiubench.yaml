@@ -1,42 +1,61 @@
 # FIUBench source configuration.
 # Paper: https://arxiv.org/abs/2411.03554
 # Repo:  https://github.com/SaFo-Lab/FIUBench
-# 400 fictitious facial identities with private profile VQA; released rows
-# carry image_path, name, gender, caption, qa_list, raw_data (repair plan B13).
+#
+# Architecture: Option A — consume released FIUBench files directly.
+#   dataset/full.json   → JSONL, one record per identity (572 records)
+#   dataset/split.json  → JSON object mapping bucket → [subject_ids]
+#
+# Released split vocabulary: forget1, forget5, forget10, retain5, retain15.
+# retain5 ⊂ retain15 (overlapping); forget buckets are NOT nested.
 data:
   name: fiubench
   hf_dataset_id: null
   hf_config_name: null
-  hf_revision: fiubench-1.0          # pin the upstream commit when mirroring
+  hf_revision: fiubench-1.0
   local_root: ${FIUBENCH_ROOT}
-  # Pinned source revision (repair plan C1); replace with the exact upstream
-  # commit hash when mirroring the real source.
-  source_version: fiubench-1.0
-  # R10: immutable source revision components — populated from real source.
+  source_version: fiubench-8e12cdd
+  # R10 / P0-2 / P0-13: path-bound immutable hashes (not positional).
   immutable_revision:
     git_commit_sha: 8e12cddc431eafd129c275d46a3d882474cfcf61
-    profile_file_sha256: f2f04cf7e21a3170b4c1541b5e650c9db3f92ff6f7833ea3f9e19887787bff72
-    split_file_sha256: f576e63909babf5105f004b2230154a4d46e6b37160d7554c3434b6693a7ce4c
-  # Source-layout settings (repair plan C2).
-  source_file: data/fiubench_profiles.jsonl
-  split_file: splits/official.json   # official forget/retain/evaluation grouping
+    files:
+      dataset/full.json:
+        sha256: f2f04cf7e21a3170b4c1541b5e650c9db3f92ff6f7833ea3f9e19887787bff72
+      dataset/split.json:
+        sha256: f576e63909babf5105f004b2230154a4d46e6b37160d7554c3434b6693a7ce4c
+  # Released source files (P0-2).
+  source_file: dataset/full.json
+  split_file: dataset/split.json
   images_root: .
   include_paraphrases: true          # qa_list paraphrased variants (B15)
   include_perturbed: true            # qa_list perturbed variants (B15)
-  adapter_version: fiubench-v2
-  # Official forget/retain/evaluation grouping and attack templates preserved.
+  adapter_version: fiubench-v3
   reuse_official_splits: true
   include_attack_templates: true
   domain_shift_audit_images: 100
-  # R4 (Fix List for f59a9c1): explicit source-partition mapping for FIUBench's
-  # released vocabulary.  FIUBench's official grouping is forget / retain /
-  # evaluation.  forget -> exclude (never in ordinary QA), retain -> train,
-  # evaluation -> eval.  Verified against splits/official.json.
+  # P0-3: FIUBench experiment protocol — maps released buckets to MIDP roles.
+  # forget_bucket: the deletion condition (identities to forget).
+  # train_bucket: the retention pool (identities to keep for training).
+  # eval_bucket: identities reserved for evaluation (may overlap train_bucket
+  #   in the released data; the adapter enforces identity-disjoint holdout).
+  # P1-2: first smoke uses forget10 / retain15 with deterministic holdout.
   extras:
+    fiubench_protocol:
+      forget_bucket: forget10
+      train_bucket: retain15
+      eval_bucket: null              # set to retain5 or a held-out subset
+      eval_fraction: 0.20
+      eval_seed: 17
+    # Source-label → effective MIDP role (used by the adapter after protocol
+    # resolution; also consumed by cmd_build_qa DEFAULT_SOURCE_MAPPING).
     source_mapping:
-      forget: exclude
-      retain: train
-      evaluation: eval
+      forget1: exclude
+      forget5: exclude
+      forget10: exclude
+      retain5: train
+      retain15: train
+      forget: exclude                # backward-compat for golden fixture
+      retain: train                  # backward-compat for golden fixture
   multiview:
     enabled: false                   # fiubench_multiview is opt-in and versioned
     images_per_identity: [5, 10]

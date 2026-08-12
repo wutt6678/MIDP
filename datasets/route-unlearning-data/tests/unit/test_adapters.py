@@ -260,14 +260,18 @@ class TestFiubenchContract:
         )
         # qa0 carries all variants, qa1 only the original.
         assert len(samples) == 4
-        variants = {s.source_subset: s for s in samples}
-        assert variants["paraphrase"].question == "In which city does Ava live?"
-        assert variants["paraphrase"].answer_text == "She lives in Alpha City"
-        assert variants["perturbed"].answer_text == "Beta Town"
-        base_id = variants["original"].source_sample_id.replace(
+        # Variants are keyed by (source_subset, variant_index).
+        variants = {(s.source_subset, s.source_metadata.get("variant_index")): s
+                    for s in samples}
+        assert ("paraphrase", 0) in variants
+        assert ("perturbed", 0) in variants
+        assert variants[("paraphrase", 0)].question == "In which city does Ava live?"
+        assert variants[("paraphrase", 0)].answer_text == "She lives in Alpha City"
+        assert variants[("perturbed", 0)].answer_text == "Beta Town"
+        base_id = variants[("original", None)].source_sample_id.replace(
             ":qa:1:original", ":qa:0:original"
         )
-        assert variants["paraphrase"].source_metadata["base_qa_id"] == (
+        assert variants[("paraphrase", 0)].source_metadata["base_qa_id"] == (
             f"fiubench:{samples[0].identity_id}:qa:0:original"
         )
         assert base_id.startswith("fiubench:")
@@ -320,7 +324,7 @@ class TestFiubenchContract:
                 source_context=self._context(adapter, 1),
             )
         )
-        assert ava.split == "forget"
+        assert ava.split == "exclude"
         assert other.split == "unassigned"
 
     def test_missing_required_field_raises(self, tmp_path):
@@ -329,6 +333,452 @@ class TestFiubenchContract:
         del row["name"]
         with pytest.raises(AdapterError, match="identity_name"):
             list(adapter.to_samples(row, source_context=self._context(adapter, 0)))
+
+
+# --------------------------------------------------------------------------- #
+# FIUBench released-schema tests (P0-11) — mirrors actual released layout
+# --------------------------------------------------------------------------- #
+
+
+def _released_row(**overrides) -> dict:
+    """Build a row matching the actual released FIUBench schema.
+
+    Key differences from the legacy ``_fiubench_row``:
+    - ``unique_id`` carries the 8-digit SFHQ subject identifier;
+    - ``image_path`` uses the released ``SFHQ_pt1_<id>.jpg`` pattern;
+    - ``paraphrased_question`` is a list of 3 strings;
+    - ``perturbed_answer`` is a list of 3 strings;
+    - ``paraphrased_answer`` is a scalar string.
+    """
+    row = {
+        "image_path": "./dataset/SFHQ/SFHQ_pt1_00044363.jpg",
+        "name": "Synthetic Person",
+        "gender": "female",
+        "caption": "Synthetic profile caption for testing.",
+        "qa_list": [
+            {
+                "question": "What is the person's name?",
+                "paraphrased_question": [
+                    "What is their complete name?",
+                    "Can you state the person's name?",
+                    "What is the entire name of this individual?",
+                ],
+                "answer": "Synthetic Person.",
+                "paraphrased_answer": "The person's name is Synthetic Person.",
+                "perturbed_answer": [
+                    "Alex Example.",
+                    "Taylor Example.",
+                    "Jordan Example.",
+                ],
+                "keywords": ["Synthetic Person"],
+            },
+            {
+                "question": "Where does this person live?",
+                "paraphrased_question": [
+                    "What is their city of residence?",
+                    "Where is their home located?",
+                ],
+                "answer": "Testville.",
+                "paraphrased_answer": "They reside in Testville.",
+                "perturbed_answer": [
+                    "Fake City.",
+                    "Nowhere.",
+                ],
+                "keywords": ["city", "home"],
+            },
+        ],
+        "raw_data": {"city": "Testville", "occupation": "Tester"},
+        "unique_id": "00044363",
+    }
+    row.update(overrides)
+    return row
+
+
+def _released_adapter(
+    root: Path,
+    *,
+    split_data: dict | None = None,
+    include_paraphrases: bool = True,
+    include_perturbed: bool = True,
+    protocol: dict | None = None,
+) -> FiubenchAdapter:
+    """Create an adapter configured for the released FIUBench schema."""
+    import json
+
+    extras: dict = {
+        "source_file": "dataset/full.json",
+        "split_file": "dataset/split.json",
+        "include_paraphrases": include_paraphrases,
+        "include_perturbed": include_perturbed,
+        "source_mapping": {
+            "forget1": "exclude",
+            "forget5": "exclude",
+            "forget10": "exclude",
+            "retain5": "train",
+            "retain15": "train",
+        },
+    }
+    if protocol is not None:
+        extras["fiubench_protocol"] = protocol
+    adapter = FiubenchAdapter(
+        DataConfig(
+            name="fiubench",
+            root=str(root),
+            source_version="fiubench-8e12cdd",
+            extras=extras,
+        )
+    )
+    # Always write the split file (may be empty for tests that don't need it).
+    split_path = root / "dataset" / "split.json"
+    split_path.parent.mkdir(parents=True, exist_ok=True)
+    split_path.write_text(json.dumps(split_data if split_data is not None else {}))
+    return adapter
+
+
+class TestFiubenchReleasedSchema:
+    """P0-11: tests using a fixture that mirrors the released FIUBench layout.
+
+    The fixture uses ``unique_id``, list-valued ``paraphrased_question`` /
+    ``perturbed_answer``, and a split file with released bucket names
+    (``forget1``, ``forget5``, ``retain5``, ``retain15``) keyed by subject ID.
+    """
+
+    def _context(self, adapter, row_index: int):
+        return adapter.base_context(
+            source_file="dataset/full.json", source_row_index=row_index
+        )
+
+    # -- subject ID extraction (P0-4) ------------------------------------ #
+
+    def test_subject_id_from_unique_id_field(self):
+        row = _released_row()
+        assert FiubenchAdapter._source_subject_id(row) == "00044363"
+
+    def test_subject_id_from_image_path_fallback(self):
+        row = _released_row()
+        del row["unique_id"]
+        assert FiubenchAdapter._source_subject_id(row) == "00044363"
+
+    def test_subject_id_none_when_no_identifier(self):
+        row = _released_row(
+            image_path="images/unknown.png", unique_id=None
+        )
+        # Remove unique_id key entirely to simulate missing field.
+        del row["unique_id"]
+        assert FiubenchAdapter._source_subject_id(row) is None
+
+    # -- split membership (P0-5 / P0-6) ---------------------------------- #
+
+    def test_official_split_membership_by_subject_id(self, tmp_path):
+        split = {
+            "forget1": ["00044363"],
+            "forget5": ["00044363", "00000002"],
+            "retain5": ["00000003"],
+            "retain15": ["00000003", "00000004"],
+        }
+        adapter = _released_adapter(tmp_path, split_data=split)
+        sample = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        memberships = sample.source_metadata["official_memberships"]
+        assert set(memberships) == {"forget1", "forget5"}
+        assert sample.split == "exclude"
+
+    def test_overlapping_retain_buckets(self, tmp_path):
+        """retain5 ⊂ retain15 — both memberships must be preserved."""
+        split = {
+            "retain5": ["00000003"],
+            "retain15": ["00000003", "00000004"],
+        }
+        adapter = _released_adapter(tmp_path, split_data=split)
+        row = _released_row(
+            image_path="./dataset/SFHQ/SFHQ_pt1_00000003.jpg",
+            name="Retain Person",
+            unique_id="00000003",
+        )
+        sample = next(
+            adapter.to_samples(row, source_context=self._context(adapter, 0))
+        )
+        memberships = sample.source_metadata["official_memberships"]
+        assert set(memberships) == {"retain5", "retain15"}
+        assert sample.split == "train"
+
+    def test_unknown_subject_id_is_unassigned(self, tmp_path):
+        split = {"forget1": ["99999999"]}
+        adapter = _released_adapter(tmp_path, split_data=split)
+        sample = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        assert sample.split == "unassigned"
+        assert "official_memberships" not in sample.source_metadata
+
+    def test_protocol_bucket_resolution(self, tmp_path):
+        """Protocol forget_bucket takes priority over source_mapping fallback."""
+        split = {
+            "forget1": ["00044363"],
+            "forget10": ["00044363"],
+        }
+        proto = {
+            "forget_bucket": "forget10",
+            "train_bucket": "retain15",
+            "eval_bucket": None,
+        }
+        adapter = _released_adapter(
+            tmp_path, split_data=split, protocol=proto
+        )
+        sample = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        # forget10 is in memberships → protocol matches → exclude.
+        assert sample.split == "exclude"
+        assert set(sample.source_metadata["official_memberships"]) == {
+            "forget1",
+            "forget10",
+        }
+
+    # -- QA flattening (P0-7 / P0-8 / P0-9) ------------------------------ #
+
+    def test_original_qa_count(self, tmp_path):
+        """One original sample per QA item (no paraphrase/perturbed)."""
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=False, include_perturbed=False
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        assert len(samples) == 2  # 2 QA items, original only
+
+    def test_paraphrase_records_emitted(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=False
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        # qa0: 1 original + 3 paraphrases; qa1: 1 original + 2 paraphrases.
+        assert len(samples) == 1 + 3 + 1 + 2
+        paraphrases = [s for s in samples if s.source_metadata["variant_type"] == "paraphrase"]
+        assert len(paraphrases) == 5
+
+    def test_perturbed_records_emitted(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=False, include_perturbed=True
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        # qa0: 1 original + 3 perturbed; qa1: 1 original + 2 perturbed.
+        perturbed = [s for s in samples if s.source_metadata["variant_type"] == "perturbed"]
+        assert len(perturbed) == 5
+
+    def test_all_variants_with_full_extras(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=True
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        # qa0: 1 orig + 3 paraphrase + 3 perturbed = 7
+        # qa1: 1 orig + 2 paraphrase + 2 perturbed = 5
+        assert len(samples) == 12
+
+    # -- no list stringification (P0-7) ----------------------------------- #
+
+    def test_no_list_stringified_in_question(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=False
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        for s in samples:
+            assert not s.question.startswith("["), (
+                f"list was stringified: {s.question!r}"
+            )
+            assert "[" not in (s.question or "")
+
+    def test_no_list_stringified_in_answer(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=False, include_perturbed=True
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        for s in samples:
+            assert not s.answer_text.startswith("["), (
+                f"list was stringified: {s.answer_text!r}"
+            )
+
+    # -- deterministic IDs (P0-10) ---------------------------------------- #
+
+    def test_all_ids_unique(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=True
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        ids = [s.source_sample_id for s in samples]
+        assert len(ids) == len(set(ids)), "duplicate source_sample_id detected"
+
+    def test_deterministic_ids_across_runs(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=True
+        )
+        row = _released_row()
+        ctx = self._context(adapter, 0)
+        ids_a = [s.source_sample_id for s in adapter.to_samples(row, source_context=ctx)]
+        ids_b = [s.source_sample_id for s in adapter.to_samples(row, source_context=ctx)]
+        assert ids_a == ids_b
+
+    def test_variant_id_scheme(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=True
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        # Collect qa:0 variants.
+        qa0 = [s for s in samples if s.source_metadata["qa_index"] == 0]
+        types = {(s.source_metadata["variant_type"], s.source_metadata.get("variant_index"))
+                 for s in qa0}
+        assert ("original", None) in types
+        assert ("paraphrase", 0) in types
+        assert ("paraphrase", 1) in types
+        assert ("paraphrase", 2) in types
+        assert ("perturbed", 0) in types
+        assert ("perturbed", 1) in types
+        assert ("perturbed", 2) in types
+
+    # -- base QA relationship --------------------------------------------- #
+
+    def test_base_qa_id_on_paraphrase(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=False
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        identity_id = samples[0].identity_id
+        expected_base = f"fiubench:{identity_id}:qa:0:original"
+        paraphrases = [
+            s for s in samples
+            if s.source_metadata["variant_type"] == "paraphrase"
+            and s.source_metadata["qa_index"] == 0
+        ]
+        assert len(paraphrases) == 3
+        for p in paraphrases:
+            assert p.source_metadata["base_qa_id"] == expected_base
+
+    def test_base_qa_id_on_perturbed(self, tmp_path):
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=False, include_perturbed=True
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        identity_id = samples[0].identity_id
+        expected_base = f"fiubench:{identity_id}:qa:0:original"
+        perturbed = [
+            s for s in samples
+            if s.source_metadata["variant_type"] == "perturbed"
+            and s.source_metadata["qa_index"] == 0
+        ]
+        assert len(perturbed) == 3
+        for p in perturbed:
+            assert p.source_metadata["base_qa_id"] == expected_base
+
+    # -- image URI / source revision -------------------------------------- #
+
+    def test_image_uri_preserved(self, tmp_path):
+        adapter = _released_adapter(tmp_path)
+        sample = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        # The image path is kept in source_metadata for traceability.
+        assert sample.source_metadata["image_path"] is not None
+        assert "SFHQ_pt1_00044363" in sample.source_metadata["image_path"]
+
+    def test_source_revision_preserved(self, tmp_path):
+        adapter = _released_adapter(tmp_path)
+        sample = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        assert sample.provenance.source_version == "fiubench-8e12cdd"
+
+    def test_source_subject_id_in_metadata(self, tmp_path):
+        adapter = _released_adapter(tmp_path)
+        sample = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        assert sample.source_metadata["source_subject_id"] == "00044363"
+
+    # -- profile facts ----------------------------------------------------- #
+
+    def test_caption_and_raw_profile_preserved(self, tmp_path):
+        adapter = _released_adapter(tmp_path)
+        sample = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        facts = {f.fact_id: f.value for f in sample.profile_facts}
+        assert facts["fiubench_caption"] == "Synthetic profile caption for testing."
+        assert "Testville" in facts["fiubench_raw_profile"]
+
+    # -- paraphrased_answer pairing (P0-9) --------------------------------- #
+
+    def test_scalar_paraphrased_answer_reused(self, tmp_path):
+        """A scalar paraphrased_answer is reused for all paraphrased questions."""
+        adapter = _released_adapter(
+            tmp_path, include_paraphrases=True, include_perturbed=False
+        )
+        samples = list(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        qa0_paraphrases = [
+            s for s in samples
+            if s.source_metadata["variant_type"] == "paraphrase"
+            and s.source_metadata["qa_index"] == 0
+        ]
+        # The scalar answer is reused for all 3 paraphrased questions.
+        assert len(qa0_paraphrases) == 3
+        for p in qa0_paraphrases:
+            assert p.answer_text == "The person's name is Synthetic Person."
 
 
 # --------------------------------------------------------------------------- #

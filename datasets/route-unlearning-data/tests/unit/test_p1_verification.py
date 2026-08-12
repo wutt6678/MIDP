@@ -1201,6 +1201,79 @@ class TestAuditGateBuildItems:
         assert report["unreviewed_items"] == 0
 
 
+class TestP21BooleanNormalization:
+    """P2-1: audit_gate normalizes Pandas/NumPy booleans correctly.
+
+    ``numpy.bool_`` is NOT identical to Python ``True``/``False``, so
+    ``label_val is True`` can silently fail.  The fix normalizes via
+    ``bool()`` after a ``pd.isna()`` guard.
+    """
+
+    @staticmethod
+    def _make_parquet(tmp_path: Path, label_value) -> Path:
+        """Write a minimal long-format parquet with one row."""
+        import pandas as pd
+
+        df = pd.DataFrame([{
+            "identity_id": "id1",
+            "image_uri": "/tmp/img.png",
+            "attribute": "Smiling",
+            "score": 0.95,
+            "label": label_value,
+            "source": "source_model",
+            "confidence_band": "high",
+            "attribute_class": "expression",
+            "model_fingerprint": "qwen35-9b",
+            "prompt_id": "p1",
+        }])
+        pq = tmp_path / "testbench_celeba40_image_annotations.parquet"
+        df.to_parquet(pq)
+        return pq
+
+    def test_python_true(self, ag, tmp_path, capsys):
+        self._make_parquet(tmp_path, True)
+        pos, neg, cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert len(pos) == 1
+        assert len(neg) == 0
+        assert cov["positive_available"] == 1
+        assert cov["negative_available"] == 0
+
+    def test_python_false(self, ag, tmp_path, capsys):
+        self._make_parquet(tmp_path, False)
+        pos, neg, cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert len(pos) == 0
+        assert len(neg) == 1
+        assert cov["positive_available"] == 0
+        assert cov["negative_available"] == 1
+
+    def test_numpy_bool_true(self, ag, tmp_path, capsys):
+        import numpy as np
+        self._make_parquet(tmp_path, np.bool_(True))
+        pos, neg, _cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert len(pos) == 1
+        assert len(neg) == 0
+
+    def test_numpy_bool_false(self, ag, tmp_path, capsys):
+        import numpy as np
+        self._make_parquet(tmp_path, np.bool_(False))
+        pos, neg, _cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert len(pos) == 0
+        assert len(neg) == 1
+
+    def test_none_label(self, ag, tmp_path, capsys):
+        self._make_parquet(tmp_path, None)
+        pos, neg, _cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert len(pos) == 0
+        assert len(neg) == 0
+
+    def test_nan_label(self, ag, tmp_path, capsys):
+        import numpy as np
+        self._make_parquet(tmp_path, np.nan)
+        pos, neg, _cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert len(pos) == 0
+        assert len(neg) == 0
+
+
 # --------------------------------------------------------------------------- #
 # P3-28: Pre-generation gate
 # --------------------------------------------------------------------------- #
@@ -1429,4 +1502,175 @@ class TestSmokeManifestConformance:
         )
         assert rec.result == fv.CheckResult.PASS
         assert failures == []
+
+
+# --------------------------------------------------------------------------- #
+# P2-2: audit coverage reporting (available vs requested)
+# --------------------------------------------------------------------------- #
+
+
+class TestP22AuditCoverage:
+    """P2-2: audit_weak_labels returns coverage dict."""
+
+    def test_coverage_keys_present(self, ag, tmp_path, capsys):
+        """Coverage dict has the four required keys."""
+        _, _, cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert "positive_available" in cov
+        assert "negative_available" in cov
+        assert "positive_requested" in cov
+        assert "negative_requested" in cov
+
+    def test_coverage_when_parquet_missing(self, ag, tmp_path, capsys):
+        """When parquet is missing, available counts are zero."""
+        _, _, cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert cov["positive_available"] == 0
+        assert cov["negative_available"] == 0
+        assert cov["positive_requested"] == 20
+        assert cov["negative_requested"] == 20
+
+    def test_coverage_reflects_actual_counts(self, ag, tmp_path, capsys):
+        """Coverage reflects actual positive/negative counts."""
+        import pandas as pd
+        rows = [
+            {"identity_id": f"id{i}", "image_uri": f"/tmp/img{i}.png",
+             "attribute": "Smiling", "score": 0.9, "label": True,
+             "source": "source_model", "confidence_band": "high",
+             "attribute_class": "expression", "model_fingerprint": "q",
+             "prompt_id": f"p{i}"}
+            for i in range(5)
+        ]
+        df = pd.DataFrame(rows)
+        df.to_parquet(tmp_path / "testbench_celeba40_image_annotations.parquet")
+        pos, _neg, cov = ag.audit_weak_labels("testbench", output_dir=tmp_path)
+        assert cov["positive_available"] == 5
+        assert cov["negative_available"] == 0
+        assert len(pos) == 5
+
+
+# --------------------------------------------------------------------------- #
+# P2-3: uncertain items in audit report
+# --------------------------------------------------------------------------- #
+
+
+class TestP23UncertainItems:
+    """P2-3: uncertain items are counted but do NOT block the gate."""
+
+    def test_uncertain_counted_in_report(self, tmp_path, ag):
+        items = [
+            {"audit_id": "src-0001", "category": "source_mapping",
+             "sample_id": "s1", "identity_id": "id1", "image_uri": None,
+             "attribute_or_fact": "split=train",
+             "automatic_checks": {},
+             "review_outcome": "uncertain", "review_note": "needs review"},
+            {"audit_id": "src-0002", "category": "source_mapping",
+             "sample_id": "s2", "identity_id": "id2", "image_uri": None,
+             "attribute_or_fact": "split=forget",
+             "automatic_checks": {},
+             "review_outcome": "pass", "review_note": "ok"},
+        ]
+        path = ag._persist_audit_report("testbench", tmp_path, items, failures=[])
+        report = json.loads(path.read_text())
+        assert report["uncertain_items"] == 1
+        assert report["unreviewed_items"] == 0
+        # Gate passes: uncertain does NOT block.
+        assert report["gate_pass"] is True
+
+
+# --------------------------------------------------------------------------- #
+# P2-5: per-attribute balance reporting
+# --------------------------------------------------------------------------- #
+
+
+class TestP25AttributeBalance:
+    """P2-5: _report_attribute_balance returns per-attribute counts."""
+
+    def test_balance_empty(self, ag):
+        balance = ag._report_attribute_balance([], [], [])
+        assert balance == {}
+
+    def test_balance_with_labels(self, ag):
+        pos = [{"attribute": "Smiling"}, {"attribute": "Smiling"}, {"attribute": "Eyeglasses"}]
+        neg = [{"attribute": "Smiling"}]
+        balance = ag._report_attribute_balance(pos, neg, [])
+        assert balance["Smiling"]["positive"] == 2
+        assert balance["Smiling"]["negative"] == 1
+        assert balance["Eyeglasses"]["positive"] == 1
+        assert balance["Eyeglasses"]["negative"] == 0
+
+    def test_balance_with_pairs(self, ag):
+        pairs = [{"attribute": "Smiling"}, {"attribute": "Smiling"}]
+        balance = ag._report_attribute_balance([], [], pairs)
+        assert balance["Smiling"]["usable_pairs"] == 2
+
+
+# --------------------------------------------------------------------------- #
+# P2-6/7/8: provenance freeze check
+# --------------------------------------------------------------------------- #
+
+
+class TestP2678ProvenanceFreeze:
+    """P2-6/7/8: _check_provenance_frozen detects PENDING values."""
+
+    def test_no_pending_passes(self, ag, tmp_path, monkeypatch):
+        """No PENDING values → no errors."""
+        import yaml
+        cfg_dir = tmp_path / "configs" / "data"
+        cfg_dir.mkdir(parents=True)
+        cfg = {"data": {"name": "testbench", "immutable_revision": {
+            "git_commit_sha": "abc123",
+            "files": {"data.json": {"sha256": "deadbeef"}},
+        }}}
+        (cfg_dir / "testbench.yaml").write_text(yaml.dump(cfg))
+        # Patch REPO so _load_data_config finds our temp config.
+        monkeypatch.setattr(ag, "REPO", tmp_path)
+        errors = ag._check_provenance_frozen("testbench")
+        assert errors == []
+
+    def test_pending_detected(self, ag, tmp_path, monkeypatch):
+        """PENDING values are detected and reported."""
+        import yaml
+        cfg_dir = tmp_path / "configs" / "data"
+        cfg_dir.mkdir(parents=True)
+        cfg = {"data": {"name": "testbench", "immutable_revision": {
+            "git_commit_sha": "PENDING",
+            "files": {"data.json": {"sha256": "abc"}},
+        }}}
+        (cfg_dir / "testbench.yaml").write_text(yaml.dump(cfg))
+        monkeypatch.setattr(ag, "REPO", tmp_path)
+        errors = ag._check_provenance_frozen("testbench")
+        assert len(errors) == 1
+        assert "PENDING" in errors[0]
+        assert "git_commit_sha" in errors[0]
+
+
+# --------------------------------------------------------------------------- #
+# P2-10: evidence bundle archive
+# --------------------------------------------------------------------------- #
+
+
+class TestP210EvidenceBundle:
+    """P2-10: _archive_evidence_bundle writes a JSON evidence file."""
+
+    def test_bundle_created(self, ag, tmp_path):
+        items = [{"review_outcome": "pass"}]
+        path = ag._archive_evidence_bundle(
+            "testbench", None, tmp_path, items, [],
+        )
+        assert path is not None
+        assert path.exists()
+        bundle = json.loads(path.read_text())
+        assert bundle["dataset"] == "testbench"
+        assert "midp_git_sha" in bundle
+        assert "runtime" in bundle
+        assert "audit_total_items" in bundle
+        assert bundle["audit_total_items"] == 1
+
+    def test_bundle_includes_artifact_hashes(self, ag, tmp_path):
+        # Create a fake audit report.
+        (tmp_path / "testbench_manual_audit_report.json").write_text("{}")
+        path = ag._archive_evidence_bundle(
+            "testbench", None, tmp_path, [], [],
+        )
+        bundle = json.loads(path.read_text())
+        assert "testbench_manual_audit_report.json" in bundle["artifact_sha256"]
 

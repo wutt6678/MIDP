@@ -1,37 +1,45 @@
-"""FIUBench adapter (repair plan B13-B18).
+"""FIUBench adapter (repair plan B13-B18, fix-list P0-1–P0-10).
 
-Reads the released FIUBench profile-level schema instead of a guessed flat
-mapping. Each source row describes one fictitious identity:
+Reads the released FIUBench source files directly (Option A):
 
-    image_path   # identity image (relative to the source root)
-    name         # display name of the fictitious person
-    gender       # source profile metadata (NOT a CelebA visual label)
-    caption      # free-form identity caption
-    qa_list      # nested list of private-profile QA items
-    raw_data     # raw upstream profile payload
+    dataset/full.json   # JSONL, one record per identity (572 records)
+    dataset/split.json  # JSON object mapping bucket → [subject_ids]
 
-QA items carry ``question``, ``paraphrased_question``, ``answer``,
-``paraphrased_answer``, ``perturbed_answer`` and ``keywords`` (plan B13).
+Each source row describes one fictitious identity with the released schema:
+
+    image_path              # e.g. ./dataset/SFHQ/SFHQ_pt1_00044363.jpg
+    name                    # display name of the fictitious person
+    gender                  # source profile metadata (NOT a CelebA visual label)
+    caption                 # free-form identity caption
+    qa_list                 # nested list of 20 private-profile QA items
+    raw_data                # raw upstream profile payload
+    unique_id               # 8-digit SFHQ subject identifier (e.g. "00044363")
+
+QA items carry ``question``, ``paraphrased_question`` (list of 3),
+``answer``, ``paraphrased_answer`` (scalar or list), ``perturbed_answer``
+(list of 3) and ``keywords``.
 
 Flattening rules:
 
 - identity IDs are stable hashes of revision + source row index + image path
-  + display name, so re-reading the same pinned revision yields identical
-  identities (plan B14);
-- one canonical record per original QA item with ID
-  ``fiubench:<identity_id>:qa:<qa_index>:original``; non-empty paraphrase /
-  perturbed variants are emitted only when enabled via config extras and
-  carry explicit ``base_qa_id`` + ``variant_type`` metadata (plan B15);
-- caption and raw profile are preserved whole as profile facts; no LLM
-  parsing (plan B16);
-- split membership comes from the configured split file, never row order
-  (plan B17).
+  + display name (plan B14);
+- the released ``unique_id`` is preserved as ``source_subject_id`` in
+  ``source_metadata`` (P0-4);
+- split membership is resolved via ``source_subject_id`` against the released
+  split file, never by display name (P0-5);
+- overlapping bucket memberships are preserved as a list in
+  ``official_memberships`` (P0-6);
+- the configured ``fiubench_protocol`` maps released buckets to MIDP roles;
+- list-valued ``paraphrased_question`` / ``perturbed_answer`` are flattened
+  into per-variant canonical samples with deterministic IDs (P0-7–P0-10);
+- caption and raw profile are preserved whole as profile facts (plan B16).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -39,10 +47,35 @@ from typing import Any
 from ..schemas import CanonicalSample, ProfileFact
 from .base import AdapterError, BenchmarkAdapter, SourceContext, register_adapter
 
+# --------------------------------------------------------------------------- #
+# Helpers
+# --------------------------------------------------------------------------- #
+
+
+def _as_variant_list(value: Any) -> list[str]:
+    """Normalize a scalar-or-list field into a list of non-empty strings.
+
+    Handles the released FIUBench schema where ``paraphrased_question`` and
+    ``perturbed_answer`` are lists of strings, while ``paraphrased_answer``
+    may be a scalar string.  Returns an empty list for missing / blank values.
+    """
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value if v not in (None, "", ) and str(v).strip()]
+    return [str(value)]
+
+
+# --------------------------------------------------------------------------- #
+# Adapter
+# --------------------------------------------------------------------------- #
+
 
 @register_adapter("fiubench")
 class FiubenchAdapter(BenchmarkAdapter):
-    adapter_version = "fiubench-v2"
+    adapter_version = "fiubench-v3"
     required_fields = ("image_path", "name")
 
     def _default_field_map(self) -> dict[str, str]:
@@ -108,21 +141,104 @@ class FiubenchAdapter(BenchmarkAdapter):
     def iter_rows_with_context(
         self,
     ) -> Iterator[tuple[SourceContext, Mapping[str, Any]]]:
-        """Yield rows from the profile file only; the split file is metadata."""
-        source_path = self._source_path()
-        from .base import read_rows_from
+        """Yield rows from the profile file; the split file is metadata only.
 
-        rows = read_rows_from(source_path)
+        Handles both JSONL and JSON-array profile files regardless of the
+        file extension (the released ``dataset/full.json`` is JSONL despite
+        its ``.json`` extension).
+        """
+        source_path = self._source_path()
+        rows = self._read_profile_file(source_path)
         for index, row in enumerate(rows):
             context = self.base_context(
                 source_file=str(source_path), source_row_index=index
             )
             yield context, row
 
-    # -- official splits (plan B17) --------------------------------------- #
+    @staticmethod
+    def _read_profile_file(path: Path) -> list[dict[str, Any]]:
+        """Read a profile file that may be JSONL or JSON-array.
 
-    def _split_lookup(self) -> dict[str, str]:
-        """Map identity display name -> split bucket from the split file."""
+        The released FIUBench ``dataset/full.json`` is JSONL despite having a
+        ``.json`` extension.  Try JSON-array first; on failure fall back to
+        line-delimited JSON.
+        """
+        with open(path) as fh:
+            text = fh.read().strip()
+        if not text:
+            return []
+        # Try JSON array / object first.
+        try:
+            data = json.loads(text)
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                return [data]
+        except json.JSONDecodeError:
+            pass
+        # Fall back to JSONL (one JSON object per line).
+        rows: list[dict[str, Any]] = []
+        for lineno, line in enumerate(text.splitlines(), 1):
+            line = line.strip()
+            if line:
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError as exc:
+                    raise AdapterError(
+                        f"[fiubench] invalid JSON at line {lineno} in {path}: {exc}"
+                    ) from exc
+        return rows
+
+    # -- source subject ID (P0-4) ---------------------------------------- #
+
+    @staticmethod
+    def _source_subject_id(row: Mapping[str, Any]) -> str | None:
+        """Extract the released FIUBench / SFHQ subject identifier.
+
+        Prefers the explicit ``unique_id`` field; falls back to parsing the
+        8-digit trailing number from ``image_path`` (e.g.
+        ``SFHQ_pt1_00044363`` → ``00044363``).  Returns ``None`` when neither
+        is available (e.g. legacy golden fixture rows).
+        """
+        uid = row.get("unique_id")
+        if uid is not None and str(uid).strip():
+            return str(uid).strip()
+        image_path = row.get("image_path") or ""
+        stem = Path(str(image_path)).stem
+        match = re.search(r"(\d{8})$", stem)
+        if match:
+            return match.group(1)
+        return None
+
+    # -- protocol (P0-3 / P1-2) ------------------------------------------ #
+
+    def _protocol(self) -> dict[str, Any]:
+        """Return the ``fiubench_protocol`` block from config extras."""
+        proto = self.config.extras.get("fiubench_protocol")
+        if proto and isinstance(proto, dict):
+            return dict(proto)
+        return {}
+
+    def _source_mapping(self) -> dict[str, str]:
+        """Return the ``source_mapping`` override from config extras."""
+        mapping = self.config.extras.get("source_mapping")
+        if mapping and isinstance(mapping, dict):
+            return dict(mapping)
+        return {}
+
+    # -- official splits (P0-5 / P0-6) ----------------------------------- #
+
+    def _split_lookup(self) -> dict[str, list[str]]:
+        """Map source subject ID → list of official FIUBench bucket names.
+
+        Reads the released ``split.json`` format: a single JSON object whose
+        keys are bucket names (``forget1``, ``forget5``, …) and whose values
+        are lists of subject-ID strings.
+
+        Falls back to name-based lookup for legacy fixtures whose split file
+        uses the old ``forget / retain / evaluation`` vocabulary with display
+        names instead of subject IDs.
+        """
         split_path = self._split_path()
         if split_path is None:
             return {}
@@ -132,18 +248,77 @@ class FiubenchAdapter(BenchmarkAdapter):
         if len(payload) != 1 or not isinstance(payload[0], Mapping):
             raise AdapterError(
                 f"[fiubench] split file {split_path} must hold one JSON "
-                "object mapping split bucket -> identity names/IDs"
+                "object mapping split bucket → identity names/IDs"
             )
-        lookup: dict[str, str] = {}
-        for bucket, ids in payload[0].items():
+        raw = payload[0]
+        # Detect legacy fixture format (forget/retain/evaluation with names).
+        legacy_keys = {"forget", "retain", "evaluation"}
+        if set(raw.keys()) & legacy_keys:
+            return self._legacy_split_lookup(raw)
+
+        lookup: dict[str, list[str]] = {}
+        for bucket, ids in raw.items():
             if not isinstance(ids, (list, tuple)):
                 raise AdapterError(
                     f"[fiubench] split bucket {bucket!r} must map to a list "
-                    "of identity names/IDs"
+                    "of subject IDs"
                 )
-            for identity in ids:
-                lookup[str(identity)] = str(bucket)
+            for sid in ids:
+                sid_str = str(sid).strip()
+                if sid_str:
+                    lookup.setdefault(sid_str, []).append(str(bucket))
         return lookup
+
+    @staticmethod
+    def _legacy_split_lookup(raw: Mapping) -> dict[str, list[str]]:
+        """Build a *name*-keyed lookup from a legacy split file.
+
+        The returned dict uses ``"name:<display name>"`` sentinel keys so the
+        caller can distinguish legacy lookups from subject-ID lookups.
+        """
+        lookup: dict[str, list[str]] = {}
+        for bucket, names in raw.items():
+            if not isinstance(names, (list, tuple)):
+                continue
+            for name in names:
+                key = f"name:{name}"
+                lookup.setdefault(key, []).append(str(bucket))
+        return lookup
+
+    def _resolve_split(
+        self,
+        row: Mapping[str, Any],
+        memberships: list[str],
+    ) -> str:
+        """Resolve official bucket memberships to an effective MIDP split.
+
+        Uses the configured ``fiubench_protocol`` when available; falls back
+        to the ``source_mapping`` for legacy fixtures.
+        """
+        protocol = self._protocol()
+        mapping = self._source_mapping()
+
+        if protocol:
+            forget_bucket = protocol.get("forget_bucket")
+            train_bucket = protocol.get("train_bucket")
+            eval_bucket = protocol.get("eval_bucket")
+            if forget_bucket and forget_bucket in memberships:
+                return mapping.get(forget_bucket, "exclude")
+            if eval_bucket and eval_bucket in memberships:
+                return mapping.get(eval_bucket, "eval")
+            if train_bucket and train_bucket in memberships:
+                return mapping.get(train_bucket, "train")
+        # Fallback: resolve the first membership through the source mapping.
+        for bucket in memberships:
+            if bucket in mapping:
+                return mapping[bucket]
+        # Legacy fixture fallback: map well-known bucket names to MIDP roles
+        # when no explicit source_mapping is configured (golden CI fixture).
+        _legacy = {"forget": "exclude", "retain": "train", "evaluation": "eval"}
+        for bucket in memberships:
+            if bucket in _legacy:
+                return _legacy[bucket]
+        return "unassigned"
 
     # -- identity normalization (plan B14) -------------------------------- #
 
@@ -216,7 +391,7 @@ class FiubenchAdapter(BenchmarkAdapter):
         )
         return facts
 
-    # -- qa_list flattening (plan B15) ------------------------------------ #
+    # -- qa_list flattening (plan B15, P0-7–P0-10) ----------------------- #
 
     def _qa_sample(
         self,
@@ -230,16 +405,23 @@ class FiubenchAdapter(BenchmarkAdapter):
         qa_index: int,
         item: Mapping[str, Any],
         variant_type: str,
+        variant_index: int | None,
         base_qa_id: str | None,
         question: Any,
         answer: Any,
         context: SourceContext,
+        source_subject_id: str | None = None,
+        official_memberships: list[str] | None = None,
     ) -> CanonicalSample:
         if question in (None, "") and variant_type == "original":
             raise AdapterError(
                 f"[fiubench] {identity_id} qa_list[{qa_index}] has no question"
             )
-        suffix = variant_type if variant_type != "original" else "original"
+        # Build deterministic source_sample_id (P0-10).
+        if variant_index is not None:
+            suffix = f"{variant_type}:{variant_index}"
+        else:
+            suffix = variant_type
         source_id = f"fiubench:{identity_id}:qa:{qa_index}:{suffix}"
         metadata = self.context_metadata(context)
         metadata.update(
@@ -250,9 +432,9 @@ class FiubenchAdapter(BenchmarkAdapter):
                 "variant_type": variant_type,
             }
         )
+        if variant_index is not None:
+            metadata["variant_index"] = variant_index
         if gender not in (None, ""):
-            # Source profile metadata only — never a CelebA visual label
-            # (plan B14).
             metadata["gender"] = gender
         if base_qa_id is not None:
             metadata["base_qa_id"] = base_qa_id
@@ -262,6 +444,10 @@ class FiubenchAdapter(BenchmarkAdapter):
             metadata["original_question"] = item["question"]
         if item.get("answer") is not None:
             metadata["original_answer"] = item["answer"]
+        if source_subject_id is not None:
+            metadata["source_subject_id"] = source_subject_id
+        if official_memberships is not None:
+            metadata["official_memberships"] = official_memberships
         return CanonicalSample(
             benchmark="fiubench",
             source_sample_id=source_id,
@@ -283,6 +469,8 @@ class FiubenchAdapter(BenchmarkAdapter):
             source_metadata=metadata,
         ).validate()
 
+    # -- main entry point ------------------------------------------------- #
+
     def to_samples(
         self,
         row: Mapping[str, Any],
@@ -298,9 +486,35 @@ class FiubenchAdapter(BenchmarkAdapter):
             self.source_field(row, "image_path", required=False)
         )
         facts = self._profile_facts(row, identity_name)
-        split_lookup = self._split_lookup()
-        split = split_lookup.get(identity_name or identity_id, "unassigned")
 
+        # -- split resolution (P0-4 / P0-5 / P0-6) ----------------------- #
+        subject_id = self._source_subject_id(row)
+        split_lookup = self._split_lookup()
+        official_memberships: list[str] = []
+        if subject_id is not None and subject_id in split_lookup:
+            official_memberships = split_lookup[subject_id]
+        elif subject_id is None and identity_name:
+            # Legacy fixture: fall back to name-based lookup.
+            legacy_key = f"name:{identity_name}"
+            official_memberships = split_lookup.get(legacy_key, [])
+        split = (
+            self._resolve_split(row, official_memberships)
+            if official_memberships
+            else "unassigned"
+        )
+        # P1-5: never silently hash an official FIUBench identity.
+        if (
+            official_memberships
+            and subject_id is not None
+            and split == "unassigned"
+        ):
+            raise AdapterError(
+                f"[fiubench] subject ID {subject_id} has official memberships "
+                f"{official_memberships} but no protocol/mapping rule resolves "
+                f"them to a MIDP role; refusing to silently hash (P1-5)"
+            )
+
+        # -- qa_list expansion (P0-7–P0-10) -------------------------------- #
         qa_list = self.source_field(row, "qa_list", required=False) or []
         if not isinstance(qa_list, list):
             raise AdapterError(
@@ -323,34 +537,54 @@ class FiubenchAdapter(BenchmarkAdapter):
                 "qa_index": qa_index,
                 "item": item,
                 "context": source_context,
+                "source_subject_id": subject_id,
+                "official_memberships": official_memberships or None,
             }
             base_qa_id = f"fiubench:{identity_id}:qa:{qa_index}:original"
+
+            # 1. Original variant.
             yield self._qa_sample(
                 **base_kwargs,
                 variant_type="original",
+                variant_index=None,
                 base_qa_id=None,
                 question=item.get("question"),
                 answer=item.get("answer"),
             )
-            if self.include_paraphrases and item.get("paraphrased_question") not in (
-                None,
-                "",
-            ):
-                yield self._qa_sample(
-                    **base_kwargs,
-                    variant_type="paraphrase",
-                    base_qa_id=base_qa_id,
-                    question=item.get("paraphrased_question"),
-                    answer=item.get("paraphrased_answer"),
-                )
-            if self.include_perturbed and item.get("perturbed_answer") not in (
-                None,
-                "",
-            ):
-                yield self._qa_sample(
-                    **base_kwargs,
-                    variant_type="perturbed",
-                    base_qa_id=base_qa_id,
-                    question=item.get("question"),
-                    answer=item.get("perturbed_answer"),
-                )
+
+            # 2. Paraphrase variants (P0-7 / P0-9).
+            if self.include_paraphrases:
+                pq_list = _as_variant_list(item.get("paraphrased_question"))
+                pa_list = _as_variant_list(item.get("paraphrased_answer"))
+                for vi, pq in enumerate(pq_list):
+                    # Pair paraphrased question with the corresponding
+                    # paraphrased answer by index; reuse the last available
+                    # answer when counts differ (P0-9).
+                    pa = (
+                        pa_list[vi]
+                        if vi < len(pa_list)
+                        else pa_list[-1]
+                        if pa_list
+                        else item.get("answer")
+                    )
+                    yield self._qa_sample(
+                        **base_kwargs,
+                        variant_type="paraphrase",
+                        variant_index=vi,
+                        base_qa_id=base_qa_id,
+                        question=pq,
+                        answer=pa,
+                    )
+
+            # 3. Perturbed variants (P0-8).
+            if self.include_perturbed:
+                pert_list = _as_variant_list(item.get("perturbed_answer"))
+                for vi, pert in enumerate(pert_list):
+                    yield self._qa_sample(
+                        **base_kwargs,
+                        variant_type="perturbed",
+                        variant_index=vi,
+                        base_qa_id=base_qa_id,
+                        question=item.get("question"),
+                        answer=pert,
+                    )
