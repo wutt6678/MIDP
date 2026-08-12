@@ -39,6 +39,9 @@ data:
   root: ${FIUBENCH_ROOT}
   source_version: "fiubench-8e12cdd"
   compute_checksums: false
+  # P0-3 fix: use the protocol-free golden data config so the legacy
+  # fixture's forget/retain/evaluation buckets resolve through source_mapping.
+  data_config_path: configs/data/fiubench_golden.yaml
 
 prompts:
   binary: configs/prompts/celeba_binary_v1.yaml

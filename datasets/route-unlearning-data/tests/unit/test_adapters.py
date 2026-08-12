@@ -303,10 +303,44 @@ class TestFiubenchContract:
             )
         )
         facts = {f.fact_id: f.value for f in sample.profile_facts}
-        assert facts == {
-            "fiubench_caption": "Ava is a synthetic test persona.",
-            "fiubench_raw_profile": '{"city": "Alpha City"}',
-        }
+        # P2-7: original QA samples also carry a structured QA fact.
+        assert facts["fiubench_caption"] == "Ava is a synthetic test persona."
+        assert facts["fiubench_raw_profile"] == '{"city": "Alpha City"}'
+        assert facts["fiubench_qa_00"] == "Alpha City"
+
+    def test_qa_fact_provenance_fields(self, tmp_path):
+        """P2-7/P2-11: each original QA sample carries a structured fact
+        with full provenance traceability."""
+        adapter = _fiubench_adapter(tmp_path)
+        samples = list(
+            adapter.to_samples(
+                _fiubench_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        # First sample (qa_index=0) should have fiubench_qa_00.
+        qa_facts = [f for f in samples[0].profile_facts if f.source_qa_index is not None]
+        assert len(qa_facts) == 1
+        fact = qa_facts[0]
+        assert fact.fact_id == "fiubench_qa_00"
+        assert fact.source_qa_index == 0
+        assert fact.original_question == "Where does Ava live?"
+        assert fact.original_answer == "Alpha City"
+        assert fact.question_variant == "canonical"
+        assert fact.privacy_class == "private_profile"
+
+    def test_perturbed_variants_have_no_qa_fact(self, tmp_path):
+        """P2-10: perturbed answers must never become ground-truth facts."""
+        adapter = _fiubench_adapter(tmp_path, include_perturbed=True)
+        samples = list(
+            adapter.to_samples(
+                _fiubench_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        perturbed = [s for s in samples if s.source_subset == "perturbed"]
+        assert len(perturbed) > 0
+        for s in perturbed:
+            qa_facts = [f for f in s.profile_facts if f.source_qa_index is not None]
+            assert len(qa_facts) == 0, "perturbed variant must not carry a QA fact"
 
     def test_split_membership_from_split_file(self, tmp_path):
         import json

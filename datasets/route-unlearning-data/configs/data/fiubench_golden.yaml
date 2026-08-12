@@ -1,0 +1,43 @@
+# FIUBench golden CI fixture data config.
+#
+# This is a protocol-free variant of configs/data/fiubench.yaml used by the
+# golden E2E test (configs/runs/golden_fiubench.yaml).  The golden fixture
+# uses legacy bucket names (forget / retain / evaluation) that are resolved
+# through the source_mapping, NOT through the fiubench_protocol.
+#
+# The production fiubench.yaml uses the fiubench_protocol block as the SOLE
+# authority for experiment roles.  The golden test exercises the legacy
+# fallback path instead.
+data:
+  name: fiubench
+  hf_dataset_id: null
+  hf_config_name: null
+  hf_revision: fiubench-1.0
+  local_root: ${FIUBENCH_ROOT}
+  source_version: fiubench-8e12cdd
+  immutable_revision:
+    git_commit_sha: 8e12cddc431eafd129c275d46a3d882474cfcf61
+    files:
+      dataset/full.json:
+        sha256: f2f04cf7e21a3170b4c1541b5e650c9db3f92ff6f7833ea3f9e19887787bff72
+      dataset/split.json:
+        sha256: f576e63909babf5105f004b2230154a4d46e6b37160d7554c3434b6693a7ce4c
+  source_file: dataset/full.json
+  split_file: dataset/split.json
+  images_root: .
+  include_paraphrases: true
+  include_perturbed: true
+  adapter_version: fiubench-v3
+  reuse_official_splits: true
+  include_attack_templates: true
+  domain_shift_audit_images: 100
+  # NO fiubench_protocol block — the golden fixture uses legacy bucket names
+  # (forget / retain / evaluation) resolved through source_mapping.
+  extras:
+    source_mapping:
+      forget: exclude
+      retain: train
+      evaluation: eval
+  multiview:
+    enabled: false
+    images_per_identity: [5, 10]

@@ -128,7 +128,23 @@ def _dataset_dir(args, run_cfg: RunConfig, dataset: str) -> Path:
 
 
 def _data_config_for(dataset: str, run_cfg: RunConfig):
-    """Resolve ``configs/data/<dataset>.yaml`` relative to the run config."""
+    """Resolve ``configs/data/<dataset>.yaml`` relative to the run config.
+
+    When the run config's data section sets ``data_config_path``, that
+    explicit path is used instead of the default resolution.  This lets
+    golden CI fixtures use a protocol-free data config (P0-3 fix).
+    """
+    # Explicit override from run config.
+    override = getattr(run_cfg.data, "data_config_path", None)
+    if override:
+        override_p = Path(override)
+        if not override_p.is_absolute():
+            # Resolve relative to the project root (package parent).
+            base = Path(__file__).resolve().parents[2]
+            override_p = (base / override_p).resolve()
+        if override_p.exists():
+            return load_data_config(override_p)
+        raise ConfigError(f"data_config_path not found: {override_p}")
     assert run_cfg.source_path is not None
     candidate = run_cfg.source_path.parent.parent / "data" / f"{_benchmark_of(dataset)}.yaml"
     if not candidate.exists():
@@ -171,12 +187,60 @@ def _get_source_sample_id(sample) -> str | None:
     return getattr(sample, "source_sample_id", None)
 
 
+def _compute_source_hashes(data_cfg) -> dict[str, Any]:
+    """P1-4: compute actual source hashes for manifest recording/verification.
+
+    Returns a dict with:
+      - git_commit_sha: actual Git SHA from the source root (or error string)
+      - files: {rel_path: sha256} for each file in immutable_revision.files
+    """
+    import hashlib as _hashlib
+    import subprocess as _sp
+
+    result: dict[str, Any] = {}
+    try:
+        source_root = data_cfg.require_root()
+    except Exception:
+        return result
+
+    # Git commit SHA.
+    try:
+        actual_git = _sp.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(source_root),
+            stderr=_sp.DEVNULL,
+        ).decode().strip()
+        result["git_commit_sha"] = actual_git
+    except Exception:
+        pass
+
+    # File hashes from immutable_revision.files.
+    immutable = data_cfg.extras.get("immutable_revision")
+    if immutable and isinstance(immutable, dict):
+        files_block = immutable.get("files")
+        if files_block and isinstance(files_block, dict):
+            file_hashes: dict[str, str] = {}
+            for rel_path in files_block:
+                fpath = source_root / rel_path
+                if fpath.exists():
+                    try:
+                        file_hashes[rel_path] = _hashlib.sha256(
+                            fpath.read_bytes()
+                        ).hexdigest()
+                    except Exception:
+                        pass
+            if file_hashes:
+                result["files"] = file_hashes
+    return result
+
+
 def _filter_by_smoke_manifest(samples, args) -> list:
     """P1-5: filter samples by --smoke-manifest allowlist.
 
     Works with both raw dicts (annotation stage) and CanonicalSample objects
     (downstream stages).  Fails closed on empty manifests (P1-3) and unknown
-    sample IDs (P1-4).
+    sample IDs (P1-4).  Also verifies protocol SHA (P1-3) and source hashes
+    (P1-4) against the current config.
     """
     smoke_manifest_path = getattr(args, "smoke_manifest", None)
     if not smoke_manifest_path:
@@ -200,6 +264,54 @@ def _filter_by_smoke_manifest(samples, args) -> list:
             "Refusing to fall back to full-data annotation."
         )
 
+    # P1-3: verify protocol SHA match against current config.
+    manifest_proto_sha = sm_data.get("protocol_sha256")
+    if manifest_proto_sha and config_path:
+        try:
+            cur_cfg = _data_config_for(args.dataset, load_run_config(config_path))
+            cur_proto = cur_cfg.extras.get("fiubench_protocol")
+            if cur_proto and isinstance(cur_proto, dict):
+                from .data.split_mapping import compute_protocol_sha256
+                cur_sha, _ = compute_protocol_sha256(cur_proto)
+                if cur_sha != manifest_proto_sha:
+                    raise ConfigError(
+                        f"P1-3: protocol SHA mismatch: manifest={manifest_proto_sha}, "
+                        f"current config={cur_sha}. The smoke manifest was created under "
+                        "a different protocol; regenerate it."
+                    )
+        except ConfigError:
+            raise
+        except Exception as exc:
+            log.warning("P1-3: could not verify protocol SHA: %s", exc)
+
+    # P1-4: verify source hashes against current actual source.
+    manifest_src = sm_data.get("source_hashes")
+    if manifest_src and config_path:
+        try:
+            cur_cfg = _data_config_for(args.dataset, load_run_config(config_path))
+            actual = _compute_source_hashes(cur_cfg)
+            # Git SHA check.
+            m_git = manifest_src.get("git_commit_sha")
+            a_git = actual.get("git_commit_sha")
+            if m_git and a_git and m_git != a_git:
+                raise ConfigError(
+                    f"P1-4: source Git SHA mismatch: manifest={m_git}, actual={a_git}"
+                )
+            # File hash check.
+            m_files = manifest_src.get("files", {})
+            a_files = actual.get("files", {})
+            for _fp, _mh in m_files.items():
+                _ah = a_files.get(_fp)
+                if _ah and _ah != _mh:
+                    raise ConfigError(
+                        f"P1-4: source file SHA mismatch for '{_fp}': "
+                        f"manifest={_mh}, actual={_ah}"
+                    )
+        except ConfigError:
+            raise
+        except Exception as exc:
+            log.warning("P1-4: could not verify source hashes: %s", exc)
+
     # P1-4: fail on unknown sample IDs (do not silently drop).
     actual_ids = {_get_source_sample_id(s) for s in samples}
     unknown = allowed_ids - actual_ids
@@ -216,6 +328,22 @@ def _filter_by_smoke_manifest(samples, args) -> list:
         len(filtered), before, manifest_p.name,
     )
     return filtered
+
+
+def _filter_out_of_protocol(samples) -> list:
+    """P0-3: remove out_of_protocol identities from downstream processing.
+
+    Official FIUBench identities not selected by the configured experiment
+    must not enter QA generation, route probes, splits, or export.
+    Works with both CanonicalSample objects and raw dicts.
+    """
+    result = []
+    for s in samples:
+        split = s.split if hasattr(s, "split") else s.get("split", "")
+        if split == "out_of_protocol":
+            continue
+        result.append(s)
+    return result
 
 
 def _load_image(uri: str | None, base: Path | None = None):
@@ -983,6 +1111,9 @@ def cmd_source_inspect(args) -> int:
     fiu_qa_perturbed = 0
     fiu_profile_fact_count = 0
     fiu_identities_with_images: set[str] = set()
+    # P1-1: per-identity role tracking for protocol derivation report.
+    fiu_identity_roles: dict[str, str] = {}  # identity_id → effective split
+    fiu_subject_ids_by_role: dict[str, set[str]] = {}  # role → {source_subject_ids}
     # P1-10: duplicate / collision tracking.
     seen_source_sample_ids: dict[str, int] = {}
     seen_qa_variant_ids: dict[str, int] = {}
@@ -1063,6 +1194,12 @@ def cmd_source_inspect(args) -> int:
                 fiu_effective_split_counts[eff] = (
                     fiu_effective_split_counts.get(eff, 0) + 1
                 )
+                # P1-1: track per-identity role and per-role subject IDs.
+                iid = sample.identity_id
+                if iid and iid not in fiu_identity_roles:
+                    fiu_identity_roles[iid] = eff
+                if sid:
+                    fiu_subject_ids_by_role.setdefault(eff, set()).add(str(sid))
                 # Conflicting split role: same subject ID mapped to
                 # different effective splits via different rows.
                 if sid:
@@ -1127,8 +1264,53 @@ def cmd_source_inspect(args) -> int:
                 "perturbed": fiu_qa_perturbed,
             },
             "image_bearing_identities": len(fiu_identities_with_images),
+            "missing_image_identities": max(0, len(fiu_subject_ids) - len(fiu_identities_with_images)),
             "profile_fact_count": fiu_profile_fact_count,
         }
+        # P1-1: protocol derivation report.
+        _exclude_ids = fiu_subject_ids_by_role.get("exclude", set())
+        _train_ids = fiu_subject_ids_by_role.get("train", set())
+        _eval_ids = fiu_subject_ids_by_role.get("eval", set())
+        _oop_ids = fiu_subject_ids_by_role.get("out_of_protocol", set())
+        _retain_pool = _train_ids | _eval_ids
+        _disjointness_errors: list[str] = []
+        if _exclude_ids & _train_ids:
+            _disjointness_errors.append(
+                f"forget ∩ train = {_exclude_ids & _train_ids}"
+            )
+        if _exclude_ids & _eval_ids:
+            _disjointness_errors.append(
+                f"forget ∩ eval = {_exclude_ids & _eval_ids}"
+            )
+        if _train_ids & _eval_ids:
+            _disjointness_errors.append(
+                f"train ∩ eval = {_train_ids & _eval_ids}"
+            )
+        _protocol_derivation = {
+            "protocol_name": (cfg.extras.get("fiubench_protocol") or {}).get("name"),
+            "source_rows": n_rows,
+            "source_identities": len(fiu_subject_ids),
+            "forget_bucket": (cfg.extras.get("fiubench_protocol") or {}).get("forget_bucket"),
+            "forget_identities": len(_exclude_ids),
+            "retain_pool": (cfg.extras.get("fiubench_protocol") or {}).get("train_bucket"),
+            "retain_pool_identities": len(_retain_pool),
+            "train_identities": len(_train_ids),
+            "eval_identities": len(_eval_ids),
+            "out_of_protocol_identities": len(_oop_ids),
+            "disjointness_errors": _disjointness_errors,
+        }
+        report["protocol_derivation"] = _protocol_derivation
+        if _disjointness_errors:
+            mapping_errors.extend(
+                f"protocol disjoint: {e}" for e in _disjointness_errors
+            )
+        # P1-2: protocol SHA-256 fingerprint.
+        _proto_cfg = cfg.extras.get("fiubench_protocol")
+        if _proto_cfg and isinstance(_proto_cfg, dict):
+            from .data.split_mapping import compute_protocol_sha256
+            _sha, _canonical = compute_protocol_sha256(_proto_cfg)
+            report["protocol_sha256"] = _sha
+            report["protocol_canonical"] = _canonical
     # Persist the inspection snapshot for schema-drift checks (repair plan D2).
     snapshot_path = Path(args.snapshot) if args.snapshot else (
         REPO_ROOT / "outputs" / "source_inspection" / args.dataset / f"{Path(args.config).stem}.json"
@@ -1167,6 +1349,16 @@ def cmd_source_make_smoke_manifest(args) -> int:
 
     # Convert to dicts for selection logic.
     samples = [s.to_dict() if hasattr(s, "to_dict") else s for s in raw_samples]
+
+    # P0-3 / P1-7: filter out out_of_protocol identities before smoke
+    # selection.  Only identities with effective roles exclude/train/eval
+    # may participate in the smoke test.
+    samples = [s for s in samples if s.get("split") != "out_of_protocol"]
+    if not samples:
+        raise ConfigError(
+            f"All samples are out_of_protocol for {args.dataset}; "
+            "check the fiubench_protocol configuration"
+        )
 
     # Resolve splits for each sample.
     source_mapping = load_source_mapping(data_cfg)
@@ -1256,10 +1448,14 @@ def cmd_source_make_smoke_manifest(args) -> int:
         required_roles = set()
         if proto.get("forget_bucket"):
             required_roles.add(source_mapping.get(proto["forget_bucket"], "exclude"))
-        if proto.get("train_bucket"):
-            required_roles.add(source_mapping.get(proto["train_bucket"], "train"))
         if proto.get("eval_bucket"):
             required_roles.add(source_mapping.get(proto["eval_bucket"], "eval"))
+        elif proto.get("train_bucket") and proto.get("eval_fraction", 0) > 0:
+            # P1-8: holdout creates both train and eval roles.
+            required_roles.add("train")
+            required_roles.add("eval")
+        elif proto.get("train_bucket"):
+            required_roles.add(source_mapping.get(proto["train_bucket"], "train"))
         missing_roles = required_roles - set(role_identities.keys())
         protocol_coverage = {
             "role_identity_counts": {
@@ -1323,6 +1519,182 @@ def cmd_source_make_smoke_manifest(args) -> int:
     if image_errors:
         warnings_list.extend(image_errors)
 
+    # ------------------------------------------------------------------ #
+    # P0-11 / P0-12: strict-mode fail-closed validation.
+    # ------------------------------------------------------------------ #
+    strict = getattr(args, "strict", True)
+    fatal_errors: list[str] = []
+    if strict:
+        # Missing required protocol roles.
+        if protocol_coverage and protocol_coverage.get("missing_roles"):
+            for _role in protocol_coverage["missing_roles"]:
+                fatal_errors.append(
+                    f"P0-11: missing required protocol role '{_role}'"
+                )
+        # Selected-image validation (P0-12).
+        for _ie in image_errors:
+            fatal_errors.append(f"P0-12: {_ie}")
+        # Insufficient identities.
+        if len(identity_ids) < min_identities:
+            fatal_errors.append(
+                f"P0-11: only {len(identity_ids)} identities selected, "
+                f"need >= {min_identities}"
+            )
+        # No image-bearing identities.
+        if len(image_bearing) < max(1, min_image_bearing):
+            fatal_errors.append(
+                f"P0-11: only {len(image_bearing)} image-bearing identities, "
+                f"need >= {min_image_bearing}"
+            )
+        # No profile facts.
+        if not has_fact:
+            fatal_errors.append(
+                "P0-11: no profile facts in selected samples"
+            )
+        # Duplicate source IDs (shouldn't happen, but guard anyway).
+        _all_sids = [s.get("source_sample_id", "") for s in selected]
+        if len(_all_sids) != len(set(_all_sids)):
+            fatal_errors.append("P0-11: duplicate source_sample_id in selection")
+
+    # ------------------------------------------------------------------ #
+    # P2-12 / P2-13: audit status validation (strict mode).
+    # ------------------------------------------------------------------ #
+    pilot_mode = getattr(args, "pilot", False)
+    audit_report: dict[str, Any] = {}
+    if pilot_mode or strict:
+        from .build.audit import validate_audit_statuses
+        # Collect audit statuses from config extras if declared.
+        _audit_cfg = data_cfg.extras.get("manual_audit")
+        _audit_statuses: list[str] = []
+        if _audit_cfg and isinstance(_audit_cfg, dict):
+            _audit_statuses = list(_audit_cfg.get("statuses", []))
+        if _audit_statuses:
+            try:
+                audit_report = validate_audit_statuses(
+                    _audit_statuses, strict=False,
+                )
+                if strict and not audit_report.get("pilot_ready", False):
+                    for _blk in audit_report.get("blocking", []):
+                        fatal_errors.append(
+                            f"P2-12: audit status '{_blk}' blocks the pilot; "
+                            f"counts={audit_report['counts']}"
+                        )
+            except Exception as exc:
+                fatal_errors.append(f"P2-13: audit status validation error: {exc}")
+        elif pilot_mode:
+            # Pilot mode requires explicit audit statuses.
+            fatal_errors.append(
+                "P2-12: pilot mode requires data.extras.manual_audit.statuses "
+                "to be populated"
+            )
+
+    # ------------------------------------------------------------------ #
+    # P2-14: route-family minimums (pilot mode).
+    # ------------------------------------------------------------------ #
+    route_family_report: dict[str, Any] = {}
+    if pilot_mode:
+        from .build.audit import (
+            DEFAULT_MINIMUM_ROUTE_COUNTS,
+            check_route_family_minimums,
+        )
+        # Count probes per family from the selected samples.  This is an
+        # estimate based on the selected samples' structure; actual probe
+        # counts depend on the downstream build.
+        _pilot_cfg = data_cfg.extras.get("pilot_verification")
+        _min_counts = DEFAULT_MINIMUM_ROUTE_COUNTS
+        if _pilot_cfg and isinstance(_pilot_cfg, dict):
+            _cfg_min = _pilot_cfg.get("minimum_route_counts")
+            if _cfg_min and isinstance(_cfg_min, dict):
+                _min_counts = {k: int(v) for k, v in _cfg_min.items()}
+        # Estimate route-family coverage from selected samples.
+        _family_counts: dict[str, int] = {}
+        for _s in selected:
+            _facts = _s.get("profile_facts", [])
+            _img = _s.get("image_uri")
+            if _img:
+                _family_counts.setdefault("direct_visual", 0)
+                _family_counts["direct_visual"] += 1
+                _family_counts.setdefault("image_plus_name", 0)
+                _family_counts["image_plus_name"] += 1
+            if _facts:
+                _family_counts.setdefault("name_only", 0)
+                _family_counts["name_only"] += len(_facts)
+        try:
+            route_family_report = check_route_family_minimums(
+                _family_counts, _min_counts, strict=False,
+            )
+            if not route_family_report.get("pilot_ready", False):
+                for _fam, _info in route_family_report.get("shortfalls", {}).items():
+                    fatal_errors.append(
+                        f"P2-14: route family '{_fam}' has "
+                        f"{_info['actual']}/{_info['required']} probes"
+                    )
+        except Exception as exc:
+            fatal_errors.append(f"P2-14: route-family check error: {exc}")
+
+    # ------------------------------------------------------------------ #
+    # P2-15: polarity balance reporting.
+    # ------------------------------------------------------------------ #
+    polarity_report: dict[str, Any] = {}
+    if pilot_mode:
+        from .build.audit import report_polarity_balance
+        # Collect per-attribute label states from selected samples.
+        _attr_states: dict[str, list[bool]] = {}
+        for _s in selected:
+            _va = _s.get("visual_attributes", {})
+            if isinstance(_va, dict):
+                for _akey, _aval in _va.items():
+                    _lbl = None
+                    if isinstance(_aval, dict):
+                        _lbl = _aval.get("label")
+                    elif hasattr(_aval, "label"):
+                        _lbl = _aval.label
+                    if _lbl is not None:
+                        _attr_states.setdefault(_akey, []).append(bool(_lbl))
+        if _attr_states:
+            polarity_report = report_polarity_balance(_attr_states)
+
+    # ------------------------------------------------------------------ #
+    # P2-16: benchmark provenance freeze (pilot mode).
+    # ------------------------------------------------------------------ #
+    provenance_report: dict[str, Any] = {}
+    if pilot_mode:
+        from .build.audit import check_benchmark_provenance_frozen
+        _bench_cfg = data_cfg.extras.get("benchmark_provenance")
+        if _bench_cfg and isinstance(_bench_cfg, dict):
+            try:
+                provenance_report = check_benchmark_provenance_frozen(
+                    _bench_cfg, strict=False,
+                )
+                if not provenance_report.get("all_frozen", False):
+                    for _bn, _bi in provenance_report.get(
+                        "per_benchmark", {}
+                    ).items():
+                        if not _bi["frozen"]:
+                            fatal_errors.append(
+                                f"P2-16: benchmark '{_bn}' provenance not "
+                                f"frozen: {'; '.join(_bi['issues'])}"
+                            )
+            except Exception as exc:
+                fatal_errors.append(f"P2-16: provenance check error: {exc}")
+        else:
+            # Pilot mode with no benchmark_provenance configured — only
+            # warn if the dataset is not FIUBench (which has its own
+            # immutable_revision check).
+            if args.dataset != "fiubench":
+                fatal_errors.append(
+                    "P2-16: pilot mode requires data.extras.benchmark_provenance "
+                    "to declare frozen provenance for all benchmarks"
+                )
+
+    if fatal_errors:
+        for _fe in fatal_errors:
+            log.error("STRICT: %s", _fe)
+        raise ConfigError(
+            "Smoke manifest validation failed (strict mode):\n  "
+            + "\n  ".join(fatal_errors)
+        )
+
     # Compute manifest SHA256 (of the canonical content, before adding the hash).
     manifest_body: dict[str, Any] = {
         "dataset": args.dataset,
@@ -1345,11 +1717,20 @@ def cmd_source_make_smoke_manifest(args) -> int:
             "min_identities": min_identities,
             "min_image_bearing": min_image_bearing,
             "require_multiview": require_multiview,
+            "strict": strict,
         },
         "source_revision": source_revision,
     }
     if source_protocol is not None:
         manifest_body["source_protocol"] = source_protocol
+        # P1-2: record protocol SHA-256 fingerprint in the smoke manifest.
+        from .data.split_mapping import compute_protocol_sha256
+        _psha, _pcanonical = compute_protocol_sha256(source_protocol)
+        manifest_body["protocol_sha256"] = _psha
+    # P1-4: record actual source hashes (Git SHA + file SHA-256s).
+    _src_hashes = _compute_source_hashes(data_cfg)
+    if _src_hashes:
+        manifest_body["source_hashes"] = _src_hashes
     if protocol_coverage:
         manifest_body["protocol_coverage"] = protocol_coverage
     # P1-7: record selected image hashes.
@@ -1357,6 +1738,18 @@ def cmd_source_make_smoke_manifest(args) -> int:
         manifest_body["selected_images"] = selected_images
     if image_errors:
         manifest_body["image_errors"] = image_errors
+    # P2-12/13: audit status report.
+    if audit_report:
+        manifest_body["audit_status"] = audit_report
+    # P2-14: route-family coverage report.
+    if route_family_report:
+        manifest_body["route_family_coverage"] = route_family_report
+    # P2-15: polarity balance report.
+    if polarity_report:
+        manifest_body["polarity_balance"] = polarity_report
+    # P2-16: benchmark provenance freeze report.
+    if provenance_report:
+        manifest_body["benchmark_provenance"] = provenance_report
     canonical = _json.dumps(manifest_body, sort_keys=True, separators=(",", ":"))
     manifest_body["manifest_sha256"] = _hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -1620,6 +2013,86 @@ def cmd_source_preflight(args) -> int:
     if dup_ids:
         errors.append(f"{len(dup_ids)} duplicate source_sample_id(s)")
 
+    # 4b. Protocol validation (P1-11).
+    proto_cfg = data_cfg.extras.get("fiubench_protocol")
+    if proto_cfg and isinstance(proto_cfg, dict):
+        from .data.split_mapping import resolve_protocol_role
+        forget_bkt = proto_cfg.get("forget_bucket")
+        train_bkt = proto_cfg.get("train_bucket")
+        eval_bkt = proto_cfg.get("eval_bucket")
+        # Collect all released buckets from the source data.
+        all_released: set[str] = set()
+        for _ctx2, _row2 in adapter.iter_rows_with_context():
+            _md = _row2.get("raw_data", {})
+            if isinstance(_md, dict):
+                for _k in ("official_memberships", "memberships", "split_group"):
+                    _v = _md.get(_k)
+                    if isinstance(_v, list):
+                        all_released.update(str(x) for x in _v)
+            # Also check split_buckets from split.json if available.
+            _sb = _row2.get("split_buckets") or _row2.get("_split_buckets")
+            if isinstance(_sb, dict):
+                all_released.update(_sb.keys())
+            break  # Only need the first row for schema check.
+        # Bucket existence checks.
+        proto_errors: list[str] = []
+        if forget_bkt and all_released and forget_bkt not in all_released:
+            proto_errors.append(f"configured forget_bucket '{forget_bkt}' not found in source")
+        if train_bkt and all_released and train_bkt not in all_released:
+            proto_errors.append(f"configured train_bucket '{train_bkt}' not found in source")
+        if eval_bkt and all_released and eval_bkt not in all_released:
+            proto_errors.append(f"configured eval_bucket '{eval_bkt}' not found in source")
+        # Identity-level disjointness and pool checks.
+        _id_by_role: dict[str, set[str]] = {}
+        try:
+            for _ctx3, _row3 in adapter.iter_rows_with_context():
+                _samples3 = list(adapter.to_samples(_row3, source_context=_ctx3))
+                for _s3 in _samples3:
+                    _sm3 = _s3.source_metadata or {}
+                    _sid3 = str(_sm3.get("source_subject_id", ""))
+                    _memberships = _sm3.get("official_memberships") or []
+                    _role = resolve_protocol_role(
+                        [str(m) for m in _memberships], proto_cfg,
+                        source_subject_id=_sid3 if _sid3 else None,
+                    )
+                    if _sid3:
+                        _id_by_role.setdefault(_role, set()).add(_sid3)
+        except Exception:
+            pass
+        _forget_ids = _id_by_role.get("exclude", set())
+        _train_ids = _id_by_role.get("train", set())
+        _eval_ids = _id_by_role.get("eval", set())
+        _oop_ids = _id_by_role.get("out_of_protocol", set())
+        # Disjointness.
+        if _forget_ids & _train_ids:
+            proto_errors.append(
+                f"forget/train overlap: {len(_forget_ids & _train_ids)} identities"
+            )
+        if _forget_ids & _eval_ids:
+            proto_errors.append(
+                f"forget/eval overlap: {len(_forget_ids & _eval_ids)} identities"
+            )
+        if _train_ids & _eval_ids:
+            proto_errors.append(
+                f"train/eval overlap: {len(_train_ids & _eval_ids)} identities"
+            )
+        # Empty pool checks.
+        if forget_bkt and not _forget_ids:
+            proto_errors.append("eval pool empty: no forget/exclude identities")
+        if train_bkt and not _train_ids:
+            proto_errors.append("train pool empty: no train identities")
+        if (eval_bkt or (proto_cfg.get("eval_fraction", 0) > 0)) and not _eval_ids:
+            proto_errors.append("eval pool empty: no eval identities")
+        report["checks"]["protocol_validation"] = {
+            "forget_bucket": forget_bkt,
+            "train_bucket": train_bkt,
+            "eval_bucket": eval_bkt,
+            "role_counts": {k: len(v) for k, v in sorted(_id_by_role.items())},
+            "pass": len(proto_errors) == 0,
+            "errors": proto_errors,
+        }
+        errors.extend(proto_errors)
+
     # 5. Image existence.
     n_with_images = 0
     missing_images: list[str] = []
@@ -1731,7 +2204,6 @@ def cmd_build_annotate(args) -> int:
         AnnotationPolicy,
         BenchmarkAnnotator,
         load_frozen_calibrators,
-        predictions_to_scores,
     )
     from .constants.celeba_attributes import CELEBA_ATTRIBUTES
 
@@ -1844,11 +2316,24 @@ def cmd_build_annotate(args) -> int:
                 sha = ""
         image_sha_by_sample[s.source_sample_id] = sha
 
+    # P2-1: build image-level deduplication structures.
+    # Map image_sha256 -> representative CanonicalSample (first seen).
+    image_to_rep_sample: dict[str, Any] = {}
+    for s in samples:
+        sha = image_sha_by_sample.get(s.source_sample_id, "")
+        if sha and sha not in image_to_rep_sample:
+            image_to_rep_sample[sha] = s
+
     def _row_cache_key(sample_id: str) -> str:
         return f"{image_sha_by_sample.get(sample_id, '')}|{cache_key_suffix}"
 
+    def _image_cache_key(image_sha: str) -> str:
+        """P2-2: canonical cache key for image-level scoring."""
+        return f"{image_sha}|{cache_key_suffix}"
+
     import math as _math  # needed for cache validation below
 
+    # P2-1: done_keys are now (image_sha256, attr) for image-level dedup.
     done_keys: set[tuple[str, str]] = set()
     score_rows: list[dict[str, Any]] = []
     if scores_path.exists() and args.resume:
@@ -1864,6 +2349,7 @@ def cmd_build_annotate(args) -> int:
             attr = r.get("attribute", "")
             p = r.get("p_positive")
             ck = r.get("_cache_key", "")
+            img_sha = r.get("image_sha256", "")
 
             # Schema validation (P0-B6)
             if not sid:
@@ -1885,18 +2371,25 @@ def cmd_build_annotate(args) -> int:
                 log.warning("Dropping cached row (%s, %s): empty _cache_key", sid, attr)
                 continue
 
-            # Cache-key match (only accept rows from the current scoring identity)
-            expected_key = _row_cache_key(sid)
+            # P2-5: cache-key match — accept rows keyed by image_sha256 OR
+            # by sample_id (backward compat with pre-P2 caches).
+            if img_sha:
+                expected_key = _image_cache_key(img_sha)
+            else:
+                expected_key = _row_cache_key(sid)
             if ck != expected_key:
                 continue
 
             validated_cache.append(r)
 
-        # P0-B5: detect conflicting duplicates — same (sample_id, attribute)
+        # P0-B5: detect conflicting duplicates — same (image, attribute)
         # with different p_positive values must raise.
         seen_cache: dict[tuple[str, str], float] = {}
         for r in validated_cache:
-            key = (r["sample_id"], r["attribute"])
+            # P2-1: key by image_sha256 when available, else sample_id.
+            img_sha = r.get("image_sha256", "")
+            dedup_key_id = img_sha if img_sha else r["sample_id"]
+            key = (dedup_key_id, r["attribute"])
             if key in seen_cache:
                 if seen_cache[key] != r["p_positive"]:
                     raise ConfigError(
@@ -1918,19 +2411,28 @@ def cmd_build_annotate(args) -> int:
 
     sample_ids = {s.source_sample_id for s in samples}
     score_rows = [r for r in score_rows if r["sample_id"] in sample_ids]
+
+    # P2-1: build pending list from unique (image_sha256, attr) pairs.
+    # Each unique image is scored once per attribute; all QA variants sharing
+    # the image reuse the same scores.
     pending = [
-        (s, attr)
-        for s in samples
+        (rep, attr, sha)
+        for sha, rep in image_to_rep_sample.items()
         for attr in CELEBA_ATTRIBUTES
-        if s.image_uri
-        and (s.source_sample_id, attr) not in done_keys
+        if rep.image_uri
+        and (sha, attr) not in done_keys
     ]
     if pending:
         log.info(
-            "Scoring %d (image, attribute) queries with backend=%s",
+            "Scoring %d unique (image, attribute) queries with backend=%s "
+            "(%d canonical samples share these images)",
             len(pending), run_cfg.model.backend,
+            sum(
+                1 for s in samples
+                if image_sha_by_sample.get(s.source_sample_id, "") in image_to_rep_sample
+            ) - len(image_to_rep_sample),
         )
-        for sample, attr in pending:
+        for sample, attr, img_sha in pending:
             image = _load_image(sample.image_uri, base=image_base)
             resp = backend.score_candidates(
                 image, registry.binary_prompt(attr), [" yes", " no"]
@@ -1939,33 +2441,33 @@ def cmd_build_annotate(args) -> int:
             if p is None:
                 continue
             # P0-B5: reject inconsistent duplicates during live scoring.
-            if (sample.source_sample_id, attr) in done_keys:
-                # Find the existing score to check for conflict.
+            if (img_sha, attr) in done_keys:
                 for existing in score_rows:
-                    if (existing["sample_id"] == sample.source_sample_id
-                            and existing["attribute"] == attr):
+                    e_sha = existing.get("image_sha256", "")
+                    if (e_sha == img_sha and existing["attribute"] == attr):
                         if existing["p_positive"] != p:
                             raise ConfigError(
                                 f"Conflicting duplicate score for "
-                                f"({sample.source_sample_id}, {attr}): "
+                                f"image({img_sha[:12]}…), {attr}: "
                                 f"{existing['p_positive']} vs {p}"
                             )
                         break
                 log.warning(
-                    "Duplicate score for (%s, %s); keeping first occurrence",
-                    sample.source_sample_id, attr,
+                    "Duplicate score for (image=%s, %s); keeping first occurrence",
+                    img_sha[:12], attr,
                 )
                 continue
             score_rows.append(
                 {
                     "sample_id": sample.source_sample_id,
+                    "image_sha256": img_sha,
                     "attribute": attr,
                     "p_positive": p,
                     "raw_text": resp.text,
-                    "_cache_key": _row_cache_key(sample.source_sample_id),
+                    "_cache_key": _image_cache_key(img_sha),
                 }
             )
-            done_keys.add((sample.source_sample_id, attr))
+            done_keys.add((img_sha, attr))
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
     # P1-11: strictly validate score-cache rows (resume path).  Reject
@@ -1979,6 +2481,7 @@ def cmd_build_annotate(args) -> int:
         p = r.get("p_positive")
         sid = r.get("sample_id", "")
         attr = r.get("attribute", "")
+        img_sha = r.get("image_sha256", "")
         if p is None or not isinstance(p, (int, float)):
             log.warning("Dropping score row (%s, %s): p_positive is not numeric", sid, attr)
             continue
@@ -1988,9 +2491,11 @@ def cmd_build_annotate(args) -> int:
         if not (0.0 <= p <= 1.0):
             log.warning("Dropping score row (%s, %s): p_positive=%s out of [0,1]", sid, attr, p)
             continue
-        key = (sid, attr)
+        # P2-1: dedup by (image_sha256, attr) when available, else (sample_id, attr).
+        dedup_id = img_sha if img_sha else sid
+        key = (dedup_id, attr)
         if key in seen_keys:
-            log.warning("Dropping duplicate score row (%s, %s)", sid, attr)
+            log.warning("Dropping duplicate score row (%s, %s)", dedup_id[:12], attr)
             continue
         seen_keys.add(key)
         validated_rows.append(r)
@@ -2041,29 +2546,50 @@ def cmd_build_annotate(args) -> int:
                 pos_rate, mean_p, std_p, min_p, max_p, len(unique_rounded),
             )
 
-    # P1-16: score-completion invariant — every image sample must have all 40
+    # P2-1: score-completion invariant — every unique image must have all 40
     # valid attribute scores.  Missing pairs indicate cache bugs or silent
     # scoring failures.
-    image_sample_ids = {s.source_sample_id for s in samples if s.image_uri}
-    expected_score_count = len(image_sample_ids) * len(CELEBA_ATTRIBUTES)
-    scored_pairs = {(r["sample_id"], r["attribute"]) for r in score_rows}
+    unique_image_shas = {sha for sha in image_to_rep_sample if image_to_rep_sample[sha].image_uri}
+    expected_score_count = len(unique_image_shas) * len(CELEBA_ATTRIBUTES)
+    scored_pairs = {
+        (r.get("image_sha256", "") or image_sha_by_sample.get(r["sample_id"], ""), r["attribute"])
+        for r in score_rows
+    }
     missing_scores: list[tuple[str, str]] = []
-    for sid in sorted(image_sample_ids):
+    for sha in sorted(unique_image_shas):
         for attr in CELEBA_ATTRIBUTES:
-            if (sid, attr) not in scored_pairs:
-                missing_scores.append((sid, attr))
+            if (sha, attr) not in scored_pairs:
+                missing_scores.append((sha[:12], attr))
     if missing_scores:
         raise ConfigError(
             f"Score-completion invariant violated: {len(missing_scores)} "
-            f"(sample, attribute) pairs missing out of {expected_score_count} expected. "
+            f"(image, attribute) pairs missing out of {expected_score_count} expected. "
             f"First 5 missing: {missing_scores[:5]}"
         )
     log.info(
-        "Score-completion OK: %d image samples × %d attributes = %d scores",
-        len(image_sample_ids), len(CELEBA_ATTRIBUTES), len(score_rows),
+        "Score-completion OK: %d unique images × %d attributes = %d scores",
+        len(unique_image_shas), len(CELEBA_ATTRIBUTES), len(score_rows),
     )
 
     write_jsonl(score_rows, scores_path)
+
+    # P2-3: build image-level score table and write artifact.
+    from .build.annotate import (
+        ImageScoreTable,
+        annotate_sample_via_image_table,
+    )
+
+    image_score_table = ImageScoreTable.from_score_rows(score_rows, image_sha_by_sample)
+    image_scores_path = dataset_dir / f"{args.dataset}_image_scores.jsonl"
+    image_score_rows = image_score_table.to_image_score_rows(
+        model_fingerprint=fingerprint_id,
+        prompt_registry_hash=registry.registry_hash(),
+    )
+    write_jsonl(image_score_rows, image_scores_path)
+    log.info(
+        "P2-3: image score table: %d unique images, %d score rows → %s",
+        image_score_table.unique_images, len(image_score_rows), image_scores_path,
+    )
 
     # P1-10: write a dedicated score manifest capturing the full immutable
     # scoring identity so the cache is auditable and reproducible.
@@ -2190,6 +2716,24 @@ def cmd_build_annotate(args) -> int:
             score_manifest["selected_identity_ids_hash"] = _hl_sm.sha256(
                 "|".join(sorted(_sel_iids)).encode()
             ).hexdigest()
+    # P2-6: add image deduplication metrics to the score manifest.
+    image_bearing = sum(1 for s in samples if s.image_uri)
+    dedup_metrics = image_score_table.deduplication_metrics(
+        canonical_samples=len(samples),
+        image_bearing_samples=image_bearing,
+        raw_score_rows=len(score_rows),
+    )
+    score_manifest["image_deduplication"] = dedup_metrics
+    log.info(
+        "P2-6: dedup metrics: %d canonical, %d image-bearing, %d unique images, "
+        "%d score rows, %d avoided duplicate requests",
+        dedup_metrics["canonical_samples"],
+        dedup_metrics["image_bearing_samples"],
+        dedup_metrics["unique_images"],
+        dedup_metrics["raw_visual_score_rows"],
+        dedup_metrics["avoided_duplicate_score_requests"],
+    )
+
     manifest_path = dataset_dir / f"{args.dataset}_score_manifest.json"
     write_json(score_manifest, manifest_path)
 
@@ -2206,9 +2750,10 @@ def cmd_build_annotate(args) -> int:
         model_fingerprint=fingerprint_id,
         prompt_registry_hash=registry.registry_hash(),
     )
-    scores_by_sample = predictions_to_scores(score_rows)
+    # P2-1: annotate via image-level score table — each unique image is
+    # annotated once, and scores propagate to all QA variants sharing it.
     annotated = [
-        annotator.annotate_sample(s, scores_by_sample.get(s.source_sample_id, {}))
+        annotate_sample_via_image_table(annotator, s, image_score_table, image_sha_by_sample)
         for s in samples
     ]
     write_jsonl([s.to_dict() for s in annotated], annotated_path)
@@ -2228,9 +2773,7 @@ def cmd_build_annotate(args) -> int:
             prompt_registry_hash=registry.registry_hash(),
         )
         processed = [
-            processed_annotator.annotate_sample(
-                s, scores_by_sample.get(s.source_sample_id, {})
-            )
+            annotate_sample_via_image_table(processed_annotator, s, image_score_table, image_sha_by_sample)
             for s in samples
         ]
         write_jsonl([s.to_dict() for s in processed], processed_path)
@@ -2258,6 +2801,8 @@ def cmd_build_annotate(args) -> int:
             "accepted_labels": n_labeled,
             "whitelist_attributes": sorted(whitelist_attrs) if whitelist_attrs else "all",
             "scores_path": str(scores_path),
+            "image_scores_path": str(image_scores_path),
+            "unique_images": image_score_table.unique_images,
             "annotated_path": str(annotated_path),
             "processed_path": str(processed_path),
         }
@@ -2269,6 +2814,8 @@ def cmd_build_qa(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: exclude out_of_protocol identities from downstream stages.
+    samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
     samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
@@ -2315,6 +2862,13 @@ def cmd_build_qa(args) -> int:
         if iid in identity_to_split:
             continue
         raw_split = s.split or "unassigned"
+        # P0-3: out_of_protocol identities are excluded from QA entirely.
+        # They must NOT be mapped through source_mapping to "exclude"
+        # (which would conflate them with forget targets).
+        if raw_split == "out_of_protocol":
+            identity_to_split[iid] = "out_of_protocol"
+            identity_provenance[iid] = "official"
+            continue
         target = source_mapping.get(raw_split, "hash")
         if target == "exclude":
             # forget-only records are excluded from ordinary generated QA
@@ -2394,6 +2948,9 @@ def cmd_build_qa(args) -> int:
         elif assignment == "eval":
             eval_samples.append(s)
         elif assignment == "exclude":
+            continue
+        elif assignment == "out_of_protocol":
+            # P0-3: out-of-protocol identities skip QA entirely.
             continue
         else:
             raise ConfigError(
@@ -2541,6 +3098,8 @@ def cmd_build_route_probes(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: exclude out_of_protocol identities from route probes.
+    samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
     samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
@@ -2671,6 +3230,8 @@ def cmd_build_splits(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: exclude out_of_protocol identities from split manifests.
+    samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
     samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
@@ -2696,6 +3257,8 @@ def cmd_build_export(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: exclude out_of_protocol identities from export.
+    samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
     samples = _filter_by_smoke_manifest(samples, args)
     if args.limit:
@@ -3066,6 +3629,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-identities", type=int, default=3, dest="min_identities")
     p.add_argument("--min-image-bearing", type=int, default=2, dest="min_image_bearing")
     p.add_argument("--require-multiview", action="store_true", dest="require_multiview")
+    # P0-11: strict mode is the default — fail closed on missing roles/images.
+    _strict_group = p.add_mutually_exclusive_group()
+    _strict_group.add_argument(
+        "--strict", action="store_true", default=True, dest="strict",
+        help="fail closed on missing roles, bad images, etc. (default)",
+    )
+    _strict_group.add_argument(
+        "--no-strict", action="store_false", dest="strict",
+        help="record problems as warnings but still write the manifest",
+    )
+    # P2-12/14/15: pilot mode enables audit, route-family, and polarity checks.
+    p.add_argument(
+        "--pilot", action="store_true", default=False, dest="pilot",
+        help="enable pilot-mode checks: audit status, route-family minimums, polarity",
+    )
     _common_flags(p)
     p.set_defaults(func=cmd_source_make_smoke_manifest)
 

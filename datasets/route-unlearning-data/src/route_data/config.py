@@ -96,6 +96,10 @@ class DataConfig:
     # Benchmark adapter extras (hf access, field maps, audit sizes) are kept as
     # a free-form dict so adapters can fail loudly on missing required keys.
     extras: dict[str, Any] = field(default_factory=dict)
+    # Optional explicit path to the data config YAML.  When set, this
+    # overrides the default configs/data/<benchmark>.yaml resolution so
+    # e.g. golden CI fixtures can use a protocol-free data config.
+    data_config_path: str | None = None
 
     def require_root(self) -> Path:
         root = self.root or self.extras.get("local_root")

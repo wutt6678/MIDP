@@ -284,3 +284,210 @@ def predictions_to_scores(rows: Any) -> dict[str, dict[str, float]]:
             continue
         out.setdefault(sample_id, {})[str(attr)] = float(p)
     return out
+
+
+# --------------------------------------------------------------------------- #
+# P2-1/2/3: Image-level score table
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class ImageScoreCacheKey:
+    """P2-2: canonical cache key for one (image, attribute) scoring identity.
+
+    Combines the image content hash with all provenance that can affect the
+    score, so that any change in model, prompt, or scoring logic invalidates
+    the cached result.
+    """
+
+    image_sha256: str
+    model_fingerprint_id: str
+    prompt_registry_hash: str
+    attribute: str
+    scoring_version: str
+    candidate_set_hash: str = ""
+
+    def cache_key(self) -> str:
+        """Deterministic string key for resume-cache lookups."""
+        parts = [
+            self.image_sha256,
+            self.model_fingerprint_id,
+            self.prompt_registry_hash,
+            self.attribute,
+            self.scoring_version,
+            self.candidate_set_hash,
+        ]
+        return "|".join(parts)
+
+    @staticmethod
+    def compute(
+        image_sha256: str,
+        model_fingerprint_id: str,
+        prompt_registry_hash: str,
+        attribute: str,
+        scoring_version: str,
+        candidate_set_hash: str = "",
+    ) -> ImageScoreCacheKey:
+        return ImageScoreCacheKey(
+            image_sha256=image_sha256,
+            model_fingerprint_id=model_fingerprint_id,
+            prompt_registry_hash=prompt_registry_hash,
+            attribute=attribute,
+            scoring_version=scoring_version,
+            candidate_set_hash=candidate_set_hash,
+        )
+
+
+class ImageScoreTable:
+    """P2-1: image-level score table keyed by ``image_sha256``.
+
+    Instead of scoring each canonical QA variant independently (which causes
+    the same face image to be scored 140+ times), this table stores exactly
+    one set of 40 CelebA attribute scores per unique image.  All canonical
+    samples sharing the image then look up scores from this table.
+    """
+
+    def __init__(self) -> None:
+        # image_sha256 -> {attribute -> p_positive}
+        self._scores: dict[str, dict[str, float]] = {}
+        # image_sha256 -> image_uri (first seen URI for provenance)
+        self._uris: dict[str, str] = {}
+
+    # -- building ------------------------------------------------------- #
+
+    def add(
+        self,
+        image_sha256: str,
+        attribute: str,
+        p_positive: float,
+        image_uri: str = "",
+    ) -> None:
+        """Record one (image, attribute) score."""
+        self._scores.setdefault(image_sha256, {})[attribute] = float(p_positive)
+        if image_uri and image_sha256 not in self._uris:
+            self._uris[image_sha256] = image_uri
+
+    @classmethod
+    def from_score_rows(
+        cls,
+        score_rows: list[dict[str, Any]],
+        sample_to_image: Mapping[str, str],
+    ) -> ImageScoreTable:
+        """Build the table from flat score rows + a sample_id→image_sha map.
+
+        ``sample_to_image`` maps each ``source_sample_id`` to its
+        ``image_sha256``.  If a sample has no image SHA it is skipped.
+        """
+        table = cls()
+        for row in score_rows:
+            sid = row.get("sample_id", "")
+            attr = row.get("attribute", "")
+            p = row.get("p_positive")
+            if p is None or not sid or not attr:
+                continue
+            sha = sample_to_image.get(sid, "")
+            if not sha:
+                continue
+            table.add(sha, attr, float(p))
+        return table
+
+    # -- lookup --------------------------------------------------------- #
+
+    def get_scores(self, image_sha256: str) -> dict[str, float]:
+        """Return ``{attribute: p_positive}`` for one image (empty if absent)."""
+        return dict(self._scores.get(image_sha256, {}))
+
+    def has_image(self, image_sha256: str) -> bool:
+        return image_sha256 in self._scores
+
+    @property
+    def unique_images(self) -> int:
+        return len(self._scores)
+
+    def attribute_count(self, image_sha256: str) -> int:
+        return len(self._scores.get(image_sha256, {}))
+
+    # -- serialisation (P2-3) ------------------------------------------- #
+
+    def to_image_score_rows(
+        self,
+        model_fingerprint: str | None = None,
+        prompt_registry_hash: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Emit one row per (image, attribute) for ``fiubench_image_scores.jsonl``."""
+        rows: list[dict[str, Any]] = []
+        for sha in sorted(self._scores):
+            for attr in sorted(self._scores[sha]):
+                rows.append({
+                    "image_sha256": sha,
+                    "image_uri": self._uris.get(sha, ""),
+                    "attribute": attr,
+                    "p_positive": self._scores[sha][attr],
+                    "model_fingerprint": model_fingerprint,
+                    "prompt_id": prompt_registry_hash,
+                })
+        return rows
+
+    # -- metrics (P2-6) ------------------------------------------------- #
+
+    def deduplication_metrics(
+        self,
+        canonical_samples: int,
+        image_bearing_samples: int,
+        raw_score_rows: int,
+    ) -> dict[str, int]:
+        """Compute image-deduplication efficiency metrics."""
+        total_queries_without_dedup = image_bearing_samples * self._expected_attrs()
+        avoided = max(0, total_queries_without_dedup - raw_score_rows)
+        return {
+            "canonical_samples": canonical_samples,
+            "image_bearing_samples": image_bearing_samples,
+            "unique_images": self.unique_images,
+            "raw_visual_score_rows": raw_score_rows,
+            "avoided_duplicate_score_requests": avoided,
+        }
+
+    def _expected_attrs(self) -> int:
+        """Number of attributes scored per image (typically 40)."""
+        if not self._scores:
+            return len(CELEBA_ATTRIBUTE_SET)
+        # Use the mode attribute count across images.
+        from collections import Counter
+        counts = Counter(len(v) for v in self._scores.values())
+        return counts.most_common(1)[0][0]
+
+
+def build_sample_to_image_sha(
+    samples: list[CanonicalSample],
+) -> dict[str, str]:
+    """Map ``source_sample_id → image_sha256`` for all image-bearing samples."""
+    mapping: dict[str, str] = {}
+    for s in samples:
+        sha = s.image_sha256 or ""
+        if sha:
+            mapping[s.source_sample_id] = sha
+    return mapping
+
+
+def annotate_sample_via_image_table(
+    annotator: BenchmarkAnnotator,
+    sample: CanonicalSample,
+    image_table: ImageScoreTable,
+    sample_to_image: Mapping[str, str] | None = None,
+) -> CanonicalSample:
+    """P2-1: annotate a sample by looking up scores from the image table.
+
+    The image SHA is resolved from:
+    1. ``sample.image_sha256`` (if set on the canonical record), or
+    2. ``sample_to_image[sample.source_sample_id]`` (runtime-computed SHA).
+
+    Falls back to the sample's existing ``visual_attributes`` when the image
+    has no entry in the table (e.g. non-image-bearing samples).
+    """
+    sha = sample.image_sha256 or ""
+    if not sha and sample_to_image:
+        sha = sample_to_image.get(sample.source_sample_id, "")
+    if not sha or not image_table.has_image(sha):
+        return sample
+    scores = image_table.get_scores(sha)
+    return annotator.annotate_sample(sample, scores)

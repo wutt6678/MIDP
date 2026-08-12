@@ -112,6 +112,11 @@ class ProfileFact:
     privacy_class: str = "public"
     source: str = "source_human"
     forgettable: bool = False
+    # P2-11: fact provenance fields for exact traceability.
+    source_qa_index: int | None = None
+    original_question: str | None = None
+    original_answer: str | None = None
+    question_variant: str = "canonical"
 
     def validate(self) -> ProfileFact:
         _require_nonempty(self.fact_id, "ProfileFact.fact_id")
@@ -130,6 +135,10 @@ class ProfileFact:
             privacy_class=data.get("privacy_class", "public"),
             source=data.get("source", "source_human"),
             forgettable=bool(data.get("forgettable", False)),
+            source_qa_index=data.get("source_qa_index"),
+            original_question=data.get("original_question"),
+            original_answer=data.get("original_answer"),
+            question_variant=data.get("question_variant", "canonical"),
         ).validate()
 
 

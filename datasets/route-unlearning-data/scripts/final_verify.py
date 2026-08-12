@@ -1266,6 +1266,102 @@ def _verify_smoke_manifest_conformance(
 
 
 # --------------------------------------------------------------------------- #
+# P1-6: out_of_protocol isolation check
+# --------------------------------------------------------------------------- #
+
+
+def _collect_identity_ids_from_jsonl(path: Path) -> set[str]:
+    """Collect unique identity_ids from a JSONL file."""
+    ids: set[str] = set()
+    if not path.exists():
+        return ids
+    for line in path.read_text().splitlines():
+        if line.strip():
+            doc = json.loads(line)
+            iid = doc.get("identity_id")
+            if iid:
+                ids.add(str(iid))
+    return ids
+
+
+def _collect_oop_identities(export_dir: Path, benchmark: str) -> set[str]:
+    """Collect identity_ids with effective_role == 'out_of_protocol'.
+
+    Looks in the processed artifact and score manifest for protocol metadata.
+    """
+    processed_path = export_dir / f"{benchmark}_processed.jsonl"
+    oop: set[str] = set()
+    if not processed_path.exists():
+        return oop
+    for line in processed_path.read_text().splitlines():
+        if line.strip():
+            doc = json.loads(line)
+            meta = doc.get("source_metadata", {})
+            if meta.get("effective_role") == "out_of_protocol":
+                iid = doc.get("identity_id")
+                if iid:
+                    oop.add(str(iid))
+    return oop
+
+
+def _verify_out_of_protocol_isolation(
+    export_dir: Path, benchmark: str, failures: list[str],
+) -> CheckRecord:
+    """P1-6: out_of_protocol identities must not leak into downstream artifacts.
+
+    Checks QA train, QA eval, route probes, and split manifests.
+    """
+    oop_ids = _collect_oop_identities(export_dir, benchmark)
+    if not oop_ids:
+        print("--- out_of_protocol isolation: OK (no out_of_protocol identities found)")
+        return CheckRecord("out_of_protocol isolation", CheckResult.PASS, "no OOP identities")
+
+    leaks: list[str] = []
+
+    # Check QA train.
+    qa_train = export_dir / f"{benchmark}_celeba40_visual_qa_train.jsonl"
+    train_ids = _collect_identity_ids_from_jsonl(qa_train)
+    leaked_train = oop_ids & train_ids
+    if leaked_train:
+        leaks.append(f"QA train: {len(leaked_train)} OOP identities")
+
+    # Check QA eval.
+    qa_eval = export_dir / f"{benchmark}_celeba40_visual_qa_eval.jsonl"
+    eval_ids = _collect_identity_ids_from_jsonl(qa_eval)
+    leaked_eval = oop_ids & eval_ids
+    if leaked_eval:
+        leaks.append(f"QA eval: {len(leaked_eval)} OOP identities")
+
+    # Check route probes.
+    route_path = export_dir / f"{benchmark}_route_probes.jsonl"
+    if not route_path.exists():
+        route_path = export_dir / f"{benchmark}_route_conflict_eval.jsonl"
+    route_ids = _collect_identity_ids_from_jsonl(route_path)
+    leaked_route = oop_ids & route_ids
+    if leaked_route:
+        leaks.append(f"route probes: {len(leaked_route)} OOP identities")
+
+    # Check split manifests.
+    for split_name in ("train", "eval"):
+        split_path = export_dir / f"{benchmark}_celeba40_visual_qa_{split_name}.jsonl"
+        split_ids = _collect_identity_ids_from_jsonl(split_path)
+        leaked_split = oop_ids & split_ids
+        if leaked_split and f"QA {split_name}" not in str(leaks):
+            leaks.append(f"split {split_name}: {len(leaked_split)} OOP identities")
+
+    if leaks:
+        detail = "; ".join(leaks)
+        failures.append(f"out_of_protocol isolation: {detail}")
+        return CheckRecord("out_of_protocol isolation", CheckResult.FAIL, detail)
+
+    print(
+        f"--- out_of_protocol isolation: OK "
+        f"({len(oop_ids)} OOP identities excluded from all artifacts)"
+    )
+    return CheckRecord("out_of_protocol isolation", CheckResult.PASS, f"{len(oop_ids)} OOP IDs excluded")
+
+
+# --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
 
@@ -1313,6 +1409,8 @@ def verify_benchmark(
     records.append(_verify_coverage(export_dir, benchmark, failures))
     records.append(_verify_route_balance(export_dir, benchmark, failures))
     records.append(_verify_manual_audit_report(export_dir, benchmark, failures))
+    # P1-6: out_of_protocol isolation check.
+    records.append(_verify_out_of_protocol_isolation(export_dir, benchmark, failures))
     # P1-12: verify output conforms to prebuilt smoke manifest.
     records.append(_verify_smoke_manifest_conformance(
         export_dir, benchmark, failures, smoke_manifest_path=smoke_manifest_path,

@@ -18,17 +18,21 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_CONFIGS_DIR = REPO_ROOT / "configs" / "data"
 
 
-# The DEFAULT_SOURCE_MAPPING from cli.py cmd_build_qa.
+# The DEFAULT_SOURCE_MAPPING from split_mapping.py.
 DEFAULT_SOURCE_MAPPING = {
     "train": "train",
     "retain_train": "train",
+    "retain": "train",
     "validation": "eval",
     "val": "eval",
     "eval": "eval",
     "retain_eval": "eval",
+    "evaluation": "eval",
     "test": "eval",
     "forget": "exclude",
+    "exclude": "exclude",
     "unassigned": "hash",
+    "out_of_protocol": "exclude",
 }
 
 
@@ -164,36 +168,43 @@ class TestFIUBenchSourceMapping:
         assert mapping["forget"] == "exclude"
 
     def test_released_split_vocabulary_exact(self):
-        # P0-3: FIUBench's released split vocabulary is forget1/5/10 +
-        # retain5/15.  The config must declare the full vocabulary plus
-        # backward-compat entries for the golden fixture.
+        # P0-1 / P0-10: released buckets are handled exclusively by the
+        # fiubench_protocol block, NOT by generic source_mapping.
         cfg = _load_data_config("fiubench")
+        proto = cfg["data"]["extras"]["fiubench_protocol"]
+        # Protocol must declare the experiment buckets.
+        assert proto["forget_bucket"] == "forget10"
+        assert proto["train_bucket"] == "retain15"
+        # source_mapping retains ONLY legacy golden-fixture entries.
         extras_mapping = cfg["data"]["extras"]["source_mapping"]
-        # Released buckets.
-        assert extras_mapping["forget1"] == "exclude"
-        assert extras_mapping["forget5"] == "exclude"
-        assert extras_mapping["forget10"] == "exclude"
-        assert extras_mapping["retain5"] == "train"
-        assert extras_mapping["retain15"] == "train"
-        # Backward-compat for golden fixture.
         assert extras_mapping["forget"] == "exclude"
         assert extras_mapping["retain"] == "train"
+        # Released buckets must NOT appear in source_mapping (P0-10).
+        for bucket in ("forget1", "forget5", "forget10", "retain5", "retain15"):
+            assert bucket not in extras_mapping, (
+                f"{bucket} should be handled by protocol, not source_mapping"
+            )
 
     def test_released_labels_resolve_exactly(self):
-        # P0-3: each released bucket must resolve to the documented target.
+        # P0-1 / P0-10: released buckets are resolved by the protocol,
+        # not the generic source mapping.  Verify the protocol config.
+        cfg = _load_data_config("fiubench")
+        proto = cfg["data"]["extras"]["fiubench_protocol"]
+        assert proto["forget_bucket"] in ("forget1", "forget5", "forget10")
+        assert proto["train_bucket"] in ("retain5", "retain15")
+        # out_of_protocol is in DEFAULT_SOURCE_MAPPING → exclude.
         mapping = _resolve_mapping("fiubench")
-        assert mapping["forget1"] == "exclude"
-        assert mapping["forget5"] == "exclude"
-        assert mapping["forget10"] == "exclude"
-        assert mapping["retain5"] == "train"
-        assert mapping["retain15"] == "train"
+        assert mapping["out_of_protocol"] == "exclude"
 
     def test_no_released_label_leaks_to_hash(self):
-        # Every official FIUBench bucket is explicitly mapped; none may fall
-        # through to the unassigned/hash fallback (R3/R9).
+        # P0-1 / P0-10: released buckets are NOT in source_mapping at all;
+        # they are handled exclusively by the protocol.  The out_of_protocol
+        # sentinel maps to exclude so nothing leaks to hash.
         mapping = _resolve_mapping("fiubench")
-        for label in ("forget1", "forget5", "forget10", "retain5", "retain15"):
-            assert mapping[label] != "hash", f"fiubench {label} leaked to hash"
+        assert mapping["out_of_protocol"] == "exclude"
+        # Legacy golden-fixture buckets still mapped correctly.
+        assert mapping["forget"] == "exclude"
+        assert mapping["retain"] == "train"
 
     def test_adapter_version(self):
         cfg = _load_data_config("fiubench")

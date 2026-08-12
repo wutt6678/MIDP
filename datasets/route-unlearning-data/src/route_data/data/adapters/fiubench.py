@@ -219,6 +219,17 @@ class FiubenchAdapter(BenchmarkAdapter):
             return dict(proto)
         return {}
 
+    def _protocol_sha256(self) -> str | None:
+        """P1-5: cached protocol SHA-256 fingerprint."""
+        proto = self._protocol()
+        if not proto:
+            return None
+        if not hasattr(self, "_cached_protocol_sha256"):
+            from ..split_mapping import compute_protocol_sha256
+            sha, _ = compute_protocol_sha256(proto)
+            self._cached_protocol_sha256 = sha
+        return self._cached_protocol_sha256
+
     def _source_mapping(self) -> dict[str, str]:
         """Return the ``source_mapping`` override from config extras."""
         mapping = self.config.extras.get("source_mapping")
@@ -292,22 +303,45 @@ class FiubenchAdapter(BenchmarkAdapter):
     ) -> str:
         """Resolve official bucket memberships to an effective MIDP split.
 
-        Uses the configured ``fiubench_protocol`` when available; falls back
-        to the ``source_mapping`` for legacy fixtures.
+        When a ``fiubench_protocol`` is configured it is the SOLE authority
+        for experiment roles.  Non-matching official identities receive
+        ``"out_of_protocol"`` instead of falling through to a generic
+        source mapping (P0-1 / P0-2).
         """
         protocol = self._protocol()
         mapping = self._source_mapping()
 
         if protocol:
+            # Protocol-exclusive resolution (P0-1).
+            from ..split_mapping import compute_holdout_role
+
             forget_bucket = protocol.get("forget_bucket")
             train_bucket = protocol.get("train_bucket")
             eval_bucket = protocol.get("eval_bucket")
+
+            # Forget takes priority.
             if forget_bucket and forget_bucket in memberships:
-                return mapping.get(forget_bucket, "exclude")
+                return "exclude"
+
+            # Explicit eval bucket.
             if eval_bucket and eval_bucket in memberships:
-                return mapping.get(eval_bucket, "eval")
+                return "eval"
+
+            # Train bucket with deterministic holdout (P0-4).
             if train_bucket and train_bucket in memberships:
-                return mapping.get(train_bucket, "train")
+                eval_fraction = protocol.get("eval_fraction", 0.0)
+                eval_seed = protocol.get("eval_seed", 0)
+                if eval_fraction > 0:
+                    subject_id = self._source_subject_id(row)
+                    if subject_id is not None:
+                        return compute_holdout_role(
+                            subject_id, eval_fraction, eval_seed,
+                        )
+                return "train"
+
+            # Official identity not selected by the configured experiment.
+            return "out_of_protocol"
+
         # Fallback: resolve the first membership through the source mapping.
         for bucket in memberships:
             if bucket in mapping:
@@ -391,7 +425,48 @@ class FiubenchAdapter(BenchmarkAdapter):
         )
         return facts
 
+    # -- P2-7: structured QA facts ---------------------------------------- #
+
+    @staticmethod
+    def _qa_fact(qa_index: int, item: Mapping[str, Any]) -> ProfileFact:
+        """Create a structured identity fact from one FIUBench QA item.
+
+        P2-7: each original QA is directly representable as a ProfileFact
+        without LLM extraction.  P2-10: only the *original* answer becomes
+        the fact value; perturbed answers are never stored as facts.
+        P2-11: provenance fields enable exact traceability.
+        """
+        question = str(item.get("question") or "")
+        answer = str(item.get("answer") or "")
+        return ProfileFact(
+            fact_id=f"fiubench_qa_{qa_index:02d}",
+            relation=question,
+            value=answer,
+            privacy_class="private_profile",
+            source="source_human",
+            forgettable=True,
+            source_qa_index=qa_index,
+            original_question=question,
+            original_answer=answer,
+            question_variant="canonical",
+        ).validate()
+
     # -- qa_list flattening (plan B15, P0-7–P0-10) ----------------------- #
+
+    @staticmethod
+    def _merged_facts(
+        base: list[ProfileFact], qa_fact: ProfileFact | None
+    ) -> list[ProfileFact]:
+        """Return base facts plus the per-QA fact (if any).
+
+        P2-7: each original QA sample carries its own structured fact
+        alongside the shared caption / raw_profile facts.  P2-10: paraphrase
+        and perturbed variants receive *no* extra fact so perturbed answers
+        can never become ground-truth knowledge.
+        """
+        if qa_fact is None:
+            return list(base)
+        return list(base) + [qa_fact]
 
     def _qa_sample(
         self,
@@ -412,6 +487,10 @@ class FiubenchAdapter(BenchmarkAdapter):
         context: SourceContext,
         source_subject_id: str | None = None,
         official_memberships: list[str] | None = None,
+        effective_role: str | None = None,
+        protocol_name: str | None = None,
+        protocol_sha256: str | None = None,
+        qa_fact: ProfileFact | None = None,
     ) -> CanonicalSample:
         if question in (None, "") and variant_type == "original":
             raise AdapterError(
@@ -448,6 +527,12 @@ class FiubenchAdapter(BenchmarkAdapter):
             metadata["source_subject_id"] = source_subject_id
         if official_memberships is not None:
             metadata["official_memberships"] = official_memberships
+        if effective_role is not None:
+            metadata["effective_role"] = effective_role
+        if protocol_name is not None:
+            metadata["protocol_name"] = protocol_name
+        if protocol_sha256 is not None:
+            metadata["protocol_sha256"] = protocol_sha256
         return CanonicalSample(
             benchmark="fiubench",
             source_sample_id=source_id,
@@ -460,7 +545,7 @@ class FiubenchAdapter(BenchmarkAdapter):
             identity_name=identity_name,
             image_id=Path(image_uri).stem if image_uri else None,
             image_uri=image_uri,
-            profile_facts=list(facts),
+            profile_facts=self._merged_facts(facts, qa_fact if variant_type == "original" else None),
             modality="image_text" if image_uri else "text_only",
             task_type="private_profile_vqa",
             question=str(question) if question not in (None, "") else None,
@@ -502,6 +587,11 @@ class FiubenchAdapter(BenchmarkAdapter):
             if official_memberships
             else "unassigned"
         )
+        # P0-8: effective_role mirrors the resolved split so downstream
+        # consumers can distinguish official memberships from MIDP roles.
+        effective_role = split
+        protocol_name = self._protocol().get("name") if self._protocol() else None
+        protocol_sha256 = self._protocol_sha256()
         # P1-5: never silently hash an official FIUBench identity.
         if (
             official_memberships
@@ -539,10 +629,15 @@ class FiubenchAdapter(BenchmarkAdapter):
                 "context": source_context,
                 "source_subject_id": subject_id,
                 "official_memberships": official_memberships or None,
+                "effective_role": effective_role,
+                "protocol_name": protocol_name,
+                "protocol_sha256": protocol_sha256,
             }
             base_qa_id = f"fiubench:{identity_id}:qa:{qa_index}:original"
+            # P2-7: one structured fact per original QA item.
+            qa_fact = self._qa_fact(qa_index, item)
 
-            # 1. Original variant.
+            # 1. Original variant (carries the QA fact, P2-7/P2-8).
             yield self._qa_sample(
                 **base_kwargs,
                 variant_type="original",
@@ -550,6 +645,7 @@ class FiubenchAdapter(BenchmarkAdapter):
                 base_qa_id=None,
                 question=item.get("question"),
                 answer=item.get("answer"),
+                qa_fact=qa_fact,
             )
 
             # 2. Paraphrase variants (P0-7 / P0-9).

@@ -106,6 +106,10 @@ class RouteProbeBuilder:
 
     @staticmethod
     def fact_question(fact: ProfileFact) -> str:
+        # P2-8: prefer the original FIUBench question when available so the
+        # name_only probe uses the authentic QA wording, not a synthetic one.
+        if fact.original_question:
+            return fact.original_question
         return f"What is this person's {fact.relation.replace('_', ' ')}?"
 
     # -- probe rendering ------------------------------------------------- #
@@ -173,6 +177,14 @@ class RouteProbeBuilder:
             new_meta["target_fact_id"] = target_fact.fact_id
             new_meta["target_fact_relation"] = target_fact.relation
             new_meta["target_fact_value"] = target_fact.value
+            # P2-11: store fact provenance for exact traceability.
+            if target_fact.source_qa_index is not None:
+                new_meta["source_qa_index"] = target_fact.source_qa_index
+            if target_fact.original_question is not None:
+                new_meta["original_question"] = target_fact.original_question
+            if target_fact.original_answer is not None:
+                new_meta["original_answer"] = target_fact.original_answer
+            new_meta["question_variant"] = target_fact.question_variant
         # P0-6: for text_only modality probes, nullify image fields to
         # prevent visual leakage into text-only conditions.
         modality = str(spec.get("modality", base.modality))
@@ -218,6 +230,13 @@ class RouteProbeBuilder:
             row["target_fact_id"] = probe.source_metadata.get("target_fact_id")
             row["target_fact_relation"] = probe.source_metadata.get("target_fact_relation")
             row["target_fact_value"] = probe.source_metadata.get("target_fact_value")
+            # P2-11: fact provenance fields.
+            row["source_qa_index"] = probe.source_metadata.get("source_qa_index")
+            row["original_question"] = probe.source_metadata.get("original_question")
+            row["original_answer"] = probe.source_metadata.get("original_answer")
+            row["question_variant"] = probe.source_metadata.get(
+                "question_variant", "canonical"
+            )
         else:
             row["target_attribute"] = attribute
             row["target_fact_id"] = None
@@ -443,6 +462,22 @@ def select_multiple_wrong_names(
     return [name for _, name, _ in scored[:candidates_per_sample]]
 
 
+def _select_name_only_fact(facts: list[ProfileFact]) -> ProfileFact:
+    """Pick the best fact for the name_only probe (P2-8).
+
+    Preference order:
+    1. A QA-derived fact (``source_qa_index is not None``) — these carry
+       the original FIUBench question and answer.
+    2. The first available fact (caption / raw_profile fallback).
+
+    Raises :class:`ConflictError` when *facts* is empty (caller handles).
+    """
+    for f in facts:
+        if f.source_qa_index is not None:
+            return f
+    return facts[0]
+
+
 def build_identity_probes(
     identity_samples: Sequence[CanonicalSample],
     builder: RouteProbeBuilder,
@@ -487,7 +522,10 @@ def build_identity_probes(
     attribute = min(attributes)
     visible_label = attributes[attribute]
     identity_name = anchor.identity_name or anchor.identity_id
-    fact = facts[0]
+    # P2-8: prefer a QA-derived fact (one with source_qa_index set) for
+    # the name_only probe so the question uses the original FIUBench
+    # wording and the expected answer is the original answer.
+    fact = _select_name_only_fact(facts)
     probes: list[CanonicalSample] = []
 
     def make(
