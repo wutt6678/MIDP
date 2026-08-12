@@ -431,15 +431,24 @@ class TestProductionConfigProvenance:
                     )
 
     def test_hash_fields_are_64_char_hex(self):
-        """Hash fields must be 64-character lowercase hex strings."""
-        hash_field_names = {
-            "git_commit_sha", "profile_file_sha256", "split_file_sha256",
+        """Hash fields must be 64-character lowercase hex strings (SHA-256).
+
+        Note: git_commit_sha is a Git SHA-1 (40 hex chars), so it's excluded
+        from the 64-char hex check and validated separately.
+        """
+        sha256_field_names = {
+            "profile_file_sha256", "split_file_sha256",
             "dataset_json_sha256", "official_split_sha256", "hf_revision_sha",
         }
+        git_commit_sha_field = "git_commit_sha"  # 40-char SHA-1
+        git_sha_re = re.compile(r"^[0-9a-f]{40}$")
+        
         for name in self.BENCHMARKS:
             cfg = _load_data_config(name)
             imm = cfg["data"].get("immutable_revision", {})
-            for key in hash_field_names:
+            
+            # Check SHA-256 fields
+            for key in sha256_field_names:
                 val = imm.get(key)
                 if val is None or val == "PENDING":
                     continue  # P2-11 will catch PENDING; here check format only
@@ -447,6 +456,15 @@ class TestProductionConfigProvenance:
                 assert _HEX64_RE.match(val), (
                     f"{name}.{key} = {val!r} is not a 64-char hex SHA-256"
                 )
+            
+            # Check git_commit_sha field (40-char SHA-1)
+            git_val = imm.get(git_commit_sha_field)
+            if git_val is None or git_val == "PENDING":
+                continue  # P2-11 will catch PENDING; here check format only
+            assert isinstance(git_val, str), f"{name}.{git_commit_sha_field} is not a string"
+            assert git_sha_re.match(git_val), (
+                f"{name}.{git_commit_sha_field} = {git_val!r} is not a 40-char hex SHA-1"
+            )
 
     @pytest.mark.xfail(
         reason="P2-11: revision SHAs are PENDING until real source access",
