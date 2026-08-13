@@ -1442,6 +1442,17 @@ def cmd_source_make_smoke_manifest(args) -> int:
 
     # P0-3 (review 54c0dc9): explicit coverage check — stop selecting once
     # all structural requirements are satisfied, rather than filling to 12.
+    # P0-4 (review 600ea5b): includes structural wrong-name feasibility.
+    from .build.conflict_generation import structural_wrong_name_candidates
+
+    def _selected_by_identity() -> dict[str, list]:
+        _by: dict[str, list] = {}
+        for _s in selected:
+            _iid = _s.get("identity_id", "")
+            if _iid:
+                _by.setdefault(_iid, []).append(_s)
+        return _by
+
     def _coverage_satisfied() -> bool:
         if len(identity_ids) < min_identities:
             return False
@@ -1455,10 +1466,12 @@ def cmd_source_make_smoke_manifest(args) -> int:
             return False
         if not has_fact:
             return False
-        return not (
-            require_multiview
-            and not any(len(imgs) >= 2 for imgs in images_by_identity.values())
-        )
+        if require_multiview and not any(
+            len(imgs) >= 2 for imgs in images_by_identity.values()
+        ):
+            return False
+        # P0-4 (review 600ea5b): structural wrong-name feasibility.
+        return structural_wrong_name_candidates(_selected_by_identity())
 
     def _score(idx: int) -> int:
         s = samples[idx]
@@ -1477,6 +1490,15 @@ def cmd_source_make_smoke_manifest(args) -> int:
             score += 1
         if require_multiview and iid in identity_ids and img and img not in images_by_identity.get(iid, set()):
             score += 5
+        # P0-5 (review 600ea5b): reward completing a control group for
+        # wrong-name structural feasibility.
+        if iid in identity_ids and len(_selected_by_identity().get(iid, [])) == 1:
+            before = len(structural_wrong_name_candidates(_selected_by_identity()))
+            trial = _selected_by_identity()
+            trial.setdefault(iid, []).append(s)
+            after = len(structural_wrong_name_candidates(trial))
+            if after > before:
+                score += 8
         return score
 
     max_select = min(12, len(samples))
@@ -1509,29 +1531,12 @@ def cmd_source_make_smoke_manifest(args) -> int:
 
     # P1-9: compute wrong-name availability using production eligibility logic.
     from .build.conflict_generation import find_wrong_name_candidates
-    _sel_by_identity: dict[str, list] = {}
-    for _s in selected:
-        _iid = _s.get("identity_id", "")
-        if _iid:
-            _sel_by_identity.setdefault(_iid, []).append(_s)
+    _sel_by_identity: dict[str, list] = _selected_by_identity()
     _wn_pairs = find_wrong_name_candidates(_sel_by_identity)
 
-    # P0-4 (review 54c0dc9): Gate A — structural wrong-name feasibility.
-    # Before Qwen annotation, require only that the selected subset
-    # structurally contains enough material for a wrong-name intervention.
-    # This does NOT require visual similarity or Qwen labels.
-    _structural_wn_candidates: list[dict[str, str]] = []
-    _named_image_bearing = [
-        _iid for _iid in sorted(image_bearing)
-        if any(s.get("name") for s in _sel_by_identity.get(_iid, []))
-    ]
-    if len(_named_image_bearing) >= 2:
-        for _i, _tgt in enumerate(_named_image_bearing):
-            for _ctrl in _named_image_bearing[_i + 1:]:
-                _structural_wn_candidates.append({
-                    "target_identity_id": _tgt,
-                    "control_identity_id": _ctrl,
-                })
+    # P0-4 (review 600ea5b): Gate A — structural wrong-name feasibility
+    # using the shared structural helper (P0-6).
+    _structural_wn_candidates = structural_wrong_name_candidates(_sel_by_identity)
     # P0-4 strict check is deferred to the strict-mode block below
     # where `strict` and `fatal_errors` are defined.
 
@@ -1627,11 +1632,12 @@ def cmd_source_make_smoke_manifest(args) -> int:
     strict = getattr(args, "strict", True)
     fatal_errors: list[str] = []
     if strict:
-        # P0-4: structural wrong-name feasibility.
-        if len(_named_image_bearing) < 2:
+        # P0-4: structural wrong-name feasibility (shared helper).
+        if not _structural_wn_candidates:
             fatal_errors.append(
-                "P0-4: structural wrong-name feasibility requires >= 2 named "
-                f"image-bearing identities, found {len(_named_image_bearing)}"
+                "P0-4: structural wrong-name feasibility requires at least "
+                "one valid (target, control) pair with control having >= 2 "
+                "selected rows"
             )
         # Missing required protocol roles.
         if protocol_coverage and protocol_coverage.get("missing_roles"):

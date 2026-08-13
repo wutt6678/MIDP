@@ -77,6 +77,9 @@ class CheckRecord:
 from route_data.build.conflict_generation import (
     find_wrong_name_candidates as _find_wrong_name_candidates,
 )
+from route_data.build.conflict_generation import (
+    structural_wrong_name_candidates as _structural_wrong_name_candidates,
+)
 from route_data.data.split_mapping import resolve_effective_split as _resolve_effective_split
 
 # --------------------------------------------------------------------------- #
@@ -120,6 +123,16 @@ def select_smoke_subset(
 
     # P0-3 (review 54c0dc9): explicit coverage check — stop selecting once
     # all structural requirements are satisfied.
+    # P0-4 (review 600ea5b): includes structural wrong-name feasibility.
+
+    def _selected_by_identity() -> dict[str, list]:
+        _by: dict[str, list] = {}
+        for _s in selected:
+            _iid = _s.get("identity_id", "")
+            if _iid:
+                _by.setdefault(_iid, []).append(_s)
+        return _by
+
     def _coverage_satisfied() -> bool:
         if len(identity_ids) < min_identities:
             return False
@@ -133,12 +146,14 @@ def select_smoke_subset(
             return False
         if require_visual and not image_bearing:
             return False
-        satisfied = not (require_profile_fact and not has_fact)
+        if require_profile_fact and not has_fact:
+            return False
         if require_multiview and not any(
             len(imgs) >= 2 for imgs in images_by_identity.values()
         ):
-            satisfied = False
-        return satisfied
+            return False
+        # P0-4 (review 600ea5b): structural wrong-name feasibility.
+        return _structural_wrong_name_candidates(_selected_by_identity())
 
     def _score_sample(idx: int) -> int:
         """Score a sample against the *current* selection state."""
@@ -165,6 +180,15 @@ def select_smoke_subset(
             and img not in images_by_identity.get(iid, set())
         ):
             score += 5
+        # P0-5 (review 600ea5b): reward completing a control group for
+        # wrong-name structural feasibility.
+        if iid in identity_ids and len(_selected_by_identity().get(iid, [])) == 1:
+            before = len(_structural_wrong_name_candidates(_selected_by_identity()))
+            trial = _selected_by_identity()
+            trial.setdefault(iid, []).append(s)
+            after = len(_structural_wrong_name_candidates(trial))
+            if after > before:
+                score += 8
         return score
 
     # Iterative greedy selection: re-score remaining candidates each round.
@@ -232,17 +256,19 @@ def select_smoke_subset(
     # P1-9: enforce require_wrong_name using the same eligibility logic as
     # production route-probe generation (visual anchor, >=2 samples, Jaccard
     # matching).  Build by_identity from selected samples.
-    _by_identity: dict[str, list] = {}
-    for _s in selected:
-        _iid = _s.get("identity_id", "")
-        if _iid:
-            _by_identity.setdefault(_iid, []).append(_s)
+    _by_identity: dict[str, list] = _selected_by_identity()
     wrong_name_pairs = _find_wrong_name_candidates(_by_identity)
+    structural_wn = _structural_wrong_name_candidates(_by_identity)
 
     if require_wrong_name and not wrong_name_pairs:
         issues.append(
             "require_wrong_name: no valid wrong-name target/control pair found "
             f"(image-bearing identities: {len(image_bearing)})"
+        )
+    if not structural_wn:
+        issues.append(
+            "structural wrong-name feasibility: no valid (target, control) "
+            "pair with control having >= 2 selected rows"
         )
 
     # P1-7: enforce require_multiview — need >=1 identity with >=2 distinct image URIs.
@@ -257,6 +283,7 @@ def select_smoke_subset(
         "splits_seen": sorted(splits_seen),
         "has_profile_facts": has_fact,
         "has_multiview": has_multiview,
+        "structural_wrong_name_candidates": structural_wn[:10],
         "wrong_name_pairs": [
             {"target": t, "control": c, "similarity": round(sim, 4)}
             for t, c, sim in wrong_name_pairs[:5]

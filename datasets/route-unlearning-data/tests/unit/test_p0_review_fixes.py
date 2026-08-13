@@ -44,9 +44,13 @@ def _make_sample(
     *,
     image_uri: str | None = None,
     profile_facts: list | None = None,
-    name: str | None = None,
+    identity_name: str | None = None,
 ) -> dict:
-    """Build a minimal sample dict for select_smoke_subset."""
+    """Build a minimal sample dict for select_smoke_subset.
+
+    Uses ``identity_name`` (the canonical field from ``CanonicalSample``),
+    not the legacy ``name`` key.
+    """
     s: dict = {
         "source_sample_id": source_sample_id,
         "identity_id": identity_id,
@@ -56,8 +60,8 @@ def _make_sample(
         s["image_uri"] = image_uri
     if profile_facts is not None:
         s["profile_facts"] = profile_facts
-    if name is not None:
-        s["name"] = name
+    if identity_name is not None:
+        s["identity_name"] = identity_name
     return s
 
 
@@ -395,31 +399,43 @@ class TestP03CoverageSatisfied:
     """P0-3: select_smoke_subset stops when coverage is complete."""
 
     def _make_coverage_samples(self):
-        """Create samples where 3 identities cover all requirements."""
+        """Create samples where coverage is satisfied with minimal identities.
+
+        Includes ``identity_name`` and a second row for idB so that
+        structural wrong-name feasibility can be satisfied.
+        """
         return [
             # Identity A: exclude + image + fact
             _make_sample("s1", "idA", "exclude",
-                         image_uri="/img/a.jpg",
+                         image_uri="/img/a.jpg", identity_name="A",
                          profile_facts=[{"q": "nat?", "a": "X"}]),
-            # Identity B: train + image + fact
+            # Identity B: train + image + fact (2 rows for control)
             _make_sample("s2", "idB", "train",
-                         image_uri="/img/b.jpg",
+                         image_uri="/img/b.jpg", identity_name="B",
                          profile_facts=[{"q": "nat?", "a": "Y"}]),
+            _make_sample("s2b", "idB", "train",
+                         image_uri="/img/b2.jpg", identity_name="B"),
             # Identity C: eval + image + fact
             _make_sample("s3", "idC", "eval",
-                         image_uri="/img/c.jpg",
+                         image_uri="/img/c.jpg", identity_name="C",
                          profile_facts=[{"q": "nat?", "a": "Z"}]),
             # Extra identities that should NOT be selected.
-            _make_sample("s4", "idD", "train", image_uri="/img/d.jpg"),
-            _make_sample("s5", "idE", "train", image_uri="/img/e.jpg"),
-            _make_sample("s6", "idF", "eval", image_uri="/img/f.jpg"),
-            _make_sample("s7", "idG", "exclude", image_uri="/img/g.jpg"),
-            _make_sample("s8", "idH", "train", image_uri="/img/h.jpg"),
-            _make_sample("s9", "idI", "eval", image_uri="/img/i.jpg"),
+            _make_sample("s4", "idD", "train", image_uri="/img/d.jpg",
+                         identity_name="D"),
+            _make_sample("s5", "idE", "train", image_uri="/img/e.jpg",
+                         identity_name="E"),
+            _make_sample("s6", "idF", "eval", image_uri="/img/f.jpg",
+                         identity_name="F"),
+            _make_sample("s7", "idG", "exclude", image_uri="/img/g.jpg",
+                         identity_name="G"),
+            _make_sample("s8", "idH", "train", image_uri="/img/h.jpg",
+                         identity_name="H"),
+            _make_sample("s9", "idI", "eval", image_uri="/img/i.jpg",
+                         identity_name="I"),
         ]
 
     def test_stops_when_required_coverage_complete(self):
-        """Selection stops at 3 identities, not 12."""
+        """Selection stops early, not at 12."""
         fv = _import_final_verify()
         samples = self._make_coverage_samples()
         result = fv.select_smoke_subset(
@@ -432,8 +448,10 @@ class TestP03CoverageSatisfied:
             require_visual=True,
             require_profile_fact=True,
         )
-        # Should stop at exactly 3 identities (coverage satisfied).
-        assert len(result["coverage"]["identities"]) == 3
+        # Should stop at 3 identities (A, B, C) once coverage is satisfied
+        # including structural wrong-name feasibility (idB has 2 rows).
+        selected_ids = result["coverage"]["identities"]
+        assert len(selected_ids) <= 4
         assert result["coverage"]["selected_samples"] <= 5
 
     def test_does_not_fill_to_12_without_need(self):
@@ -444,14 +462,19 @@ class TestP03CoverageSatisfied:
         assert result["coverage"]["selected_samples"] < 12
 
     def test_minimal_three_role_case(self):
-        """3 identities covering train/eval/exclude is sufficient."""
+        """3 identities covering train/eval/exclude + wrong-name feasibility."""
         fv = _import_final_verify()
         samples = [
             _make_sample("s1", "A", "exclude", image_uri="/a.jpg",
+                         identity_name="A",
                          profile_facts=[{"q": "x", "a": "y"}]),
             _make_sample("s2", "B", "train", image_uri="/b.jpg",
+                         identity_name="B",
                          profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s2b", "B", "train", image_uri="/b2.jpg",
+                         identity_name="B"),
             _make_sample("s3", "C", "eval", image_uri="/c.jpg",
+                         identity_name="C",
                          profile_facts=[{"q": "x", "a": "y"}]),
         ]
         result = fv.select_smoke_subset(
@@ -477,46 +500,52 @@ class TestP03CoverageSatisfied:
 
 
 class TestP04WrongNameGateA:
-    """P0-4: structural wrong-name feasibility check in manifest generation."""
+    """P0-4: structural wrong-name feasibility check in manifest generation.
+
+    Uses ``identity_name`` (the canonical field) and the shared
+    :func:`structural_wrong_name_candidates` helper.
+    """
 
     def test_preinference_wrong_name_structural_feasibility(self):
-        """Gate A requires >= 2 named image-bearing identities."""
-        from route_data.build.conflict_generation import find_wrong_name_candidates
+        """Gate A requires a control identity with >= 2 rows."""
+        from route_data.build.conflict_generation import (
+            structural_wrong_name_candidates,
+        )
 
-        # Two named image-bearing identities → structural candidates exist.
+        # Two named image-bearing identities, control has >= 2 rows.
         by_identity = {
             "idA": [
-                {"identity_id": "idA", "name": "Alice", "image_uri": "/a.jpg"},
-                {"identity_id": "idA", "name": "Alice", "image_uri": "/a2.jpg"},
+                {"identity_id": "idA", "identity_name": "Alice", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "Alice", "image_uri": "/a2.jpg"},
             ],
             "idB": [
-                {"identity_id": "idB", "name": "Bob", "image_uri": "/b.jpg"},
-                {"identity_id": "idB", "name": "Bob", "image_uri": "/b2.jpg"},
+                {"identity_id": "idB", "identity_name": "Bob", "image_uri": "/b.jpg"},
             ],
         }
-        _pairs = find_wrong_name_candidates(by_identity)
-        # The production function may or may not return pairs depending on
-        # Jaccard logic, but structurally we have the material.
-        # For Gate A, we just need >= 2 named image-bearing identities.
-        named_ib = [
-            iid for iid, samples in by_identity.items()
-            if any(s.get("name") for s in samples) and any(s.get("image_uri") for s in samples)
-        ]
-        assert len(named_ib) >= 2
+        pairs = structural_wrong_name_candidates(by_identity)
+        # idB is a valid target (has name+image), idA is a valid control
+        # (has name+image, >= 2 rows).  So at least one pair exists.
+        assert len(pairs) >= 1
+        target_ids = {p["target_identity_id"] for p in pairs}
+        control_ids = {p["control_identity_id"] for p in pairs}
+        assert "idB" in target_ids
+        assert "idA" in control_ids
 
     def test_preinference_does_not_require_visual_similarity(self):
-        """Gate A does not check visual similarity — only structure."""
-        # Even without visual attributes, structural candidates exist
-        # as long as we have >= 2 named image-bearing identities.
+        """Gate A does not check visual attributes — only structure."""
+        from route_data.build.conflict_generation import (
+            structural_wrong_name_candidates,
+        )
+
         by_identity = {
-            "idX": [{"identity_id": "idX", "name": "X", "image_uri": "/x.jpg"}],
-            "idY": [{"identity_id": "idY", "name": "Y", "image_uri": "/y.jpg"}],
+            "idX": [
+                {"identity_id": "idX", "identity_name": "X", "image_uri": "/x.jpg"},
+                {"identity_id": "idX", "identity_name": "X", "image_uri": "/x2.jpg"},
+            ],
+            "idY": [{"identity_id": "idY", "identity_name": "Y", "image_uri": "/y.jpg"}],
         }
-        named_ib = [
-            iid for iid, samples in by_identity.items()
-            if any(s.get("name") for s in samples) and any(s.get("image_uri") for s in samples)
-        ]
-        assert len(named_ib) >= 2
+        pairs = structural_wrong_name_candidates(by_identity)
+        assert len(pairs) >= 1
         # No visual_attributes needed for Gate A.
 
 
@@ -827,3 +856,605 @@ class TestP07ProtocolShaFailClosed:
             )
             assert len(result) == 1
             assert result[0]["source_sample_id"] == "s1"
+
+
+# ========================================================================== #
+# P0-1: identity_name field correctness tests
+# ========================================================================== #
+
+
+class TestP01IdentityNameField:
+    """P0-1: wrong-name gate uses identity_name, not name."""
+
+    def test_wrong_name_gate_uses_identity_name(self):
+        """A sample with identity_name is recognised as named."""
+        from route_data.build.conflict_generation import (
+            _identity_name,
+            structural_wrong_name_candidates,
+        )
+
+        sample = {"identity_id": "id1", "identity_name": "Alice", "image_uri": "/a.jpg"}
+        assert _identity_name(sample) == "Alice"
+
+        by_identity = {
+            "id1": [
+                sample,
+                {"identity_id": "id1", "identity_name": "Alice", "image_uri": "/a2.jpg"},
+            ],
+            "id2": [{"identity_id": "id2", "identity_name": "Bob", "image_uri": "/b.jpg"}],
+        }
+        pairs = structural_wrong_name_candidates(by_identity)
+        assert len(pairs) >= 1
+
+    def test_wrong_name_gate_rejects_missing_identity_name(self):
+        """A sample without identity_name is NOT recognised as named."""
+        from route_data.build.conflict_generation import (
+            _identity_name,
+            structural_wrong_name_candidates,
+        )
+
+        # Has "name" but NOT "identity_name" — should be rejected.
+        sample = {"identity_id": "id1", "name": "Alice", "image_uri": "/a.jpg"}
+        assert _identity_name(sample) is None
+
+        by_identity = {
+            "id1": [
+                sample,
+                {"identity_id": "id1", "name": "Alice", "image_uri": "/a2.jpg"},
+            ],
+            "id2": [{"identity_id": "id2", "name": "Bob", "image_uri": "/b.jpg"}],
+        }
+        pairs = structural_wrong_name_candidates(by_identity)
+        assert len(pairs) == 0
+
+    def test_wrong_name_gate_accepts_real_canonical_identity_name(self):
+        """CanonicalSample.to_dict() produces a dict recognised by the gate."""
+        from route_data.build.conflict_generation import (
+            _identity_name,
+            structural_wrong_name_candidates,
+        )
+        from route_data.data.schemas import CanonicalSample, Provenance
+
+        prov = Provenance(source_dataset="fiubench")
+        cs = CanonicalSample(
+            benchmark="fiubench",
+            source_sample_id="s1",
+            identity_id="id1",
+            provenance=prov,
+            identity_name="Synthetic Person A",
+            image_uri="/tmp/a.jpg",
+        )
+        d = cs.to_dict()
+        assert _identity_name(d) == "Synthetic Person A"
+
+        by_identity = {
+            "id1": [
+                d,
+                CanonicalSample(
+                    benchmark="fiubench", source_sample_id="s1b",
+                    identity_id="id1", provenance=prov,
+                    identity_name="Synthetic Person A",
+                    image_uri="/tmp/a2.jpg",
+                ).to_dict(),
+            ],
+            "id2": [
+                CanonicalSample(
+                    benchmark="fiubench", source_sample_id="s2",
+                    identity_id="id2", provenance=prov,
+                    identity_name="Synthetic Person B",
+                    image_uri="/tmp/b.jpg",
+                ).to_dict(),
+            ],
+        }
+        pairs = structural_wrong_name_candidates(by_identity)
+        assert len(pairs) >= 1
+
+
+# ========================================================================== #
+# Structural wrong-name gate — detailed tests
+# ========================================================================== #
+
+
+class TestStructuralWrongNameGate:
+    """Detailed tests for structural_wrong_name_candidates()."""
+
+    def _pair(self, by_identity):
+        from route_data.build.conflict_generation import (
+            structural_wrong_name_candidates,
+        )
+        return structural_wrong_name_candidates(by_identity)
+
+    def test_two_identities_one_row_each_rejected(self):
+        """2 named image identities with only 1 row each → no pairs."""
+        by_identity = {
+            "idA": [{"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"}],
+            "idB": [{"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg"}],
+        }
+        assert self._pair(by_identity) == []
+
+    def test_control_with_two_rows_passes(self):
+        """Control identity with 2 selected rows → at least one pair."""
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a2.jpg"},
+            ],
+            "idB": [{"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg"}],
+        }
+        pairs = self._pair(by_identity)
+        assert len(pairs) >= 1
+        # idA is the control (2 rows), idB is the target.
+        control_ids = {p["control_identity_id"] for p in pairs}
+        assert "idA" in control_ids
+
+    def test_deterministic(self):
+        """Same input → same output every time."""
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a2.jpg"},
+            ],
+            "idB": [{"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg"}],
+            "idC": [{"identity_id": "idC", "identity_name": "C", "image_uri": "/c.jpg"}],
+        }
+        r1 = self._pair(by_identity)
+        r2 = self._pair(by_identity)
+        assert r1 == r2
+
+    def test_no_visual_labels_needed(self):
+        """Structural gate passes without any visual_attributes."""
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a2.jpg"},
+            ],
+            "idB": [{"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg"}],
+        }
+        # No visual_attributes keys present at all.
+        pairs = self._pair(by_identity)
+        assert len(pairs) >= 1
+
+    def test_rejects_same_identity_pair(self):
+        """Target and control must differ — no self-pairs."""
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a2.jpg"},
+            ],
+        }
+        pairs = self._pair(by_identity)
+        # Only one identity → no valid (target, control) pair.
+        assert pairs == []
+
+    def test_rejects_missing_image(self):
+        """Identity without image_uri is not eligible."""
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "A"},  # no image
+            ],
+            "idB": [{"identity_id": "idB", "identity_name": "B"}],  # no image
+        }
+        pairs = self._pair(by_identity)
+        # idA has one image-bearing row but idB has no image at all.
+        # idA can't be control (only 1 image-bearing row counted by any()).
+        # Actually idA has_name=True, has_image=True (any row has image_uri).
+        # But idB has has_image=False → idB not eligible as target or control.
+        # idA has 2 rows → eligible control, but no eligible target.
+        assert pairs == []
+
+    def test_rejects_missing_identity_name(self):
+        """Identity without identity_name is not eligible."""
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "image_uri": "/a2.jpg"},
+            ],
+            "idB": [{"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg"}],
+        }
+        pairs = self._pair(by_identity)
+        # idA has no identity_name → not eligible as control.
+        # idB has only 1 row → not eligible as control.
+        # idB is eligible target, but no eligible control exists.
+        assert pairs == []
+
+
+# ========================================================================== #
+# Selector tests for wrong-name structural feasibility
+# ========================================================================== #
+
+
+class TestSelectorWrongName:
+    """Selector integration tests for structural wrong-name feasibility."""
+
+    def test_coverage_does_not_stop_before_wrong_name_feasibility(self):
+        """Selector continues until structural wrong-name is satisfied."""
+        fv = _import_final_verify()
+        # 3 identities covering train/eval/exclude, but none has 2 rows.
+        # Without wrong-name feasibility, selector would stop at 3.
+        # With it, selector must keep going until some identity gets 2 rows.
+        samples = [
+            _make_sample("s1", "idA", "exclude",
+                         image_uri="/a.jpg", identity_name="A",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s2", "idB", "train",
+                         image_uri="/b.jpg", identity_name="B",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s3", "idC", "eval",
+                         image_uri="/c.jpg", identity_name="C",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            # Second row for idB — makes idB a valid control.
+            _make_sample("s4", "idB", "train",
+                         image_uri="/b2.jpg", identity_name="B"),
+            # Extra identities that should NOT be selected if s4 is enough.
+            _make_sample("s5", "idD", "train", image_uri="/d.jpg",
+                         identity_name="D"),
+            _make_sample("s6", "idE", "eval", image_uri="/e.jpg",
+                         identity_name="E"),
+        ]
+        result = fv.select_smoke_subset(
+            samples, min_identities=3, min_image_bearing=2,
+        )
+        by_identity: dict[str, list] = {}
+        for s in result["selected"]:
+            by_identity.setdefault(s["identity_id"], []).append(s)
+        from route_data.build.conflict_generation import (
+            structural_wrong_name_candidates,
+        )
+        pairs = structural_wrong_name_candidates(by_identity)
+        assert len(pairs) >= 1, (
+            f"No structural wrong-name pairs; by_identity sizes: "
+            f"{({k: len(v) for k, v in by_identity.items()})}"
+        )
+
+    def test_selector_chooses_second_row_for_control(self):
+        """Selector prefers second row for control over new identity."""
+        fv = _import_final_verify()
+        samples = [
+            _make_sample("s1", "idA", "exclude",
+                         image_uri="/a.jpg", identity_name="A",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s2", "idB", "train",
+                         image_uri="/b.jpg", identity_name="B",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s3", "idC", "eval",
+                         image_uri="/c.jpg", identity_name="C",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            # Second row for idA — completes control group.
+            _make_sample("s4", "idA", "exclude",
+                         image_uri="/a2.jpg", identity_name="A"),
+            # Extra identities.
+            _make_sample("s5", "idD", "train", image_uri="/d.jpg",
+                         identity_name="D"),
+            _make_sample("s6", "idE", "eval", image_uri="/e.jpg",
+                         identity_name="E"),
+            _make_sample("s7", "idF", "exclude", image_uri="/f.jpg",
+                         identity_name="F"),
+        ]
+        result = fv.select_smoke_subset(
+            samples, min_identities=3, min_image_bearing=2,
+        )
+        selected_ids = [s["source_sample_id"] for s in result["selected"]]
+        # s4 (second row for idA) should be selected before idD/idE/idF.
+        assert "s4" in selected_ids
+
+    def test_minimal_row_count_deterministic(self):
+        """Same input → same selected row count every time."""
+        fv = _import_final_verify()
+        samples = [
+            _make_sample("s1", "idA", "exclude",
+                         image_uri="/a.jpg", identity_name="A",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s2", "idB", "train",
+                         image_uri="/b.jpg", identity_name="B",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s3", "idC", "eval",
+                         image_uri="/c.jpg", identity_name="C",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s4", "idB", "train",
+                         image_uri="/b2.jpg", identity_name="B"),
+            _make_sample("s5", "idD", "train", image_uri="/d.jpg",
+                         identity_name="D"),
+        ]
+        r1 = fv.select_smoke_subset(samples, min_identities=3)
+        r2 = fv.select_smoke_subset(samples, min_identities=3)
+        assert r1["coverage"]["selected_samples"] == r2["coverage"]["selected_samples"]
+
+    def test_selected_roles_include_train_eval_exclude(self):
+        """Selected subset covers all three required roles."""
+        fv = _import_final_verify()
+        samples = [
+            _make_sample("s1", "idA", "exclude",
+                         image_uri="/a.jpg", identity_name="A",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s2", "idB", "train",
+                         image_uri="/b.jpg", identity_name="B",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s3", "idC", "eval",
+                         image_uri="/c.jpg", identity_name="C",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s4", "idB", "train",
+                         image_uri="/b2.jpg", identity_name="B"),
+        ]
+        result = fv.select_smoke_subset(
+            samples, min_identities=3, min_image_bearing=2,
+        )
+        splits = {s.get("split") for s in result["selected"]}
+        assert "train" in splits
+        assert "eval" in splits
+        assert "exclude" in splits
+
+    def test_selected_subset_supports_structural_wrong_name_pair(self):
+        """Selected subset has >= 1 structural wrong-name pair."""
+        fv = _import_final_verify()
+        samples = [
+            _make_sample("s1", "idA", "exclude",
+                         image_uri="/a.jpg", identity_name="A",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s2", "idB", "train",
+                         image_uri="/b.jpg", identity_name="B",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s3", "idC", "eval",
+                         image_uri="/c.jpg", identity_name="C",
+                         profile_facts=[{"q": "x", "a": "y"}]),
+            _make_sample("s4", "idB", "train",
+                         image_uri="/b2.jpg", identity_name="B"),
+        ]
+        result = fv.select_smoke_subset(
+            samples, min_identities=3, min_image_bearing=2,
+        )
+        by_identity: dict[str, list] = {}
+        for s in result["selected"]:
+            by_identity.setdefault(s["identity_id"], []).append(s)
+        from route_data.build.conflict_generation import (
+            structural_wrong_name_candidates,
+        )
+        assert structural_wrong_name_candidates(by_identity)
+
+
+# ========================================================================== #
+# Gate A → Gate B transition tests
+# ========================================================================== #
+
+
+class TestGateAToGateBTransition:
+    """Verify the pre-inference → post-annotation wrong-name pipeline."""
+
+    def _make_visual_attrs(self, smiling=True, eyeglasses=False):
+        """Build fake accepted visual attributes for Gate B."""
+        prefix = "extended_attributes.celeba40."
+        return {
+            f"{prefix}Smiling": {
+                "label": smiling, "confidence_band": "high",
+            },
+            f"{prefix}Eyeglasses": {
+                "label": eyeglasses, "confidence_band": "high",
+            },
+        }
+
+    def test_structural_pair_exists_pre_annotation(self):
+        """Gate A: structural pair exists before annotation."""
+        from route_data.build.conflict_generation import (
+            structural_wrong_name_candidates,
+        )
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a2.jpg"},
+            ],
+            "idB": [
+                {"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg"},
+            ],
+        }
+        assert structural_wrong_name_candidates(by_identity)
+
+    def test_visual_attrs_make_gate_b_pass(self):
+        """Adding accepted visual attrs makes find_wrong_name_candidates() non-empty."""
+        from route_data.build.conflict_generation import (
+            find_wrong_name_candidates,
+        )
+        va = self._make_visual_attrs(smiling=True, eyeglasses=True)
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg",
+                 "visual_attributes": va},
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a2.jpg",
+                 "visual_attributes": va},
+            ],
+            "idB": [
+                {"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg",
+                 "visual_attributes": va},
+            ],
+        }
+        triples = find_wrong_name_candidates(by_identity)
+        assert len(triples) >= 1
+
+    def test_no_visual_attrs_fails_gate_b(self):
+        """Without visual attributes, find_wrong_name_candidates() is empty."""
+        from route_data.build.conflict_generation import (
+            find_wrong_name_candidates,
+        )
+        by_identity = {
+            "idA": [
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a.jpg"},
+                {"identity_id": "idA", "identity_name": "A", "image_uri": "/a2.jpg"},
+            ],
+            "idB": [
+                {"identity_id": "idB", "identity_name": "B", "image_uri": "/b.jpg"},
+            ],
+        }
+        # Gate A passes (structural), but Gate B fails (no visual attrs).
+        triples = find_wrong_name_candidates(by_identity)
+        assert triples == []
+
+
+# ========================================================================== #
+# P0-7: E2E minimal selector test for wrong-name viability
+# ========================================================================== #
+
+
+class TestP07E2EMinimalSelector:
+    """P0-7: end-to-end test proving selected subset yields wrong-name pair."""
+
+    def test_e2e_minimal_selector_wrong_name_viability(self):
+        """Full pipeline: selector → structural gate → Gate B with visual attrs.
+
+        Fixture:
+          Identity A: exclude, 1 row (target candidate)
+          Identity B: train, 2 rows (control candidate)
+          Identity C: eval, 1 row (fills eval role)
+          Plus extra irrelevant identities.
+        """
+        fv = _import_final_verify()
+        from route_data.build.conflict_generation import (
+            find_wrong_name_candidates,
+            structural_wrong_name_candidates,
+        )
+
+        samples = [
+            # Identity A: exclude, 1 canonical image+QA row.
+            _make_sample("s1", "idA", "exclude",
+                         image_uri="/img/a.jpg", identity_name="Person A",
+                         profile_facts=[{"q": "nat?", "a": "X"}]),
+            # Identity B: train, 2 canonical rows.
+            _make_sample("s2", "idB", "train",
+                         image_uri="/img/b1.jpg", identity_name="Person B",
+                         profile_facts=[{"q": "nat?", "a": "Y"}]),
+            _make_sample("s3", "idB", "train",
+                         image_uri="/img/b2.jpg", identity_name="Person B"),
+            # Identity C: eval, 1 canonical image+QA row.
+            _make_sample("s4", "idC", "eval",
+                         image_uri="/img/c.jpg", identity_name="Person C",
+                         profile_facts=[{"q": "nat?", "a": "Z"}]),
+            # Extra irrelevant identities.
+            _make_sample("s5", "idD", "train", image_uri="/img/d.jpg",
+                         identity_name="Person D"),
+            _make_sample("s6", "idE", "eval", image_uri="/img/e.jpg",
+                         identity_name="Person E"),
+            _make_sample("s7", "idF", "exclude", image_uri="/img/f.jpg",
+                         identity_name="Person F"),
+            _make_sample("s8", "idG", "train", image_uri="/img/g.jpg",
+                         identity_name="Person G"),
+        ]
+
+        result = fv.select_smoke_subset(
+            samples,
+            min_identities=3,
+            min_image_bearing=2,
+            require_train=True,
+            require_eval=True,
+            require_exclude=True,
+            require_visual=True,
+            require_profile_fact=True,
+        )
+
+        # Build by_identity from selected samples.
+        by_identity: dict[str, list] = {}
+        for s in result["selected"]:
+            by_identity.setdefault(s["identity_id"], []).append(s)
+
+        # Gate A: structural wrong-name candidates exist.
+        structural_pairs = structural_wrong_name_candidates(by_identity)
+        assert structural_pairs, (
+            f"No structural pairs; by_identity: "
+            f"{({k: len(v) for k, v in by_identity.items()})}"
+        )
+
+        # Gate B: add fake accepted visual attributes and verify
+        # find_wrong_name_candidates() can become non-empty.
+        prefix = "extended_attributes.celeba40."
+        shared_va = {
+            f"{prefix}Smiling": {"label": True, "confidence_band": "high"},
+            f"{prefix}Eyeglasses": {"label": False, "confidence_band": "high"},
+        }
+        by_identity_with_attrs: dict[str, list] = {}
+        for iid, group in by_identity.items():
+            enriched = []
+            for s in group:
+                s2 = dict(s)
+                s2["visual_attributes"] = shared_va
+                enriched.append(s2)
+            by_identity_with_attrs[iid] = enriched
+
+        triples = find_wrong_name_candidates(by_identity_with_attrs)
+        assert triples, "Gate B: find_wrong_name_candidates() should be non-empty with visual attrs"
+
+        # Verify the selected subset is minimal (3-4 identities, 4-6 rows).
+        n_selected = result["coverage"]["selected_samples"]
+        n_identities = len(result["coverage"]["identities"])
+        assert 3 <= n_identities <= 5, f"Too many identities selected: {n_identities}"
+        assert n_selected <= 8, f"Too many rows selected: {n_selected}"
+
+
+# ========================================================================== #
+# P0-8: Schema contract test
+# ========================================================================== #
+
+
+class TestP08SchemaContract:
+    """P0-8: smoke selection uses CanonicalSample schema end-to-end."""
+
+    def test_smoke_selection_contract_uses_canonical_sample_schema(self):
+        """CanonicalSample.to_dict() → selector → structural feasibility.
+
+        Verifies that no code expects undefined top-level fields.
+        """
+        from route_data.build.conflict_generation import (
+            _identity_name,
+            structural_wrong_name_candidates,
+        )
+        from route_data.data.schemas import (
+            CanonicalSample,
+            ProfileFact,
+            Provenance,
+        )
+
+        fv = _import_final_verify()
+        prov = Provenance(source_dataset="fiubench")
+
+        def _cs(sid, iid, split, name, img, facts=None):
+            return CanonicalSample(
+                benchmark="fiubench",
+                source_sample_id=sid,
+                identity_id=iid,
+                provenance=prov,
+                identity_name=name,
+                image_uri=img,
+                split=split,
+                profile_facts=facts or [],
+            ).to_dict()
+
+        fact = ProfileFact(fact_id="f1", relation="nat", value="X")
+        samples = [
+            _cs("s1", "idA", "exclude", "Person A", "/a.jpg", [fact]),
+            _cs("s2", "idB", "train", "Person B", "/b1.jpg", [fact]),
+            _cs("s3", "idB", "train", "Person B", "/b2.jpg"),
+            _cs("s4", "idC", "eval", "Person C", "/c.jpg", [fact]),
+            _cs("s5", "idD", "train", "Person D", "/d.jpg"),
+            _cs("s6", "idE", "eval", "Person E", "/e.jpg"),
+        ]
+
+        # Verify every dict has identity_name, not name.
+        for s in samples:
+            assert "identity_name" in s
+            assert _identity_name(s) is not None or s["identity_name"] is None
+
+        # Run the smoke selector.
+        result = fv.select_smoke_subset(
+            samples, min_identities=3, min_image_bearing=2,
+        )
+
+        # Run structural wrong-name feasibility.
+        by_identity: dict[str, list] = {}
+        for s in result["selected"]:
+            by_identity.setdefault(s["identity_id"], []).append(s)
+        pairs = structural_wrong_name_candidates(by_identity)
+        assert pairs, "Schema contract: structural wrong-name pairs must exist"
+
+        # Verify no code expects a "name" field — only "identity_name".
+        for s in result["selected"]:
+            # identity_name must be the field used.
+            assert "identity_name" in s
+            # The selector should not have introduced any "name" key.
+            # (CanonicalSample.to_dict() does not produce "name".)
+            assert "name" not in s

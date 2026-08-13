@@ -840,3 +840,92 @@ def find_wrong_name_candidates(
 
     triples.sort(key=lambda t: (-t[0], t[1], t[2]))
     return [(target, control, sim) for sim, target, control in triples]
+
+
+# --------------------------------------------------------------------------- #
+# Pre-inference structural wrong-name eligibility (P0-3 / P0-6 review 600ea5b)
+# --------------------------------------------------------------------------- #
+
+
+def _identity_name(sample: Mapping[str, Any] | Any) -> str | None:
+    """Return the canonical identity name, or *None* if absent/blank.
+
+    Works on both plain dicts (``CanonicalSample.to_dict()`` output) and
+    :class:`CanonicalSample` objects.  The canonical field is
+    ``identity_name`` — never the top-level ``name`` key.
+    """
+    if isinstance(sample, Mapping):
+        name = sample.get("identity_name")
+    else:
+        name = getattr(sample, "identity_name", None)
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return None
+
+
+def structural_wrong_name_candidates(
+    by_identity: Mapping[str, Sequence],
+    *,
+    min_control_rows: int = 2,
+) -> list[dict[str, Any]]:
+    """Pre-inference structural wrong-name candidate pairs.
+
+    Returns every ``(target, control)`` pair that is structurally feasible
+    *before* Qwen annotation — i.e. all conditions knowable without visual
+    attribute labels.
+
+    Conditions checked:
+
+    * target identity has a non-blank ``identity_name``;
+    * target identity has at least one image-bearing selected sample;
+    * control identity differs from target;
+    * control identity has a non-blank ``identity_name``;
+    * control identity has at least one image-bearing selected sample;
+    * control identity has ``>= min_control_rows`` selected canonical rows
+      (matching the production ``len(other_group) < 2`` guard at
+      :func:`matched_wrong_name_details`).
+
+    Does **not** require accepted visual attributes, Jaccard similarity,
+    or ``matching_similarity`` — those belong to post-annotation Gate B
+    (:func:`find_wrong_name_candidates`).
+    """
+    # Collect per-identity structural facts.
+    id_info: dict[str, dict[str, Any]] = {}
+    for iid, group in by_identity.items():
+        has_name = any(_identity_name(s) for s in group)
+        has_image = any(
+            (s.get("image_uri") if isinstance(s, Mapping) else getattr(s, "image_uri", None))
+            for s in group
+        )
+        id_info[iid] = {
+            "has_name": has_name,
+            "has_image": has_image,
+            "row_count": len(group),
+        }
+
+    eligible_targets = [
+        iid for iid, info in id_info.items()
+        if info["has_name"] and info["has_image"]
+    ]
+    eligible_controls = [
+        iid for iid, info in id_info.items()
+        if info["has_name"] and info["has_image"] and info["row_count"] >= min_control_rows
+    ]
+
+    pairs: list[dict[str, Any]] = []
+    for tgt in sorted(eligible_targets):
+        for ctrl in sorted(eligible_controls):
+            if tgt == ctrl:
+                continue
+            pairs.append({
+                "target_identity_id": tgt,
+                "control_identity_id": ctrl,
+                "target_selected_records": id_info[tgt]["row_count"],
+                "control_selected_records": id_info[ctrl]["row_count"],
+                "target_has_name": True,
+                "control_has_name": True,
+                "target_has_image": True,
+                "control_has_image": True,
+                "structurally_valid": True,
+            })
+    return pairs
