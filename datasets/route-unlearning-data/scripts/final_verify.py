@@ -1361,6 +1361,82 @@ def _verify_out_of_protocol_isolation(
     return CheckRecord("out_of_protocol isolation", CheckResult.PASS, f"{len(oop_ids)} OOP IDs excluded")
 
 
+def _verify_protocol_identity_counts(
+    export_dir: Path, benchmark: str, config: str,
+    failures: list[str],
+) -> CheckRecord:
+    """P1-26: strict verifier must require unassigned==0, hash==0 in protocol mode.
+
+    Reads the processed JSONL and checks that no identity has split
+    'unassigned' or 'hash' when the FIUBench protocol is active.
+    Also verifies train > 0, eval > 0, forget > 0.
+    """
+    import yaml
+
+    with open(config) as f:
+        cfg = yaml.safe_load(f)
+    proto = (cfg.get("data", {}).get("extras", {})
+             .get("fiubench_protocol") if isinstance(cfg.get("data", {}).get("extras", {}), dict) else None)
+    if not proto or not isinstance(proto, dict):
+        return CheckRecord(
+            "protocol identity counts", CheckResult.NOT_APPLICABLE,
+            "no fiubench_protocol configured",
+        )
+
+    processed_path = export_dir / f"{benchmark}_processed.jsonl"
+    if not processed_path.exists():
+        failures.append(f"P1-26: processed artifact not found: {processed_path}")
+        return CheckRecord(
+            "protocol identity counts", CheckResult.FAIL,
+            f"processed artifact missing: {processed_path}",
+        )
+
+    split_counts: dict[str, int] = {}
+    identity_roles: dict[str, str] = {}
+    for line in processed_path.read_text().splitlines():
+        if not line.strip():
+            continue
+        doc = json.loads(line)
+        split = doc.get("split", "")
+        split_counts[split] = split_counts.get(split, 0) + 1
+        iid = doc.get("identity_id", "")
+        if iid:
+            identity_roles[iid] = split
+
+    n_unassigned = split_counts.get("unassigned", 0)
+    n_hash = split_counts.get("hash", 0)
+    n_train = split_counts.get("train", 0)
+    n_eval = split_counts.get("eval", 0)
+    n_exclude = split_counts.get("exclude", 0)
+    n_oop = split_counts.get("out_of_protocol", 0)
+
+    issues: list[str] = []
+    if n_unassigned > 0:
+        issues.append(f"unassigned={n_unassigned} (must be 0)")
+    if n_hash > 0:
+        issues.append(f"hash={n_hash} (must be 0)")
+    if n_train == 0:
+        issues.append("train=0 (must be >0)")
+    if n_eval == 0:
+        issues.append("eval=0 (must be >0)")
+    if n_exclude == 0:
+        issues.append("forget/exclude=0 (must be >0)")
+    if n_oop > 0:
+        issues.append(f"out_of_protocol={n_oop} leaked into processed output")
+
+    detail = (
+        f"train={n_train} eval={n_eval} exclude={n_exclude} "
+        f"oop={n_oop} unassigned={n_unassigned} hash={n_hash}"
+    )
+    if issues:
+        msg = "; ".join(issues)
+        failures.append(f"P1-26 protocol identity counts: {msg}")
+        return CheckRecord("protocol identity counts", CheckResult.FAIL, f"{msg} ({detail})")
+
+    print(f"--- protocol identity counts: OK ({detail})")
+    return CheckRecord("protocol identity counts", CheckResult.PASS, detail)
+
+
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
@@ -1411,6 +1487,10 @@ def verify_benchmark(
     records.append(_verify_manual_audit_report(export_dir, benchmark, failures))
     # P1-6: out_of_protocol isolation check.
     records.append(_verify_out_of_protocol_isolation(export_dir, benchmark, failures))
+    # P1-26: protocol identity counts (unassigned==0, hash==0, etc.).
+    records.append(_verify_protocol_identity_counts(
+        export_dir, benchmark, config, failures,
+    ))
     # P1-12: verify output conforms to prebuilt smoke manifest.
     records.append(_verify_smoke_manifest_conformance(
         export_dir, benchmark, failures, smoke_manifest_path=smoke_manifest_path,

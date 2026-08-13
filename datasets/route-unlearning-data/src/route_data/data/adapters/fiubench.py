@@ -280,6 +280,23 @@ class FiubenchAdapter(BenchmarkAdapter):
                     lookup.setdefault(sid_str, []).append(str(bucket))
         return lookup
 
+    def official_split_buckets(self) -> set[str]:
+        """P0-6: return the actual bucket names from ``dataset/split.json``.
+
+        Reads the released split file and returns the top-level keys
+        (e.g. ``{"forget1", "forget5", "forget10", "retain5", "retain15"}``).
+        Returns an empty set when no split file is configured or found.
+        """
+        split_path = self._split_path()
+        if split_path is None:
+            return set()
+        from .base import read_rows_from
+
+        payload = read_rows_from(split_path)
+        if len(payload) != 1 or not isinstance(payload[0], Mapping):
+            return set()
+        return set(str(k) for k in payload[0].keys())
+
     @staticmethod
     def _legacy_split_lookup(raw: Mapping) -> dict[str, list[str]]:
         """Build a *name*-keyed lookup from a legacy split file.
@@ -303,44 +320,15 @@ class FiubenchAdapter(BenchmarkAdapter):
     ) -> str:
         """Resolve official bucket memberships to an effective MIDP split.
 
-        When a ``fiubench_protocol`` is configured it is the SOLE authority
-        for experiment roles.  Non-matching official identities receive
-        ``"out_of_protocol"`` instead of falling through to a generic
-        source mapping (P0-1 / P0-2).
+        Called only when no ``fiubench_protocol`` is active.  When a protocol
+        IS active the caller uses the shared
+        :func:`route_data.data.split_mapping.resolve_protocol_role` directly
+        (P0-1 review-list repair).
+
+        Non-matching official identities receive ``"out_of_protocol"``
+        instead of falling through to a generic source mapping (P0-2).
         """
-        protocol = self._protocol()
         mapping = self._source_mapping()
-
-        if protocol:
-            # Protocol-exclusive resolution (P0-1).
-            from ..split_mapping import compute_holdout_role
-
-            forget_bucket = protocol.get("forget_bucket")
-            train_bucket = protocol.get("train_bucket")
-            eval_bucket = protocol.get("eval_bucket")
-
-            # Forget takes priority.
-            if forget_bucket and forget_bucket in memberships:
-                return "exclude"
-
-            # Explicit eval bucket.
-            if eval_bucket and eval_bucket in memberships:
-                return "eval"
-
-            # Train bucket with deterministic holdout (P0-4).
-            if train_bucket and train_bucket in memberships:
-                eval_fraction = protocol.get("eval_fraction", 0.0)
-                eval_seed = protocol.get("eval_seed", 0)
-                if eval_fraction > 0:
-                    subject_id = self._source_subject_id(row)
-                    if subject_id is not None:
-                        return compute_holdout_role(
-                            subject_id, eval_fraction, eval_seed,
-                        )
-                return "train"
-
-            # Official identity not selected by the configured experiment.
-            return "out_of_protocol"
 
         # Fallback: resolve the first membership through the source mapping.
         for bucket in memberships:
@@ -572,7 +560,7 @@ class FiubenchAdapter(BenchmarkAdapter):
         )
         facts = self._profile_facts(row, identity_name)
 
-        # -- split resolution (P0-4 / P0-5 / P0-6) ----------------------- #
+        # -- split resolution (P0-1 / P0-4 / P0-5 / P0-6) ---------------- #
         subject_id = self._source_subject_id(row)
         split_lookup = self._split_lookup()
         official_memberships: list[str] = []
@@ -582,11 +570,21 @@ class FiubenchAdapter(BenchmarkAdapter):
             # Legacy fixture: fall back to name-based lookup.
             legacy_key = f"name:{identity_name}"
             official_memberships = split_lookup.get(legacy_key, [])
-        split = (
-            self._resolve_split(row, official_memberships)
-            if official_memberships
-            else "unassigned"
-        )
+        # P0-1 (review-list): when a protocol is active it is the SOLE
+        # authority for experiment roles.  Empty memberships must route
+        # through resolve_protocol_role([], …) → "out_of_protocol",
+        # never fall through to "unassigned".
+        protocol = self._protocol()
+        if protocol:
+            from ..split_mapping import resolve_protocol_role
+            split = resolve_protocol_role(
+                official_memberships, protocol,
+                source_subject_id=subject_id,
+            )
+        elif official_memberships:
+            split = self._resolve_split(row, official_memberships)
+        else:
+            split = "unassigned"
         # P0-8: effective_role mirrors the resolved split so downstream
         # consumers can distinguish official memberships from MIDP roles.
         effective_role = split

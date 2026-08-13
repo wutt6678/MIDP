@@ -19,6 +19,8 @@ from __future__ import annotations
 import hashlib
 from typing import ClassVar
 
+import pytest
+
 from route_data.data.split_mapping import (
     compute_holdout_role,
     resolve_protocol_role,
@@ -243,6 +245,33 @@ class TestComputeHoldoutRole:
         expected = "eval" if x < 0.20 else "train"
         assert compute_holdout_role(sid, 0.20, seed) == expected
 
+    def test_holdout_order_independent_reversed_rows(self):
+        """P0-10: holdout is independent of source row order.
+
+        Simulates running protocol derivation twice with source rows
+        reversed; each identity must get the same role both times.
+        """
+        ids = [f"{i:08d}" for i in range(200)]
+        proto = _make_protocol(train_bucket="retain15", eval_fraction=0.20, eval_seed=17)
+
+        # Forward pass.
+        roles_forward = {}
+        for sid in ids:
+            roles_forward[sid] = resolve_protocol_role(
+                ["retain15"], proto, source_subject_id=sid,
+            )
+
+        # Reverse pass (simulates reversed source rows).
+        roles_reverse = {}
+        for sid in reversed(ids):
+            roles_reverse[sid] = resolve_protocol_role(
+                ["retain15"], proto, source_subject_id=sid,
+            )
+
+        assert roles_forward == roles_reverse, (
+            "Holdout assignment must be independent of source row order"
+        )
+
 
 # ========================================================================== #
 # TestSmokeManifestStrictConditions (P0-11 / P0-12)
@@ -324,6 +353,188 @@ class TestSmokeManifestStrictConditions:
         """Verify the has_fact check logic."""
         has_fact = False
         assert not has_fact  # would fail strict
+
+
+# ========================================================================== #
+# TestSmokeSelectorAllowlist (P0-4)
+# ========================================================================== #
+
+
+class TestSmokeSelectorAllowlist:
+    """P0-4: smoke selection must use a positive role allowlist.
+
+    Only samples whose effective split is in ``ALLOWED_SMOKE_ROLES``
+    ({train, eval, exclude}) may enter the smoke subset.  Samples with
+    unassigned, hash, or out_of_protocol must be rejected.
+    """
+
+    def test_smoke_selector_rejects_unassigned(self):
+        """Sample with effective split 'unassigned' is not in allowed roles."""
+        from route_data.cli import ALLOWED_SMOKE_ROLES
+        from route_data.data.split_mapping import resolve_effective_split
+
+        sample = {"split": "unassigned"}
+        eff = resolve_effective_split(sample)
+        assert eff not in ALLOWED_SMOKE_ROLES
+
+    def test_smoke_selector_rejects_hash(self):
+        """Sample with effective split 'hash' is not in allowed roles."""
+        from route_data.cli import ALLOWED_SMOKE_ROLES
+        from route_data.data.split_mapping import resolve_effective_split
+
+        sample = {"split": "hash"}
+        eff = resolve_effective_split(sample)
+        assert eff not in ALLOWED_SMOKE_ROLES
+
+    def test_smoke_selector_rejects_out_of_protocol(self):
+        """Sample with effective split 'out_of_protocol' is not allowed."""
+        from route_data.cli import ALLOWED_SMOKE_ROLES
+        from route_data.data.split_mapping import resolve_effective_split
+
+        sample = {"split": "out_of_protocol"}
+        eff = resolve_effective_split(sample)
+        assert eff not in ALLOWED_SMOKE_ROLES
+
+    def test_allowed_roles_contents(self):
+        """ALLOWED_SMOKE_ROLES is exactly {train, eval, exclude}."""
+        from route_data.cli import ALLOWED_SMOKE_ROLES
+        assert ALLOWED_SMOKE_ROLES == frozenset({"train", "eval", "exclude"})
+
+    def test_train_eval_exclude_pass_allowlist(self):
+        """Samples with train/eval/exclude pass the allowlist check."""
+        from route_data.cli import ALLOWED_SMOKE_ROLES
+        from route_data.data.split_mapping import resolve_effective_split
+
+        for role in ("train", "eval", "exclude"):
+            sample = {"split": role}
+            eff = resolve_effective_split(sample)
+            assert eff in ALLOWED_SMOKE_ROLES, f"{role} should be allowed"
+
+
+# ========================================================================== #
+# TestSmokeManifestSourceHashFailClosed (P0-8)
+# ========================================================================== #
+
+
+class TestSmokeManifestSourceHashFailClosed:
+    """P0-8: smoke-manifest source binding must be fully fail-closed.
+
+    When the manifest expects source hashes but the actual hashes cannot
+    be computed or differ, verification must raise ConfigError.
+    """
+
+    def test_smoke_manifest_missing_actual_git_sha_fails(self, tmp_path, monkeypatch):
+        """Manifest expects git SHA but actual cannot be computed → error."""
+        import json
+
+        import route_data.cli as cli_mod
+        from route_data.cli import _filter_by_smoke_manifest
+        from route_data.config import ConfigError
+
+        manifest = {
+            "selected_source_sample_ids": ["s1"],
+            "source_hashes": {"git_commit_sha": "abc123"},
+        }
+        manifest_path = tmp_path / "smoke.json"
+        manifest_path.write_text(json.dumps(manifest))
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("data:\n  name: fiubench\n")
+
+        class _FakeCfg:
+            def require_root(self):
+                return tmp_path
+            extras: ClassVar[dict] = {}
+
+        monkeypatch.setattr(cli_mod, "_data_config_for", lambda *a, **kw: _FakeCfg())
+        monkeypatch.setattr(
+            cli_mod, "_compute_source_hashes", lambda cfg: {"git_commit_sha": None},
+        )
+
+        class _Args:
+            smoke_manifest = str(manifest_path)
+            config = str(config_path)
+            dataset = "fiubench"
+
+        samples = [{"source_sample_id": "s1"}]
+        with pytest.raises(ConfigError, match="P0-8"):
+            _filter_by_smoke_manifest(samples, _Args())
+
+    def test_smoke_manifest_missing_actual_file_hash_fails(self, tmp_path, monkeypatch):
+        """Manifest expects file hash but actual cannot be computed → error."""
+        import json
+
+        import route_data.cli as cli_mod
+        from route_data.cli import _filter_by_smoke_manifest
+        from route_data.config import ConfigError
+
+        manifest = {
+            "selected_source_sample_ids": ["s1"],
+            "source_hashes": {
+                "git_commit_sha": None,
+                "files": {"dataset/full.json": "deadbeef"},
+            },
+        }
+        manifest_path = tmp_path / "smoke.json"
+        manifest_path.write_text(json.dumps(manifest))
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("data:\n  name: fiubench\n")
+
+        class _FakeCfg:
+            def require_root(self):
+                return tmp_path
+            extras: ClassVar[dict] = {}
+
+        monkeypatch.setattr(cli_mod, "_data_config_for", lambda *a, **kw: _FakeCfg())
+        monkeypatch.setattr(
+            cli_mod, "_compute_source_hashes", lambda cfg: {"files": {}},
+        )
+
+        class _Args:
+            smoke_manifest = str(manifest_path)
+            config = str(config_path)
+            dataset = "fiubench"
+
+        samples = [{"source_sample_id": "s1"}]
+        with pytest.raises(ConfigError, match="P0-8"):
+            _filter_by_smoke_manifest(samples, _Args())
+
+    def test_smoke_manifest_hash_mismatch_fails(self, tmp_path, monkeypatch):
+        """Manifest hash differs from actual hash → ConfigError."""
+        import json
+
+        import route_data.cli as cli_mod
+        from route_data.cli import _filter_by_smoke_manifest
+        from route_data.config import ConfigError
+
+        manifest = {
+            "selected_source_sample_ids": ["s1"],
+            "source_hashes": {"git_commit_sha": "expected_sha"},
+        }
+        manifest_path = tmp_path / "smoke.json"
+        manifest_path.write_text(json.dumps(manifest))
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("data:\n  name: fiubench\n")
+
+        class _FakeCfg:
+            def require_root(self):
+                return tmp_path
+            extras: ClassVar[dict] = {}
+
+        monkeypatch.setattr(cli_mod, "_data_config_for", lambda *a, **kw: _FakeCfg())
+        monkeypatch.setattr(
+            cli_mod,
+            "_compute_source_hashes",
+            lambda cfg: {"git_commit_sha": "actual_different_sha"},
+        )
+
+        class _Args:
+            smoke_manifest = str(manifest_path)
+            config = str(config_path)
+            dataset = "fiubench"
+
+        samples = [{"source_sample_id": "s1"}]
+        with pytest.raises(ConfigError, match="P1-4"):
+            _filter_by_smoke_manifest(samples, _Args())
 
 
 # ========================================================================== #
@@ -782,3 +993,52 @@ class TestRealSourceProtocolGolden:
         # 00000055 is in both retain5 and retain15; retain15 matches the
         # train_bucket, so holdout assigns eval (hash says eval for this ID).
         assert roles["00000055"] == "eval"
+
+    # -- P0-6: preflight reads actual split.json bucket names ----------- #
+
+    def test_preflight_reads_actual_split_json_bucket_names(self, tmp_path):
+        """P0-6: official_split_buckets reads keys from dataset/split.json."""
+        from tests.fixtures.fiubench_fixture import build_fiubench_protocol_fixture
+        build_fiubench_protocol_fixture(tmp_path)
+        adapter = self._build_adapter(tmp_path, self._make_protocol())
+
+        buckets = adapter.official_split_buckets()
+        # The fixture creates: forget1, forget5, forget10, retain5, retain15, retain1.
+        expected = {"forget1", "forget5", "forget10", "retain5", "retain15", "retain1"}
+        assert expected <= buckets, (
+            f"Expected at least {expected}, got {buckets}"
+        )
+
+    def test_missing_protocol_bucket_detected(self, tmp_path):
+        """P0-6: a configured bucket not in split.json is detectable."""
+        from tests.fixtures.fiubench_fixture import build_fiubench_protocol_fixture
+        build_fiubench_protocol_fixture(tmp_path)
+        adapter = self._build_adapter(tmp_path, self._make_protocol())
+
+        buckets = adapter.official_split_buckets()
+        nonexistent = "nonexistent_bucket_xyz"
+        assert nonexistent not in buckets
+
+    # -- P0-3: zero hash/unassigned in protocol mode -------------------- #
+
+    def test_fiubench_protocol_mode_has_zero_hash_assigned_identities(
+        self, tmp_path,
+    ):
+        """P0-3: protocol mode produces zero unassigned/hash identities."""
+        from tests.fixtures.fiubench_fixture import build_fiubench_protocol_fixture
+        build_fiubench_protocol_fixture(tmp_path)
+        adapter = self._build_adapter(tmp_path, self._make_protocol())
+        roles, _ = self._collect_roles(adapter)
+
+        all_splits = set(roles.values())
+        assert "unassigned" not in all_splits, (
+            "Protocol mode must not produce 'unassigned' identities"
+        )
+        assert "hash" not in all_splits, (
+            "Protocol mode must not produce 'hash' identities"
+        )
+        # Verify all roles are in the valid protocol vocabulary.
+        valid_roles = {"train", "eval", "exclude", "out_of_protocol"}
+        assert all_splits <= valid_roles, (
+            f"Unexpected roles: {all_splits - valid_roles}"
+        )

@@ -284,25 +284,36 @@ def _filter_by_smoke_manifest(samples, args) -> list:
         except Exception as exc:
             log.warning("P1-3: could not verify protocol SHA: %s", exc)
 
-    # P1-4: verify source hashes against current actual source.
+    # P0-8: verify source hashes against current actual source (fail-closed).
     manifest_src = sm_data.get("source_hashes")
     if manifest_src and config_path:
         try:
             cur_cfg = _data_config_for(args.dataset, load_run_config(config_path))
             actual = _compute_source_hashes(cur_cfg)
-            # Git SHA check.
+            # Git SHA check — P0-8: fail if manifest has expected but actual is missing.
             m_git = manifest_src.get("git_commit_sha")
             a_git = actual.get("git_commit_sha")
-            if m_git and a_git and m_git != a_git:
-                raise ConfigError(
-                    f"P1-4: source Git SHA mismatch: manifest={m_git}, actual={a_git}"
-                )
-            # File hash check.
+            if m_git:
+                if not a_git:
+                    raise ConfigError(
+                        "P0-8: manifest expects git_commit_sha but actual SHA "
+                        "could not be computed; refusing to pass silently."
+                    )
+                if m_git != a_git:
+                    raise ConfigError(
+                        f"P1-4: source Git SHA mismatch: manifest={m_git}, actual={a_git}"
+                    )
+            # File hash check — P0-8: fail if manifest has expected but actual is missing.
             m_files = manifest_src.get("files", {})
             a_files = actual.get("files", {})
             for _fp, _mh in m_files.items():
                 _ah = a_files.get(_fp)
-                if _ah and _ah != _mh:
+                if not _ah:
+                    raise ConfigError(
+                        f"P0-8: manifest expects hash for '{_fp}' but actual hash "
+                        "could not be computed; refusing to pass silently."
+                    )
+                if _ah != _mh:
                     raise ConfigError(
                         f"P1-4: source file SHA mismatch for '{_fp}': "
                         f"manifest={_mh}, actual={_ah}"
@@ -344,6 +355,36 @@ def _filter_out_of_protocol(samples) -> list:
             continue
         result.append(s)
     return result
+
+
+# P0-4: positive allowlist for smoke selection.
+ALLOWED_SMOKE_ROLES = frozenset({"train", "eval", "exclude"})
+
+
+def _assert_protocol_no_unassigned_hash(dataset: str, run_cfg: dict, samples) -> None:
+    """P0-3: when FIUBench protocol is active, reject unassigned/hash samples.
+
+    Raises ConfigError if any sample has split == 'unassigned' or 'hash'
+    while the protocol is active.  This is a defensive invariant — the
+    adapter should never emit such values in protocol mode.
+    """
+    data_cfg = _data_config_for(dataset, run_cfg)
+    proto = data_cfg.extras.get("fiubench_protocol")
+    if not proto or not isinstance(proto, dict):
+        return
+    bad = []
+    for s in samples:
+        split = s.split if hasattr(s, "split") else s.get("split", "")
+        if split in ("unassigned", "hash"):
+            bad.append(split)
+    if bad:
+        from collections import Counter
+        counts = Counter(bad)
+        raise ConfigError(
+            f"P0-3: FIUBench protocol is active but {len(bad)} sample(s) have "
+            f"forbidden split values {dict(counts)}.  "
+            "All identities must resolve to train/eval/exclude/out_of_protocol."
+        )
 
 
 def _load_image(uri: str | None, base: Path | None = None):
@@ -1350,14 +1391,26 @@ def cmd_source_make_smoke_manifest(args) -> int:
     # Convert to dicts for selection logic.
     samples = [s.to_dict() if hasattr(s, "to_dict") else s for s in raw_samples]
 
-    # P0-3 / P1-7: filter out out_of_protocol identities before smoke
-    # selection.  Only identities with effective roles exclude/train/eval
-    # may participate in the smoke test.
-    samples = [s for s in samples if s.get("split") != "out_of_protocol"]
+    # P0-4: positive allowlist — only train/eval/exclude may enter the smoke.
+    from .data.split_mapping import load_source_mapping as _sm_lm
+    from .data.split_mapping import resolve_effective_split as _sm_res
+    _sm_map = _sm_lm(data_cfg)
+    _rejected_roles: dict[str, int] = {}
+    _allowed_samples: list[dict] = []
+    for s in samples:
+        _eff = _sm_res(s, source_mapping=_sm_map)
+        if _eff in ALLOWED_SMOKE_ROLES:
+            _allowed_samples.append(s)
+        else:
+            _rejected_roles[_eff] = _rejected_roles.get(_eff, 0) + 1
+    samples = _allowed_samples
+    if _rejected_roles:
+        log.info("P0-4: smoke roles rejected by allowlist: %s", _rejected_roles)
     if not samples:
         raise ConfigError(
-            f"All samples are out_of_protocol for {args.dataset}; "
-            "check the fiubench_protocol configuration"
+            f"No samples with allowed roles {sorted(ALLOWED_SMOKE_ROLES)} for "
+            f"{args.dataset}; rejected roles: {_rejected_roles}. "
+            "Check the fiubench_protocol configuration."
         )
 
     # Resolve splits for each sample.
@@ -1880,6 +1933,95 @@ def cmd_source_verify_revision(args) -> int:
     return 0 if not errors else 1
 
 
+def cmd_source_protocol_report(args) -> int:
+    """P0-9: generate fiubench_protocol_report.json with identity counts.
+
+    Loads the source adapter, resolves every identity's protocol role,
+    verifies disjointness, and writes a machine-readable report.
+    """
+    import json as _json_pr
+
+    data_cfg = _data_config_for(args.dataset, load_run_config(args.config))
+    from .data.adapters.base import create_adapter
+    from .data.split_mapping import resolve_protocol_role
+
+    adapter = create_adapter(data_cfg)
+    proto_cfg = data_cfg.extras.get("fiubench_protocol")
+    if not proto_cfg or not isinstance(proto_cfg, dict):
+        raise ConfigError(
+            f"No fiubench_protocol configured for {args.dataset}; "
+            "cannot generate protocol report."
+        )
+
+    id_by_role: dict[str, set[str]] = {}
+    for ctx, row in adapter.iter_rows_with_context():
+        samples = list(adapter.to_samples(row, source_context=ctx))
+        for s in samples:
+            sm = s.source_metadata or {}
+            sid = str(sm.get("source_subject_id", ""))
+            memberships = sm.get("official_memberships") or []
+            role = resolve_protocol_role(
+                [str(m) for m in memberships], proto_cfg,
+                source_subject_id=sid if sid else None,
+            )
+            if sid:
+                id_by_role.setdefault(role, set()).add(sid)
+
+    forget_ids = id_by_role.get("exclude", set())
+    train_ids = id_by_role.get("train", set())
+    eval_ids = id_by_role.get("eval", set())
+    oop_ids = id_by_role.get("out_of_protocol", set())
+    unassigned_ids = id_by_role.get("unassigned", set())
+    hash_ids = id_by_role.get("hash", set())
+    all_ids = forget_ids | train_ids | eval_ids | oop_ids | unassigned_ids | hash_ids
+
+    # Disjointness verification.
+    disjointness_ok = True
+    for _a, _b, _label in [
+        (forget_ids, train_ids, "forget/train"),
+        (forget_ids, eval_ids, "forget/eval"),
+        (train_ids, eval_ids, "train/eval"),
+    ]:
+        if _a & _b:
+            disjointness_ok = False
+
+    report = {
+        "protocol_name": proto_cfg.get("name", ""),
+        "source_population": proto_cfg.get("source_population", {}).get("mode", "unknown")
+        if isinstance(proto_cfg.get("source_population"), dict)
+        else str(proto_cfg.get("source_population", "unknown")),
+        "source_identity_count": len(all_ids),
+        "forget_bucket": proto_cfg.get("forget_bucket"),
+        "forget_identity_count": len(forget_ids),
+        "retain_pool": proto_cfg.get("train_bucket"),
+        "retain_pool_identity_count": len(train_ids) + len(eval_ids),
+        "train_identity_count": len(train_ids),
+        "eval_identity_count": len(eval_ids),
+        "out_of_protocol_identity_count": len(oop_ids),
+        "unassigned_identity_count": len(unassigned_ids),
+        "hash_identity_count": len(hash_ids),
+        "disjointness_ok": disjointness_ok,
+        "invariants": {
+            "unassigned_is_zero": len(unassigned_ids) == 0,
+            "hash_is_zero": len(hash_ids) == 0,
+            "forget_nonempty": len(forget_ids) > 0,
+            "train_nonempty": len(train_ids) > 0,
+            "eval_nonempty": len(eval_ids) > 0,
+        },
+    }
+
+    output_path = getattr(args, "output", None)
+    if output_path:
+        out_p = Path(output_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        out_p.write_text(_json_pr.dumps(report, indent=2, sort_keys=False))
+        log.info("P0-9: protocol report written to %s", out_p)
+
+    _print_json(report)
+    all_invariants_ok = all(report["invariants"].values()) and disjointness_ok
+    return 0 if all_invariants_ok else 1
+
+
 def cmd_source_preflight(args) -> int:
     """P1-11: CPU-only gate before GPU use.
 
@@ -2020,20 +2162,23 @@ def cmd_source_preflight(args) -> int:
         forget_bkt = proto_cfg.get("forget_bucket")
         train_bkt = proto_cfg.get("train_bucket")
         eval_bkt = proto_cfg.get("eval_bucket")
-        # Collect all released buckets from the source data.
+        # P0-6: read actual bucket names from dataset/split.json via the adapter.
         all_released: set[str] = set()
-        for _ctx2, _row2 in adapter.iter_rows_with_context():
-            _md = _row2.get("raw_data", {})
-            if isinstance(_md, dict):
-                for _k in ("official_memberships", "memberships", "split_group"):
-                    _v = _md.get(_k)
-                    if isinstance(_v, list):
-                        all_released.update(str(x) for x in _v)
-            # Also check split_buckets from split.json if available.
-            _sb = _row2.get("split_buckets") or _row2.get("_split_buckets")
-            if isinstance(_sb, dict):
-                all_released.update(_sb.keys())
-            break  # Only need the first row for schema check.
+        if hasattr(adapter, "official_split_buckets"):
+            all_released = adapter.official_split_buckets()
+        if not all_released:
+            # Fallback: collect from row data (legacy fixtures).
+            for _ctx2, _row2 in adapter.iter_rows_with_context():
+                _md = _row2.get("raw_data", {})
+                if isinstance(_md, dict):
+                    for _k in ("official_memberships", "memberships", "split_group"):
+                        _v = _md.get(_k)
+                        if isinstance(_v, list):
+                            all_released.update(str(x) for x in _v)
+                _sb = _row2.get("split_buckets") or _row2.get("_split_buckets")
+                if isinstance(_sb, dict):
+                    all_released.update(_sb.keys())
+                break  # Only need the first row for schema check.
         # Bucket existence checks.
         proto_errors: list[str] = []
         if forget_bkt and all_released and forget_bkt not in all_released:
@@ -2076,6 +2221,32 @@ def cmd_source_preflight(args) -> int:
             proto_errors.append(
                 f"train/eval overlap: {len(_train_ids & _eval_ids)} identities"
             )
+        # P0-5: unassigned and hash must be zero when protocol is active.
+        _n_unassigned = split_counts.get("unassigned", 0)
+        _n_hash = split_counts.get("hash", 0)
+        if _n_unassigned > 0:
+            proto_errors.append(
+                f"P0: FIUBench protocol-active source contains {_n_unassigned} "
+                "unassigned identities; all official source identities must "
+                "resolve to train/eval/exclude/out_of_protocol"
+            )
+        if _n_hash > 0:
+            proto_errors.append(
+                f"P0: FIUBench protocol-active source contains {_n_hash} "
+                "hash-assigned identities; all official source identities must "
+                "resolve to train/eval/exclude/out_of_protocol"
+            )
+        # Also check role_counts from identity-level analysis.
+        _role_unassigned = len(_id_by_role.get("unassigned", set()))
+        _role_hash = len(_id_by_role.get("hash", set()))
+        if _role_unassigned > 0 and _n_unassigned == 0:
+            proto_errors.append(
+                f"P0: {_role_unassigned} identity-level unassigned role(s) detected"
+            )
+        if _role_hash > 0 and _n_hash == 0:
+            proto_errors.append(
+                f"P0: {_role_hash} identity-level hash role(s) detected"
+            )
         # Empty pool checks.
         if forget_bkt and not _forget_ids:
             proto_errors.append("eval pool empty: no forget/exclude identities")
@@ -2083,11 +2254,18 @@ def cmd_source_preflight(args) -> int:
             proto_errors.append("train pool empty: no train identities")
         if (eval_bkt or (proto_cfg.get("eval_fraction", 0) > 0)) and not _eval_ids:
             proto_errors.append("eval pool empty: no eval identities")
+        # Build role_counts including unassigned/hash for full visibility.
+        _all_role_counts: dict[str, int] = {}
+        for _rk, _rv in sorted(_id_by_role.items()):
+            _all_role_counts[_rk] = len(_rv)
+        _all_role_counts.setdefault("unassigned", _n_unassigned)
+        _all_role_counts.setdefault("hash", _n_hash)
         report["checks"]["protocol_validation"] = {
             "forget_bucket": forget_bkt,
             "train_bucket": train_bkt,
             "eval_bucket": eval_bkt,
-            "role_counts": {k: len(v) for k, v in sorted(_id_by_role.items())},
+            "official_split_buckets": sorted(all_released) if all_released else [],
+            "role_counts": dict(sorted(_all_role_counts.items())),
             "pass": len(proto_errors) == 0,
             "errors": proto_errors,
         }
@@ -2814,6 +2992,8 @@ def cmd_build_qa(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: defensive assertion — no unassigned/hash in protocol mode.
+    _assert_protocol_no_unassigned_hash(args.dataset, load_run_config(args.config), samples)
     # P0-3: exclude out_of_protocol identities from downstream stages.
     samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
@@ -3098,6 +3278,8 @@ def cmd_build_route_probes(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: defensive assertion — no unassigned/hash in protocol mode.
+    _assert_protocol_no_unassigned_hash(args.dataset, run_cfg, samples)
     # P0-3: exclude out_of_protocol identities from route probes.
     samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
@@ -3230,6 +3412,8 @@ def cmd_build_splits(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: defensive assertion — no unassigned/hash in protocol mode.
+    _assert_protocol_no_unassigned_hash(args.dataset, run_cfg, samples)
     # P0-3: exclude out_of_protocol identities from split manifests.
     samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
@@ -3257,6 +3441,8 @@ def cmd_build_export(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
     samples = _load_processed_samples(dataset_dir, args.dataset)
+    # P0-3: defensive assertion — no unassigned/hash in protocol mode.
+    _assert_protocol_no_unassigned_hash(args.dataset, run_cfg, samples)
     # P0-3: exclude out_of_protocol identities from export.
     samples = _filter_out_of_protocol(samples)
     # P1-5: downstream stages honor --smoke-manifest.
@@ -3656,6 +3842,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", required=True)
     _common_flags(p)
     p.set_defaults(func=cmd_source_verify_revision)
+
+    # P0-9: protocol identity-count report.
+    p = source.add_parser(
+        "protocol-report",
+        help="generate fiubench_protocol_report.json with identity counts (P0-9)",
+    )
+    p.add_argument("--dataset", required=True)
+    p.add_argument("--config", required=True)
+    p.add_argument("--output", default=None, help="output report JSON path")
+    _common_flags(p)
+    p.set_defaults(func=cmd_source_protocol_report)
 
     # P1-11: CPU-only preflight gate before GPU use.
     p = source.add_parser(

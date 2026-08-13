@@ -31,7 +31,7 @@ DEFAULT_SOURCE_MAPPING: dict[str, str] = {
     "forget": "exclude",
     "exclude": "exclude",
     "unassigned": "hash",
-    "out_of_protocol": "exclude",
+    "out_of_protocol": "out_of_protocol",
 }
 
 

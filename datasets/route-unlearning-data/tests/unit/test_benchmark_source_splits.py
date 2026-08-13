@@ -32,7 +32,7 @@ DEFAULT_SOURCE_MAPPING = {
     "forget": "exclude",
     "exclude": "exclude",
     "unassigned": "hash",
-    "out_of_protocol": "exclude",
+    "out_of_protocol": "out_of_protocol",
 }
 
 
@@ -73,7 +73,7 @@ class TestDefaultSourceMapping:
         assert DEFAULT_SOURCE_MAPPING["unassigned"] == "hash"
 
     def test_all_values_valid(self):
-        valid_targets = {"train", "eval", "exclude", "hash"}
+        valid_targets = {"train", "eval", "exclude", "hash", "out_of_protocol"}
         for label, target in DEFAULT_SOURCE_MAPPING.items():
             assert target in valid_targets, f"{label} -> {target} not in {valid_targets}"
 
@@ -192,16 +192,16 @@ class TestFIUBenchSourceMapping:
         proto = cfg["data"]["extras"]["fiubench_protocol"]
         assert proto["forget_bucket"] in ("forget1", "forget5", "forget10")
         assert proto["train_bucket"] in ("retain5", "retain15")
-        # out_of_protocol is in DEFAULT_SOURCE_MAPPING → exclude.
+        # out_of_protocol is in DEFAULT_SOURCE_MAPPING → preserved as distinct state (P0-2).
         mapping = _resolve_mapping("fiubench")
-        assert mapping["out_of_protocol"] == "exclude"
+        assert mapping["out_of_protocol"] == "out_of_protocol"
 
     def test_no_released_label_leaks_to_hash(self):
         # P0-1 / P0-10: released buckets are NOT in source_mapping at all;
         # they are handled exclusively by the protocol.  The out_of_protocol
-        # sentinel maps to exclude so nothing leaks to hash.
+        # sentinel is preserved as a distinct state (P0-2).
         mapping = _resolve_mapping("fiubench")
-        assert mapping["out_of_protocol"] == "exclude"
+        assert mapping["out_of_protocol"] == "out_of_protocol"
         # Legacy golden-fixture buckets still mapped correctly.
         assert mapping["forget"] == "exclude"
         assert mapping["retain"] == "train"
@@ -416,7 +416,7 @@ class TestCrossBenchmarkConsistency:
 import re
 
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
-_VALID_EFFECTIVE_SPLITS = {"train", "eval", "exclude", "hash"}
+_VALID_EFFECTIVE_SPLITS = {"train", "eval", "exclude", "hash", "out_of_protocol"}
 
 
 class TestProductionConfigProvenance:

@@ -576,6 +576,80 @@ class TestFiubenchReleasedSchema:
             "forget10",
         }
 
+    def test_protocol_unlisted_identity_never_unassigned(self, tmp_path):
+        """P0-1: unlisted identity under protocol gets out_of_protocol, not unassigned."""
+        split = {
+            "forget1": ["00044363"],
+            "retain15": ["00000003"],
+        }
+        proto = {
+            "name": "test_proto",
+            "algorithm_version": 1,
+            "source_population": "fiubench",
+            "forget_bucket": "forget1",
+            "train_bucket": "retain15",
+            "eval_bucket": None,
+            "eval_fraction": 0.20,
+            "eval_seed": 42,
+        }
+        adapter = _released_adapter(tmp_path, split_data=split, protocol=proto)
+        # Row with subject "00044363" — listed, should resolve normally.
+        sample_listed = next(
+            adapter.to_samples(
+                _released_row(), source_context=self._context(adapter, 0)
+            )
+        )
+        assert sample_listed.split != "unassigned"
+
+        # Row with subject "99999999" — NOT listed in any bucket.
+        row_unlisted = _released_row(
+            image_path="./dataset/SFHQ/SFHQ_pt1_99999999.jpg",
+            name="Unknown Person",
+            unique_id="99999999",
+        )
+        sample_unlisted = next(
+            adapter.to_samples(
+                row_unlisted, source_context=self._context(adapter, 0)
+            )
+        )
+        assert sample_unlisted.split == "out_of_protocol", (
+            "Unlisted identity under protocol must get 'out_of_protocol', "
+            f"got {sample_unlisted.split!r}"
+        )
+        assert sample_unlisted.split != "unassigned"
+
+    def test_protocol_unlisted_identity_never_hashes(self, tmp_path):
+        """P0-1: unlisted identity under protocol never gets 'hash' role."""
+        split = {
+            "forget1": ["00044363"],
+            "retain15": ["00000003"],
+        }
+        proto = {
+            "name": "test_proto",
+            "algorithm_version": 1,
+            "source_population": "fiubench",
+            "forget_bucket": "forget1",
+            "train_bucket": "retain15",
+            "eval_bucket": None,
+            "eval_fraction": 0.20,
+            "eval_seed": 42,
+        }
+        adapter = _released_adapter(tmp_path, split_data=split, protocol=proto)
+        row_unlisted = _released_row(
+            image_path="./dataset/SFHQ/SFHQ_pt1_99999999.jpg",
+            name="Unknown Person",
+            unique_id="99999999",
+        )
+        sample = next(
+            adapter.to_samples(
+                row_unlisted, source_context=self._context(adapter, 0)
+            )
+        )
+        assert sample.split != "hash", (
+            "Unlisted identity under protocol must never get 'hash' role"
+        )
+        assert sample.split == "out_of_protocol"
+
     # -- QA flattening (P0-7 / P0-8 / P0-9) ------------------------------ #
 
     def test_original_qa_count(self, tmp_path):
