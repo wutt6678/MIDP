@@ -118,6 +118,28 @@ def select_smoke_subset(
     # Track remaining candidates by index so we never mutate inputs.
     remaining = list(range(len(samples)))
 
+    # P0-3 (review 54c0dc9): explicit coverage check — stop selecting once
+    # all structural requirements are satisfied.
+    def _coverage_satisfied() -> bool:
+        if len(identity_ids) < min_identities:
+            return False
+        if len(image_bearing) < max(1, min_image_bearing):
+            return False
+        if require_train and "train" not in splits_seen:
+            return False
+        if require_eval and "eval" not in splits_seen:
+            return False
+        if require_exclude and "exclude" not in splits_seen:
+            return False
+        if require_visual and not image_bearing:
+            return False
+        satisfied = not (require_profile_fact and not has_fact)
+        if require_multiview and not any(
+            len(imgs) >= 2 for imgs in images_by_identity.values()
+        ):
+            satisfied = False
+        return satisfied
+
     def _score_sample(idx: int) -> int:
         """Score a sample against the *current* selection state."""
         s = samples[idx]
@@ -148,6 +170,9 @@ def select_smoke_subset(
     # Iterative greedy selection: re-score remaining candidates each round.
     max_select = min(12, len(samples))
     while len(selected) < max_select and remaining:
+        # P0-3: stop as soon as all structural coverage is satisfied.
+        if _coverage_satisfied():
+            break
         # Score all remaining against current state.
         scored = [(idx, _score_sample(idx)) for idx in remaining]
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -1371,12 +1396,22 @@ def _verify_protocol_identity_counts(
     'unassigned' or 'hash' when the FIUBench protocol is active.
     Also verifies train > 0, eval > 0, forget > 0.
     """
-    import yaml
-
-    with open(config) as f:
-        cfg = yaml.safe_load(f)
-    proto = (cfg.get("data", {}).get("extras", {})
-             .get("fiubench_protocol") if isinstance(cfg.get("data", {}).get("extras", {}), dict) else None)
+    # P0-1 (review 54c0dc9): resolve the *data* config via the shared
+    # helper so that the protocol is read from configs/data/<dataset>.yaml
+    # rather than from the run config YAML.
+    proto = None
+    try:
+        from route_data.cli import _data_config_for as _fv_data_config_for
+        from route_data.config import load_run_config as _fv_load_run_config
+        _fv_data_cfg = _fv_data_config_for(benchmark, _fv_load_run_config(config))
+        proto = _fv_data_cfg.extras.get("fiubench_protocol")
+    except Exception:
+        # Fallback: read the run YAML directly (golden fixture path).
+        import yaml
+        with open(config) as f:
+            cfg = yaml.safe_load(f)
+        proto = (cfg.get("data", {}).get("extras", {})
+                 .get("fiubench_protocol") if isinstance(cfg.get("data", {}).get("extras", {}), dict) else None)
     if not proto or not isinstance(proto, dict):
         return CheckRecord(
             "protocol identity counts", CheckResult.NOT_APPLICABLE,
@@ -1582,13 +1617,17 @@ def main_check(
 
     # Run the build pipeline.
     # P1-12: pass --smoke-manifest to every stage when a prebuilt manifest is provided.
+    # P0-2 (review 54c0dc9): when a prebuilt smoke manifest is supplied,
+    # do NOT add --limit.  The manifest is the sole sample selector.
     for stage in ("annotate", "qa", "route-probes", "splits", "export"):
         stage_argv = ["build", stage, "--dataset", dataset, "--config", config,
-                      "--output-dir", str(out), "--limit", limit]
+                      "--output-dir", str(out)]
         if smoke_manifest:
             stage_argv.extend(["--smoke-manifest", str(smoke_manifest)])
+        else:
+            stage_argv.extend(["--limit", limit])
         _run_cli(
-            f"build {stage} --limit {limit}",
+            f"build {stage}",
             stage_argv,
             expect=0,
             failures=failures,

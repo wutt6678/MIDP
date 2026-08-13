@@ -696,19 +696,14 @@ class TestSmokeManifestProtocolSHABinding:
         orig = _cli_mod._data_config_for
         try:
             _cli_mod._data_config_for = lambda *a, **kw: _FakeCfg()
-            # Need a config_path for the verification to trigger.
+            # P0-7: manifest with protocol_sha256 requires a config path
+            # so the verification can run (fail-closed when absent).
             args = _FakeArgs()
             args.config = str(tmp_path / "config.yaml")
-            # Write a dummy config so load_run_config can find it.
             (tmp_path / "config.yaml").write_text("data:\n  name: fiubench\n")
-            # Actually, load_run_config is called inside _data_config_for
-            # which we've monkeypatched, so it won't be called.
-            # But _filter_by_smoke_manifest calls load_run_config itself.
-            # Let me just test with config=None (no verification).
-            args.config = None
-            # With no config_path, verification is skipped.
-            result = _filter_by_smoke_manifest(samples, args)
-            assert len(result) == 1
+            from route_data.config import ConfigError
+            with pytest.raises(ConfigError, match="protocol SHA mismatch"):
+                _filter_by_smoke_manifest(samples, args)
         finally:
             _cli_mod._data_config_for = orig
 
@@ -747,15 +742,28 @@ class TestSmokeManifestProtocolSHABinding:
         manifest_path = tmp_path / "smoke.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        # No config_path → verification skipped, should pass.
+        # P0-7: config_path must be set so protocol SHA can be verified.
         class _FakeArgs:
             smoke_manifest = str(manifest_path)
-            config = None
+            config = str(tmp_path / "config.yaml")
             dataset = "fiubench"
 
-        samples = [{"source_sample_id": "s1"}]
-        result = _filter_by_smoke_manifest(samples, _FakeArgs())
-        assert len(result) == 1
+        # Write a dummy config (monkeypatch below intercepts _data_config_for).
+        (tmp_path / "config.yaml").write_text("data:\n  name: fiubench\n")
+
+        import route_data.cli as _cli_mod
+        orig = _cli_mod._data_config_for
+
+        class _FakeCfg:
+            extras: ClassVar[dict] = {"fiubench_protocol": proto}
+
+        try:
+            _cli_mod._data_config_for = lambda *a, **kw: _FakeCfg()
+            samples = [{"source_sample_id": "s1"}]
+            result = _filter_by_smoke_manifest(samples, _FakeArgs())
+            assert len(result) == 1
+        finally:
+            _cli_mod._data_config_for = orig
 
 
 class TestSmokeManifestSourceHashBinding:

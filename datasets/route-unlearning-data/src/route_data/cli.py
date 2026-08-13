@@ -247,9 +247,8 @@ def _filter_by_smoke_manifest(samples, args) -> list:
         return samples
 
     manifest_p = Path(smoke_manifest_path)
-    config_path = getattr(args, "config", None)
-    if not manifest_p.is_absolute() and config_path:
-        manifest_p = (Path(config_path).resolve().parent / manifest_p).resolve()
+    # P0-6 (review 54c0dc9): resolve relative paths against CWD (not config dir).
+    # Path() already resolves relative to CWD — do NOT re-parent to config dir.
     if not manifest_p.exists():
         raise ConfigError(f"Smoke manifest not found: {manifest_p}")
 
@@ -264,25 +263,32 @@ def _filter_by_smoke_manifest(samples, args) -> list:
             "Refusing to fall back to full-data annotation."
         )
 
-    # P1-3: verify protocol SHA match against current config.
+    # P0-7 (review 54c0dc9): verify protocol SHA — fail closed when manifest
+    # has protocol_sha256 but current config has no protocol block.
+    config_path = getattr(args, "config", None)
     manifest_proto_sha = sm_data.get("protocol_sha256")
-    if manifest_proto_sha and config_path:
-        try:
-            cur_cfg = _data_config_for(args.dataset, load_run_config(config_path))
-            cur_proto = cur_cfg.extras.get("fiubench_protocol")
-            if cur_proto and isinstance(cur_proto, dict):
-                from .data.split_mapping import compute_protocol_sha256
-                cur_sha, _ = compute_protocol_sha256(cur_proto)
-                if cur_sha != manifest_proto_sha:
-                    raise ConfigError(
-                        f"P1-3: protocol SHA mismatch: manifest={manifest_proto_sha}, "
-                        f"current config={cur_sha}. The smoke manifest was created under "
-                        "a different protocol; regenerate it."
-                    )
-        except ConfigError:
-            raise
-        except Exception as exc:
-            log.warning("P1-3: could not verify protocol SHA: %s", exc)
+    if manifest_proto_sha:
+        if not config_path:
+            raise ConfigError(
+                "P0-7: manifest is bound to a protocol_sha256 but no --config "
+                "was supplied to verify the current protocol."
+            )
+        cur_cfg = _data_config_for(args.dataset, load_run_config(config_path))
+        cur_proto = cur_cfg.extras.get("fiubench_protocol")
+        if not cur_proto or not isinstance(cur_proto, dict):
+            raise ConfigError(
+                "P0-7: Manifest is bound to a FIUBench protocol but the current "
+                "benchmark config has no fiubench_protocol. Regenerate the "
+                "manifest or restore the protocol block."
+            )
+        from .data.split_mapping import compute_protocol_sha256
+        cur_sha, _ = compute_protocol_sha256(cur_proto)
+        if cur_sha != manifest_proto_sha:
+            raise ConfigError(
+                f"P1-3: protocol SHA mismatch: manifest={manifest_proto_sha}, "
+                f"current config={cur_sha}. The smoke manifest was created under "
+                "a different protocol; regenerate it."
+            )
 
     # P0-8: verify source hashes against current actual source (fail-closed).
     manifest_src = sm_data.get("source_hashes")
@@ -1434,6 +1440,26 @@ def cmd_source_make_smoke_manifest(args) -> int:
     images_by_identity: dict[str, set[str]] = {}
     remaining = list(range(len(samples)))
 
+    # P0-3 (review 54c0dc9): explicit coverage check — stop selecting once
+    # all structural requirements are satisfied, rather than filling to 12.
+    def _coverage_satisfied() -> bool:
+        if len(identity_ids) < min_identities:
+            return False
+        if len(image_bearing) < max(1, min_image_bearing):
+            return False
+        if "train" not in splits_seen:
+            return False
+        if "eval" not in splits_seen:
+            return False
+        if "exclude" not in splits_seen:
+            return False
+        if not has_fact:
+            return False
+        return not (
+            require_multiview
+            and not any(len(imgs) >= 2 for imgs in images_by_identity.values())
+        )
+
     def _score(idx: int) -> int:
         s = samples[idx]
         iid = s.get("identity_id", "")
@@ -1455,6 +1481,9 @@ def cmd_source_make_smoke_manifest(args) -> int:
 
     max_select = min(12, len(samples))
     while len(selected) < max_select and remaining:
+        # P0-3: stop as soon as all structural coverage is satisfied.
+        if _coverage_satisfied():
+            break
         scored = [(idx, _score(idx)) for idx in remaining]
         scored.sort(key=lambda x: x[1], reverse=True)
         best_idx = scored[0][0]
@@ -1487,6 +1516,25 @@ def cmd_source_make_smoke_manifest(args) -> int:
             _sel_by_identity.setdefault(_iid, []).append(_s)
     _wn_pairs = find_wrong_name_candidates(_sel_by_identity)
 
+    # P0-4 (review 54c0dc9): Gate A — structural wrong-name feasibility.
+    # Before Qwen annotation, require only that the selected subset
+    # structurally contains enough material for a wrong-name intervention.
+    # This does NOT require visual similarity or Qwen labels.
+    _structural_wn_candidates: list[dict[str, str]] = []
+    _named_image_bearing = [
+        _iid for _iid in sorted(image_bearing)
+        if any(s.get("name") for s in _sel_by_identity.get(_iid, []))
+    ]
+    if len(_named_image_bearing) >= 2:
+        for _i, _tgt in enumerate(_named_image_bearing):
+            for _ctrl in _named_image_bearing[_i + 1:]:
+                _structural_wn_candidates.append({
+                    "target_identity_id": _tgt,
+                    "control_identity_id": _ctrl,
+                })
+    # P0-4 strict check is deferred to the strict-mode block below
+    # where `strict` and `fatal_errors` are defined.
+
     # P1-4: verify protocol role coverage when a protocol is defined.
     proto = data_cfg.extras.get("fiubench_protocol")
     protocol_coverage: dict[str, Any] = {}
@@ -1498,17 +1546,18 @@ def cmd_source_make_smoke_manifest(args) -> int:
             _split = _s.get("_effective_split", "")
             if _iid and _split:
                 role_identities.setdefault(_split, set()).add(_iid)
-        required_roles = set()
+        # P0-5 (review 54c0dc9): required roles use direct role names,
+        # not bucket-name-through-source_mapping indirection.
+        required_roles: set[str] = set()
         if proto.get("forget_bucket"):
-            required_roles.add(source_mapping.get(proto["forget_bucket"], "exclude"))
-        if proto.get("eval_bucket"):
-            required_roles.add(source_mapping.get(proto["eval_bucket"], "eval"))
-        elif proto.get("train_bucket") and proto.get("eval_fraction", 0) > 0:
-            # P1-8: holdout creates both train and eval roles.
+            required_roles.add("exclude")
+        if proto.get("train_bucket"):
             required_roles.add("train")
+        if proto.get("eval_bucket"):
             required_roles.add("eval")
-        elif proto.get("train_bucket"):
-            required_roles.add(source_mapping.get(proto["train_bucket"], "train"))
+        elif proto.get("eval_fraction", 0) > 0:
+            # Holdout generates eval from train bucket.
+            required_roles.add("eval")
         missing_roles = required_roles - set(role_identities.keys())
         protocol_coverage = {
             "role_identity_counts": {
@@ -1578,6 +1627,12 @@ def cmd_source_make_smoke_manifest(args) -> int:
     strict = getattr(args, "strict", True)
     fatal_errors: list[str] = []
     if strict:
+        # P0-4: structural wrong-name feasibility.
+        if len(_named_image_bearing) < 2:
+            fatal_errors.append(
+                "P0-4: structural wrong-name feasibility requires >= 2 named "
+                f"image-bearing identities, found {len(_named_image_bearing)}"
+            )
         # Missing required protocol roles.
         if protocol_coverage and protocol_coverage.get("missing_roles"):
             for _role in protocol_coverage["missing_roles"]:
@@ -1786,6 +1841,9 @@ def cmd_source_make_smoke_manifest(args) -> int:
         manifest_body["source_hashes"] = _src_hashes
     if protocol_coverage:
         manifest_body["protocol_coverage"] = protocol_coverage
+    # P0-4: persist structural wrong-name feasibility candidates.
+    if _structural_wn_candidates:
+        manifest_body["wrong_name_structural_candidates"] = _structural_wn_candidates
     # P1-7: record selected image hashes.
     if selected_images:
         manifest_body["selected_images"] = selected_images
