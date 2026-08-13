@@ -7,7 +7,7 @@ model:
   processor_id: null
   trust_remote_code: false
   dtype: bfloat16
-  device_map: auto
+  device_map: "cuda:0"
   attn_implementation: sdpa
   quantization:
     enabled: false

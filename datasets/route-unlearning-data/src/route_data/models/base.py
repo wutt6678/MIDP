@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class CandidateScore:
-    """Sequence-level score for one answer candidate (e.g. " yes")."""
+    """Sequence-level score for one answer candidate (e.g. "Yes")."""
 
     candidate: str
     log_probability: float

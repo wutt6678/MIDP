@@ -83,12 +83,16 @@ class TestGoldenEndToEnd:
             read_jsonl(golden_run["out"] / _STUB_MODEL_DIR / "fairget" / "fairget_annotated.jsonl")
         )
         assert len(rows) == 18  # 3 identities x 6 samples
-        # 124 accepted labels overall (100 model celeba40 + 24 source
+        # 115 accepted labels overall (91 model celeba40 + 24 source
         # fairface observations on the 12 image samples).
-        assert _accepted_labels(rows) == 124
+        # Count changed from 124 to 115 when the binary candidate protocol
+        # was frozen from " yes"/" no" to "Yes"/"No" (the stub backend
+        # hashes the candidate strings, so different strings produce
+        # different annotation outcomes).
+        assert _accepted_labels(rows) == 115
         assert (
             _accepted_labels(rows, namespace="extended_attributes.celeba40.")
-            == 100
+            == 91
         )
 
     def test_visual_qa_rows(self, golden_run):
@@ -122,8 +126,10 @@ class TestGoldenEndToEnd:
         # both images.  In the golden fixture the stub annotator's accepted
         # attributes differ between training views (due to different image
         # sizes), so only identities whose views share an accepted attribute
-        # produce a cross_image probe.  2 identities × 5 + 1 × 6 = 16.
-        assert len(probes) == 16
+        # produce a cross_image probe.  Count changed from 16 to 15 when
+        # the binary candidate protocol was frozen from " yes"/" no" to
+        # "Yes"/"No".
+        assert len(probes) == 15
 
     def test_flat_export_artifacts(self, golden_run):
         dataset_dir = golden_run["out"] / _STUB_MODEL_DIR / "fairget"
@@ -172,4 +178,4 @@ class TestGoldenEndToEnd:
         assert by_name["identity_fact_forget"]["forget_fact_ids"] == [
             "fairget_nationality"
         ]
-        assert by_name["attribute_forget"]["attribute"] == "5_o_Clock_Shadow"
+        assert by_name["attribute_forget"]["attribute"] == "Arched_Eyebrows"

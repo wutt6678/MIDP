@@ -431,7 +431,7 @@ def _p_positive(response) -> float | None:
     # through binary_probability again (that expects raw log-scores and would
     # apply a second softmax, compressing every score into ~[0.27, 0.73]).
     probs = normalize_binary_scores(logps)
-    for candidate in (" yes", "yes"):
+    for candidate in ("Yes", "yes"):
         if candidate in probs:
             p = float(probs[candidate])
             # Validate probability (Fix 10)
@@ -596,13 +596,13 @@ def cmd_model_smoke_test(args) -> int:
         for attr in smoke_attributes:
             prompt = registry.binary_prompt(attr)
             gen = backend.generate(image, prompt)
-            scored = backend.score_candidates(image, prompt, [" yes", " no"])
+            scored = backend.score_candidates(image, prompt, ["Yes", "No"])
             p = _p_positive(scored)
             logps = {
                 cs.candidate: cs.log_probability for cs in (scored.candidate_scores or [])
             }
-            log_p_yes = logps.get(" yes")
-            log_p_no = logps.get(" no")
+            log_p_yes = logps.get("Yes")
+            log_p_no = logps.get("No")
             margin = (
                 log_p_yes - log_p_no
                 if (
@@ -2532,7 +2532,7 @@ def cmd_build_annotate(args) -> int:
 
     from .models.scoring import SCORING_VERSION
 
-    candidates_blob = json.dumps([" yes", " no"], sort_keys=True)
+    candidates_blob = json.dumps(["Yes", "No"], sort_keys=True)
     candidate_set_hash = _hashlib_cache.sha256(candidates_blob.encode()).hexdigest()[:12]
 
     cache_parts = [
@@ -2677,7 +2677,7 @@ def cmd_build_annotate(args) -> int:
         for sample, attr, img_sha in pending:
             image = _load_image(sample.image_uri, base=image_base)
             resp = backend.score_candidates(
-                image, registry.binary_prompt(attr), [" yes", " no"]
+                image, registry.binary_prompt(attr), ["Yes", "No"]
             )
             p = _p_positive(resp)
             if p is None:

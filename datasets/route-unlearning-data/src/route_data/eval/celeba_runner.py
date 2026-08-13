@@ -42,9 +42,9 @@ __all__ = ["CANDIDATES", "CelebaRunner"]
 
 # Full candidate strings scored in candidate mode (plan section 8.4). Neither is
 # assumed to be a single token.
-CANDIDATES: tuple[str, ...] = (" yes", " no")
-_POSITIVE_CANDIDATE = " yes"
-_NEGATIVE_CANDIDATE = " no"
+CANDIDATES: tuple[str, ...] = ("Yes", "No")
+_POSITIVE_CANDIDATE = "Yes"
+_NEGATIVE_CANDIDATE = "No"
 
 # Fixed prediction-row columns (plan 8.5 keys plus resumption/provenance extras).
 ROW_COLUMNS: tuple[str, ...] = (

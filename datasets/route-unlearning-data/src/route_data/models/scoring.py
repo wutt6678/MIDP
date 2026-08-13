@@ -1,7 +1,7 @@
 """Candidate sequence scoring (coding plan section 8.4).
 
 For better-calibrated binary decisions, score the full candidate strings
-(e.g. " yes" and " no") conditioned on image + prompt instead of assuming a
+(e.g. "Yes" and "No") conditioned on image + prompt instead of assuming a
 single-token answer:
 
     score(c) = sum_t log P(c_t | image, prompt, c_<t)
@@ -22,7 +22,7 @@ import torch
 # invalidates previously cached scores (e.g. different normalization,
 # tokenization, or sequence-log-prob algorithm).  The value is embedded
 # in the score-cache key so stale entries are automatically discarded.
-SCORING_VERSION = "1"
+SCORING_VERSION = "2"
 
 
 def gather_sequence_log_probs(logits: torch.Tensor, target_ids: torch.Tensor) -> float:

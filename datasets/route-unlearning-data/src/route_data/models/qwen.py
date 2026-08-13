@@ -5,15 +5,26 @@ VisionLanguageModel interface used by the route-unlearning-data package.
 
 Important:
 - Qwen3.5 thinking is disabled in the chat template.
-- Candidate answers are scored as full token sequences, not first-token logits.
-- No model is loaded until a generation/scoring method or fingerprint() requiring
-  revision resolution is called.
+- Candidate answers are scored via prefix-token teacher forcing: the
+  multimodal prefix is constructed once with ``processor.apply_chat_template``
+  and candidate token IDs are explicitly appended.  This makes the
+  conditional probability mathematically explicit:
+
+      log P(c | x) = sum_j log P(c_j | x, c_<j)
+
+  where x is the exact image-conditioned assistant prefix.
+- The frozen binary candidate protocol uses ``"Yes"`` / ``"No"``
+  (capitalized, no leading space).  Both candidates are validated at
+  initialization to tokenize to non-empty, distinct sequences.
+- No model is loaded until a generation/scoring method or fingerprint()
+  requiring revision resolution is called.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from pathlib import Path
 
@@ -21,6 +32,15 @@ from ..config import ModelConfig
 from .base import CandidateScore, VisionLanguageModel, VisionResponse
 from .registry import register_backend
 from .scoring import gather_sequence_log_probs
+
+# Frozen binary candidate protocol.
+# The Qwen3.5 chat template ends the assistant prefix after the empty
+# <think>...</think> block; the model naturally produces capitalized
+# "Yes" / "No" as the first token.  Do NOT change these without
+# re-running the diagnostic in scripts/diagnose_qwen_logits.py.
+POSITIVE_CANDIDATE = "Yes"
+NEGATIVE_CANDIDATE = "No"
+BINARY_CANDIDATES: tuple[str, ...] = (POSITIVE_CANDIDATE, NEGATIVE_CANDIDATE)
 
 _DTYPE_MAP = {
     "float16": "float16",
@@ -117,6 +137,41 @@ class QwenHFBackend(VisionLanguageModel):
                 add_generation_prompt=True,
             )
 
+    def _build_prefix(self, image, prompt: str) -> dict:
+        """Construct the multimodal prefix tensor dict via the official route.
+
+        Uses ``processor.apply_chat_template`` with ``enable_thinking=False``
+        so the assistant prefix ends after the empty ``<think>...</think>``
+        block.  The returned dict contains ``input_ids`` and
+        ``attention_mask`` ready for ``model(**prefix)``.
+        """
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "image", "image": image},
+                {"type": "text", "text": prompt},
+            ],
+        }]
+        try:
+            prefix = self.processor.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                enable_thinking=False,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+        except TypeError:
+            prefix = self.processor.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+        device = self.model.get_input_embeddings().weight.device
+        return {k: v.to(device) for k, v in prefix.items()}
+
     def _prepare(self, images, prompts, *, padding_side: str):
         processor = self.processor
         texts = [self._render(prompt) for prompt in prompts]
@@ -181,49 +236,137 @@ class QwenHFBackend(VisionLanguageModel):
 
         import torch
 
-        scores: list[CandidateScore] = []
-        for candidate in candidates:
-            # Render chat prompt first, then append candidate to the rendered
-            # assistant-generation prefix. This avoids inserting the candidate
-            # inside the user's natural-language prompt.
-            rendered = self._render(prompt)
-            processor = self.processor
-            tokenizer = processor.tokenizer
+        tokenizer = self.processor.tokenizer
 
-            # Encode rendered prompt + candidate directly.
-            batch = processor(
-                images=[image],
-                text=[rendered + candidate],
-                padding=True,
-                return_tensors="pt",
+        # ── Validate candidate tokenization ─────────────────────────────
+        cand_token_map: dict[str, list[int]] = {}
+        for cand in candidates:
+            ids = tokenizer.encode(cand, add_special_tokens=False)
+            assert len(ids) > 0, (
+                f"candidate tokenized to empty sequence: {cand!r}"
             )
-            device = self.model.get_input_embeddings().weight.device
-            batch = {k: v.to(device) for k, v in batch.items()}
-            input_ids = batch["input_ids"]
+            cand_token_map[cand] = ids
 
-            cand_ids = tokenizer.encode(candidate, add_special_tokens=False)
-            m = len(cand_ids)
-            if m == 0:
-                raise ValueError(f"candidate tokenized to empty sequence: {candidate!r}")
+        # Distinct token sequences for distinct candidates.
+        unique_id_tuples = {tuple(v) for v in cand_token_map.values()}
+        assert len(unique_id_tuples) == len(candidates), (
+            f"candidates did not produce distinct token sequences: "
+            f"{cand_token_map}"
+        )
 
-            target_ids = input_ids[0, -m:]
+        # ── Build multimodal prefix ONCE ────────────────────────────────
+        prefix = self._build_prefix(image, prompt)
+        prefix_input_ids = prefix["input_ids"]
+        prefix_len = prefix_input_ids.shape[1]
+        assert prefix_len > 0, "prefix length must be > 0"
+
+        scores: list[CandidateScore] = []
+        debug_info: list[dict] = []
+
+        for candidate in candidates:
+            cand_ids_list = cand_token_map[candidate]
+            cand_ids_tensor = torch.tensor(
+                [cand_ids_list], dtype=prefix_input_ids.dtype,
+                device=prefix_input_ids.device,
+            )
+
+            # ── Explicitly append candidate IDs to prefix ───────────────
+            full_input_ids = torch.cat(
+                [prefix_input_ids, cand_ids_tensor], dim=1
+            )
+            full_attention_mask = torch.cat(
+                [
+                    prefix["attention_mask"],
+                    torch.ones_like(cand_ids_tensor),
+                ],
+                dim=1,
+            )
+            # Extend mm_token_type_ids for candidate tokens (text-only, type 0).
+            full_mm_token_type_ids = None
+            if "mm_token_type_ids" in prefix:
+                prefix_mm_ids = prefix["mm_token_type_ids"]
+                cand_mm_ids = torch.zeros_like(
+                    cand_ids_tensor, dtype=prefix_mm_ids.dtype
+                )
+                full_mm_token_type_ids = torch.cat(
+                    [prefix_mm_ids, cand_mm_ids], dim=1
+                )
+            full_len = full_input_ids.shape[1]
+            m = len(cand_ids_list)
+
+            # ── Alignment assertions ────────────────────────────────────
+            assert full_len == prefix_len + m, (
+                f"full length {full_len} != prefix {prefix_len} + "
+                f"candidate {m}"
+            )
+            target_slice = full_input_ids[0, prefix_len:]
+            assert target_slice.tolist() == cand_ids_list, (
+                f"target candidate IDs {target_slice.tolist()} do not "
+                f"match appended IDs {cand_ids_list}"
+            )
+
+            forward_kwargs = {
+                "input_ids": full_input_ids,
+                "attention_mask": full_attention_mask,
+            }
+            # Forward multimodal tensors from prefix if present.
+            # Qwen3.5 requires mm_token_type_ids for M-RoPE computation.
+            for key in ("pixel_values", "image_sizes", "image_grid_thw"):
+                if key in prefix:
+                    forward_kwargs[key] = prefix[key]
+            # Use extended mm_token_type_ids (prefix + text-only candidate).
+            if full_mm_token_type_ids is not None:
+                forward_kwargs["mm_token_type_ids"] = full_mm_token_type_ids
+
             with torch.inference_mode():
-                outputs = self.model(**batch)
-            pred_rows = outputs.logits[0, -m - 1:-1, :]
+                outputs = self.model(**forward_kwargs)
+
+            # Score candidate positions: logit at prefix_len-1 predicts
+            # the first candidate token, logit at prefix_len predicts the
+            # second, etc.
+            pred_rows = outputs.logits[0, prefix_len - 1: prefix_len - 1 + m, :]
+            target_ids = full_input_ids[0, prefix_len: prefix_len + m]
             log_prob = gather_sequence_log_probs(
                 pred_rows, target_ids.to(pred_rows.device)
             )
+
+            assert math.isfinite(log_prob), (
+                f"non-finite log probability for {candidate!r}: {log_prob}"
+            )
+
             scores.append(
                 CandidateScore(
                     candidate=candidate,
                     log_probability=log_prob,
                 )
             )
+            debug_info.append({
+                "candidate": candidate,
+                "candidate_token_ids": cand_ids_list,
+                "candidate_decoded": tokenizer.decode(cand_ids_list),
+                "prefix_length": prefix_len,
+                "full_length": full_len,
+                "scored_positions": list(
+                    range(prefix_len - 1, prefix_len - 1 + m)
+                ),
+            })
 
+        # Cross-candidate sanity: log probs should not be accidentally
+        # identical (would indicate a scoring bug).
+        if len(scores) >= 2:
+            log_probs = [s.log_probability for s in scores]
+            assert len({round(lp, 8) for lp in log_probs}) > 1, (
+                f"all candidate log probabilities are identical: {log_probs}"
+            )
+
+        metadata: dict = {
+            "thinking_disabled": True,
+            "scoring_debug": debug_info,
+        }
         return VisionResponse(
             text="",
             candidate_scores=scores,
-            metadata={"thinking_disabled": True},
+            metadata=metadata,
         )
 
     def fingerprint(self) -> dict[str, str]:
