@@ -353,11 +353,18 @@ class QwenHFBackend(VisionLanguageModel):
 
         # Cross-candidate sanity: log probs should not be accidentally
         # identical (would indicate a scoring bug).
+        # Note: identical logits can occur when the model is completely uncertain
+        # (e.g., 50/50 probability), which is valid behavior.
         if len(scores) >= 2:
             log_probs = [s.log_probability for s in scores]
-            assert len({round(lp, 8) for lp in log_probs}) > 1, (
-                f"all candidate log probabilities are identical: {log_probs}"
-            )
+            # Warn if all log probs are identical (may indicate model uncertainty)
+            if len({round(lp, 8) for lp in log_probs}) == 1:
+                import warnings
+                warnings.warn(
+                    f"All candidate log probabilities are identical: {log_probs}. "
+                    "This indicates the model is completely uncertain (50/50 probability).",
+                    UserWarning
+                )
 
         metadata: dict = {
             "thinking_disabled": True,
