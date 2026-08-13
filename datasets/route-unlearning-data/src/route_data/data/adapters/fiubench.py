@@ -295,7 +295,7 @@ class FiubenchAdapter(BenchmarkAdapter):
         payload = read_rows_from(split_path)
         if len(payload) != 1 or not isinstance(payload[0], Mapping):
             return set()
-        return set(str(k) for k in payload[0].keys())
+        return {str(k) for k in payload[0]}
 
     @staticmethod
     def _legacy_split_lookup(raw: Mapping) -> dict[str, list[str]]:
