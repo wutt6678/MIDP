@@ -1,0 +1,93 @@
+{
+  "model_fingerprint": {
+    "backend": "stub",
+    "model_id": "local/stub-vlm-v1",
+    "revision": "stub-v1",
+    "seed": "17",
+    "generation": "{'do_sample': False, 'temperature': 0.0, 'max_new_tokens': 4}",
+    "fingerprint_id": "c77d5e4cb380c98e"
+  },
+  "resolved_revision": "stub-v1",
+  "image_sha256": "placeholder_gray_image",
+  "image_path": "placeholder",
+  "smoke_results": [
+    {
+      "attribute": "Eyeglasses",
+      "prompt": "Examine only the current image. Does the person visibly wear eyeglasses? Answer exactly one token: yes or no.",
+      "generated_text": "yes",
+      "log_p_yes": -1.371171873651875,
+      "log_p_no": -0.2927741520648458,
+      "margin": -1.078397721587029,
+      "p_positive": 0.25380935271500654,
+      "predicted_label": "negative"
+    },
+    {
+      "attribute": "Smiling",
+      "prompt": "Examine only the current image. Is the person smiling in this image? Answer exactly one token: yes or no.",
+      "generated_text": "yes",
+      "log_p_yes": -1.6306174234411295,
+      "log_p_no": -0.21791802811394462,
+      "margin": -1.412699395327185,
+      "p_positive": 0.1958086399526717,
+      "predicted_label": "negative"
+    },
+    {
+      "attribute": "Wearing_Hat",
+      "prompt": "Examine only the current image. Is the person wearing a hat in this image? Answer exactly one token: yes or no.",
+      "generated_text": "no",
+      "log_p_yes": -0.4527015922062161,
+      "log_p_no": -1.0103483257352979,
+      "margin": 0.5576467335290818,
+      "p_positive": 0.6359078651794173,
+      "predicted_label": "positive"
+    }
+  ],
+  "checks": {
+    "generated_non_blank": 3,
+    "candidate_scores_present": 3,
+    "finite_scores": true,
+    "probabilities_near_half": false,
+    "margins_distinct": true
+  },
+  "n_images": 1,
+  "per_image": [
+    {
+      "image_path": "placeholder",
+      "image_sha256": "placeholder_gray_image",
+      "smoke_results": [
+        {
+          "attribute": "Eyeglasses",
+          "prompt": "Examine only the current image. Does the person visibly wear eyeglasses? Answer exactly one token: yes or no.",
+          "generated_text": "yes",
+          "log_p_yes": -1.371171873651875,
+          "log_p_no": -0.2927741520648458,
+          "margin": -1.078397721587029,
+          "p_positive": 0.25380935271500654,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Smiling",
+          "prompt": "Examine only the current image. Is the person smiling in this image? Answer exactly one token: yes or no.",
+          "generated_text": "yes",
+          "log_p_yes": -1.6306174234411295,
+          "log_p_no": -0.21791802811394462,
+          "margin": -1.412699395327185,
+          "p_positive": 0.1958086399526717,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Wearing_Hat",
+          "prompt": "Examine only the current image. Is the person wearing a hat in this image? Answer exactly one token: yes or no.",
+          "generated_text": "no",
+          "log_p_yes": -0.4527015922062161,
+          "log_p_no": -1.0103483257352979,
+          "margin": 0.5576467335290818,
+          "p_positive": 0.6359078651794173,
+          "predicted_label": "positive"
+        }
+      ]
+    }
+  ],
+  "cross_image_variation": {},
+  "sanity_check": {}
+}

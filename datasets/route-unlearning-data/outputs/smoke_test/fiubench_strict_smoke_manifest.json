@@ -1,0 +1,163 @@
+{
+  "dataset": "fiubench",
+  "selection_version": "smoke_v3",
+  "selected_source_sample_ids": [
+    "fiubench:142b6f8d3027d594:qa:0:original",
+    "fiubench:142b6f8d3027d594:qa:0:paraphrase:0",
+    "fiubench:89d6ff2125fd7ac5:qa:0:original",
+    "fiubench:c9e49c518af392fa:qa:0:original",
+    "fiubench:c9e49c518af392fa:qa:0:paraphrase:0"
+  ],
+  "selected_identity_ids": [
+    "142b6f8d3027d594",
+    "89d6ff2125fd7ac5",
+    "c9e49c518af392fa"
+  ],
+  "coverage": {
+    "selected_samples": 5,
+    "identities": [
+      "142b6f8d3027d594",
+      "89d6ff2125fd7ac5",
+      "c9e49c518af392fa"
+    ],
+    "image_bearing_identities": [
+      "142b6f8d3027d594",
+      "89d6ff2125fd7ac5",
+      "c9e49c518af392fa"
+    ],
+    "splits_seen": [
+      "eval",
+      "exclude",
+      "train"
+    ],
+    "has_profile_facts": true,
+    "has_multiview": false,
+    "wrong_name_pairs": []
+  },
+  "selection_policy": {
+    "min_identities": 3,
+    "min_image_bearing": 2,
+    "require_multiview": false,
+    "strict": true
+  },
+  "source_revision": {
+    "source_version": "fiubench-8e12cdd",
+    "immutable_revision": {
+      "git_commit_sha": "8e12cddc431eafd129c275d46a3d882474cfcf61",
+      "files": {
+        "dataset/full.json": {
+          "sha256": "f2f04cf7e21a3170b4c1541b5e650c9db3f92ff6f7833ea3f9e19887787bff72"
+        },
+        "dataset/split.json": {
+          "sha256": "f576e63909babf5105f004b2230154a4d46e6b37160d7554c3434b6693a7ce4c"
+        }
+      }
+    }
+  },
+  "source_protocol": {
+    "name": "fiubench_midp_all572_v1",
+    "source_population": {
+      "mode": "all"
+    },
+    "forget_bucket": "forget10",
+    "train_bucket": "retain15",
+    "eval_bucket": null,
+    "eval_fraction": 0.2,
+    "eval_seed": 17
+  },
+  "protocol_sha256": "b08795380a310c86bfab34d916988431472a028d0abe6aa487e42df43351e924",
+  "source_hashes": {
+    "git_commit_sha": "8e12cddc431eafd129c275d46a3d882474cfcf61",
+    "files": {
+      "dataset/full.json": "f2f04cf7e21a3170b4c1541b5e650c9db3f92ff6f7833ea3f9e19887787bff72",
+      "dataset/split.json": "f576e63909babf5105f004b2230154a4d46e6b37160d7554c3434b6693a7ce4c"
+    }
+  },
+  "protocol_coverage": {
+    "role_identity_counts": {
+      "eval": 1,
+      "exclude": 1,
+      "train": 1
+    },
+    "required_roles": [
+      "eval",
+      "exclude",
+      "train"
+    ],
+    "missing_roles": []
+  },
+  "wrong_name_structural_candidates": [
+    {
+      "target_identity_id": "142b6f8d3027d594",
+      "control_identity_id": "c9e49c518af392fa",
+      "target_selected_records": 2,
+      "control_selected_records": 2,
+      "target_has_name": true,
+      "control_has_name": true,
+      "target_has_image": true,
+      "control_has_image": true,
+      "structurally_valid": true
+    },
+    {
+      "target_identity_id": "89d6ff2125fd7ac5",
+      "control_identity_id": "142b6f8d3027d594",
+      "target_selected_records": 1,
+      "control_selected_records": 2,
+      "target_has_name": true,
+      "control_has_name": true,
+      "target_has_image": true,
+      "control_has_image": true,
+      "structurally_valid": true
+    },
+    {
+      "target_identity_id": "89d6ff2125fd7ac5",
+      "control_identity_id": "c9e49c518af392fa",
+      "target_selected_records": 1,
+      "control_selected_records": 2,
+      "target_has_name": true,
+      "control_has_name": true,
+      "target_has_image": true,
+      "control_has_image": true,
+      "structurally_valid": true
+    },
+    {
+      "target_identity_id": "c9e49c518af392fa",
+      "control_identity_id": "142b6f8d3027d594",
+      "target_selected_records": 2,
+      "control_selected_records": 2,
+      "target_has_name": true,
+      "control_has_name": true,
+      "target_has_image": true,
+      "control_has_image": true,
+      "structurally_valid": true
+    }
+  ],
+  "selected_images": [
+    {
+      "source_sample_id": "fiubench:c9e49c518af392fa:qa:0:original",
+      "image_uri": "/scratch/wutiantong/datasets/FIUBench/dataset/SFHQ/SFHQ_pt1_00062584.jpg",
+      "sha256": "d5a12ba1ac689f7102ae89854118d68652c8a863e5864b2a16fa5e34c0f2e464"
+    },
+    {
+      "source_sample_id": "fiubench:142b6f8d3027d594:qa:0:original",
+      "image_uri": "/scratch/wutiantong/datasets/FIUBench/dataset/SFHQ/SFHQ_pt1_00062376.jpg",
+      "sha256": "63d08f8880db5a454b25717cbd6c4bdda66a5395ae792dc9d7a3f4610e0db272"
+    },
+    {
+      "source_sample_id": "fiubench:c9e49c518af392fa:qa:0:paraphrase:0",
+      "image_uri": "/scratch/wutiantong/datasets/FIUBench/dataset/SFHQ/SFHQ_pt1_00062584.jpg",
+      "sha256": "d5a12ba1ac689f7102ae89854118d68652c8a863e5864b2a16fa5e34c0f2e464"
+    },
+    {
+      "source_sample_id": "fiubench:142b6f8d3027d594:qa:0:paraphrase:0",
+      "image_uri": "/scratch/wutiantong/datasets/FIUBench/dataset/SFHQ/SFHQ_pt1_00062376.jpg",
+      "sha256": "63d08f8880db5a454b25717cbd6c4bdda66a5395ae792dc9d7a3f4610e0db272"
+    },
+    {
+      "source_sample_id": "fiubench:89d6ff2125fd7ac5:qa:0:original",
+      "image_uri": "/scratch/wutiantong/datasets/FIUBench/dataset/SFHQ/SFHQ_pt1_00083852.jpg",
+      "sha256": "0d95c6922fb96af368f7818b2e0014423e87eb004be8cb46f0cf7964d8d3f495"
+    }
+  ],
+  "manifest_sha256": "c75055235a0164d6427b0141b0ee8f512c43338741295c8e30d3099f7695bc26"
+}
