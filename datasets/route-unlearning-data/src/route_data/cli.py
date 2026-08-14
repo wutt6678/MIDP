@@ -2616,7 +2616,23 @@ def cmd_build_annotate(args) -> int:
             # P2-5: cache-key match — accept rows keyed by image_sha256 OR
             # by sample_id (backward compat with pre-P2 caches).
             if img_sha:
-                expected_key = _image_cache_key(img_sha)
+                # P0-5: reject stale cached rows whose image SHA no longer
+                # matches the current source image for this sample_id.
+                current_sha = image_sha_by_sample.get(sid, "")
+                if not current_sha:
+                    log.warning(
+                        "Dropping cached row (%s, %s): current image SHA unavailable",
+                        sid, attr,
+                    )
+                    continue
+                if img_sha != current_sha:
+                    log.warning(
+                        "Dropping stale cached row (%s, %s): "
+                        "cached image=%s current image=%s",
+                        sid, attr, img_sha[:12], current_sha[:12],
+                    )
+                    continue
+                expected_key = _image_cache_key(current_sha)
             else:
                 expected_key = _row_cache_key(sid)
             if ck != expected_key:
@@ -2790,23 +2806,34 @@ def cmd_build_annotate(args) -> int:
 
     # P2-1: score-completion invariant — every unique image must have all 40
     # valid attribute scores.  Missing pairs indicate cache bugs or silent
-    # scoring failures.
+    # scoring failures.  Extra pairs indicate duplicate or phantom rows.
     unique_image_shas = {sha for sha in image_to_rep_sample if image_to_rep_sample[sha].image_uri}
-    expected_score_count = len(unique_image_shas) * len(CELEBA_ATTRIBUTES)
-    scored_pairs = {
-        (r.get("image_sha256", "") or image_sha_by_sample.get(r["sample_id"], ""), r["attribute"])
+    expected_pairs = {
+        (sha, attr)
+        for sha in unique_image_shas
+        for attr in CELEBA_ATTRIBUTES
+    }
+    actual_pairs = {
+        (
+            r.get("image_sha256", "") or image_sha_by_sample.get(r["sample_id"], ""),
+            r["attribute"],
+        )
         for r in score_rows
     }
-    missing_scores: list[tuple[str, str]] = []
-    for sha in sorted(unique_image_shas):
-        for attr in CELEBA_ATTRIBUTES:
-            if (sha, attr) not in scored_pairs:
-                missing_scores.append((sha[:12], attr))
-    if missing_scores:
+    missing_pairs = expected_pairs - actual_pairs
+    extra_pairs = actual_pairs - expected_pairs
+    if missing_pairs or extra_pairs:
         raise ConfigError(
-            f"Score-completion invariant violated: {len(missing_scores)} "
-            f"(image, attribute) pairs missing out of {expected_score_count} expected. "
-            f"First 5 missing: {missing_scores[:5]}"
+            f"Score table mismatch: "
+            f"{len(missing_pairs)} missing, {len(extra_pairs)} unexpected "
+            f"out of {len(expected_pairs)} expected pairs. "
+            f"First 5 missing: {sorted(missing_pairs)[:5]}, "
+            f"first 5 extra: {sorted(extra_pairs)[:5]}"
+        )
+    if len(score_rows) != len(expected_pairs):
+        raise ConfigError(
+            f"Score row count mismatch: {len(score_rows)} rows vs "
+            f"{len(expected_pairs)} expected pairs"
         )
     log.info(
         "Score-completion OK: %d unique images × %d attributes = %d scores",
