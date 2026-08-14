@@ -1,0 +1,52 @@
+{
+  "model_id": "Qwen/Qwen3.5-9B",
+  "dataset": "fiubench",
+  "version": "v1",
+  "description": "FIUBench experiment attribute subset for unlearning research. Derived from the CelebA reliability whitelist (qwen35_9b_celeba.json) with additional FIUBench coverage filtering.",
+  "ceiling_whitelist": "configs/whitelists/qwen35_9b_celeba.json",
+  "selection_criteria": {
+    "min_celebA_balanced_accuracy": 0.85,
+    "require_both_states": true,
+    "max_uncertainty_fraction": 0.50,
+    "min_accepted_positives": 1,
+    "min_wrong_name_controls": 1
+  },
+  "excluded_attributes": {
+    "Wearing_Hat": {
+      "reason": "zero accepted positives in FIUBench (0/30660)",
+      "accepted_positive": 0,
+      "positive_prevalence": 0.0
+    },
+    "Wearing_Necktie": {
+      "reason": "zero accepted positives in FIUBench (0/30660)",
+      "accepted_positive": 0,
+      "positive_prevalence": 0.0
+    },
+    "Sideburns": {
+      "reason": "dominated by uncertainty (63.8% of samples uncertain)",
+      "uncertain": 19560,
+      "uncertain_fraction": 0.638
+    }
+  },
+  "attributes": [
+    "Bald",
+    "Bangs",
+    "Blond_Hair",
+    "Eyeglasses",
+    "Gray_Hair",
+    "Male",
+    "Mustache",
+    "Smiling",
+    "Wearing_Earrings",
+    "Wearing_Lipstick"
+  ],
+  "n_attributes": 10,
+  "notes": [
+    "The CelebA reliability whitelist (13 attributes) is the reliability ceiling.",
+    "This experiment subset further filters by FIUBench coverage.",
+    "Wearing_Hat and Wearing_Necktie have zero accepted positives — no positive experimental cases exist.",
+    "Sideburns has 63.8% uncertain labels — insufficient signal for reliable experimentation.",
+    "All 10 remaining attributes have both positive and negative examples across train/eval/exclude roles.",
+    "Male is retained as apparent-presentation analysis is part of the research question; treat strictly as CelebA-defined Male label."
+  ]
+}
