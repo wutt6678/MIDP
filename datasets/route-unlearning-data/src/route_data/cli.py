@@ -3399,14 +3399,69 @@ def cmd_build_route_probes(args) -> int:
     registry = PromptRegistry(run_cfg.prompts)
     builder = RouteProbeBuilder(registry)
 
+    # P0-3 (freeze): load the experiment-attribute subset so route-probe
+    # target selection is restricted to the frozen experiment plan.
+    experiment_attrs: set[str] | None = None
+    if run_cfg.build.experiment_attribute_subset:
+        import json as _json
+        _subset_path = Path(run_cfg.build.experiment_attribute_subset)
+        if not _subset_path.is_file():
+            raise FileNotFoundError(
+                f"Experiment attribute subset not found: {_subset_path}"
+            )
+        _subset_data = _json.loads(_subset_path.read_text())
+        experiment_attrs = set(_subset_data.get("attributes", []))
+        if not experiment_attrs:
+            raise ValueError(
+                f"Empty 'attributes' list in {_subset_path}"
+            )
+        log.info(
+            "[experiment-attr] restricting route probes to %d attributes: %s",
+            len(experiment_attrs),
+            sorted(experiment_attrs),
+        )
+
     by_identity: dict[str, list] = {}
     for sample in samples:
         by_identity.setdefault(sample.identity_id, []).append(sample)
 
+    # P0-3 (freeze): balanced attribute assignment — two-pass approach.
+    # Pass 1: collect eligible experiment attributes per identity.
+    # Pass 2: assign targets round-robin (least-assigned eligible attr wins,
+    #         ties broken alphabetically) so every experiment attribute gets
+    #         reasonable coverage instead of min()-alphabetical domination.
+    identity_ids = sorted(by_identity)
+    eligible_by_identity: dict[str, set[str]] = {}
+    if experiment_attrs is not None:
+        for identity_id in identity_ids:
+            group = by_identity[identity_id]
+            for s in group:
+                attrs = _accepted_visible_attributes(s)
+                eligible = {k for k in attrs if k in experiment_attrs}
+                if eligible:
+                    eligible_by_identity[identity_id] = eligible
+                    break
+
+        # Compute balanced assignment.
+        attr_counts: dict[str, int] = {a: 0 for a in experiment_attrs}
+        balanced_assignment: dict[str, str] = {}
+        for identity_id in sorted(eligible_by_identity):
+            eligible = eligible_by_identity[identity_id]
+            # Pick the eligible attribute with the lowest count; ties broken
+            # by alphabetical order for determinism.
+            best = min(sorted(eligible), key=lambda a: attr_counts[a])
+            balanced_assignment[identity_id] = best
+            attr_counts[best] += 1
+        log.info(
+            "[experiment-attr] balanced assignment: %s",
+            {a: attr_counts[a] for a in sorted(attr_counts)},
+        )
+    else:
+        balanced_assignment = {}
+
     probe_rows: list[dict[str, Any]] = []
     pair_specs: list[dict[str, str]] = []
     skipped: list[str] = []
-    identity_ids = sorted(by_identity)
     for identity_id in identity_ids:
         group = by_identity[identity_id]
 
@@ -3422,7 +3477,9 @@ def cmd_build_route_probes(args) -> int:
 
         try:
             probes = build_identity_probes(
-                group, builder, wrong_identity_name=wrong_name
+                group, builder, wrong_identity_name=wrong_name,
+                experiment_attributes=experiment_attrs,
+                target_attribute=balanced_assignment.get(identity_id),
             )
         except ConflictError as exc:
             skipped.append(f"{identity_id}: {exc}")

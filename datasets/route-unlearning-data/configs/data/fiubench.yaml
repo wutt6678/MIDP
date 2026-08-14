@@ -3,7 +3,7 @@
 # Repo:  https://github.com/SaFo-Lab/FIUBench
 #
 # Architecture: Option A — consume released FIUBench files directly.
-#   dataset/full.json   → JSONL, one record per identity (572 records)
+#   dataset/full.json   → JSONL, one record per identity (573 records)
 #   dataset/split.json  → JSON object mapping bucket → [subject_ids]
 #
 # Released split vocabulary: forget1, forget5, forget10, retain5, retain15.
@@ -44,6 +44,11 @@ data:
   # P1-2: first smoke uses forget10 / retain15 with deterministic holdout.
   extras:
     fiubench_protocol:
+      # Legacy protocol identifier retained for reproducibility.
+      # The pinned FIUBench source contains 573 identities; the original
+      # 'all572_v1' name was based on a wc -l undercount caused by the
+      # missing trailing newline.  Do NOT rename — the name participates
+      # in the canonical protocol hash.
       name: fiubench_midp_all572_v1
       source_population:
         mode: all

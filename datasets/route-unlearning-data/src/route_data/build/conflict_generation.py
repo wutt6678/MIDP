@@ -483,21 +483,40 @@ def build_identity_probes(
     builder: RouteProbeBuilder,
     *,
     wrong_identity_name: str | None = None,
+    experiment_attributes: set[str] | None = None,
+    target_attribute: str | None = None,
 ) -> list[CanonicalSample]:
     """Generate the six probe types for one identity's samples.
 
     Requires at least one image with an accepted visible attribute and one
     profile fact; otherwise raises so the caller can decide what to skip.
+
+    Parameters
+    ----------
+    experiment_attributes:
+        If provided, restrict the target attribute selection to this set
+        (the *experiment subset*).  Accepted visible attributes that are
+        not in this set are excluded before the deterministic ``min()``
+        selection.  This prevents attributes outside the frozen experiment
+        plan (e.g. Wearing_Hat, Wearing_Necktie, Sideburns) from becoming
+        route-probe targets.
+    target_attribute:
+        If provided, use this specific attribute as the probe target
+        instead of ``min(eligible)``.  The attribute must be present in
+        the anchor's eligible set; otherwise :class:`ConflictError` is
+        raised.  This enables balanced probe assignment across attributes.
     """
     if not identity_samples:
         raise ConflictError("build_identity_probes requires at least one sample")
 
-    # P0-10: find an anchor with accepted visible attributes instead of
-    # blindly using identity_samples[0].
+    # P0-3 (freeze): find an anchor with accepted visible attributes,
+    # optionally restricted to the experiment-attribute subset.
     anchor = None
     attributes: dict[str, bool] = {}
     for s in identity_samples:
         attrs = _accepted_visible_attributes(s)
+        if experiment_attributes is not None:
+            attrs = {k: v for k, v in attrs.items() if k in experiment_attributes}
         if attrs:
             anchor = s
             attributes = attrs
@@ -505,6 +524,7 @@ def build_identity_probes(
     if anchor is None:
         raise ConflictError(
             f"Identity {identity_samples[0].identity_id} has no accepted visible attribute"
+            + (" in experiment subset" if experiment_attributes is not None else "")
         )
 
     # Fix 5: aggregate profile facts across the complete identity group
@@ -519,7 +539,12 @@ def build_identity_probes(
     if not facts:
         raise ConflictError(f"Identity {anchor.identity_id} has no profile facts")
 
-    attribute = min(attributes)
+    attribute = target_attribute if target_attribute is not None else min(attributes)
+    if attribute not in attributes:
+        raise ConflictError(
+            f"Target attribute '{attribute}' not accepted on identity "
+            f"{anchor.identity_id} (eligible: {sorted(attributes)})"
+        )
     visible_label = attributes[attribute]
     identity_name = anchor.identity_name or anchor.identity_id
     # P2-8: prefer a QA-derived fact (one with source_qa_index set) for

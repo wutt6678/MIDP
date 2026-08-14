@@ -143,6 +143,7 @@ class BuildConfig:
     min_auto_accept_score: float = 0.85
     qa_registry_hash: str | None = None
     attribute_whitelist: str | None = None
+    experiment_attribute_subset: str | None = None
 
 
 @dataclass

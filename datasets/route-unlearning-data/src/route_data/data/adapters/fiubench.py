@@ -2,7 +2,7 @@
 
 Reads the released FIUBench source files directly (Option A):
 
-    dataset/full.json   # JSONL, one record per identity (572 records)
+    dataset/full.json   # JSONL, one record per identity (573 records)
     dataset/split.json  # JSON object mapping bucket → [subject_ids]
 
 Each source row describes one fictitious identity with the released schema:

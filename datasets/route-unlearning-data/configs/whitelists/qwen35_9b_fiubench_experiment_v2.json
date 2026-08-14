@@ -24,7 +24,8 @@
       "uncertainty_fraction": 0.0314,
       "train_positive": 1,
       "eval_positive": 0,
-      "exclude_positive": 1
+      "exclude_positive": 1,
+      "role_balanced_eval_eligible": false
     },
     "Bangs": {
       "positive_images": 80,
@@ -33,7 +34,8 @@
       "uncertainty_fraction": 0.1675,
       "train_positive": 7,
       "eval_positive": 1,
-      "exclude_positive": 6
+      "exclude_positive": 6,
+      "role_balanced_eval_eligible": true
     },
     "Blond_Hair": {
       "positive_images": 60,
@@ -42,7 +44,8 @@
       "uncertainty_fraction": 0.1606,
       "train_positive": 7,
       "eval_positive": 1,
-      "exclude_positive": 3
+      "exclude_positive": 3,
+      "role_balanced_eval_eligible": true
     },
     "Eyeglasses": {
       "positive_images": 28,
@@ -51,7 +54,8 @@
       "uncertainty_fraction": 0.0017,
       "train_positive": 1,
       "eval_positive": 0,
-      "exclude_positive": 2
+      "exclude_positive": 2,
+      "role_balanced_eval_eligible": false
     },
     "Gray_Hair": {
       "positive_images": 37,
@@ -60,7 +64,8 @@
       "uncertainty_fraction": 0.1239,
       "train_positive": 3,
       "eval_positive": 0,
-      "exclude_positive": 1
+      "exclude_positive": 1,
+      "role_balanced_eval_eligible": false
     },
     "Male": {
       "positive_images": 236,
@@ -69,7 +74,8 @@
       "uncertainty_fraction": 0.0768,
       "train_positive": 19,
       "eval_positive": 5,
-      "exclude_positive": 14
+      "exclude_positive": 14,
+      "role_balanced_eval_eligible": true
     },
     "Mustache": {
       "positive_images": 37,
@@ -78,7 +84,8 @@
       "uncertainty_fraction": 0.1012,
       "train_positive": 2,
       "eval_positive": 1,
-      "exclude_positive": 1
+      "exclude_positive": 1,
+      "role_balanced_eval_eligible": true
     },
     "Smiling": {
       "positive_images": 50,
@@ -87,7 +94,8 @@
       "uncertainty_fraction": 0.1937,
       "train_positive": 4,
       "eval_positive": 1,
-      "exclude_positive": 5
+      "exclude_positive": 5,
+      "role_balanced_eval_eligible": true
     },
     "Wearing_Earrings": {
       "positive_images": 124,
@@ -96,7 +104,8 @@
       "uncertainty_fraction": 0.178,
       "train_positive": 10,
       "eval_positive": 2,
-      "exclude_positive": 13
+      "exclude_positive": 13,
+      "role_balanced_eval_eligible": true
     },
     "Wearing_Lipstick": {
       "positive_images": 161,
@@ -105,7 +114,8 @@
       "uncertainty_fraction": 0.2443,
       "train_positive": 15,
       "eval_positive": 1,
-      "exclude_positive": 12
+      "exclude_positive": 12,
+      "role_balanced_eval_eligible": true
     }
   },
   "excluded_attributes": {
@@ -160,7 +170,7 @@
     "Wearing_Hat and Wearing_Necktie have zero accepted positive images — no positive experimental cases exist.",
     "Sideburns has 61.78% image-level uncertainty (354/573 images) — still exceeds the 50% threshold.",
     "The final 10 attributes are unchanged from v1, but the justification methodology is now statistically correct.",
-    "All 10 included attributes have positive and negative support across train/eval/exclude protocol roles.",
+    "All 10 included attributes have both accepted positive and accepted negative examples within the protocol-eligible FIUBench population. Per-role support is reported separately and is not required to be nonzero for every role.",
     "Wrong-name routing is viable for all 10 attributes: 163878 visually-matched pairs across 573 identities.",
     "Male is retained as apparent-presentation analysis is part of the research question; treat strictly as CelebA-defined Male label."
   ]

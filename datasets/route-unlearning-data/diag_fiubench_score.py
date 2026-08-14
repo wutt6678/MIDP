@@ -5,10 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from PIL import Image
-from route_data.models.qwen import QwenHFBackend
-from route_data.config import ModelConfig
 import yaml as ruamel_yaml
+from PIL import Image
+
+from route_data.config import ModelConfig
+from route_data.models.qwen import QwenHFBackend
 
 # Load run config to get model settings
 with open("configs/runs/tiny_fiubench_qwen.yaml") as f:
@@ -36,7 +37,7 @@ sample_path = Path("data/processed/Qwen_Qwen3.5-9B/fiubench/fiubench_annotated.j
 with open(sample_path) as f:
     first_sample = json.loads(f.readline())
 
-print(f"\n=== Sample ===")
+print("\n=== Sample ===")
 print(f"source_sample_id: {first_sample['source_sample_id']}")
 print(f"image_uri: {first_sample['image_uri']}")
 print(f"visual_attributes count: {len(first_sample['visual_attributes'])}")
@@ -48,7 +49,8 @@ print(f"Image size: {pil_img.size}")
 
 # Check prompt structure  
 from route_data.prompts import load_binary_prompt
-first_attr_name = list(first_sample['visual_attributes'].keys())[0]
+
+first_attr_name = next(iter(first_sample['visual_attributes'].keys()))
 prompt_text = load_binary_prompt(first_attr_name, "configs/prompts/celeba_binary_v1.yaml")
 
 print(f"\n--- Testing score_candidates for attribute: {first_attr_name} ---")
@@ -63,7 +65,7 @@ try:
     margins = {round(s.log_probability, 8) for s in resp.candidate_scores}
     print(f"Distinct log_probs: {len(margins)} (should be >1)")
     if len(margins) == 1:
-        print(f"WARNING: Probability collapse detected!")
+        print("WARNING: Probability collapse detected!")
 except Exception as e:
     print(f"ERROR: {e}")
     import traceback

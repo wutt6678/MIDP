@@ -1,16 +1,15 @@
 {
-  "manifest_version": "1.0",
-  "manifest_purpose": "Frozen evidence bundle for FIUBench unlearning experiments. All hashes must match before experiments begin.",
-  "created_at": "2026-08-05T12:00:00Z",
-
+  "manifest_version": "2.0",
+  "manifest_purpose": "Frozen evidence bundle for FIUBench unlearning experiments. All hashes are independently recomputed from source files.",
+  "created_at": "2026-08-14T08:51:19Z",
   "code_provenance": {
-    "midp_git_commit": "af4dbd3479e8b98d1d63e7e4cc782efce6f8eb02",
+    "dataset_creation_commit": "af4dbd3479e8b98d1d63e7e4cc782efce6f8eb02",
+    "evidence_generation_code_commit": "845a583b32120192a0a4d0c825b0b76cea7aa54e",
     "midp_git_dirty": false,
     "fiubench_upstream_commit": "8e12cddc431eafd129c275d46a3d882474cfcf61",
     "source_version": "fiubench-8e12cdd",
     "source_hash": "c79b632e3a94900d7d5c5496062e7871330e1bb609b351bf19776c53e5faa752"
   },
-
   "model_provenance": {
     "model_id": "Qwen/Qwen3.5-9B",
     "backend": "qwen_hf",
@@ -21,89 +20,111 @@
     "transformers_version": "5.14.1",
     "torch_version": "2.8.0+cu128"
   },
-
   "scoring_provenance": {
     "prompt_registry_hash": "28481d2ebb85a6fb",
     "scoring_version": "2",
     "candidate_set_hash": "8950b978f15f",
     "scoring_method": "candidate_sequence_log_probability"
   },
-
   "protocol": {
     "name": "fiubench_midp_all572_v1",
     "forget_bucket": "forget10",
     "train_bucket": "retain15",
     "eval_bucket": null,
-    "eval_fraction": 0.20,
+    "eval_fraction": 0.2,
     "eval_seed": 17,
-    "protocol_sha256": "d1d7c3b9985a368692a672b9f3c80307c1a8136e79033757fb7c879d2c8ced68"
+    "protocol_sha256": "b08795380a310c86bfab34d916988431472a028d0abe6aa487e42df43351e924",
+    "canonical_protocol": {
+      "algorithm_version": 1,
+      "eval_fraction": 0.2,
+      "eval_seed": 17,
+      "eval_bucket": null,
+      "forget_bucket": "forget10",
+      "name": "fiubench_midp_all572_v1",
+      "source_population": {
+        "mode": "all"
+      },
+      "train_bucket": "retain15"
+    }
   },
-
   "attribute_whitelists": {
     "celeba_reliability_whitelist": {
       "path": "configs/whitelists/qwen35_9b_celeba.json",
       "sha256": "4575367243999ff65f9ed552c242a930518c29a5a2770d77485a82dca3654ebc",
-      "attributes_sha256": "e27c1a6064935c2f7cf7b4d8287766bbf4737fcb26c8c11fc1744f83713b37fd",
+      "attributes_sha256": "badd21f88e58c9a59ce879a8b0c40a48a80ce12655229c8118cd1e7b778c78ea",
       "n_attributes": 13,
       "policy": "provisional_balanced_accuracy_ge_0.85"
     },
     "fiubench_experiment_subset": {
       "path": "configs/whitelists/qwen35_9b_fiubench_experiment_v2.json",
-      "sha256": "6e9d6c8bd5518619847d77d66093900482c18054d0f920fba559896b9dd4d011",
+      "sha256": "4833105c7bf37edf200d9531ecfc3b4c926f4b981ce52c42b7f2a3324af66738",
       "n_attributes": 10,
-      "excluded": ["Wearing_Hat", "Wearing_Necktie", "Sideburns"],
+      "excluded": [
+        "Sideburns",
+        "Wearing_Hat",
+        "Wearing_Necktie"
+      ],
       "analysis_unit": "unique_image",
       "version": "v2"
     }
   },
-
   "dataset_artifacts": {
     "output_dir": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench",
     "processed_dataset": {
       "path": "fiubench_processed.jsonl",
-      "sha256": "107d0e078e1dee432de2706372524f0820061ff41cc6edbbc0bb01c80f802799",
+      "sha256": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1",
+      "size_bytes": 561058781,
       "canonical_samples": 30660,
-      "unique_images": 573
+      "unique_images": 573,
+      "unique_identities": 573
     },
     "score_table": {
       "image_scores": {
         "path": "fiubench_image_scores.jsonl",
         "sha256": "0ea38050a5028550b0f52860610fab8c152911de5d02c9bc506d6b9cba2c400b",
+        "size_bytes": 5461910,
         "rows": 22920
       },
       "model_scores": {
         "path": "fiubench_model_scores.jsonl",
         "sha256": "fb75a41b9eda760765cc28e1af32afe8ceb39a35a2b7170dfb3db8e707e55eba",
+        "size_bytes": 8074790,
         "rows": 22920
       }
     },
     "route_probes": {
       "path": "fiubench_route_conflict_eval.jsonl",
       "sha256": "75023f5cbfc8e34c7f8d4f7085d219755babb88ad2918b312fc0eb125d3f104d",
+      "size_bytes": 411188,
       "total_probes": 500,
       "families": {
         "direct_visual": 100,
         "image_plus_name": 100,
         "name_only": 100,
-        "wrong_name": 100,
-        "visual_text_conflict": 100
+        "visual_text_conflict": 100,
+        "wrong_name": 100
       }
     },
     "splits": {
       "path": "fiubench_unlearning_splits",
       "sha256": "8192bfdc9a0f1ca44d65282b34aaadf43dc0e319745ae85f4eb9d7aeab30afc4",
-      "protocols": ["identity_forget", "identity_fact_forget", "attribute_forget"]
+      "protocols": [
+        "identity_forget",
+        "identity_fact_forget",
+        "attribute_forget"
+      ]
     },
     "export_manifest": {
       "path": "fiubench_export_manifest.json",
-      "sha256": "8e6c4ef9daa7dd04e345f86219f1773a9d3fd579b7b17d864ed2a0c775002378"
+      "sha256": "8e6c4ef9daa7dd04e345f86219f1773a9d3fd579b7b17d864ed2a0c775002378",
+      "size_bytes": 1936
     }
   },
-
   "quality_evidence": {
     "manual_audit": {
       "path": "fiubench_manual_audit_report.json",
       "sha256": "c493c64409a4841173962b884388a2d39735e16a63b84a7523aa7065f34046a0",
+      "size_bytes": 65508,
       "total_items": 165,
       "fail": 0,
       "uncertain": 0,
@@ -112,59 +133,67 @@
     },
     "attribute_distribution": {
       "path": "outputs/full_fiubench/evidence/attribute_distribution_report.json",
+      "sha256": "ede6c1678f32e3a6dc9f3bbef276df496291111201485dae5b7ad53102cff06e",
       "analysis_unit": "unique_image",
       "n_images": 573,
-      "excluded_attributes": ["Wearing_Hat (0 positive images)", "Wearing_Necktie (0 positive images)", "Sideburns (61.78% uncertainty)"],
       "experiment_subset_attributes": 10
     },
-    "final_verify_strict": {
-      "status": "PASS",
-      "flags": ["--verify-only", "--strict"],
-      "checks_passed": 17
+    "route_probe_coverage": {
+      "path": "outputs/full_fiubench/evidence/route_probe_attribute_coverage.json",
+      "sha256": "46745b77b5b59caaac131f75e1b76227f45021fa66786790c656f76c38633b2e"
+    },
+    "actual_wrong_name_report": {
+      "path": "outputs/full_fiubench/evidence/actual_wrong_name_probe_report.json",
+      "sha256": "a3221183433e9d205b1841bc7d09747ae059c8a4ca699eb52dd4e341961efd95"
     }
   },
-
   "evidence_bundle_files": [
-    "outputs/full_fiubench/evidence/fiubench_score_manifest.json",
-    "outputs/full_fiubench/evidence/artifact_checksums.json",
-    "outputs/full_fiubench/evidence/annotation_summary.json",
-    "outputs/full_fiubench/evidence/runtime_environment.json",
-    "outputs/full_fiubench/evidence/fiubench_population_report.json",
-    "outputs/full_fiubench/evidence/source_image_audit.json",
-    "outputs/full_fiubench/evidence/wrong_name_matching_report.json",
-    "outputs/full_fiubench/evidence/attribute_distribution_report.json",
-    "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_manual_audit_report.json",
-    "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_checksums.json",
     "configs/whitelists/qwen35_9b_celeba.json",
     "configs/whitelists/qwen35_9b_fiubench_experiment_v2.json",
-    "scripts/regenerate_evidence.py",
-    "scripts/verify_evidence_bundle.py",
-    "scripts/compute_attribute_distribution.py",
-    "scripts/compute_wrong_name_report.py"
+    "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_checksums.json",
+    "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_manual_audit_report.json",
+    "outputs/full_fiubench/evidence/actual_wrong_name_probe_report.json",
+    "outputs/full_fiubench/evidence/annotation_summary.json",
+    "outputs/full_fiubench/evidence/artifact_checksums.json",
+    "outputs/full_fiubench/evidence/attribute_distribution_report.json",
+    "outputs/full_fiubench/evidence/fiubench_population_report.json",
+    "outputs/full_fiubench/evidence/fiubench_score_manifest.json",
+    "outputs/full_fiubench/evidence/route_probe_attribute_coverage.json",
+    "outputs/full_fiubench/evidence/runtime_environment.json",
+    "outputs/full_fiubench/evidence/source_image_audit.json",
+    "outputs/full_fiubench/evidence/wrong_name_matching_report.json"
   ],
-
   "hard_stop_conditions": {
     "all_clear": true,
     "checks": {
-      "573_image_anomaly_explained": true,
-      "extra_cached_image_hashes_zero": true,
-      "missing_image_attribute_pairs_zero": true,
-      "extra_image_attribute_pairs_zero": true,
-      "non_whitelisted_accepted_labels_zero": true,
-      "model_revision_resolved": true,
-      "source_revision_match": true,
-      "protocol_sha_match": true,
-      "train_eval_forget_identity_disjoint": true,
-      "wrong_name_route_count_nonzero": true,
-      "required_route_family_counts_nonzero": true,
-      "final_verify_strict_pass": true,
+      "10_experiment_v2_attrs": true,
+      "13_celeba_whitelist_attrs": true,
+      "22920_image_score_rows": true,
+      "30660_canonical_samples": true,
+      "573_unique_identities": true,
+      "573_unique_images": true,
+      "all_route_families_present": true,
+      "candidate_set_hash_nonempty": true,
+      "excluded_attrs_not_in_v2": true,
+      "experiment_subset_within_reliability": true,
+      "git_dirty_false": true,
+      "manual_audit_no_fail": true,
+      "manual_audit_no_uncertain": true,
+      "manual_audit_no_unreviewed": true,
       "manual_audit_pass": true,
-      "experimental_attribute_subset_frozen": true
+      "model_fingerprint_nonempty": true,
+      "model_revision_is_full_sha": true,
+      "non_whitelisted_accepted_zero": true,
+      "prompt_registry_hash_nonempty": true,
+      "protocol_sha_computed": true,
+      "route_coverage_exists": true,
+      "route_total_500": true,
+      "scoring_version_2": true,
+      "wrong_name_report_exists": true
     }
   },
-
   "definition_of_done": {
     "ready_for_experiments": true,
-    "summary": "All 23 phases complete. 573 images, 22,920 score rows, 30,660 canonical samples. 13 CelebA-whitelisted attributes scored; 10 selected for experiments (Wearing_Hat, Wearing_Necktie, Sideburns excluded at image-level analysis, n=573). Evidence bundle regenerated from clean commit af4dbd3. All verification gates pass."
+    "summary": "Generated programmatically from 845a583b32120192a0a4d0c825b0b76cea7aa54e. 573 images, 22920 score rows, 30660 canonical samples. 13 CelebA-whitelisted attributes; 10 selected for experiments. All hard-stop checks: PASS."
   }
 }

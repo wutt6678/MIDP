@@ -1,5 +1,5 @@
 # Full FIUBench annotation with Qwen3.5-9B.
-# Processes all 572 identity records (573 unique images × 40 CelebA attributes
+# Processes all 573 identity records (573 unique images × 40 CelebA attributes
 # = 22,920 unique queries) without smoke-manifest filtering.
 #
 # Usage:
@@ -59,3 +59,4 @@ build:
   min_auto_accept_score: 0.85
   qa_registry_hash: null
   attribute_whitelist: configs/whitelists/qwen35_9b_celeba.json
+  experiment_attribute_subset: configs/whitelists/qwen35_9b_fiubench_experiment_v2.json
