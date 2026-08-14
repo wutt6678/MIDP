@@ -11,7 +11,17 @@
   "attributes_per_image": 40,
   "annotated_rows": 30660,
   "observations": 1226400,
-  "accepted_labels": 741980,
+  "accepted_labels_processed": 341100,
+  "accepted_labels_pre_whitelist": "historical:741980 (pre-repair, not recomputable from current artifacts)",
+  "accepted_labels_pre_whitelist_note": "The pre-whitelist count of 741980 was computed before the 13-attribute CelebA reliability whitelist was applied. It is retained for historical comparison only and is not recomputable from the current scored artifacts.",
+  "non_whitelisted_accepted_labels_processed": 0,
   "expected_score_rows": "573 \u00d7 40 = 22920",
-  "note": "573 source identities (not 572 \u2014 wc -l undercounts by 1 due to missing trailing newline). Each identity has 1 unique image. 573 images \u00d7 40 CelebA attributes = 22,920 score rows. 30,660 canonical samples = 573 identities \u00d7 ~53.4 samples each (original + paraphrase + perturbed variants sharing the same image)."
+  "split_counts": {
+    "out_of_protocol": 16660,
+    "exclude": 5600,
+    "train": 7000,
+    "eval": 1400
+  },
+  "midp_commit": "af4dbd3479e8b98d1d63e7e4cc782efce6f8eb02",
+  "note": "573 source identities. 573 unique images \u00d7 40 CelebA attributes = 22920 score rows. 30660 canonical samples (original + paraphrase + perturbed variants)."
 }

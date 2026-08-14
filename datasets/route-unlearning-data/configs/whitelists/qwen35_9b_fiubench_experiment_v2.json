@@ -1,0 +1,167 @@
+{
+  "model_id": "Qwen/Qwen3.5-9B",
+  "dataset": "fiubench",
+  "version": "v2",
+  "description": "FIUBench experiment attribute subset for unlearning research. Derived from the CelebA reliability whitelist (qwen35_9b_celeba.json) with FIUBench coverage filtering computed at the unique-image / identity level (n=573).",
+  "ceiling_whitelist": "configs/whitelists/qwen35_9b_celeba.json",
+  "attribute_distribution_report": "outputs/full_fiubench/evidence/attribute_distribution_report.json",
+  "analysis_unit": "unique_image",
+  "source_population": "573 images / 573 identities",
+  "selection_criteria": {
+    "min_celebA_balanced_accuracy": 0.85,
+    "require_both_states": true,
+    "max_uncertainty_fraction": 0.50,
+    "min_accepted_positive_images": 1,
+    "min_accepted_negative_images": 1,
+    "min_wrong_name_controls": 1,
+    "note": "All thresholds applied at the unique-image level (573 images), not canonical-row level (30660 rows)."
+  },
+  "included_attributes": {
+    "Bald": {
+      "positive_images": 11,
+      "negative_images": 544,
+      "uncertain_images": 18,
+      "uncertainty_fraction": 0.0314,
+      "train_positive": 1,
+      "eval_positive": 0,
+      "exclude_positive": 1
+    },
+    "Bangs": {
+      "positive_images": 80,
+      "negative_images": 397,
+      "uncertain_images": 96,
+      "uncertainty_fraction": 0.1675,
+      "train_positive": 7,
+      "eval_positive": 1,
+      "exclude_positive": 6
+    },
+    "Blond_Hair": {
+      "positive_images": 60,
+      "negative_images": 421,
+      "uncertain_images": 92,
+      "uncertainty_fraction": 0.1606,
+      "train_positive": 7,
+      "eval_positive": 1,
+      "exclude_positive": 3
+    },
+    "Eyeglasses": {
+      "positive_images": 28,
+      "negative_images": 544,
+      "uncertain_images": 1,
+      "uncertainty_fraction": 0.0017,
+      "train_positive": 1,
+      "eval_positive": 0,
+      "exclude_positive": 2
+    },
+    "Gray_Hair": {
+      "positive_images": 37,
+      "negative_images": 465,
+      "uncertain_images": 71,
+      "uncertainty_fraction": 0.1239,
+      "train_positive": 3,
+      "eval_positive": 0,
+      "exclude_positive": 1
+    },
+    "Male": {
+      "positive_images": 236,
+      "negative_images": 293,
+      "uncertain_images": 44,
+      "uncertainty_fraction": 0.0768,
+      "train_positive": 19,
+      "eval_positive": 5,
+      "exclude_positive": 14
+    },
+    "Mustache": {
+      "positive_images": 37,
+      "negative_images": 478,
+      "uncertain_images": 58,
+      "uncertainty_fraction": 0.1012,
+      "train_positive": 2,
+      "eval_positive": 1,
+      "exclude_positive": 1
+    },
+    "Smiling": {
+      "positive_images": 50,
+      "negative_images": 412,
+      "uncertain_images": 111,
+      "uncertainty_fraction": 0.1937,
+      "train_positive": 4,
+      "eval_positive": 1,
+      "exclude_positive": 5
+    },
+    "Wearing_Earrings": {
+      "positive_images": 124,
+      "negative_images": 347,
+      "uncertain_images": 102,
+      "uncertainty_fraction": 0.178,
+      "train_positive": 10,
+      "eval_positive": 2,
+      "exclude_positive": 13
+    },
+    "Wearing_Lipstick": {
+      "positive_images": 161,
+      "negative_images": 272,
+      "uncertain_images": 140,
+      "uncertainty_fraction": 0.2443,
+      "train_positive": 15,
+      "eval_positive": 1,
+      "exclude_positive": 12
+    }
+  },
+  "excluded_attributes": {
+    "Wearing_Hat": {
+      "reason": "zero accepted positive images at image level (0/573)",
+      "positive_images": 0,
+      "negative_images": 570,
+      "uncertain_images": 3,
+      "uncertainty_fraction": 0.0052
+    },
+    "Wearing_Necktie": {
+      "reason": "zero accepted positive images at image level (0/573)",
+      "positive_images": 0,
+      "negative_images": 571,
+      "uncertain_images": 2,
+      "uncertainty_fraction": 0.0035
+    },
+    "Sideburns": {
+      "reason": "image-level uncertainty fraction 61.78% (354/573) exceeds 50% threshold; v1 excluded at 63.8% canonical-row level (19560/30660), image-level analysis confirms exclusion",
+      "positive_images": 57,
+      "negative_images": 162,
+      "uncertain_images": 354,
+      "uncertainty_fraction": 0.6178
+    }
+  },
+  "attributes": [
+    "Bald",
+    "Bangs",
+    "Blond_Hair",
+    "Eyeglasses",
+    "Gray_Hair",
+    "Male",
+    "Mustache",
+    "Smiling",
+    "Wearing_Earrings",
+    "Wearing_Lipstick"
+  ],
+  "n_attributes": 10,
+  "wrong_name_matching_report": "outputs/full_fiubench/evidence/wrong_name_matching_report.json",
+  "wrong_name_summary": {
+    "n_identities_with_visual_anchors": 573,
+    "n_total_candidate_pairs": 163878,
+    "n_visually_matched_pairs": 163878,
+    "median_similarity_bin": "(0.6, 0.8]",
+    "all_identities_have_matches": true
+  },
+  "creation_code_commit": "af4dbd3479e8b98d1d63e7e4cc782efce6f8eb02",
+  "notes": [
+    "v2 recomputes all coverage statistics at the unique-image level (573 images/identities) instead of canonical-row level (30660 rows).",
+    "The CelebA reliability whitelist (13 attributes) is the reliability ceiling.",
+    "This experiment subset further filters by FIUBench image-level coverage.",
+    "Wearing_Hat and Wearing_Necktie have zero accepted positive images — no positive experimental cases exist.",
+    "Sideburns has 61.78% image-level uncertainty (354/573 images) — still exceeds the 50% threshold.",
+    "The final 10 attributes are unchanged from v1, but the justification methodology is now statistically correct.",
+    "All 10 included attributes have positive and negative support across train/eval/exclude protocol roles.",
+    "Wrong-name routing is viable for all 10 attributes: 163878 visually-matched pairs across 573 identities.",
+    "Male is retained as apparent-presentation analysis is part of the research question; treat strictly as CelebA-defined Male label."
+  ]
+}
