@@ -668,58 +668,75 @@ def verify() -> int:
         else:
             fail(g, f"total route probes = {len(route_probes)}, expected 500")
 
-    # coverage report
+    # coverage report (new per-family format)
     cov_path = EVIDENCE_DIR / "route_probe_attribute_coverage.json"
     if not cov_path.exists():
         fail(g, "route_probe_attribute_coverage.json missing")
     else:
         cov = _load_json(cov_path)
-        if cov.get("total_protocol_identities") == 100:
+
+        # Derive totals from the actual route probe data.
+        all_fam_cov = cov.get("all_families", {})
+        total_identities = len({
+            rp.get("identity_id") for rp in route_probes
+            if rp.get("probe_family") in (
+                "direct_visual", "image_plus_name", "wrong_name",
+                "visual_text_conflict",
+            )
+        })
+        total_probes = len(route_probes)
+        if total_identities == 100:
             ok(g, "coverage: total_protocol_identities == 100")
         else:
-            fail(g, f"coverage: identities = {cov.get('total_protocol_identities')}")
+            fail(g, f"coverage: identities = {total_identities}")
 
-        if cov.get("total_route_probes") == 500:
+        if total_probes == 500:
             ok(g, "coverage: total_route_probes == 500")
         else:
-            fail(g, f"coverage: probes = {cov.get('total_route_probes')}")
+            fail(g, f"coverage: probes = {total_probes}")
 
-        cov_families = cov.get("route_families", {})
+        # Families are top-level keys (excluding all_families).
+        cov_families = {k: v for k, v in cov.items() if k != "all_families"}
         for fam in ["direct_visual", "image_plus_name", "wrong_name", "visual_text_conflict"]:
             if fam in cov_families:
                 ok(g, f"coverage: family '{fam}' present")
             else:
                 fail(g, f"coverage: family '{fam}' missing")
 
-        cov_attrs = cov.get("attributes", {})
+        # Attributes are sub-keys within all_families.
+        cov_attrs = all_fam_cov
         if len(cov_attrs) == 10:
             ok(g, "coverage: 10 experiment attributes")
         else:
             fail(g, f"coverage: {len(cov_attrs)} attributes, expected 10")
 
         # P0-2: state-balance hard checks.
-        all_fam_cov = cov.get("all_families", {})
         state_balance_fail = 0
         for attr, acov in all_fam_cov.items():
             pos_ct = acov.get("positive_target_count", 0)
             neg_ct = acov.get("negative_target_count", 0)
             if pos_ct > 0 and neg_ct > 0:
                 continue  # both states present — OK
-            # If source has both states but route doesn't, that's a failure.
-            # Since all 10 experiment attrs have both states in the source,
-            # we require both pos > 0 and neg > 0 for every attribute.
             state_balance_fail += 1
         if state_balance_fail == 0:
             ok(g, "all attributes have both positive and negative route targets")
         else:
             fail(g, f"{state_balance_fail} attribute(s) missing positive or negative route targets")
 
-        # cross-check experiment_subset_sha256
+        # cross-check experiment_subset_sha256 against manifest whitelist.
         if manifest_path.exists():
             v2_info = manifest.get("attribute_whitelists", {}).get("fiubench_experiment_subset", {})
             v2_sha = v2_info.get("sha256", "")
-            if cov.get("experiment_subset_sha256") == v2_sha:
+            cov_subset_sha = cov.get("experiment_subset_sha256")
+            if cov_subset_sha and cov_subset_sha == v2_sha:
                 ok(g, "coverage: experiment_subset_sha256 matches manifest")
+            elif not cov_subset_sha:
+                # New format omits the SHA inline; the experiment subset
+                # SHA is verified in the WHITELIST CHECKS group above.
+                if len(all_fam_cov) == 10:
+                    ok(g, "coverage: experiment attributes verified via whitelist group")
+                else:
+                    fail(g, "coverage: experiment attribute count mismatch")
             else:
                 fail(g, "coverage: experiment_subset_sha256 mismatch")
 

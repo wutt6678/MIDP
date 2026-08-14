@@ -1,10 +1,10 @@
 {
   "manifest_version": "2.0",
   "manifest_purpose": "Frozen evidence bundle for FIUBench unlearning experiments. All hashes are independently recomputed from source files.",
-  "created_at": "2026-08-14T08:51:19Z",
+  "created_at": "2026-08-14T16:55:59Z",
   "code_provenance": {
     "dataset_creation_commit": "af4dbd3479e8b98d1d63e7e4cc782efce6f8eb02",
-    "evidence_generation_code_commit": "845a583b32120192a0a4d0c825b0b76cea7aa54e",
+    "evidence_generation_code_commit": "27f975e4df83cb68c4ca4649aeb72096725ba2fc",
     "midp_git_dirty": false,
     "fiubench_upstream_commit": "8e12cddc431eafd129c275d46a3d882474cfcf61",
     "source_version": "fiubench-8e12cdd",
@@ -94,8 +94,8 @@
     },
     "route_probes": {
       "path": "fiubench_route_conflict_eval.jsonl",
-      "sha256": "75023f5cbfc8e34c7f8d4f7085d219755babb88ad2918b312fc0eb125d3f104d",
-      "size_bytes": 411188,
+      "sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+      "size_bytes": 455068,
       "total_probes": 500,
       "families": {
         "direct_visual": 100,
@@ -116,7 +116,7 @@
     },
     "export_manifest": {
       "path": "fiubench_export_manifest.json",
-      "sha256": "8e6c4ef9daa7dd04e345f86219f1773a9d3fd579b7b17d864ed2a0c775002378",
+      "sha256": "966149dbae7afc588fd3499fa7faac8e317e725363b2e8f4a5de938ce272a895",
       "size_bytes": 1936
     }
   },
@@ -140,11 +140,14 @@
     },
     "route_probe_coverage": {
       "path": "outputs/full_fiubench/evidence/route_probe_attribute_coverage.json",
-      "sha256": "46745b77b5b59caaac131f75e1b76227f45021fa66786790c656f76c38633b2e"
+      "sha256": "ed0bbc10165d1a609ee7c8a5b3e7c21434affd462dd647973c27edfdef770631"
     },
     "actual_wrong_name_report": {
       "path": "outputs/full_fiubench/evidence/actual_wrong_name_probe_report.json",
-      "sha256": "a3221183433e9d205b1841bc7d09747ae059c8a4ca699eb52dd4e341961efd95"
+      "sha256": "2c7c7cd6843753ecdfd83e9bd1c056c6d405bb803f15e5b4646860df935979cf",
+      "matching_covariate_policy": "all_high_confidence_celeba_reliability_attributes",
+      "matching_covariate_attribute_ceiling": "configs/whitelists/qwen35_9b_celeba.json",
+      "target_attribute_subset": "configs/whitelists/qwen35_9b_fiubench_experiment_v2.json"
     }
   },
   "evidence_bundle_files": [
@@ -172,6 +175,9 @@
       "30660_canonical_samples": true,
       "573_unique_identities": true,
       "573_unique_images": true,
+      "all_experiment_attributes_have_route_targets": true,
+      "all_feasible_attributes_have_negative_route_targets": true,
+      "all_feasible_attributes_have_positive_route_targets": true,
       "all_route_families_present": true,
       "candidate_set_hash_nonempty": true,
       "excluded_attrs_not_in_v2": true,
@@ -189,11 +195,13 @@
       "route_coverage_exists": true,
       "route_total_500": true,
       "scoring_version_2": true,
-      "wrong_name_report_exists": true
+      "wrong_name_report_exists": true,
+      "wrong_name_same_answer_invariant": true,
+      "wrong_name_same_image_invariant": true
     }
   },
   "definition_of_done": {
     "ready_for_experiments": true,
-    "summary": "Generated programmatically from 845a583b32120192a0a4d0c825b0b76cea7aa54e. 573 images, 22920 score rows, 30660 canonical samples. 13 CelebA-whitelisted attributes; 10 selected for experiments. All hard-stop checks: PASS."
+    "summary": "Generated programmatically from 27f975e4df83cb68c4ca4649aeb72096725ba2fc. 573 images, 22920 score rows, 30660 canonical samples. 13 CelebA-whitelisted attributes; 10 selected for experiments. All hard-stop checks: PASS."
   }
 }
