@@ -217,10 +217,12 @@ def generate(output_dir: Path, allow_dirty: bool = False) -> dict:
     # --- Route probe coverage -------------------------------------------- #
     route_coverage_path = evidence_dir / "route_probe_attribute_coverage.json"
     route_coverage_sha = _sha256_file(route_coverage_path) if route_coverage_path.exists() else None
+    route_coverage_data = _load_json(route_coverage_path) if route_coverage_path.exists() else {}
 
     # --- Wrong-name report ----------------------------------------------- #
     wn_report_path = evidence_dir / "actual_wrong_name_probe_report.json"
     wn_report_sha = _sha256_file(wn_report_path) if wn_report_path.exists() else None
+    wn_report_data = _load_json(wn_report_path) if wn_report_path.exists() else {}
 
     # --- Hard-stop checks ------------------------------------------------ #
     checks: dict[str, bool] = {}
@@ -275,6 +277,42 @@ def generate(output_dir: Path, allow_dirty: bool = False) -> dict:
     checks["git_dirty_false"] = not dirty
     checks["route_coverage_exists"] = route_coverage_path.exists()
     checks["wrong_name_report_exists"] = wn_report_path.exists()
+
+    # P1-3: route-state coverage hard-stop checks.
+    all_fam_cov = route_coverage_data.get("all_families", {})
+    attrs_with_targets = sum(
+        1 for acov in all_fam_cov.values()
+        if acov.get("total_visual_probe_count", 0) > 0
+    )
+    checks["all_experiment_attributes_have_route_targets"] = (
+        attrs_with_targets >= len(experiment_attrs)
+    )
+    checks["all_feasible_attributes_have_positive_route_targets"] = all(
+        acov.get("positive_target_count", 0) > 0
+        for acov in all_fam_cov.values()
+    )
+    checks["all_feasible_attributes_have_negative_route_targets"] = all(
+        acov.get("negative_target_count", 0) > 0
+        for acov in all_fam_cov.values()
+    )
+
+    # P1-1 / P1-3: wrong-name image-SHA and answer invariants.
+    wn_probes = wn_report_data.get("probes", [])
+    if wn_probes:
+        checks["wrong_name_same_image_invariant"] = all(
+            r.get("target_image_sha256")
+            and r.get("paired_correct_name_image_sha256")
+            and r["target_image_sha256"] == r["paired_correct_name_image_sha256"]
+            for r in wn_probes
+        )
+        checks["wrong_name_same_answer_invariant"] = all(
+            r.get("target_label") is not None
+            and r.get("target_label") == r.get("paired_correct_name_target_label")
+            for r in wn_probes
+        )
+    else:
+        checks["wrong_name_same_image_invariant"] = False
+        checks["wrong_name_same_answer_invariant"] = False
 
     all_clear = all(checks.values())
 
@@ -432,6 +470,18 @@ def generate(output_dir: Path, allow_dirty: bool = False) -> dict:
                     wn_report_path.relative_to(REPO_ROOT),
                 ) if wn_report_path.exists() else None,
                 "sha256": wn_report_sha,
+                "matching_covariate_policy": wn_report_data.get(
+                    "matching_covariate_policy",
+                    "all_high_confidence_celeba_reliability_attributes",
+                ),
+                "matching_covariate_attribute_ceiling": wn_report_data.get(
+                    "matching_covariate_attribute_ceiling",
+                    "configs/whitelists/qwen35_9b_celeba.json",
+                ),
+                "target_attribute_subset": wn_report_data.get(
+                    "target_attribute_subset",
+                    "configs/whitelists/qwen35_9b_fiubench_experiment_v2.json",
+                ),
             },
         },
         "evidence_bundle_files": [

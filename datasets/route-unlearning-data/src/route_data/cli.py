@@ -3369,6 +3369,220 @@ def _build_probe_coverage_report(
     }
 
 
+# ------------------------------------------------------------------ #
+# Evidence artifact generators (P0-2 / P1-1 / P1-2)
+# ------------------------------------------------------------------ #
+
+_VISUAL_FAMILIES = (
+    "direct_visual",
+    "image_plus_name",
+    "wrong_name",
+    "visual_text_conflict",
+)
+
+
+def _build_route_probe_attribute_coverage(
+    probe_rows: list[dict[str, Any]],
+    by_identity: dict[str, list],
+    experiment_attrs: set[str] | None,
+) -> dict[str, Any]:
+    """Generate per-family per-attribute route probe coverage report.
+
+    Produces the ``route_probe_attribute_coverage.json`` evidence file
+    with probe counts, identity counts by protocol role, and target
+    state counts for every visual family and experiment attribute.
+    """
+    # Build identity -> protocol role lookup.
+    identity_role: dict[str, str] = {}
+    for iid, group in by_identity.items():
+        identity_role[iid] = group[0].split if hasattr(group[0], "split") else "unknown"
+
+    result: dict[str, Any] = {}
+    for family in _VISUAL_FAMILIES:
+        family_data: dict[str, Any] = {}
+        for attr in sorted(experiment_attrs or []):
+            family_attr_rows = [
+                r for r in probe_rows
+                if r.get("probe_family") == family and r.get("target_attribute") == attr
+            ]
+            identities = sorted({r["identity_id"] for r in family_attr_rows})
+            train_ct = sum(1 for i in identities if identity_role.get(i) == "train")
+            eval_ct = sum(1 for i in identities if identity_role.get(i) == "eval")
+            exclude_ct = sum(1 for i in identities if identity_role.get(i) == "exclude")
+            pos_ct = sum(1 for r in family_attr_rows if r.get("answer_text") == "yes")
+            neg_ct = sum(1 for r in family_attr_rows if r.get("answer_text") == "no")
+            family_data[attr] = {
+                "probe_count": len(family_attr_rows),
+                "unique_identity_count": len(identities),
+                "train_identity_count": train_ct,
+                "eval_identity_count": eval_ct,
+                "exclude_identity_count": exclude_ct,
+                "positive_target_count": pos_ct,
+                "negative_target_count": neg_ct,
+            }
+        result[family] = family_data
+
+    # all_families aggregation.
+    all_fam: dict[str, Any] = {}
+    for attr in sorted(experiment_attrs or []):
+        attr_rows = [
+            r for r in probe_rows
+            if r.get("probe_family") in _VISUAL_FAMILIES
+            and r.get("target_attribute") == attr
+        ]
+        identities = sorted({r["identity_id"] for r in attr_rows})
+        train_ct = sum(1 for i in identities if identity_role.get(i) == "train")
+        eval_ct = sum(1 for i in identities if identity_role.get(i) == "eval")
+        exclude_ct = sum(1 for i in identities if identity_role.get(i) == "exclude")
+        pos_ct = sum(1 for r in attr_rows if r.get("answer_text") == "yes")
+        neg_ct = sum(1 for r in attr_rows if r.get("answer_text") == "no")
+        all_fam[attr] = {
+            "total_visual_probe_count": len(attr_rows),
+            "unique_identity_count": len(identities),
+            "train_identity_count": train_ct,
+            "eval_identity_count": eval_ct,
+            "exclude_identity_count": exclude_ct,
+            "positive_target_count": pos_ct,
+            "negative_target_count": neg_ct,
+        }
+    result["all_families"] = all_fam
+    return result
+
+
+def _build_wrong_name_probe_report(
+    probe_rows: list[dict[str, Any]],
+    by_identity: dict[str, list],
+    experiment_attrs: set[str] | None,
+) -> dict[str, Any]:
+    """Generate the ``actual_wrong_name_probe_report.json`` evidence file.
+
+    Each wrong-name probe record includes image SHA, paired correct-name
+    metadata, and invariant checks ensuring only identity text changes.
+    """
+    from .build.conflict_generation import _accepted_visible_attributes
+
+    # Build identity -> protocol role lookup.
+    identity_role: dict[str, str] = {}
+    for iid, group in by_identity.items():
+        identity_role[iid] = group[0].split if hasattr(group[0], "split") else "unknown"
+
+    # Build lookup for paired correct-name (direct_visual) probes.
+    dv_lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in probe_rows:
+        if r.get("probe_family") == "direct_visual" and r.get("target_attribute"):
+            key = (r["identity_id"], r["target_attribute"])
+            dv_lookup[key] = r
+
+    wrong_rows = [r for r in probe_rows if r.get("probe_family") == "wrong_name"]
+
+    # Build identity -> target_attribute -> label from samples.
+    identity_attr_labels: dict[str, dict[str, bool]] = {}
+    for iid, group in by_identity.items():
+        for s in group:
+            attrs = _accepted_visible_attributes(s)
+            if attrs:
+                identity_attr_labels[iid] = attrs
+                break
+
+    probes_out: list[dict[str, Any]] = []
+    all_invariants_pass = True
+    similarities: list[float] = []
+    per_attr: dict[str, list[dict[str, Any]]] = {}
+
+    for wr in sorted(wrong_rows, key=lambda r: r["probe_id"]):
+        iid = wr["identity_id"]
+        attr = wr.get("target_attribute", "")
+        dv = dv_lookup.get((iid, attr))
+
+        target_sha = wr.get("image_sha256")
+        paired_sha = dv.get("image_sha256") if dv else None
+        paired_attr = dv.get("target_attribute") if dv else None
+        target_label = wr.get("answer_label")
+        paired_label = dv.get("answer_label") if dv else None
+
+        # Invariant checks.
+        sha_match = (target_sha is not None and paired_sha is not None
+                     and target_sha == paired_sha)
+        attr_match = (attr == paired_attr)
+        label_match = (target_label == paired_label)
+        inv_ok = sha_match and attr_match and label_match
+        if not inv_ok:
+            all_invariants_pass = False
+
+        target_protocol_role = identity_role.get(iid, "unknown")
+        wrong_iid = wr.get("matched_wrong_identity_id", "")
+        control_protocol_role = identity_role.get(wrong_iid, "unknown")
+
+        rec = {
+            "probe_id": wr["probe_id"],
+            "target_identity_id": iid,
+            "target_identity_name": by_identity[iid][0].identity_name if iid in by_identity else None,
+            "target_attribute": attr,
+            "target_label": target_label,
+            "target_image_sha256": target_sha,
+            "matched_wrong_identity_id": wrong_iid,
+            "wrong_identity_name": None,
+            "matching_similarity": wr.get("matching_similarity"),
+            "matching_attributes": wr.get("matching_attributes"),
+            "paired_correct_name_probe_id": dv["probe_id"] if dv else None,
+            "paired_correct_name_image_sha256": paired_sha,
+            "paired_correct_name_target_attribute": paired_attr,
+            "paired_correct_name_target_label": paired_label,
+            "target_protocol_role": target_protocol_role,
+            "control_protocol_role": control_protocol_role,
+            "invariants_pass": inv_ok,
+        }
+        # Resolve wrong identity name.
+        if wrong_iid and wrong_iid in by_identity:
+            rec["wrong_identity_name"] = by_identity[wrong_iid][0].identity_name
+        probes_out.append(rec)
+
+        sim = wr.get("matching_similarity")
+        if sim is not None:
+            similarities.append(sim)
+        per_attr.setdefault(attr, []).append(rec)
+
+    # Per-attribute summary.
+    per_attr_summary: dict[str, Any] = {}
+    for attr in sorted(per_attr):
+        recs = per_attr[attr]
+        sims = [r["matching_similarity"] for r in recs if r["matching_similarity"] is not None]
+        role_dist: dict[str, int] = {}
+        for r in recs:
+            role = r["target_protocol_role"]
+            role_dist[role] = role_dist.get(role, 0) + 1
+        target_ids = {r["target_identity_id"] for r in recs}
+        control_ids = {r["matched_wrong_identity_id"] for r in recs}
+        per_attr_summary[attr] = {
+            "wrong_name_probe_count": len(recs),
+            "unique_target_identities": len(target_ids),
+            "unique_control_identities": len(control_ids),
+            "similarity_mean": sum(sims) / len(sims) if sims else None,
+            "similarity_median": sorted(sims)[len(sims) // 2] if sims else None,
+            "similarity_min": min(sims) if sims else None,
+            "similarity_max": max(sims) if sims else None,
+            "train_eval_exclude_target_distribution": role_dist,
+        }
+
+    total_identities = len({r["target_identity_id"] for r in probes_out})
+    return {
+        "total_wrong_name_probes": len(probes_out),
+        "total_protocol_identities": total_identities,
+        "all_invariants_pass": all_invariants_pass,
+        "matching_covariate_policy": "all_high_confidence_celeba_reliability_attributes",
+        "matching_covariate_attribute_ceiling": "configs/whitelists/qwen35_9b_celeba.json",
+        "target_attribute_subset": "configs/whitelists/qwen35_9b_fiubench_experiment_v2.json",
+        "similarity_distribution": {
+            "mean": sum(similarities) / len(similarities) if similarities else None,
+            "median": sorted(similarities)[len(similarities) // 2] if similarities else None,
+            "min": min(similarities) if similarities else None,
+            "max": max(similarities) if similarities else None,
+        },
+        "per_attribute": per_attr_summary,
+        "probes": probes_out,
+    }
+
+
 def cmd_build_route_probes(args) -> int:
     run_cfg = load_run_config(args.config)
     dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
@@ -3389,6 +3603,7 @@ def cmd_build_route_probes(args) -> int:
         ConflictError,
         RouteProbeBuilder,
         _accepted_visible_attributes,
+        assign_balanced_route_attributes,
         build_identity_probes,
         build_pair_manifest,
         matched_wrong_name_details,
@@ -3425,36 +3640,28 @@ def cmd_build_route_probes(args) -> int:
     for sample in samples:
         by_identity.setdefault(sample.identity_id, []).append(sample)
 
-    # P0-3 (freeze): balanced attribute assignment — two-pass approach.
-    # Pass 1: collect eligible experiment attributes per identity.
-    # Pass 2: assign targets round-robin (least-assigned eligible attr wins,
-    #         ties broken alphabetically) so every experiment attribute gets
-    #         reasonable coverage instead of min()-alphabetical domination.
+    # P0-3 (freeze) + P0-2 (state-balance): balanced attribute assignment.
+    # Pass 1: collect eligible experiment attributes *with labels* per identity.
+    # Pass 2: two-stage state-balanced assignment via helper.
     identity_ids = sorted(by_identity)
-    eligible_by_identity: dict[str, set[str]] = {}
+    eligible_by_identity: dict[str, dict[str, bool]] = {}
     if experiment_attrs is not None:
         for identity_id in identity_ids:
             group = by_identity[identity_id]
             for s in group:
                 attrs = _accepted_visible_attributes(s)
-                eligible = {k for k in attrs if k in experiment_attrs}
+                eligible = {k: v for k, v in attrs.items() if k in experiment_attrs}
                 if eligible:
                     eligible_by_identity[identity_id] = eligible
                     break
 
-        # Compute balanced assignment.
-        attr_counts: dict[str, int] = {a: 0 for a in experiment_attrs}
-        balanced_assignment: dict[str, str] = {}
-        for identity_id in sorted(eligible_by_identity):
-            eligible = eligible_by_identity[identity_id]
-            # Pick the eligible attribute with the lowest count; ties broken
-            # by alphabetical order for determinism.
-            best = min(sorted(eligible), key=lambda a: attr_counts[a])
-            balanced_assignment[identity_id] = best
-            attr_counts[best] += 1
+        # State-balanced assignment via extracted helper.
+        balanced_assignment, _assignment_stats = assign_balanced_route_attributes(
+            eligible_by_identity, experiment_attrs,
+        )
         log.info(
             "[experiment-attr] balanced assignment: %s",
-            {a: attr_counts[a] for a in sorted(attr_counts)},
+            {a: _assignment_stats[a] for a in sorted(_assignment_stats)},
         )
     else:
         balanced_assignment = {}
@@ -3534,6 +3741,28 @@ def cmd_build_route_probes(args) -> int:
                 + "; ".join(pair_issues[:5])
             )
 
+    # P1-1: compute image SHA-256 from actual image files for visual probes.
+    _img_sha_cache: dict[str, str | None] = {}
+    for row in probe_rows:
+        uri = row.get("image_uri")
+        if not uri:
+            continue
+        if uri not in _img_sha_cache:
+            p = Path(uri)
+            if p.is_file():
+                import hashlib as _hashlib
+                h = _hashlib.sha256()
+                with open(p, "rb") as _f:
+                    while True:
+                        chunk = _f.read(1 << 20)
+                        if not chunk:
+                            break
+                        h.update(chunk)
+                _img_sha_cache[uri] = h.hexdigest()
+            else:
+                _img_sha_cache[uri] = None
+        row["image_sha256"] = _img_sha_cache[uri]
+
     probes_path = dataset_dir / f"{args.dataset}_route_probes.jsonl"
     write_jsonl(probe_rows, probes_path)
     write_json(pairs, dataset_dir / f"{args.dataset}_pair_manifest.json")
@@ -3545,6 +3774,27 @@ def cmd_build_route_probes(args) -> int:
     )
     report_path = dataset_dir / f"{args.dataset}_route_probe_report.json"
     write_json(coverage, report_path)
+
+    # P0-2 / P1-1: generate evidence artifacts for the frozen bundle.
+    base_dir = Path(args.output_dir) if args.output_dir else _default_build_dir(run_cfg)
+    evidence_dir = base_dir / "evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    attr_coverage_report = _build_route_probe_attribute_coverage(
+        probe_rows, by_identity, experiment_attrs,
+    )
+    write_json(
+        attr_coverage_report,
+        evidence_dir / "route_probe_attribute_coverage.json",
+    )
+
+    wn_report = _build_wrong_name_probe_report(
+        probe_rows, by_identity, experiment_attrs,
+    )
+    write_json(
+        wn_report,
+        evidence_dir / "actual_wrong_name_probe_report.json",
+    )
 
     _print_json(
         {

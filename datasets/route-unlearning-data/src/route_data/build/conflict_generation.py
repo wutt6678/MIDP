@@ -17,9 +17,12 @@ associations, never real-world facts.
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 from ..data.schemas import CanonicalSample, ProfileFact, RouteProbe
 from ..prompts.registry import PromptRegistry
@@ -219,6 +222,7 @@ class RouteProbeBuilder:
             "paired_sample_id": rp.paired_sample_id,
             "controlled_variables": rp.controlled_variables,
             "image_uri": probe.image_uri,
+            "image_sha256": probe.image_sha256,
             "registry_hash": self.registry_hash,
         }
         # P0-5: add expected answer fields so downstream consumers know the
@@ -954,3 +958,101 @@ def structural_wrong_name_candidates(
                 "structurally_valid": True,
             })
     return pairs
+
+
+def assign_balanced_route_attributes(
+    eligible_by_identity: Mapping[str, Mapping[str, bool]],
+    experiment_attributes: set[str],
+    target_quota: int = 10,
+) -> tuple[dict[str, str], dict[str, dict[str, int]]]:
+    """State-balanced deterministic route-attribute assignment.
+
+    Two-stage assignment ensures every experiment attribute has both
+    positive and negative target identities when both states exist in
+    the protocol-eligible source population.
+
+    **Stage 1 — seed state coverage.**  For each attribute, if both
+    positive-eligible and negative-eligible identities exist, at least
+    one of each is assigned before general balancing.
+
+    **Stage 2 — fill remaining quota.**  Unassigned identities are
+    allocated to the least-assigned eligible attribute (ties broken
+    alphabetically).
+
+    Parameters
+    ----------
+    eligible_by_identity:
+        ``{identity_id: {attr_name: label_bool, ...}}`` — accepted
+        high-confidence experiment attributes and their label states
+        for each protocol-eligible identity.
+    experiment_attributes:
+        The frozen experiment-v2 attribute set.
+    target_quota:
+        Maximum number of identities assigned to each attribute.
+
+    Returns
+    -------
+    assignment : dict[str, str]
+        ``{identity_id: selected_attribute}``.
+    stats : dict[str, dict[str, int]]
+        Per-attribute ``positive`` and ``negative`` assignment counts.
+    """
+    experiment_attrs = sorted(experiment_attributes)
+    attr_counts: dict[str, int] = {a: 0 for a in experiment_attrs}
+    assignment: dict[str, str] = {}
+
+    # Pre-compute eligible positive / negative pools per attribute.
+    eligible_pos: dict[str, list[str]] = {a: [] for a in experiment_attrs}
+    eligible_neg: dict[str, list[str]] = {a: [] for a in experiment_attrs}
+    for identity_id in sorted(eligible_by_identity):
+        attrs_labels = eligible_by_identity[identity_id]
+        for attr in experiment_attrs:
+            if attr in attrs_labels:
+                if attrs_labels[attr]:
+                    eligible_pos[attr].append(identity_id)
+                else:
+                    eligible_neg[attr].append(identity_id)
+
+    # Stage 1: seed at least 1 positive + 1 negative per attribute.
+    for attr in experiment_attrs:
+        if eligible_pos[attr] and eligible_neg[attr]:
+            pos_id = eligible_pos[attr][0]
+            if pos_id not in assignment:
+                assignment[pos_id] = attr
+                attr_counts[attr] += 1
+            neg_id = eligible_neg[attr][0]
+            if neg_id not in assignment:
+                assignment[neg_id] = attr
+                attr_counts[attr] += 1
+
+    # Stage 2: fill remaining quota with least-assigned eligible attr.
+    for identity_id in sorted(eligible_by_identity):
+        if identity_id in assignment:
+            continue
+        eligible = sorted(
+            a for a in eligible_by_identity[identity_id]
+            if a in experiment_attrs and attr_counts[a] < target_quota
+        )
+        if not eligible:
+            continue
+        best = min(eligible, key=lambda a: attr_counts[a])
+        assignment[identity_id] = best
+        attr_counts[best] += 1
+
+    # Compute per-attribute positive / negative stats.
+    stats: dict[str, dict[str, int]] = {
+        a: {"positive": 0, "negative": 0} for a in experiment_attrs
+    }
+    for identity_id, attr in assignment.items():
+        label = eligible_by_identity[identity_id].get(attr)
+        if label is True:
+            stats[attr]["positive"] += 1
+        elif label is False:
+            stats[attr]["negative"] += 1
+
+    log.info(
+        "[experiment-attr] state-balanced assignment: counts=%s, stats=%s",
+        {a: attr_counts[a] for a in experiment_attrs},
+        stats,
+    )
+    return assignment, stats

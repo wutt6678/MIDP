@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -289,10 +290,48 @@ def verify() -> int:
 
         # creation code commit exists
         cp = manifest.get("code_provenance", {})
-        if cp.get("evidence_generation_code_commit"):
+        egc = cp.get("evidence_generation_code_commit")
+        if egc:
             ok(g, "evidence_generation_code_commit present")
         else:
             fail(g, "evidence_generation_code_commit missing")
+
+        # P0-1: verify evidence_generation_code_commit is a real git commit.
+        if egc:
+            try:
+                subprocess.run(
+                    ["git", "cat-file", "-e", f"{egc}^{{commit}}"],
+                    cwd=REPO, check=True, capture_output=True,
+                )
+                ok(g, f"evidence_generation_code_commit is real commit ({egc[:12]})")
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                fail(g, f"evidence_generation_code_commit not a reachable commit: {egc[:12]}")
+
+        # P0-1: verify dataset_creation_commit is a real git commit.
+        dcc = cp.get("dataset_creation_commit")
+        if dcc:
+            ok(g, "dataset_creation_commit present")
+            try:
+                subprocess.run(
+                    ["git", "cat-file", "-e", f"{dcc}^{{commit}}"],
+                    cwd=REPO, check=True, capture_output=True,
+                )
+                ok(g, f"dataset_creation_commit is real commit ({dcc[:12]})")
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                fail(g, f"dataset_creation_commit not a reachable commit: {dcc[:12]}")
+        else:
+            fail(g, "dataset_creation_commit missing")
+
+        # P0-1: optional stronger check — ancestor relationship.
+        if egc and dcc:
+            try:
+                subprocess.run(
+                    ["git", "merge-base", "--is-ancestor", dcc, egc],
+                    cwd=REPO, check=True, capture_output=True,
+                )
+                ok(g, "dataset_creation_commit is ancestor of evidence_generation_code_commit")
+            except subprocess.CalledProcessError:
+                fail(g, "dataset_creation_commit is NOT ancestor of evidence_generation_code_commit")
 
         # git_dirty == false
         if cp.get("midp_git_dirty") is False:
@@ -658,6 +697,23 @@ def verify() -> int:
         else:
             fail(g, f"coverage: {len(cov_attrs)} attributes, expected 10")
 
+        # P0-2: state-balance hard checks.
+        all_fam_cov = cov.get("all_families", {})
+        state_balance_fail = 0
+        for attr, acov in all_fam_cov.items():
+            pos_ct = acov.get("positive_target_count", 0)
+            neg_ct = acov.get("negative_target_count", 0)
+            if pos_ct > 0 and neg_ct > 0:
+                continue  # both states present — OK
+            # If source has both states but route doesn't, that's a failure.
+            # Since all 10 experiment attrs have both states in the source,
+            # we require both pos > 0 and neg > 0 for every attribute.
+            state_balance_fail += 1
+        if state_balance_fail == 0:
+            ok(g, "all attributes have both positive and negative route targets")
+        else:
+            fail(g, f"{state_balance_fail} attribute(s) missing positive or negative route targets")
+
         # cross-check experiment_subset_sha256
         if manifest_path.exists():
             v2_info = manifest.get("attribute_whitelists", {}).get("fiubench_experiment_subset", {})
@@ -705,6 +761,7 @@ def verify() -> int:
             "probe_id", "target_identity_id", "matched_wrong_identity_id",
             "matching_similarity", "target_attribute", "target_label",
             "paired_correct_name_probe_id",
+            "target_image_sha256", "paired_correct_name_image_sha256",
         ]
         bad_records = 0
         different_identity_ok = 0
@@ -740,6 +797,57 @@ def verify() -> int:
             ok(g, "all wrong-name probes have different identity name")
         else:
             fail(g, f"{total_wn - different_name_ok} probes share identity name")
+
+        # P1-1: image SHA invariant checks.
+        img_sha_nonnull = 0
+        paired_sha_nonnull = 0
+        sha_match_ct = 0
+        attr_match_ct = 0
+        label_match_ct = 0
+        for rec in probe_records:
+            t_sha = rec.get("target_image_sha256")
+            p_sha = rec.get("paired_correct_name_image_sha256")
+            if t_sha:
+                img_sha_nonnull += 1
+            if p_sha:
+                paired_sha_nonnull += 1
+            if t_sha and p_sha and t_sha == p_sha:
+                sha_match_ct += 1
+            if rec.get("target_attribute") == rec.get("paired_correct_name_target_attribute"):
+                attr_match_ct += 1
+            if rec.get("target_label") == rec.get("paired_correct_name_target_label"):
+                label_match_ct += 1
+
+        if img_sha_nonnull == total_wn:
+            ok(g, f"all {total_wn} wrong-name probes have non-null target_image_sha256")
+        else:
+            fail(g, f"{total_wn - img_sha_nonnull} probes have null target_image_sha256")
+
+        if paired_sha_nonnull == total_wn:
+            ok(g, f"all {total_wn} wrong-name probes have non-null paired_image_sha256")
+        else:
+            fail(g, f"{total_wn - paired_sha_nonnull} probes have null paired_image_sha256")
+
+        if sha_match_ct == total_wn:
+            ok(g, f"all {total_wn} wrong-name probes: image SHAs match")
+        else:
+            fail(g, f"{total_wn - sha_match_ct} probes have mismatched image SHAs")
+
+        if attr_match_ct == total_wn:
+            ok(g, f"all {total_wn} wrong-name probes: target attributes match paired")
+        else:
+            fail(g, f"{total_wn - attr_match_ct} probes have mismatched target attributes")
+
+        if label_match_ct == total_wn:
+            ok(g, f"all {total_wn} wrong-name probes: expected answers match paired")
+        else:
+            fail(g, f"{total_wn - label_match_ct} probes have mismatched expected answers")
+
+        # P1-2: covariate policy metadata.
+        if wn_report.get("matching_covariate_policy"):
+            ok(g, "matching_covariate_policy documented")
+        else:
+            fail(g, "matching_covariate_policy missing")
 
         # cross-check with actual route artifact
         if route_path.exists():

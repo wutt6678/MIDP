@@ -13,6 +13,7 @@ import pytest
 from route_data.build.conflict_generation import (
     ConflictError,
     RouteProbeBuilder,
+    assign_balanced_route_attributes,
     build_identity_probes,
 )
 from route_data.config import PromptsConfig
@@ -171,3 +172,93 @@ class TestExperimentAttributeFiltering:
                 continue
             target = p.source_metadata.get("target_attribute")
             assert target == "Bald"
+
+
+class TestBalancedRouteAttributeAssignment:
+    """P0-2: state-balanced route-attribute assignment tests."""
+
+    def test_seeds_positive_and_negative_states(self):
+        """If an attribute has both positive and negative eligible
+        identities, both states must appear in the assignment."""
+        eligible = {
+            "id_001": {"Bald": True},
+            "id_002": {"Bald": False},
+            "id_003": {"Bald": False},
+            "id_004": {"Bald": True},
+        }
+        assignment, stats = assign_balanced_route_attributes(
+            eligible, {"Bald"}, target_quota=10,
+        )
+        assert stats["Bald"]["positive"] >= 1
+        assert stats["Bald"]["negative"] >= 1
+
+    def test_deterministic(self):
+        """Running the same input twice produces identical output."""
+        eligible = {
+            "id_b": {"Bald": True, "Smiling": False},
+            "id_a": {"Bald": False, "Smiling": True},
+            "id_c": {"Bald": True, "Smiling": True},
+        }
+        a1, s1 = assign_balanced_route_attributes(
+            eligible, {"Bald", "Smiling"},
+        )
+        a2, s2 = assign_balanced_route_attributes(
+            eligible, {"Bald", "Smiling"},
+        )
+        assert a1 == a2
+        assert s1 == s2
+
+    def test_respects_experiment_subset(self):
+        """Only experiment attributes appear in the assignment."""
+        eligible = {
+            "id_001": {"Bald": True, "Sideburns": True},
+            "id_002": {"Bald": False, "Sideburns": False},
+        }
+        assignment, stats = assign_balanced_route_attributes(
+            eligible, {"Bald"}, target_quota=10,
+        )
+        for attr in stats:
+            assert attr == "Bald"
+        for iid, attr in assignment.items():
+            assert attr == "Bald"
+
+    def test_handles_attribute_with_only_one_state(self):
+        """If only positive identities exist for an attribute, no
+        negative is seeded (but positives are still assigned)."""
+        eligible = {
+            "id_001": {"Mustache": True},
+            "id_002": {"Mustache": True},
+        }
+        assignment, stats = assign_balanced_route_attributes(
+            eligible, {"Mustache"}, target_quota=10,
+        )
+        assert stats["Mustache"]["positive"] == 2
+        assert stats["Mustache"]["negative"] == 0
+
+    def test_preserves_target_quota(self):
+        """No attribute exceeds the target quota."""
+        eligible = {}
+        for i in range(30):
+            eligible[f"id_{i:03d}"] = {"Bald": i % 2 == 0, "Smiling": i % 2 == 1}
+        assignment, stats = assign_balanced_route_attributes(
+            eligible, {"Bald", "Smiling"}, target_quota=10,
+        )
+        bald_count = sum(1 for a in assignment.values() if a == "Bald")
+        smiling_count = sum(1 for a in assignment.values() if a == "Smiling")
+        assert bald_count <= 10
+        assert smiling_count <= 10
+
+    def test_never_assigns_ineligible_attribute(self):
+        """An identity is never assigned to an attribute it doesn't have."""
+        eligible = {
+            "id_001": {"Bald": True},
+            "id_002": {"Smiling": False},
+            "id_003": {"Bald": False, "Smiling": True},
+        }
+        assignment, _ = assign_balanced_route_attributes(
+            eligible, {"Bald", "Smiling"}, target_quota=10,
+        )
+        for iid, attr in assignment.items():
+            assert attr in eligible[iid], (
+                f"{iid} assigned to {attr} but is not eligible"
+            )
