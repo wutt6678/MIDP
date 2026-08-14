@@ -92,8 +92,7 @@ class TestCollectIdentityRoles:
             {"identity_id": "id_X", "split": "eval"},  # conflict!
             {"identity_id": "id_Y", "split": "exclude"},
         ])
-        identity_roles, sample_counts, issues = fv.collect_identity_roles_from_processed(p)
-
+        _identity_roles, _sample_counts, issues = fv.collect_identity_roles_from_processed(p)
         assert len(issues) == 1
         assert "id_X" in issues[0]
         assert "inconsistent roles" in issues[0]
@@ -116,8 +115,8 @@ class TestCollectIdentityRoles:
             '{"identity_id": "id_2", "split": "eval"}\n'
             "\n"
         )
-        identity_roles, sample_counts, issues = fv.collect_identity_roles_from_processed(p)
-        assert len(identity_roles) == 2
+        _identity_roles, _sample_counts, issues = fv.collect_identity_roles_from_processed(p)
+        assert len(_identity_roles) == 2
         assert issues == []
 
 

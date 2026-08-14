@@ -137,7 +137,6 @@ def verify() -> int:
 
     # Also check score_manifest's configured/resolved revision.
     manifest_commit = score_manifest.get("midp_commit")
-    configured = score_manifest.get("configured_revision")
     resolved = score_manifest.get("resolved_revision")
     if resolved and manifest_commit and not resolved.startswith(manifest_commit[:12]):
         # The resolved_revision is a Qwen model revision, not the MIDP code commit.
@@ -259,7 +258,7 @@ def verify() -> int:
 
 def _report(passes: list[str], failures: list[str]) -> None:
     print(f"\n{'=' * 60}")
-    print(f"Evidence Bundle Consistency Check")
+    print("Evidence Bundle Consistency Check")
     print(f"{'=' * 60}")
     print(f"\nPassed: {len(passes)}")
     for p in passes:
@@ -268,9 +267,9 @@ def _report(passes: list[str], failures: list[str]) -> None:
         print(f"\nFailed: {len(failures)}")
         for f in failures:
             print(f"  ✗ {f}")
-        print(f"\n*** EVIDENCE BUNDLE VERIFICATION FAILED ***")
+        print("\n*** EVIDENCE BUNDLE VERIFICATION FAILED ***")
     else:
-        print(f"\n*** ALL CHECKS PASSED — EVIDENCE BUNDLE IS CONSISTENT ***")
+        print("\n*** ALL CHECKS PASSED — EVIDENCE BUNDLE IS CONSISTENT ***")
 
 
 if __name__ == "__main__":

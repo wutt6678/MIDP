@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import platform
 import subprocess
 import sys
@@ -64,9 +63,7 @@ def regenerate() -> None:
     print(f"Code SHA: {code_sha}")
 
     # --- Load core artifacts ---
-    scores_path = ARTIFACT_DIR / "fiubench_model_scores.jsonl"
     image_scores_path = ARTIFACT_DIR / "fiubench_image_scores.jsonl"
-    annotated_path = ARTIFACT_DIR / "fiubench_annotated.jsonl"
     processed_path = ARTIFACT_DIR / "fiubench_processed.jsonl"
     score_manifest_path = ARTIFACT_DIR / "fiubench_score_manifest.json"
 
@@ -247,7 +244,7 @@ def regenerate() -> None:
     print("\n=== Evidence bundle regenerated successfully ===")
     print(f"Code SHA: {code_sha}")
     print(f"Accepted labels (processed): {accepted_labels_processed}")
-    print(f"Accepted labels (pre-whitelist): historical 741980 (not recomputable)")
+    print("Accepted labels (pre-whitelist): historical 741980 (not recomputable)")
     print(f"Non-whitelisted accepted: {non_whitelisted}")
     print(f"Unique images: {unique_images}")
     print(f"Score rows: {raw_score_rows}")
