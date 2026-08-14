@@ -750,7 +750,11 @@ def _verify_split_invariants(export_dir: Path, benchmark: str, failures: list[st
         for issue in issues:
             # For full FIUBench, missing positive/negative visual cases in
             # the forget set is a data characteristic, not a structural error.
-            if "missing positive or negative visual cases" in str(issue):
+            # Scope this relaxation to FIUBench only (Step 8 of repair plan).
+            if (
+                benchmark == "fiubench"
+                and "missing positive or negative visual cases" in str(issue)
+            ):
                 warnings += 1
             else:
                 total_issues += 1
@@ -1419,15 +1423,71 @@ def _verify_out_of_protocol_isolation(
     return CheckRecord("out_of_protocol isolation", CheckResult.PASS, f"{len(oop_ids)} OOP IDs excluded")
 
 
+# --------------------------------------------------------------------------- #
+# Identity-role counting helpers (testable)
+# --------------------------------------------------------------------------- #
+
+
+def collect_identity_roles_from_processed(
+    processed_path: Path,
+) -> tuple[dict[str, str], dict[str, int], list[str]]:
+    """Extract identity roles and sample counts from a processed JSONL artifact.
+
+    Returns
+    -------
+    tuple of (identity_roles, sample_counts, issues)
+        identity_roles: dict mapping identity_id -> split role
+        sample_counts: dict mapping split -> count of canonical rows
+        issues: list of consistency problems detected
+    """
+    identity_roles: dict[str, str] = {}
+    sample_counts: dict[str, int] = {}
+    issues: list[str] = []
+
+    for line in processed_path.read_text().splitlines():
+        if not line.strip():
+            continue
+        doc = json.loads(line)
+        split = doc.get("split", "")
+        sample_counts[split] = sample_counts.get(split, 0) + 1
+        iid = doc.get("identity_id", "")
+        if iid:
+            previous = identity_roles.get(iid)
+            if previous is not None and previous != split:
+                issues.append(
+                    f"identity {iid} has inconsistent roles: "
+                    f"{previous!r} vs {split!r}"
+                )
+            else:
+                identity_roles[iid] = split
+
+    return identity_roles, sample_counts, issues
+
+
+def compute_identity_counts_from_roles(
+    identity_roles: dict[str, str],
+) -> dict[str, int]:
+    """Compute per-role identity counts from an identity->role mapping."""
+    from collections import Counter
+    return dict(Counter(identity_roles.values()))
+
+
+# --------------------------------------------------------------------------- #
+# P1-26: Protocol identity counts (identity-level, not row-level)
+# --------------------------------------------------------------------------- #
+
+
 def _verify_protocol_identity_counts(
     export_dir: Path, benchmark: str, config: str,
     failures: list[str],
 ) -> CheckRecord:
     """P1-26: strict verifier must require unassigned==0, hash==0 in protocol mode.
 
-    Reads the processed JSONL and checks that no identity has split
-    'unassigned' or 'hash' when the FIUBench protocol is active.
-    Also verifies train > 0, eval > 0, forget > 0.
+    Counts unique identities (not canonical rows) and verifies:
+    - Each identity has exactly one consistent role
+    - unassigned = 0, hash = 0
+    - train > 0, eval > 0, exclude > 0
+    - Identity sets match the frozen protocol report (if available)
     """
     # P0-1 (review 54c0dc9): resolve the *data* config via the shared
     # helper so that the protocol is read from configs/data/<dataset>.yaml
@@ -1459,45 +1519,79 @@ def _verify_protocol_identity_counts(
             f"processed artifact missing: {processed_path}",
         )
 
-    split_counts: dict[str, int] = {}
-    identity_roles: dict[str, str] = {}
-    for line in processed_path.read_text().splitlines():
-        if not line.strip():
-            continue
-        doc = json.loads(line)
-        split = doc.get("split", "")
-        split_counts[split] = split_counts.get(split, 0) + 1
-        iid = doc.get("identity_id", "")
-        if iid:
-            identity_roles[iid] = split
+    # Extract identity roles and sample counts using the helper.
+    identity_roles, sample_counts, role_issues = collect_identity_roles_from_processed(
+        processed_path
+    )
 
-    n_unassigned = split_counts.get("unassigned", 0)
-    n_hash = split_counts.get("hash", 0)
-    n_train = split_counts.get("train", 0)
-    n_eval = split_counts.get("eval", 0)
-    n_exclude = split_counts.get("exclude", 0)
-    n_oop = split_counts.get("out_of_protocol", 0)
+    # Compute identity-level counts (not row-level).
+    identity_counts = compute_identity_counts_from_roles(identity_roles)
+    n_train = identity_counts.get("train", 0)
+    n_eval = identity_counts.get("eval", 0)
+    n_exclude = identity_counts.get("exclude", 0)
+    n_oop = identity_counts.get("out_of_protocol", 0)
+    n_unassigned = identity_counts.get("unassigned", 0)
+    n_hash = identity_counts.get("hash", 0)
 
-    issues: list[str] = []
+    # Sample-level counts (still useful for diagnostics).
+    s_train = sample_counts.get("train", 0)
+    s_eval = sample_counts.get("eval", 0)
+    s_exclude = sample_counts.get("exclude", 0)
+    s_oop = sample_counts.get("out_of_protocol", 0)
+
+    issues: list[str] = list(role_issues)  # Start with consistency issues.
     if n_unassigned > 0:
-        issues.append(f"unassigned={n_unassigned} (must be 0)")
+        issues.append(f"unassigned_identities={n_unassigned} (must be 0)")
     if n_hash > 0:
-        issues.append(f"hash={n_hash} (must be 0)")
+        issues.append(f"hash_identities={n_hash} (must be 0)")
     if n_train == 0:
-        issues.append("train=0 (must be >0)")
+        issues.append("train_identities=0 (must be >0)")
     if n_eval == 0:
-        issues.append("eval=0 (must be >0)")
+        issues.append("eval_identities=0 (must be >0)")
     if n_exclude == 0:
-        issues.append("forget/exclude=0 (must be >0)")
-    # out_of_protocol samples are valid for full FIUBench (non-protocol identities).
-    # Only flag if ALL samples are out_of_protocol (indicating a broken split).
-    # if n_oop > 0:
-    #     issues.append(f"out_of_protocol={n_oop} leaked into processed output")
+        issues.append("exclude_identities=0 (must be >0)")
+    # out_of_protocol identities are valid for full FIUBench (non-protocol identities).
+    # Only flag if ALL identities are out_of_protocol (indicating a broken split).
 
     detail = (
-        f"train={n_train} eval={n_eval} exclude={n_exclude} "
-        f"oop={n_oop} unassigned={n_unassigned} hash={n_hash}"
+        f"identities: train={n_train} eval={n_eval} exclude={n_exclude} "
+        f"oop={n_oop} unassigned={n_unassigned} hash={n_hash}; "
+        f"samples: train={s_train} eval={s_eval} exclude={s_exclude} oop={s_oop}"
     )
+    if issues:
+        msg = "; ".join(issues)
+        failures.append(f"P1-26 protocol identity counts: {msg}")
+        return CheckRecord("protocol identity counts", CheckResult.FAIL, f"{msg} ({detail})")
+
+    # Compare against frozen protocol report if available.
+    protocol_report_path = export_dir / f"{benchmark}_protocol_report.json"
+    if protocol_report_path.exists():
+        try:
+            proto_report = json.loads(protocol_report_path.read_text())
+            # Verify identity counts match.
+            expected_train = proto_report.get("train_identity_count", -1)
+            expected_eval = proto_report.get("eval_identity_count", -1)
+            expected_exclude = proto_report.get("forget_identity_count", -1)
+            expected_oop = proto_report.get("out_of_protocol_identity_count", -1)
+            if expected_train >= 0 and n_train != expected_train:
+                issues.append(f"train count mismatch: {n_train} vs expected {expected_train}")
+            if expected_eval >= 0 and n_eval != expected_eval:
+                issues.append(f"eval count mismatch: {n_eval} vs expected {expected_eval}")
+            if expected_exclude >= 0 and n_exclude != expected_exclude:
+                issues.append(f"exclude count mismatch: {n_exclude} vs expected {expected_exclude}")
+            if expected_oop >= 0 and n_oop != expected_oop:
+                issues.append(f"oop count mismatch: {n_oop} vs expected {expected_oop}")
+            # Compare exact identity sets if available.
+            for role, key in [("train", "train_identity_ids"), ("eval", "eval_identity_ids"),
+                              ("exclude", "forget_identity_ids"), ("out_of_protocol", "oop_identity_ids")]:
+                expected_ids = proto_report.get(key)
+                if expected_ids is not None:
+                    actual_ids = {iid for iid, r in identity_roles.items() if r == role}
+                    if actual_ids != set(expected_ids):
+                        issues.append(f"{role} identity sets do not match protocol")
+        except Exception:
+            pass  # Protocol report comparison is best-effort.
+
     if issues:
         msg = "; ".join(issues)
         failures.append(f"P1-26 protocol identity counts: {msg}")

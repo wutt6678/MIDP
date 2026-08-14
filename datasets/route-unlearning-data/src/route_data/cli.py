@@ -2065,6 +2065,10 @@ def cmd_source_protocol_report(args) -> int:
         "unassigned_identity_count": len(unassigned_ids),
         "hash_identity_count": len(hash_ids),
         "disjointness_ok": disjointness_ok,
+        "train_identity_ids": sorted(train_ids),
+        "eval_identity_ids": sorted(eval_ids),
+        "forget_identity_ids": sorted(forget_ids),
+        "oop_identity_ids": sorted(oop_ids),
         "invariants": {
             "unassigned_is_zero": len(unassigned_ids) == 0,
             "hash_is_zero": len(hash_ids) == 0,
