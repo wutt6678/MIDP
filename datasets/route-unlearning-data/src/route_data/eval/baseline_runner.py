@@ -18,6 +18,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
+import re
+import string
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -108,45 +111,77 @@ class BaselineResult:
     """One result row per probe (Stage 2.4 result schema).
 
     For image-bearing binary families the *candidate scoring* path fills
-    ``logp_yes``, ``logp_no``, and ``p_yes``.  For ``name_only`` (text-only,
-    free-form answer) the *generation* path fills ``generated_answer`` and
-    ``text_match_score``; the probability fields stay ``None``.
+    ``logp_yes``, ``logp_no``, ``p_yes``, ``raw_log_margin``, and
+    ``signed_answer_margin``.  For ``name_only`` (text-only, free-form
+    answer) the *generation* path fills ``generated_answer`` and the
+    text-match metrics; the probability fields stay ``None``.
+
+    All probe metadata fields are carried through so downstream analysis
+    can group by attribute, identity, family, or split without joining
+    back to the source probe file.
     """
 
-    # Probe identity
+    # -- Probe identity (carried through from BaselineProbe) --
     probe_id: str
     sample_id: str
     identity_id: str
     probe_family: str
     modality: str
-
-    # Model identity
-    model_fingerprint: str
-    model_revision: str | None
-
-    # Inputs
     question: str
-    image_sha256: str | None
+    expected_evidence_source: str = ""
+    controlled_variables: list[str] = field(default_factory=list)
+    registry_hash: str = ""
+    paired_sample_id: str | None = None
 
-    # Outputs
-    generated_answer: str
-    parsed_answer: str | None
-    correct: bool | None
-
-    # Candidate scores (binary families only)
-    logp_yes: float | None = None
-    logp_no: float | None = None
-    p_yes: float | None = None
-    margin: float | None = None
-
-    # Text-match score (name_only only)
-    text_match_score: float | None = None
-
-    # Ground truth (carried through for downstream analysis)
+    # -- Route / attribute fields --
+    target_attribute: str | None = None
     answer_label: bool | None = None
     answer_text: str = ""
 
-    # Provenance
+    # -- Wrong-name fields --
+    matched_wrong_identity_id: str | None = None
+    matching_similarity: float | None = None
+    matching_attributes: list[str] | None = None
+    candidate_rank: int | None = None
+    matching_strategy: str | None = None
+
+    # -- Name-only fields --
+    target_fact_id: str | None = None
+    target_fact_relation: str | None = None
+    target_fact_value: str | None = None
+    source_qa_index: int | None = None
+    question_variant: str | None = None
+    original_question: str | None = None
+    original_answer: str | None = None
+
+    # -- Model identity --
+    model_fingerprint: str = ""
+    model_revision: str | None = None
+
+    # -- Inputs --
+    image_sha256: str | None = None
+
+    # -- Outputs --
+    generated_answer: str = ""
+    parsed_answer: str | None = None
+    predicted_label: str | None = None
+    correct: bool | None = None
+
+    # -- Candidate scores (binary families only) --
+    logp_yes: float | None = None
+    logp_no: float | None = None
+    p_yes: float | None = None
+    centered_p_yes: float | None = None
+    raw_log_margin: float | None = None
+    signed_answer_margin: float | None = None
+
+    # -- Text-match scores (name_only only) --
+    exact_match: float | None = None
+    normalized_exact_match: float | None = None
+    token_overlap: float | None = None
+    fuzzy_match: float | None = None
+
+    # -- Provenance --
     scoring_version: str = ""
     prompt_hash: str = ""
     latency_ms: float = 0.0
@@ -283,12 +318,18 @@ class BaselineRunner:
 
         generated_answer = ""
         parsed_answer: str | None = None
+        predicted_label: str | None = None
         correct: bool | None = None
         logp_yes: float | None = None
         logp_no: float | None = None
         p_yes: float | None = None
-        margin: float | None = None
-        text_match_score: float | None = None
+        centered_p_yes: float | None = None
+        raw_log_margin: float | None = None
+        signed_answer_margin: float | None = None
+        exact_match: float | None = None
+        normalized_exact_match: float | None = None
+        token_overlap_score: float | None = None
+        fuzzy_match: float | None = None
         error: str | None = None
 
         try:
@@ -306,10 +347,19 @@ class BaselineRunner:
                     logp_yes = scores[_POSITIVE]
                     logp_no = scores[_NEGATIVE]
                     p_yes = binary_probability(logp_yes, logp_no)
-                    margin = p_yes - 0.5
-                    parsed_answer = _POSITIVE if p_yes >= 0.5 else _NEGATIVE
+                    centered_p_yes = p_yes - 0.5
+                    raw_log_margin = logp_yes - logp_no
+                    predicted_label = _POSITIVE if p_yes >= 0.5 else _NEGATIVE
+                    # signed_answer_margin: positive = correct side preferred
                     if probe.answer_label is not None:
-                        correct = (parsed_answer == _POSITIVE) == probe.answer_label
+                        signed_answer_margin = (
+                            raw_log_margin
+                            if probe.answer_label
+                            else -raw_log_margin
+                        )
+                        correct = (predicted_label == _POSITIVE) == probe.answer_label
+                    else:
+                        signed_answer_margin = raw_log_margin
                 else:
                     error = "backend did not return scores for both candidates"
             else:
@@ -318,10 +368,20 @@ class BaselineRunner:
                 generated_answer = resp.text or ""
                 parsed_answer = generated_answer.strip()
                 if probe.answer_text:
-                    text_match_score = _text_match(
+                    exact_match = _compute_exact_match(
                         generated_answer, probe.answer_text
                     )
-                    correct = text_match_score > 0.5
+                    normalized_exact_match = _compute_normalized_exact_match(
+                        generated_answer, probe.answer_text
+                    )
+                    token_overlap_score = _compute_token_overlap(
+                        generated_answer, probe.answer_text
+                    )
+                    fuzzy_match = _text_match(
+                        generated_answer, probe.answer_text
+                    )
+                    # Primary metric: normalized exact match
+                    correct = (normalized_exact_match == 1.0)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             log.warning("Probe %s failed: %s", probe.probe_id, error)
@@ -329,25 +389,60 @@ class BaselineRunner:
         latency = (time.perf_counter() - started) * 1000.0
 
         return BaselineResult(
+            # Probe identity
             probe_id=probe.probe_id,
             sample_id=probe.sample_id,
             identity_id=probe.identity_id,
             probe_family=probe.probe_family,
             modality=probe.modality,
+            question=probe.question,
+            expected_evidence_source=probe.expected_evidence_source,
+            controlled_variables=list(probe.controlled_variables),
+            registry_hash=probe.registry_hash,
+            paired_sample_id=probe.paired_sample_id,
+            # Route / attribute
+            target_attribute=probe.target_attribute,
+            answer_label=probe.answer_label,
+            answer_text=probe.answer_text,
+            # Wrong-name fields
+            matched_wrong_identity_id=probe.matched_wrong_identity_id,
+            matching_similarity=probe.matching_similarity,
+            matching_attributes=(
+                list(probe.matching_attributes) if probe.matching_attributes else None
+            ),
+            candidate_rank=probe.candidate_rank,
+            matching_strategy=probe.matching_strategy,
+            # Name-only fields
+            target_fact_id=probe.target_fact_id,
+            target_fact_relation=probe.target_fact_relation,
+            target_fact_value=probe.target_fact_value,
+            source_qa_index=probe.source_qa_index,
+            question_variant=probe.question_variant,
+            original_question=probe.original_question,
+            original_answer=probe.original_answer,
+            # Model identity
             model_fingerprint=fp,
             model_revision=rev,
-            question=probe.question,
+            # Inputs
             image_sha256=probe.image_sha256,
+            # Outputs
             generated_answer=generated_answer,
             parsed_answer=parsed_answer,
+            predicted_label=predicted_label,
             correct=correct,
+            # Candidate scores
             logp_yes=logp_yes,
             logp_no=logp_no,
             p_yes=p_yes,
-            margin=margin,
-            text_match_score=text_match_score,
-            answer_label=probe.answer_label,
-            answer_text=probe.answer_text,
+            centered_p_yes=centered_p_yes,
+            raw_log_margin=raw_log_margin,
+            signed_answer_margin=signed_answer_margin,
+            # Text-match scores
+            exact_match=exact_match,
+            normalized_exact_match=normalized_exact_match,
+            token_overlap=token_overlap_score,
+            fuzzy_match=fuzzy_match,
+            # Provenance
             scoring_version=SCORING_VERSION,
             prompt_hash=ph,
             latency_ms=latency,
@@ -404,7 +499,12 @@ class BaselineRunner:
         return path
 
     def generate_summary(self) -> dict[str, Any]:
-        """Compute and write ``baseline_summary.json``."""
+        """Compute and write ``baseline_summary.json``.
+
+        Per-family metrics are reported separately because the five probe
+        families are heterogeneous.  A mixed overall accuracy is provided
+        only as a secondary convenience metric.
+        """
         results = self._results
         by_family: dict[str, list[BaselineResult]] = {}
         for r in results:
@@ -414,17 +514,89 @@ class BaselineRunner:
         for fam in sorted(by_family):
             fam_results = by_family[fam]
             n = len(fam_results)
-            n_correct = sum(1 for r in fam_results if r.correct is True)
             n_errors = sum(1 for r in fam_results if r.error is not None)
-            p_values = [r.p_yes for r in fam_results if r.p_yes is not None]
             entry: dict[str, Any] = {
                 "count": n,
-                "correct": n_correct,
-                "accuracy": n_correct / n if n else None,
                 "errors": n_errors,
             }
-            if p_values:
-                entry["mean_p_yes"] = sum(p_values) / len(p_values)
+            if fam in _IMAGE_FAMILIES:
+                # Binary route metrics
+                n_correct = sum(1 for r in fam_results if r.correct is True)
+                margins = [
+                    r.signed_answer_margin
+                    for r in fam_results
+                    if r.signed_answer_margin is not None
+                ]
+                p_vals = [r.p_yes for r in fam_results if r.p_yes is not None]
+                pos_correct = sum(
+                    1
+                    for r in fam_results
+                    if r.answer_label is True and r.correct is True
+                )
+                neg_correct = sum(
+                    1
+                    for r in fam_results
+                    if r.answer_label is False and r.correct is True
+                )
+                pos_total = sum(
+                    1 for r in fam_results if r.answer_label is True
+                )
+                neg_total = sum(
+                    1 for r in fam_results if r.answer_label is False
+                )
+                entry["correct"] = n_correct
+                entry["accuracy"] = n_correct / n if n else None
+                if margins:
+                    entry["mean_signed_answer_margin"] = (
+                        sum(margins) / len(margins)
+                    )
+                    sorted_m = sorted(margins)
+                    mid = len(sorted_m) // 2
+                    entry["median_signed_answer_margin"] = (
+                        sorted_m[mid]
+                        if len(sorted_m) % 2
+                        else (sorted_m[mid - 1] + sorted_m[mid]) / 2
+                    )
+                if p_vals:
+                    entry["mean_p_yes"] = sum(p_vals) / len(p_vals)
+                if pos_total:
+                    entry["positive_target_accuracy"] = (
+                        pos_correct / pos_total
+                    )
+                if neg_total:
+                    entry["negative_target_accuracy"] = (
+                        neg_correct / neg_total
+                    )
+                entry["positive_count"] = pos_total
+                entry["negative_count"] = neg_total
+            elif fam in _TEXT_ONLY_FAMILIES:
+                # Name-only metrics
+                nem_vals = [
+                    r.normalized_exact_match
+                    for r in fam_results
+                    if r.normalized_exact_match is not None
+                ]
+                to_vals = [
+                    r.token_overlap
+                    for r in fam_results
+                    if r.token_overlap is not None
+                ]
+                n_correct = sum(1 for r in fam_results if r.correct is True)
+                non_empty = sum(
+                    1
+                    for r in fam_results
+                    if r.generated_answer.strip()
+                )
+                entry["correct"] = n_correct
+                entry["normalized_exact_match_rate"] = (
+                    sum(nem_vals) / len(nem_vals) if nem_vals else None
+                )
+                entry["mean_token_overlap"] = (
+                    sum(to_vals) / len(to_vals) if to_vals else None
+                )
+                entry["answer_non_empty_rate"] = (
+                    non_empty / n if n else None
+                )
             per_family[fam] = entry
 
         total = len(results)
@@ -491,6 +663,36 @@ def _load_image(path: str | None):
     if path is None:
         return None
     return Image.open(path).convert("RGB")
+
+
+def _compute_exact_match(generated: str, expected: str) -> float:
+    """1.0 if *generated* exactly matches *expected* (case-sensitive)."""
+    return 1.0 if generated == expected else 0.0
+
+
+def _compute_normalized_exact_match(generated: str, expected: str) -> float:
+    """1.0 if match after lowering, stripping punctuation, collapsing whitespace."""
+    def _normalize(text: str) -> str:
+        text = text.strip().lower()
+        text = text.translate(str.maketrans("", "", string.punctuation))
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
+
+    return 1.0 if _normalize(generated) == _normalize(expected) else 0.0
+
+
+def _compute_token_overlap(generated: str, expected: str) -> float:
+    """Token-level F1 overlap between *generated* and *expected*."""
+    g_tokens = set(generated.strip().lower().split())
+    e_tokens = set(expected.strip().lower().split())
+    if not g_tokens or not e_tokens:
+        return 0.0
+    overlap = g_tokens & e_tokens
+    if not overlap:
+        return 0.0
+    precision = len(overlap) / len(g_tokens)
+    recall = len(overlap) / len(e_tokens)
+    return 2 * precision * recall / (precision + recall)
 
 
 def _text_match(generated: str, expected: str) -> float:

@@ -271,7 +271,8 @@ class TestBaselineResultSchema:
             logp_yes=-0.1,
             logp_no=-2.3,
             p_yes=0.9,
-            margin=0.4,
+            raw_log_margin=2.2,
+            signed_answer_margin=2.2,
         )
         serialized = json.dumps(asdict(result), default=str)
         restored = json.loads(serialized)
@@ -411,3 +412,189 @@ class TestTextMatch:
         from route_data.eval.baseline_runner import _text_match
 
         assert _text_match("Bob Jones", "Alice Smith") == 0.0
+
+
+class TestNewTextMetrics:
+    """Verify the new text-metric helpers (Commit A)."""
+
+    def test_compute_exact_match_equal(self):
+        from route_data.eval.baseline_runner import _compute_exact_match
+
+        assert _compute_exact_match("Alice Smith", "Alice Smith") == 1.0
+
+    def test_compute_exact_match_case_sensitive(self):
+        from route_data.eval.baseline_runner import _compute_exact_match
+
+        assert _compute_exact_match("alice smith", "Alice Smith") == 0.0
+
+    def test_compute_normalized_exact_match_equal(self):
+        from route_data.eval.baseline_runner import _compute_normalized_exact_match
+
+        assert _compute_normalized_exact_match("Alice Smith", "Alice Smith") == 1.0
+
+    def test_compute_normalized_exact_match_case_insensitive(self):
+        from route_data.eval.baseline_runner import _compute_normalized_exact_match
+
+        assert _compute_normalized_exact_match("alice smith", "Alice Smith") == 1.0
+
+    def test_compute_normalized_exact_match_punctuation(self):
+        from route_data.eval.baseline_runner import _compute_normalized_exact_match
+
+        assert _compute_normalized_exact_match("Alice Smith!", "Alice Smith") == 1.0
+
+    def test_compute_normalized_exact_match_whitespace(self):
+        from route_data.eval.baseline_runner import _compute_normalized_exact_match
+
+        assert _compute_normalized_exact_match("  Alice   Smith  ", "Alice Smith") == 1.0
+
+    def test_compute_normalized_exact_match_mismatch(self):
+        from route_data.eval.baseline_runner import _compute_normalized_exact_match
+
+        assert _compute_normalized_exact_match("Bob Jones", "Alice Smith") == 0.0
+
+    def test_compute_token_overlap_full(self):
+        from route_data.eval.baseline_runner import _compute_token_overlap
+
+        assert _compute_token_overlap("Alice Smith", "Alice Smith") == pytest.approx(1.0)
+
+    def test_compute_token_overlap_partial(self):
+        from route_data.eval.baseline_runner import _compute_token_overlap
+
+        score = _compute_token_overlap("Alice Jones", "Alice Smith")
+        # tokens: {alice, jones} vs {alice, smith} → overlap={alice}
+        # precision=1/2, recall=1/2 → F1=0.5
+        assert score == pytest.approx(0.5)
+
+    def test_compute_token_overlap_no_match(self):
+        from route_data.eval.baseline_runner import _compute_token_overlap
+
+        assert _compute_token_overlap("Bob Jones", "Alice Smith") == 0.0
+
+    def test_compute_token_overlap_empty(self):
+        from route_data.eval.baseline_runner import _compute_token_overlap
+
+        assert _compute_token_overlap("", "Alice Smith") == 0.0
+
+
+class TestSignedMarginSemantics:
+    """Verify signed_answer_margin semantics (Commit A)."""
+
+    def test_positive_label_positive_margin(self, runner: BaselineRunner):
+        """Positive label + model prefers Yes → positive signed margin."""
+        probe = BaselineProbe(
+            probe_id="sm_pos",
+            sample_id="s1",
+            identity_id="i1",
+            benchmark="fiubench",
+            probe_family="direct_visual",
+            modality="image_only",
+            question="Is the person smiling?",
+            expected_evidence_source="visual",
+            controlled_variables=["image"],
+            image_uri="/fake.jpg",
+            image_sha256="abc",
+            registry_hash="rh",
+            target_attribute="Smiling",
+            answer_label=True,
+            answer_text="yes",
+        )
+        result = runner.run_probe(probe)
+        if result.raw_log_margin is not None:
+            # positive label → signed == raw
+            assert result.signed_answer_margin == pytest.approx(result.raw_log_margin)
+
+    def test_negative_label_sign_flip(self, runner: BaselineRunner):
+        """Negative label → signed margin is negated raw margin."""
+        probe = BaselineProbe(
+            probe_id="sm_neg",
+            sample_id="s1",
+            identity_id="i1",
+            benchmark="fiubench",
+            probe_family="direct_visual",
+            modality="image_only",
+            question="Is the person bald?",
+            expected_evidence_source="visual",
+            controlled_variables=["image"],
+            image_uri="/fake.jpg",
+            image_sha256="abc",
+            registry_hash="rh",
+            target_attribute="Bald",
+            answer_label=False,
+            answer_text="no",
+        )
+        result = runner.run_probe(probe)
+        if result.raw_log_margin is not None:
+            assert result.signed_answer_margin == pytest.approx(-result.raw_log_margin)
+
+    def test_centered_p_yes_and_raw_margin(self, runner: BaselineRunner):
+        """centered_p_yes = p_yes - 0.5; raw_log_margin = logp_yes - logp_no."""
+        probe = BaselineProbe(
+            probe_id="sm_ctr",
+            sample_id="s1",
+            identity_id="i1",
+            benchmark="fiubench",
+            probe_family="direct_visual",
+            modality="image_only",
+            question="Is the person wearing a hat?",
+            expected_evidence_source="visual",
+            controlled_variables=["image"],
+            image_uri="/fake.jpg",
+            image_sha256="abc",
+            registry_hash="rh",
+            target_attribute="Hat",
+            answer_label=True,
+            answer_text="yes",
+        )
+        result = runner.run_probe(probe)
+        if result.p_yes is not None:
+            assert result.centered_p_yes == pytest.approx(result.p_yes - 0.5)
+            assert result.raw_log_margin == pytest.approx(
+                result.logp_yes - result.logp_no
+            )
+
+
+class TestMetadataCarryThrough:
+    """Verify all probe metadata fields are carried through to BaselineResult."""
+
+    def test_all_probe_fields_carried(self, runner: BaselineRunner):
+        probe = BaselineProbe(
+            probe_id="meta1",
+            sample_id="s1",
+            identity_id="i1",
+            benchmark="fiubench",
+            probe_family="wrong_name",
+            modality="image_text",
+            question="Is the person Bob?",
+            expected_evidence_source="visual",
+            controlled_variables=["image"],
+            image_uri="/fake.jpg",
+            image_sha256="sha123",
+            registry_hash="reg_hash",
+            target_attribute="Bald",
+            answer_label=False,
+            answer_text="no",
+            matched_wrong_identity_id="wrong_id",
+            matching_similarity=0.85,
+            matching_attributes=["Bald", "Male"],
+            candidate_rank=2,
+            matching_strategy="jaccard",
+            paired_sample_id="pair1",
+        )
+        result = runner.run_probe(probe)
+        assert result.probe_id == "meta1"
+        assert result.identity_id == "i1"
+        assert result.probe_family == "wrong_name"
+        assert result.registry_hash == "reg_hash"
+        assert result.paired_sample_id == "pair1"
+        assert result.target_attribute == "Bald"
+        assert result.answer_label is False
+        assert result.matched_wrong_identity_id == "wrong_id"
+        assert result.matching_similarity == pytest.approx(0.85)
+        assert result.matching_attributes == ["Bald", "Male"]
+        assert result.candidate_rank == 2
+        assert result.matching_strategy == "jaccard"
+        assert result.image_sha256 == "sha123"
+        assert result.model_fingerprint != ""
+        assert result.scoring_version != ""
+        assert result.prompt_hash != ""
+        assert result.latency_ms >= 0
