@@ -186,7 +186,7 @@ class TestBalancedRouteAttributeAssignment:
             "id_003": {"Bald": False},
             "id_004": {"Bald": True},
         }
-        assignment, stats = assign_balanced_route_attributes(
+        _, stats = assign_balanced_route_attributes(
             eligible, {"Bald"}, target_quota=10,
         )
         assert stats["Bald"]["positive"] >= 1
@@ -219,8 +219,8 @@ class TestBalancedRouteAttributeAssignment:
         )
         for attr in stats:
             assert attr == "Bald"
-        for iid, attr in assignment.items():
-            assert attr == "Bald"
+        for _attr in assignment.values():
+            assert _attr == "Bald"
 
     def test_handles_attribute_with_only_one_state(self):
         """If only positive identities exist for an attribute, no
@@ -229,9 +229,10 @@ class TestBalancedRouteAttributeAssignment:
             "id_001": {"Mustache": True},
             "id_002": {"Mustache": True},
         }
-        assignment, stats = assign_balanced_route_attributes(
+        _, stats = assign_balanced_route_attributes(
             eligible, {"Mustache"}, target_quota=10,
         )
+        assert set(stats.keys()) == {"Mustache"}
         assert stats["Mustache"]["positive"] == 2
         assert stats["Mustache"]["negative"] == 0
 
@@ -240,11 +241,11 @@ class TestBalancedRouteAttributeAssignment:
         eligible = {}
         for i in range(30):
             eligible[f"id_{i:03d}"] = {"Bald": i % 2 == 0, "Smiling": i % 2 == 1}
-        assignment, stats = assign_balanced_route_attributes(
+        assignment, _ = assign_balanced_route_attributes(
             eligible, {"Bald", "Smiling"}, target_quota=10,
         )
-        bald_count = sum(1 for a in assignment.values() if a == "Bald")
-        smiling_count = sum(1 for a in assignment.values() if a == "Smiling")
+        bald_count = sum(1 for _a in assignment.values() if _a == "Bald")
+        smiling_count = sum(1 for _a in assignment.values() if _a == "Smiling")
         assert bald_count <= 10
         assert smiling_count <= 10
 

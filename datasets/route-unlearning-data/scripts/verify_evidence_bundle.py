@@ -712,7 +712,7 @@ def verify() -> int:
 
         # P0-2: state-balance hard checks.
         state_balance_fail = 0
-        for attr, acov in all_fam_cov.items():
+        for acov in all_fam_cov.values():
             pos_ct = acov.get("positive_target_count", 0)
             neg_ct = acov.get("negative_target_count", 0)
             if pos_ct > 0 and neg_ct > 0:
