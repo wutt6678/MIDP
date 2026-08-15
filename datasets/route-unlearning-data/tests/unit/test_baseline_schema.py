@@ -1287,39 +1287,61 @@ class TestCommit5MetadataEnrichment:
         assert "decision_rule" in sc
 
     def test_validate_dataset_manifest_requires_manifest(self, runner: BaselineRunner):
-        """P1-1: validate_dataset_manifest raises without manifest."""
+        """P0-1: validate_dataset_manifest raises without manifest."""
         with pytest.raises(RuntimeError, match="requires --dataset-manifest"):
             runner.validate_dataset_manifest()
 
     def test_validate_dataset_manifest_with_valid_manifest(
         self, stub_backend, tmp_path, stub_model_config
     ):
-        """P1-1: validate_dataset_manifest passes with valid manifest."""
+        """P0-1: validate_dataset_manifest passes with actual frozen schema."""
         import json
         probe_file = tmp_path / "probes.jsonl"
         probe_file.write_text("\n".join(json.dumps(p) for p in _PROBES_RAW))
         from route_data.eval.baseline_runner import _sha256_file
         sha = _sha256_file(probe_file)
+        # Use the *actual* frozen schema paths.
         manifest_data = {
-            "ready_for_experiments": True,
-            "dataset_version": "fiubench-route-v1",
+            "definition_of_done": {
+                "ready_for_experiments": True,
+            },
             "dataset_artifacts": {
                 "route_probes": {
                     "sha256": sha,
-                    "count": 500,  # Required for full research baseline
+                    "total_probes": 500,
+                    "families": {
+                        "direct_visual": 100,
+                        "image_plus_name": 100,
+                        "wrong_name": 100,
+                        "visual_text_conflict": 100,
+                        "name_only": 100,
+                    },
                 }
             },
         }
         manifest_file = tmp_path / "manifest.json"
         manifest_file.write_text(json.dumps(manifest_data))
+        # Freeze verification file provides dataset_version.
+        freeze_data = {
+            "dataset_version": "fiubench-route-v1",
+            "ready_for_experiments": True,
+        }
+        freeze_file = tmp_path / "freeze_verification.json"
+        freeze_file.write_text(json.dumps(freeze_data))
         runner = BaselineRunner(
             backend=stub_backend,
             probe_path=str(probe_file),
             output_dir=tmp_path / "out",
             model_config=stub_model_config,
             dataset_manifest_path=str(manifest_file),
+            freeze_verification_path=str(freeze_file),
         )
-        checks = runner.validate_dataset_manifest()
+        # Mock _read_jsonl to return 500 rows for the JSONL row-count check.
+        with patch(
+            "route_data.eval.baseline_runner._read_jsonl",
+            return_value=[{}] * 500,
+        ):
+            checks = runner.validate_dataset_manifest()
         assert checks["ready_for_experiments"] is True
         assert checks["dataset_version"] == "fiubench-route-v1"
         assert checks["route_probe_count"] == 500
@@ -1327,27 +1349,148 @@ class TestCommit5MetadataEnrichment:
     def test_validate_dataset_manifest_fails_on_wrong_version(
         self, stub_backend, tmp_path, stub_model_config
     ):
-        """P1-1: validate_dataset_manifest fails on wrong dataset_version."""
+        """P0-1: validate_dataset_manifest fails on wrong dataset_version."""
         import json
         probe_file = tmp_path / "probes.jsonl"
         probe_file.write_text("\n".join(json.dumps(p) for p in _PROBES_RAW))
         from route_data.eval.baseline_runner import _sha256_file
         sha = _sha256_file(probe_file)
         manifest_data = {
-            "ready_for_experiments": True,
-            "dataset_version": "wrong-version",
+            "definition_of_done": {
+                "ready_for_experiments": True,
+            },
             "dataset_artifacts": {
-                "route_probes": {"sha256": sha, "count": 500}
+                "route_probes": {
+                    "sha256": sha,
+                    "total_probes": 500,
+                    "families": {
+                        "direct_visual": 100,
+                        "image_plus_name": 100,
+                        "wrong_name": 100,
+                        "visual_text_conflict": 100,
+                        "name_only": 100,
+                    },
+                }
             },
         }
         manifest_file = tmp_path / "manifest.json"
         manifest_file.write_text(json.dumps(manifest_data))
+        # Wrong dataset_version in freeze verification.
+        freeze_data = {
+            "dataset_version": "wrong-version",
+            "ready_for_experiments": True,
+        }
+        freeze_file = tmp_path / "freeze_verification.json"
+        freeze_file.write_text(json.dumps(freeze_data))
         runner = BaselineRunner(
             backend=stub_backend,
             probe_path=str(probe_file),
             output_dir=tmp_path / "out",
             model_config=stub_model_config,
             dataset_manifest_path=str(manifest_file),
+            freeze_verification_path=str(freeze_file),
         )
-        with pytest.raises(RuntimeError, match="validation failed"):
-            runner.validate_dataset_manifest()
+        with patch(
+            "route_data.eval.baseline_runner._read_jsonl",
+            return_value=[{}] * 500,
+        ):
+            with pytest.raises(RuntimeError, match="validation failed"):
+                runner.validate_dataset_manifest()
+
+
+class TestFrozenEvidenceIntegration:
+    """Integration tests using the actual committed freeze files (P0-4).
+
+    These tests load the real frozen evidence bundles from
+    ``outputs/full_fiubench/evidence/`` and verify that field paths,
+    cross-file hash relations, and schema locations match what the
+    :class:`BaselineRunner` expects.
+    """
+
+    EVIDENCE_DIR: Path = (
+        Path(__file__).resolve().parent.parent.parent
+        / "outputs"
+        / "full_fiubench"
+        / "evidence"
+    )
+    MANIFEST_PATH: Path = EVIDENCE_DIR / "research_dataset_manifest.json"
+    FREEZE_PATH: Path = EVIDENCE_DIR / "final_freeze_verification.json"
+
+    @pytest.fixture(autouse=True)
+    def _skip_if_missing(self):
+        """Skip when the frozen evidence files are not present."""
+        if not self.MANIFEST_PATH.is_file() or not self.FREEZE_PATH.is_file():
+            pytest.skip("Frozen evidence files not available")
+
+    # -- helpers ---------------------------------------------------------- #
+
+    @staticmethod
+    def _load_json(path: Path) -> dict:
+        return json.loads(path.read_text())
+
+    # -- tests ------------------------------------------------------------ #
+
+    def test_actual_field_paths(self):
+        """Verify the actual field paths in committed freeze files."""
+        manifest = self._load_json(self.MANIFEST_PATH)
+        freeze = self._load_json(self.FREEZE_PATH)
+
+        # Manifest field paths
+        assert manifest["definition_of_done"]["ready_for_experiments"] is True
+        rp = manifest["dataset_artifacts"]["route_probes"]
+        assert rp["total_probes"] == 500
+        assert "sha256" in rp
+        assert "families" in rp
+
+        # Freeze verification field paths
+        assert freeze["dataset_version"] == "fiubench-route-v1"
+        assert freeze["ready_for_experiments"] is True
+        assert "dataset_manifest_sha256" in freeze
+        assert "route_probe_sha256" in freeze
+
+    def test_manifest_sha_relation(self):
+        """Freeze ``dataset_manifest_sha256`` matches actual manifest SHA."""
+        from route_data.eval.baseline_runner import _sha256_file
+
+        freeze = self._load_json(self.FREEZE_PATH)
+        expected_sha = freeze["dataset_manifest_sha256"]
+        actual_sha = _sha256_file(self.MANIFEST_PATH)
+        assert actual_sha == expected_sha
+
+    def test_dataset_version_location(self):
+        """``dataset_version`` lives in freeze verification, not manifest."""
+        manifest = self._load_json(self.MANIFEST_PATH)
+        freeze = self._load_json(self.FREEZE_PATH)
+
+        # Freeze verification has dataset_version
+        assert freeze["dataset_version"] == "fiubench-route-v1"
+
+        # Manifest does NOT have a top-level dataset_version
+        assert "dataset_version" not in manifest
+
+    def test_ready_for_experiments_location(self):
+        """``ready_for_experiments`` in ``definition_of_done`` and freeze."""
+        manifest = self._load_json(self.MANIFEST_PATH)
+        freeze = self._load_json(self.FREEZE_PATH)
+
+        # In manifest: nested under definition_of_done
+        assert manifest["definition_of_done"]["ready_for_experiments"] is True
+
+        # In freeze: top-level
+        assert freeze["ready_for_experiments"] is True
+
+    def test_route_total_probes_location(self):
+        """Route count is at ``dataset_artifacts.route_probes.total_probes``."""
+        manifest = self._load_json(self.MANIFEST_PATH)
+        total = manifest["dataset_artifacts"]["route_probes"]["total_probes"]
+        assert total == 500
+
+    def test_route_sha_cross_reference(self):
+        """Route SHA agrees across freeze verification and manifest."""
+        manifest = self._load_json(self.MANIFEST_PATH)
+        freeze = self._load_json(self.FREEZE_PATH)
+
+        manifest_sha = manifest["dataset_artifacts"]["route_probes"]["sha256"]
+        freeze_sha = freeze["route_probe_sha256"]
+        assert manifest_sha == freeze_sha
+        assert len(manifest_sha) == 64  # SHA-256 hex digest length

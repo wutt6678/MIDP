@@ -242,6 +242,7 @@ class BaselineRunner:
         resume: bool = True,
         dataset_manifest_path: str | Path | None = None,
         model_config_path: str | Path | None = None,
+        freeze_verification_path: str | Path | None = None,
     ):
         self.backend = backend
         self.probe_path = Path(probe_path)
@@ -253,6 +254,9 @@ class BaselineRunner:
         )
         self.model_config_path = (
             Path(model_config_path) if model_config_path else None
+        )
+        self.freeze_verification_path = (
+            Path(freeze_verification_path) if freeze_verification_path else None
         )
 
         self._fingerprint = backend.fingerprint()
@@ -267,6 +271,11 @@ class BaselineRunner:
         # Load the dataset manifest if provided.
         self._dataset_manifest: dict[str, Any] | None = (
             self._load_dataset_manifest() if self.dataset_manifest_path else None
+        )
+
+        # Load the freeze verification file if provided.
+        self._freeze_verification: dict[str, Any] | None = (
+            self._load_freeze_verification() if self.freeze_verification_path else None
         )
 
         self.probes: list[BaselineProbe] = self.load_probes()
@@ -324,13 +333,17 @@ class BaselineRunner:
         return self.verify_input_hashes(expected)
 
     def validate_dataset_manifest(self) -> dict[str, Any]:
-        """Validate the dataset manifest for full research baselines (P1-1).
+        """Validate the dataset manifest for full research baselines (P0-1).
 
-        Checks:
-        - ``ready_for_experiments`` is true
-        - ``dataset_version`` is ``fiubench-route-v1``
+        Uses the *actual* frozen schema:
+
+        - ``definition_of_done.ready_for_experiments`` is true
+        - ``dataset_artifacts.route_probes.total_probes`` is 500
         - Route SHA matches the probe file
-        - Route probe count is 500
+        - Family counts match the frozen manifest
+
+        When a freeze-verification file is also loaded, ``dataset_version``
+        and ``ready_for_experiments`` are read from there instead.
 
         Returns
         -------
@@ -350,19 +363,30 @@ class BaselineRunner:
         checks: dict[str, Any] = {}
         passed = True
 
-        # ready_for_experiments
-        ready = m.get("ready_for_experiments", False)
+        # -- ready_for_experiments -----------------------------------------
+        # Prefer the freeze-verification file when available; fall back to
+        # the dataset manifest's definition_of_done section.
+        if self._freeze_verification:
+            ready = self._freeze_verification.get("ready_for_experiments", False)
+        else:
+            ready = (
+                m.get("definition_of_done", {})
+                .get("ready_for_experiments", False)
+            )
         checks["ready_for_experiments"] = ready
         if not ready:
             passed = False
 
-        # dataset_version
-        dv = m.get("dataset_version", "")
+        # -- dataset_version (from freeze-verification only) ---------------
+        if self._freeze_verification:
+            dv = self._freeze_verification.get("dataset_version", "")
+        else:
+            dv = "fiubench-route-v1"  # assumed when no freeze file
         checks["dataset_version"] = dv
         if dv != "fiubench-route-v1":
             passed = False
 
-        # route SHA matches probe file
+        # -- route SHA matches probe file ----------------------------------
         expected_sha = (
             m.get("dataset_artifacts", {})
             .get("route_probes", {})
@@ -373,10 +397,37 @@ class BaselineRunner:
         if expected_sha != actual_sha:
             passed = False
 
-        # route probe count == 500
-        probe_count = m.get("dataset_artifacts", {}).get("route_probes", {}).get("count", 0)
+        # -- route probe count == 500 (total_probes field) -----------------
+        probe_count = (
+            m.get("dataset_artifacts", {})
+            .get("route_probes", {})
+            .get("total_probes", 0)
+        )
         checks["route_probe_count"] = probe_count
         if probe_count != 500:
+            passed = False
+
+        # -- JSONL row count == 500 ----------------------------------------
+        jsonl_rows = len(_read_jsonl(self.probe_path))
+        checks["jsonl_row_count"] = jsonl_rows
+        if jsonl_rows != 500:
+            passed = False
+
+        # -- family counts -------------------------------------------------
+        frozen_families = (
+            m.get("dataset_artifacts", {})
+            .get("route_probes", {})
+            .get("families", {})
+        )
+        expected_families = {
+            "direct_visual": 100,
+            "image_plus_name": 100,
+            "wrong_name": 100,
+            "visual_text_conflict": 100,
+            "name_only": 100,
+        }
+        checks["family_counts"] = frozen_families
+        if frozen_families != expected_families:
             passed = False
 
         if not passed:
@@ -384,6 +435,155 @@ class BaselineRunner:
                 f"Dataset manifest validation failed: {checks}"
             )
         log.info("Dataset manifest validated: %s", checks)
+        return checks
+
+    def validate_freeze_verification(self) -> dict[str, Any]:
+        """Validate the freeze-verification file for full research baselines.
+
+        Checks all required gates:
+
+        - ``dataset_version == "fiubench-route-v1"``
+        - ``ready_for_experiments == true``
+        - ``bundle_verifier_pass == true``
+        - ``strict_final_verify_pass == true``
+        - ``manual_audit_pass == true``
+        - ``exact_ci_pass == true``
+        - All ``hard_stop_conditions`` are true
+
+        Returns
+        -------
+        dict
+            Validation details.
+
+        Raises
+        ------
+        RuntimeError
+            If any check fails or no freeze-verification file is loaded.
+        """
+        if self._freeze_verification is None:
+            raise RuntimeError(
+                "Full research baseline requires --freeze-verification."
+            )
+        fv = self._freeze_verification
+        checks: dict[str, Any] = {}
+        passed = True
+
+        # -- top-level gates -----------------------------------------------
+        for gate in (
+            "bundle_verifier_pass",
+            "strict_final_verify_pass",
+            "manual_audit_pass",
+            "exact_ci_pass",
+            "ready_for_experiments",
+        ):
+            val = fv.get(gate, False)
+            checks[gate] = val
+            if not val:
+                passed = False
+
+        # -- dataset_version -----------------------------------------------
+        dv = fv.get("dataset_version", "")
+        checks["dataset_version"] = dv
+        if dv != "fiubench-route-v1":
+            passed = False
+
+        # -- hard_stop_conditions ------------------------------------------
+        hsc = fv.get("hard_stop_conditions", {})
+        for key in (
+            "manual_audit_matches_current_route_artifact",
+            "manual_audit_route_count_matches",
+            "all_artifact_hashes_verified",
+            "all_commits_reachable",
+            "git_dirty_false",
+        ):
+            val = hsc.get(key, False)
+            checks[f"hard_stop.{key}"] = val
+            if not val:
+                passed = False
+
+        if not passed:
+            raise RuntimeError(
+                f"Freeze verification failed: {checks}"
+            )
+        log.info("Freeze verification validated: all gates pass")
+        return checks
+
+    def validate_cross_file(self) -> dict[str, Any]:
+        """Cross-file hash validation between freeze, manifest, and probe file.
+
+        Validates:
+
+        1. ``dataset_manifest_sha256`` in freeze-verification matches the
+           actual SHA-256 of the dataset manifest file.
+        2. ``route_probe_sha256`` agrees across both freeze files and the
+           actual probe JSONL (three-way agreement).
+        3. Route probe count in the manifest is 500.
+
+        Returns
+        -------
+        dict
+            Cross-file validation details.
+
+        Raises
+        ------
+        RuntimeError
+            If any check fails.
+        """
+        if self._freeze_verification is None:
+            raise RuntimeError(
+                "Cross-file validation requires --freeze-verification."
+            )
+        if self._dataset_manifest is None:
+            raise RuntimeError(
+                "Cross-file validation requires --dataset-manifest."
+            )
+        fv = self._freeze_verification
+        m = self._dataset_manifest
+        checks: dict[str, Any] = {}
+        passed = True
+
+        # -- dataset manifest SHA ------------------------------------------
+        expected_manifest_sha = fv.get("dataset_manifest_sha256", "")
+        actual_manifest_sha = _sha256_file(self.dataset_manifest_path)
+        checks["dataset_manifest_sha_match"] = (
+            expected_manifest_sha == actual_manifest_sha
+        )
+        checks["dataset_manifest_sha_expected"] = expected_manifest_sha
+        checks["dataset_manifest_sha_actual"] = actual_manifest_sha
+        if expected_manifest_sha != actual_manifest_sha:
+            passed = False
+
+        # -- route SHA three-way agreement ---------------------------------
+        fv_route_sha = fv.get("route_probe_sha256", "")
+        manifest_route_sha = (
+            m.get("dataset_artifacts", {})
+            .get("route_probes", {})
+            .get("sha256", "")
+        )
+        actual_route_sha = _sha256_file(self.probe_path)
+        three_way = fv_route_sha == manifest_route_sha == actual_route_sha
+        checks["route_sha_three_way"] = three_way
+        checks["route_sha_freeze"] = fv_route_sha
+        checks["route_sha_manifest"] = manifest_route_sha
+        checks["route_sha_actual"] = actual_route_sha
+        if not three_way:
+            passed = False
+
+        # -- route count ---------------------------------------------------
+        route_count = (
+            m.get("dataset_artifacts", {})
+            .get("route_probes", {})
+            .get("total_probes", 0)
+        )
+        checks["route_probe_count"] = route_count
+        if route_count != 500:
+            passed = False
+
+        if not passed:
+            raise RuntimeError(
+                f"Cross-file validation failed: {checks}"
+            )
+        log.info("Cross-file validation passed: freeze ↔ manifest ↔ probe")
         return checks
 
     # ------------------------------------------------------------------ #
@@ -401,6 +601,25 @@ class BaselineRunner:
             manifest = json.load(f)
         log.info("Loaded dataset manifest from %s", self.dataset_manifest_path)
         return manifest
+
+    def _load_freeze_verification(self) -> dict[str, Any] | None:
+        """Load and return the freeze-verification JSON, or *None*."""
+        if (
+            not self.freeze_verification_path
+            or not self.freeze_verification_path.is_file()
+        ):
+            log.warning(
+                "Freeze verification not found: %s",
+                self.freeze_verification_path,
+            )
+            return None
+        with open(self.freeze_verification_path) as f:
+            fv = json.load(f)
+        log.info(
+            "Loaded freeze verification from %s",
+            self.freeze_verification_path,
+        )
+        return fv
 
     def _compute_model_config_sha(self) -> str:
         """SHA-256 of the model config YAML (or serialised dataclass)."""

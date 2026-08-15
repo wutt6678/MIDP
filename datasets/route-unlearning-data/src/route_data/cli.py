@@ -4154,6 +4154,8 @@ def cmd_experiment_baseline(args) -> int:
 
     # Resolve optional dataset manifest path.
     dataset_manifest = getattr(args, "dataset_manifest", None)
+    # Resolve optional freeze-verification path.
+    freeze_verification = getattr(args, "freeze_verification", None)
     # Resolve model config path for cache-key strengthening.
     model_config_path = getattr(args, "model_config", None)
 
@@ -4165,6 +4167,7 @@ def cmd_experiment_baseline(args) -> int:
         resume=args.resume,
         dataset_manifest_path=dataset_manifest,
         model_config_path=model_config_path,
+        freeze_verification_path=freeze_verification,
     )
 
     # Verify the frozen probe-file hash before any inference.
@@ -4180,7 +4183,7 @@ def cmd_experiment_baseline(args) -> int:
         log.info("[dry-run] baseline for %d probes", len(runner.probes))
         return 0
 
-    # P1-1: Full research baselines require a valid dataset manifest.
+    # P1-1: Full research baselines require valid dataset manifest + freeze.
     is_smoke = getattr(args, "smoke", False)
     is_limited = args.limit is not None
     if not is_smoke and not is_limited:
@@ -4190,10 +4193,18 @@ def cmd_experiment_baseline(args) -> int:
                 "Use --smoke or --limit for development runs."
             )
             return 1
+        if not freeze_verification:
+            log.error(
+                "Full research baseline requires --freeze-verification. "
+                "Use --smoke or --limit for development runs."
+            )
+            return 1
         try:
+            runner.validate_freeze_verification()
             runner.validate_dataset_manifest()
+            runner.validate_cross_file()
         except RuntimeError as exc:
-            log.error("Dataset manifest validation failed: %s", exc)
+            log.error("Freeze/validation failed: %s", exc)
             return 1
 
     # Determine whether to run smoke or full baseline.
@@ -4469,6 +4480,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="dataset_manifest",
         help="path to research_dataset_manifest.json for manifest-driven SHA verification",
+    )
+    p.add_argument(
+        "--freeze-verification",
+        default=None,
+        dest="freeze_verification",
+        help="path to final_freeze_verification.json for cross-file freeze validation",
     )
     _common_flags(p)
     p.set_defaults(func=cmd_experiment_baseline)
