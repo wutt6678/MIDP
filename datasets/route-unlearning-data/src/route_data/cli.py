@@ -4180,19 +4180,29 @@ def cmd_experiment_baseline(args) -> int:
         log.info("[dry-run] baseline for %d probes", len(runner.probes))
         return 0
 
-    # Determine the probe limit.
-    limit: int | None = None
+    # Determine whether to run smoke or full baseline.
     if getattr(args, "smoke", False):
-        limit = _smoke_limit(runner.probes)
-    elif args.limit:
+        from .eval.baseline_runner import select_smoke_probes, write_smoke_manifest
+        smoke_probes = select_smoke_probes(runner.probes, n_identities=2)
+        runner.run_selected(smoke_probes)
+        # Write smoke manifest.
+        route_sha = runner._route_probe_sha()
+        write_smoke_manifest(
+            smoke_probes,
+            output_dir / "smoke_manifest.json",
+            probe_file_sha256=route_sha,
+        )
+    else:
         limit = args.limit
+        runner.run_all(limit=limit)
 
-    runner.run_all(limit=limit)
     runner.save_results()
     summary = runner.generate_summary()
 
-    # Validate and generate manifest for full (non-limited) runs.
-    if limit is None:
+    # Validate and generate manifest for full (non-smoke, non-limited) runs.
+    is_smoke = getattr(args, "smoke", False)
+    is_limited = args.limit is not None
+    if not is_smoke and not is_limited:
         try:
             runner.validate_results()
         except RuntimeError as exc:
@@ -4202,21 +4212,6 @@ def cmd_experiment_baseline(args) -> int:
 
     _print_json(summary)
     return 0
-
-
-def _smoke_limit(probes: list) -> int:
-    """Return a small limit that covers all 5 probe families."""
-    seen: set[str] = set()
-    for idx, p in enumerate(probes):
-        from .eval.baseline_runner import BaselineProbe
-        if isinstance(p, BaselineProbe):
-            fam = p.probe_family
-        else:
-            fam = p.get("probe_family", "")
-        seen.add(fam)
-        if len(seen) >= 5:
-            return min(idx + 5, len(probes))
-    return min(20, len(probes))
 
 
 # --------------------------------------------------------------------------- #

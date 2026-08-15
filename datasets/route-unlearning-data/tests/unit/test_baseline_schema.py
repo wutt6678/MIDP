@@ -136,6 +136,112 @@ _PROBES_RAW: list[dict] = [
         "answer_label": None,
         "answer_text": "Alice Smith",
     },
+    # Second identity "bbbb" — all 5 families (for smoke selector).
+    {
+        "probe_id": "probe_dv_test02",
+        "sample_id": "fiubench:bbbb:qa:0:original",
+        "identity_id": "bbbb",
+        "benchmark": "fiubench",
+        "probe_family": "direct_visual",
+        "modality": "image_only",
+        "question": "Based only on the current image, Is the person male?",
+        "expected_evidence_source": "visual",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "bbb222",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Male",
+        "target_fact_id": None,
+        "target_fact_relation": None,
+        "target_fact_value": None,
+        "answer_label": True,
+        "answer_text": "yes",
+    },
+    {
+        "probe_id": "probe_ipn_test02",
+        "sample_id": "fiubench:bbbb:qa:0:original",
+        "identity_id": "bbbb",
+        "benchmark": "fiubench",
+        "probe_family": "image_plus_name",
+        "modality": "image_text",
+        "question": "The person is Bob. Is the person male?",
+        "expected_evidence_source": "visual",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "bbb222",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Male",
+        "answer_label": True,
+        "answer_text": "yes",
+    },
+    {
+        "probe_id": "probe_wn_test02",
+        "sample_id": "fiubench:bbbb:qa:0:original",
+        "identity_id": "bbbb",
+        "benchmark": "fiubench",
+        "probe_family": "wrong_name",
+        "modality": "image_text",
+        "question": "The person is Alice. Is the person male?",
+        "expected_evidence_source": "visual",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "bbb222",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Male",
+        "answer_label": True,
+        "answer_text": "yes",
+        "matched_wrong_identity_id": "aaaa",
+        "matching_similarity": 0.8,
+        "matching_attributes": ["Male"],
+        "candidate_rank": 1,
+        "matching_strategy": "visual_attribute_signed_state_jaccard",
+    },
+    {
+        "probe_id": "probe_vtc_test02",
+        "sample_id": "fiubench:bbbb:qa:0:original",
+        "identity_id": "bbbb",
+        "benchmark": "fiubench",
+        "probe_family": "visual_text_conflict",
+        "modality": "image_text",
+        "question": "Bob always shows male attire. Is the person male?",
+        "expected_evidence_source": "conflict",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "bbb222",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Male",
+        "answer_label": True,
+        "answer_text": "yes",
+    },
+    {
+        "probe_id": "probe_no_test02",
+        "sample_id": "fiubench:bbbb:qa:0:original",
+        "identity_id": "bbbb",
+        "benchmark": "fiubench",
+        "probe_family": "name_only",
+        "modality": "text_only",
+        "question": "Bob: What is the person's full name?",
+        "expected_evidence_source": "identity_fact",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": None,
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": None,
+        "target_fact_id": "fiubench_qa_01",
+        "target_fact_relation": "What is the person's full name?",
+        "target_fact_value": "Bob Jones",
+        "source_qa_index": 0,
+        "original_question": "What is the person's full name?",
+        "original_answer": "Bob Jones",
+        "question_variant": "canonical",
+        "answer_label": None,
+        "answer_text": "Bob Jones",
+    },
 ]
 
 
@@ -285,7 +391,7 @@ class TestBaselineRunnerProbeLoading:
     """Verify probe loading and family coverage."""
 
     def test_loads_all_probes(self, runner: BaselineRunner):
-        assert len(runner.probes) == 5
+        assert len(runner.probes) == 10
 
     def test_all_five_families_present(self, runner: BaselineRunner):
         families = {p.probe_family for p in runner.probes}
@@ -301,7 +407,7 @@ class TestBaselineRunnerExecution:
 
     def test_run_all_produces_results(self, runner: BaselineRunner):
         results = runner.run_all()
-        assert len(results) == 5
+        assert len(results) == 10
 
     def test_candidate_scores_are_finite(self, runner: BaselineRunner):
         results = runner.run_all()
@@ -346,21 +452,21 @@ class TestBaselineRunnerPersistence:
         path = runner.save_results()
         assert path.is_file()
         lines = path.read_text().strip().split("\n")
-        assert len(lines) == 5
+        assert len(lines) == 10
 
     def test_generate_summary_writes_json(self, runner: BaselineRunner):
         runner.run_all()
         summary = runner.generate_summary()
         summary_path = runner.output_dir / "baseline_summary.json"
         assert summary_path.is_file()
-        assert summary["total_probes"] == 5
+        assert summary["total_probes"] == 10
         assert "per_family" in summary
 
     def test_resume_skips_cached(self, runner: BaselineRunner, tmp_path: Path):
-        # First run: all 5 probes
+        # First run: all 10 probes
         runner.run_all()
         runner.save_results()
-        assert len(runner._results) == 5
+        assert len(runner._results) == 10
 
         # Second run with resume=True: should reuse cache
         runner2 = BaselineRunner(
@@ -370,10 +476,10 @@ class TestBaselineRunnerPersistence:
             model_config=runner.model_config,
             resume=True,
         )
-        assert len(runner2._results) == 5  # loaded from cache
+        assert len(runner2._results) == 10  # loaded from cache
         new_results = runner2.run_all()
         # No new results — all were cached
-        assert len(new_results) == 5
+        assert len(new_results) == 10
 
 
 class TestBaselineRunnerHashVerification:
@@ -805,8 +911,8 @@ class TestValidateResults:
 
     def test_validate_custom_expected_count(self, runner: BaselineRunner):
         runner.run_all()
-        # We have 5 probes, so expect 5
-        report = runner.validate_results(expected_probe_count=5)
+        # We have 10 probes, so expect 10
+        report = runner.validate_results(expected_probe_count=10)
         assert report["pass"] is True
 
 
@@ -829,7 +935,7 @@ class TestBaselineManifest:
         assert "dataset_provenance" in manifest
         dp = manifest["dataset_provenance"]
         assert "probe_file_sha256" in dp
-        assert dp["probe_count"] == 5
+        assert dp["probe_count"] == 10
 
     def test_manifest_has_model_identity(self, runner: BaselineRunner):
         runner.run_all()
@@ -868,12 +974,40 @@ class TestBaselineManifest:
 
 
 class TestSmokeSelector:
-    """Verify the deterministic smoke probe selector (Commit D)."""
+    """Verify the deterministic smoke probe selector (Commit D / P0-3)."""
 
     def test_selects_all_families(self, runner: BaselineRunner):
         selected = select_smoke_probes(runner.probes)
         families = {p.probe_family for p in selected}
         assert families == ALL_FAMILIES
+
+    def test_returns_exactly_10_probes(self, runner: BaselineRunner):
+        selected = select_smoke_probes(runner.probes, n_identities=2)
+        assert len(selected) == 10
+
+    def test_returns_exactly_2_identities(self, runner: BaselineRunner):
+        selected = select_smoke_probes(runner.probes, n_identities=2)
+        identities = {p.identity_id for p in selected}
+        assert len(identities) == 2
+        assert identities == {"aaaa", "bbbb"}
+
+    def test_two_probes_per_family(self, runner: BaselineRunner):
+        from collections import Counter
+
+        selected = select_smoke_probes(runner.probes, n_identities=2)
+        family_counts = Counter(p.probe_family for p in selected)
+        for fam in ALL_FAMILIES:
+            assert family_counts[fam] == 2, f"family {fam} has {family_counts[fam]} probes"
+
+    def test_each_identity_has_all_families(self, runner: BaselineRunner):
+        selected = select_smoke_probes(runner.probes, n_identities=2)
+        by_id: dict[str, set[str]] = {}
+        for p in selected:
+            by_id.setdefault(p.identity_id, set()).add(p.probe_family)
+        for iid, fams in by_id.items():
+            assert fams == ALL_FAMILIES, (
+                f"identity {iid} missing families: {ALL_FAMILIES - fams}"
+            )
 
     def test_deterministic(self, runner: BaselineRunner):
         s1 = select_smoke_probes(runner.probes)
@@ -883,7 +1017,8 @@ class TestSmokeSelector:
     def test_respects_n_identities(self, runner: BaselineRunner):
         selected = select_smoke_probes(runner.probes, n_identities=1)
         identities = {p.identity_id for p in selected}
-        assert len(identities) <= 1
+        assert len(identities) == 1
+        assert len(selected) == 5
 
     def test_no_duplicate_probe_ids(self, runner: BaselineRunner):
         selected = select_smoke_probes(runner.probes)
@@ -899,7 +1034,12 @@ class TestSmokeSelector:
         with open(manifest_path) as f:
             data = json.load(f)
         assert data["probe_count"] == len(selected)
-        assert set(data["families_covered"]) == ALL_FAMILIES
+        assert data["identity_count"] == 2
+        assert set(data["family_counts"].keys()) == ALL_FAMILIES
+        assert set(data["selected_identity_ids"]) == {"aaaa", "bbbb"}
+        assert set(data["selected_probe_ids"]) == {p.probe_id for p in selected}
+        assert data["route_probe_sha256"] == ""
+        assert data["dataset_version"] == "fiubench-route-v1"
 
     def test_write_smoke_manifest_with_sha(
         self, runner: BaselineRunner, tmp_path: Path
@@ -910,7 +1050,15 @@ class TestSmokeSelector:
         )
         with open(manifest_path) as f:
             data = json.load(f)
-        assert data["probe_file_sha256"] == "abc123"
+        assert data["route_probe_sha256"] == "abc123"
+
+    def test_insufficient_identities_raises(
+        self, stub_backend, tmp_path, stub_model_config
+    ):
+        """Fewer than n_identities eligible identities raises ValueError."""
+        probes = [BaselineProbe.from_dict(d) for d in _PROBES_RAW[:5]]
+        with pytest.raises(ValueError, match="Need 2 eligible"):
+            select_smoke_probes(probes, n_identities=2)
 
 
 class TestSpyCallPaths:

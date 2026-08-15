@@ -594,6 +594,14 @@ class BaselineRunner:
     def run_all(self, limit: int | None = None) -> list[BaselineResult]:
         """Iterate all probes with progress logging and cache/resume."""
         probes = self.probes if limit is None else self.probes[:limit]
+        return self._run_probes(probes)
+
+    def run_selected(self, probes: list[BaselineProbe]) -> list[BaselineResult]:
+        """Run exactly the specified probes with cache/resume."""
+        return self._run_probes(probes)
+
+    def _run_probes(self, probes: list[BaselineProbe]) -> list[BaselineResult]:
+        """Internal: iterate probes with progress logging and cache/resume."""
         done = self._done_keys()
         new_count = 0
 
@@ -1045,9 +1053,12 @@ def select_smoke_probes(
 ) -> list[BaselineProbe]:
     """Select a deterministic smoke-test subset of probes.
 
-    Picks up to *n_identities* distinct identities and returns one probe per
-    family per identity, covering all 5 families.  The selection is
-    deterministic (sorted by probe_id) so results are reproducible.
+    Picks exactly *n_identities* eligible identities where each identity
+    has all 5 probe families. Returns exactly ``n_identities * 5`` probes.
+
+    An eligible identity is one that has at least one probe in each of the
+    5 families: direct_visual, image_plus_name, wrong_name,
+    visual_text_conflict, name_only.
 
     Parameters
     ----------
@@ -1059,33 +1070,39 @@ def select_smoke_probes(
     Returns
     -------
     list[BaselineProbe]
-        Selected probes (up to ``n_identities * len(ALL_FAMILIES)``).
+        Selected probes (exactly ``n_identities * 5``).
+
+    Raises
+    ------
+    ValueError
+        If fewer than *n_identities* eligible identities exist.
     """
-    # Group by identity, sorted for determinism.
-    by_identity: dict[str, list[BaselineProbe]] = {}
-    for p in sorted(probes, key=lambda p: p.probe_id):
-        by_identity.setdefault(p.identity_id, []).append(p)
+    # Group by identity and family.
+    by_identity: dict[str, dict[str, BaselineProbe]] = {}
+    for p in probes:
+        by_identity.setdefault(p.identity_id, {})[p.probe_family] = p
 
+    # Find eligible identities (those with all 5 families).
+    eligible_ids = sorted(
+        iid for iid, fam_map in by_identity.items()
+        if set(fam_map) == ALL_FAMILIES
+    )
+
+    if len(eligible_ids) < n_identities:
+        raise ValueError(
+            f"Need {n_identities} eligible identities with all {len(ALL_FAMILIES)} "
+            f"families, but only {len(eligible_ids)} found."
+        )
+
+    # Select the first n_identities eligible identities.
+    selected_ids = eligible_ids[:n_identities]
+
+    # For each selected identity, pick one probe per family (sorted by probe_id).
     selected: list[BaselineProbe] = []
-    seen_families: set[str] = set()
-
-    # Pick the first n_identities identities that together cover all families.
-    for identity_id in sorted(by_identity):
-        if len(selected) >= n_identities * len(ALL_FAMILIES):
-            break
-        identity_probes = by_identity[identity_id]
-        # Pick one probe per family for this identity.
-        family_pick: dict[str, BaselineProbe] = {}
-        for p in identity_probes:
-            if p.probe_family not in family_pick:
-                family_pick[p.probe_family] = p
-        # Only add this identity if it contributes new families.
-        new_families = set(family_pick) - seen_families
-        if new_families:
-            for fam in sorted(family_pick):
-                if fam not in seen_families:
-                    selected.append(family_pick[fam])
-                    seen_families.add(fam)
+    for iid in selected_ids:
+        fam_map = by_identity[iid]
+        for fam in sorted(ALL_FAMILIES):
+            selected.append(fam_map[fam])
 
     return selected
 
@@ -1097,8 +1114,9 @@ def write_smoke_manifest(
 ) -> Path:
     """Write a smoke manifest JSON for the selected probes.
 
-    The manifest records the selected probe IDs and (optionally) the
-    SHA-256 of the source probe file for reproducibility.
+    The manifest records the selected probe IDs, identity count, family
+    counts, and (optionally) the SHA-256 of the source probe file for
+    reproducibility.
 
     Parameters
     ----------
@@ -1116,14 +1134,21 @@ def write_smoke_manifest(
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Compute family counts.
+    family_counts: dict[str, int] = {}
+    for fam in sorted(ALL_FAMILIES):
+        family_counts[fam] = sum(1 for p in probes if p.probe_family == fam)
+
     manifest = {
-        "selected_probe_ids": sorted(p.probe_id for p in probes),
+        "dataset_version": "fiubench-route-v1",
+        "route_probe_sha256": probe_file_sha256,
+        "identity_count": len({p.identity_id for p in probes}),
         "probe_count": len(probes),
-        "families_covered": sorted({p.probe_family for p in probes}),
-        "identities_covered": sorted({p.identity_id for p in probes}),
+        "selected_identity_ids": sorted({p.identity_id for p in probes}),
+        "selected_probe_ids": sorted(p.probe_id for p in probes),
+        "family_counts": family_counts,
     }
-    if probe_file_sha256:
-        manifest["probe_file_sha256"] = probe_file_sha256
     with open(output_path, "w") as f:
         json.dump(manifest, f, indent=2)
     log.info("Smoke manifest written to %s (%d probes)", output_path, len(probes))
