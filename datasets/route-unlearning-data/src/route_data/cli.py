@@ -10,6 +10,7 @@ Subcommand contract:
     route-data build annotate|qa|route-probes|splits|export --dataset X --config Y
     route-data validate dataset --dataset X [--strict]
     route-data card render --dataset X
+    route-data experiment baseline --dataset fiubench --model-config configs/models/...
 
 Every command supports ``--dry-run``, ``--limit``, ``--resume`` and
 ``--output-dir``. Configuration is always loaded *before* any model is touched,
@@ -4109,6 +4110,96 @@ def cmd_card_render(args) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# experiment baseline
+# --------------------------------------------------------------------------- #
+
+
+def cmd_experiment_baseline(args) -> int:
+    """Run the FIUBench route-conflict baseline evaluation (Stage 2)."""
+    from .models.registry import create_backend
+
+    # Load model config (standalone or from the run config).
+    if getattr(args, "model_config", None):
+        model_cfg = load_model_config(args.model_config)
+    else:
+        run_cfg = load_run_config(args.config)
+        model_cfg = run_cfg.model
+
+    backend = create_backend(model_cfg)
+
+    # Resolve the probe JSONL path.
+    probe_path = getattr(args, "probe_path", None)
+    if not probe_path:
+        if not args.config:
+            raise ConfigError(
+                "Either --config or --probe-path must be provided to locate "
+                "the frozen probe file."
+            )
+        run_cfg = load_run_config(args.config)
+        dataset_dir = _dataset_dir(args, run_cfg, args.dataset)
+        probe_path = str(dataset_dir / "fiubench_route_conflict_eval.jsonl")
+
+    probe_p = Path(probe_path)
+    if not probe_p.is_file():
+        # Smoke-test fallback: look under the package root.
+        alt = REPO_ROOT / "outputs" / "full_fiubench" / "Qwen_Qwen3.5-9B" / "fiubench" / "fiubench_route_conflict_eval.jsonl"
+        if alt.is_file():
+            probe_p = alt
+        else:
+            raise FileNotFoundError(f"Probe file not found: {probe_path}")
+
+    output_dir = Path(args.output_dir) if args.output_dir else Path("outputs/experiments/baseline")
+
+    from .eval.baseline_runner import BaselineRunner
+
+    runner = BaselineRunner(
+        backend=backend,
+        probe_path=probe_p,
+        output_dir=output_dir,
+        model_config=model_cfg,
+        resume=args.resume,
+    )
+
+    # Verify the frozen probe-file hash before any inference.
+    if not args.dry_run:
+        runner.verify_input_hashes(
+            "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864"
+        )
+
+    if args.dry_run:
+        log.info("[dry-run] baseline for %d probes", len(runner.probes))
+        return 0
+
+    # Determine the probe limit.
+    limit: int | None = None
+    if getattr(args, "smoke", False):
+        limit = _smoke_limit(runner.probes)
+    elif args.limit:
+        limit = args.limit
+
+    runner.run_all(limit=limit)
+    runner.save_results()
+    summary = runner.generate_summary()
+    _print_json(summary)
+    return 0
+
+
+def _smoke_limit(probes: list) -> int:
+    """Return a small limit that covers all 5 probe families."""
+    seen: set[str] = set()
+    for idx, p in enumerate(probes):
+        from .eval.baseline_runner import BaselineProbe
+        if isinstance(p, BaselineProbe):
+            fam = p.probe_family
+        else:
+            fam = p.get("probe_family", "")
+        seen.add(fam)
+        if len(seen) >= 5:
+            return min(idx + 5, len(probes))
+    return min(20, len(probes))
+
+
+# --------------------------------------------------------------------------- #
 # Parser wiring
 # --------------------------------------------------------------------------- #
 
@@ -4315,6 +4406,37 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default=None)
     _common_flags(p)
     p.set_defaults(func=cmd_card_render)
+
+    # experiment
+    experiment = sub.add_parser(
+        "experiment", help="post-freeze experiment workflows"
+    ).add_subparsers(dest="experiment_command", required=True)
+    p = experiment.add_parser(
+        "baseline",
+        help="run the FIUBench route-conflict baseline evaluation (Stage 2)",
+    )
+    p.add_argument("--dataset", default="fiubench")
+    p.add_argument("--config", default=None, help="run config YAML (for probe-path resolution)")
+    p.add_argument(
+        "--model-config",
+        default=None,
+        dest="model_config",
+        help="standalone model config YAML (overrides --config model section)",
+    )
+    p.add_argument(
+        "--probe-path",
+        default=None,
+        dest="probe_path",
+        help="explicit path to the frozen probe JSONL",
+    )
+    p.add_argument(
+        "--smoke",
+        action="store_true",
+        default=False,
+        help="run a small probe subset covering all 5 families",
+    )
+    _common_flags(p)
+    p.set_defaults(func=cmd_experiment_baseline)
 
     return parser
 

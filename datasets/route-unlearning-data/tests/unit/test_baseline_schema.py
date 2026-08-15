@@ -1,0 +1,413 @@
+"""Schema tests for FIUBench baseline results (Stage 2.4).
+
+These tests exercise the :class:`BaselineRunner` with the *stub* backend so
+that no GPU is required.  They verify the structural invariants of the
+result schema that downstream analysis stages depend on.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import tempfile
+from dataclasses import asdict
+from pathlib import Path
+
+import pytest
+
+from route_data.config import ModelConfig
+from route_data.eval.baseline_runner import (
+    ALL_FAMILIES,
+    BaselineProbe,
+    BaselineResult,
+    BaselineRunner,
+)
+
+# --------------------------------------------------------------------------- #
+# Fixtures
+# --------------------------------------------------------------------------- #
+
+# One probe per family (5 probes total) extracted from the frozen JSONL.
+_PROBES_RAW: list[dict] = [
+    {
+        "probe_id": "probe_dv_test01",
+        "sample_id": "fiubench:aaaa:qa:0:original",
+        "identity_id": "aaaa",
+        "benchmark": "fiubench",
+        "probe_family": "direct_visual",
+        "modality": "image_only",
+        "question": "Based only on the current image, Is the person bald?",
+        "expected_evidence_source": "visual",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "aaa111",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Bald",
+        "target_fact_id": None,
+        "target_fact_relation": None,
+        "target_fact_value": None,
+        "answer_label": False,
+        "answer_text": "no",
+    },
+    {
+        "probe_id": "probe_ipn_test01",
+        "sample_id": "fiubench:aaaa:qa:0:original",
+        "identity_id": "aaaa",
+        "benchmark": "fiubench",
+        "probe_family": "image_plus_name",
+        "modality": "image_text",
+        "question": "The person is Alice. Is the person bald?",
+        "expected_evidence_source": "visual",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "aaa111",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Bald",
+        "answer_label": False,
+        "answer_text": "no",
+    },
+    {
+        "probe_id": "probe_wn_test01",
+        "sample_id": "fiubench:aaaa:qa:0:original",
+        "identity_id": "aaaa",
+        "benchmark": "fiubench",
+        "probe_family": "wrong_name",
+        "modality": "image_text",
+        "question": "The person is Bob. Is the person bald?",
+        "expected_evidence_source": "visual",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "aaa111",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Bald",
+        "answer_label": False,
+        "answer_text": "no",
+        "matched_wrong_identity_id": "bbbb",
+        "matching_similarity": 0.9,
+        "matching_attributes": ["Bald"],
+        "candidate_rank": 1,
+        "matching_strategy": "visual_attribute_signed_state_jaccard",
+    },
+    {
+        "probe_id": "probe_vtc_test01",
+        "sample_id": "fiubench:aaaa:qa:0:original",
+        "identity_id": "aaaa",
+        "benchmark": "fiubench",
+        "probe_family": "visual_text_conflict",
+        "modality": "image_text",
+        "question": "Alice always shows bald. Is the person bald?",
+        "expected_evidence_source": "conflict",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": "aaa111",
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": "Bald",
+        "answer_label": False,
+        "answer_text": "no",
+    },
+    {
+        "probe_id": "probe_no_test01",
+        "sample_id": "fiubench:aaaa:qa:0:original",
+        "identity_id": "aaaa",
+        "benchmark": "fiubench",
+        "probe_family": "name_only",
+        "modality": "text_only",
+        "question": "Alice: What is the person's full name?",
+        "expected_evidence_source": "identity_fact",
+        "paired_sample_id": None,
+        "controlled_variables": ["image"],
+        "image_uri": None,
+        "image_sha256": None,
+        "registry_hash": "28481d2ebb85a6fb",
+        "target_attribute": None,
+        "target_fact_id": "fiubench_qa_00",
+        "target_fact_relation": "What is the person's full name?",
+        "target_fact_value": "Alice Smith",
+        "source_qa_index": 0,
+        "original_question": "What is the person's full name?",
+        "original_answer": "Alice Smith",
+        "question_variant": "canonical",
+        "answer_label": None,
+        "answer_text": "Alice Smith",
+    },
+]
+
+
+@pytest.fixture()
+def probe_jsonl(tmp_path: Path) -> Path:
+    """Write the 5 test probes to a temporary JSONL file."""
+    path = tmp_path / "test_probes.jsonl"
+    with open(path, "w") as f:
+        for p in _PROBES_RAW:
+            f.write(json.dumps(p) + "\n")
+    return path
+
+
+@pytest.fixture()
+def stub_model_config() -> ModelConfig:
+    return ModelConfig(backend="stub", model_id="test-model", revision="abc123")
+
+
+@pytest.fixture()
+def stub_backend(stub_model_config: ModelConfig):
+    from route_data.models.registry import create_backend
+
+    return create_backend(stub_model_config)
+
+
+@pytest.fixture()
+def runner(
+    stub_backend,
+    probe_jsonl: Path,
+    tmp_path: Path,
+    stub_model_config: ModelConfig,
+) -> BaselineRunner:
+    return BaselineRunner(
+        backend=stub_backend,
+        probe_path=probe_jsonl,
+        output_dir=tmp_path / "output",
+        model_config=stub_model_config,
+        resume=False,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Tests
+# --------------------------------------------------------------------------- #
+
+
+class TestBaselineProbeSchema:
+    """Verify the probe dataclass mirrors the frozen JSONL schema."""
+
+    def test_from_dict_known_fields(self):
+        probe = BaselineProbe.from_dict(_PROBES_RAW[0])
+        assert probe.probe_id == "probe_dv_test01"
+        assert probe.probe_family == "direct_visual"
+        assert probe.answer_label is False
+
+    def test_from_dict_ignores_unknown(self):
+        d = dict(_PROBES_RAW[0])
+        d["unknown_future_field"] = 42
+        probe = BaselineProbe.from_dict(d)
+        assert probe.probe_id == "probe_dv_test01"
+
+    def test_wrong_name_extras(self):
+        probe = BaselineProbe.from_dict(_PROBES_RAW[2])
+        assert probe.matched_wrong_identity_id == "bbbb"
+        assert probe.matching_similarity == pytest.approx(0.9)
+
+    def test_name_only_extras(self):
+        probe = BaselineProbe.from_dict(_PROBES_RAW[4])
+        assert probe.target_fact_id == "fiubench_qa_00"
+        assert probe.question_variant == "canonical"
+        assert probe.image_sha256 is None
+
+    def test_has_image_property(self):
+        assert BaselineProbe.from_dict(_PROBES_RAW[0]).has_image is False  # image_uri is None
+        # With a non-None image_uri
+        d = dict(_PROBES_RAW[0])
+        d["image_uri"] = "/some/path.jpg"
+        assert BaselineProbe.from_dict(d).has_image is True
+
+
+class TestBaselineResultSchema:
+    """Verify the result dataclass has all required fields."""
+
+    REQUIRED_FIELDS = {
+        "probe_id",
+        "sample_id",
+        "identity_id",
+        "probe_family",
+        "modality",
+        "model_fingerprint",
+        "model_revision",
+        "question",
+        "image_sha256",
+        "generated_answer",
+        "parsed_answer",
+        "correct",
+        "scoring_version",
+        "prompt_hash",
+        "latency_ms",
+    }
+
+    def test_all_required_fields_present(self):
+        result = BaselineResult(
+            probe_id="p1",
+            sample_id="s1",
+            identity_id="i1",
+            probe_family="direct_visual",
+            modality="image_only",
+            model_fingerprint="fp",
+            model_revision="rev",
+            question="q?",
+            image_sha256="sha",
+            generated_answer="Yes",
+            parsed_answer="Yes",
+            correct=True,
+        )
+        d = asdict(result)
+        for field_name in self.REQUIRED_FIELDS:
+            assert field_name in d, f"Missing required field: {field_name}"
+
+    def test_serializable_to_json(self):
+        result = BaselineResult(
+            probe_id="p1",
+            sample_id="s1",
+            identity_id="i1",
+            probe_family="direct_visual",
+            modality="image_only",
+            model_fingerprint="fp",
+            model_revision="rev",
+            question="q?",
+            image_sha256="sha",
+            generated_answer="Yes",
+            parsed_answer="Yes",
+            correct=True,
+            logp_yes=-0.1,
+            logp_no=-2.3,
+            p_yes=0.9,
+            margin=0.4,
+        )
+        serialized = json.dumps(asdict(result), default=str)
+        restored = json.loads(serialized)
+        assert restored["probe_id"] == "p1"
+        assert restored["p_yes"] == pytest.approx(0.9)
+
+
+class TestBaselineRunnerProbeLoading:
+    """Verify probe loading and family coverage."""
+
+    def test_loads_all_probes(self, runner: BaselineRunner):
+        assert len(runner.probes) == 5
+
+    def test_all_five_families_present(self, runner: BaselineRunner):
+        families = {p.probe_family for p in runner.probes}
+        assert families == ALL_FAMILIES
+
+    def test_no_duplicate_probe_ids(self, runner: BaselineRunner):
+        ids = [p.probe_id for p in runner.probes]
+        assert len(ids) == len(set(ids))
+
+
+class TestBaselineRunnerExecution:
+    """Verify the runner produces valid results with the stub backend."""
+
+    def test_run_all_produces_results(self, runner: BaselineRunner):
+        results = runner.run_all()
+        assert len(results) == 5
+
+    def test_candidate_scores_are_finite(self, runner: BaselineRunner):
+        results = runner.run_all()
+        for r in results:
+            if r.logp_yes is not None:
+                assert math.isfinite(r.logp_yes), f"logp_yes not finite for {r.probe_id}"
+            if r.logp_no is not None:
+                assert math.isfinite(r.logp_no), f"logp_no not finite for {r.probe_id}"
+            if r.p_yes is not None:
+                assert math.isfinite(r.p_yes), f"p_yes not finite for {r.probe_id}"
+                assert 0.0 <= r.p_yes <= 1.0, f"p_yes out of range for {r.probe_id}"
+
+    def test_image_shas_match_frozen_probes(self, runner: BaselineRunner):
+        results = runner.run_all()
+        probe_shas = {p.probe_id: p.image_sha256 for p in runner.probes}
+        for r in results:
+            assert r.image_sha256 == probe_shas[r.probe_id], (
+                f"image_sha256 mismatch for {r.probe_id}"
+            )
+
+    def test_scoring_version_populated(self, runner: BaselineRunner):
+        results = runner.run_all()
+        for r in results:
+            assert r.scoring_version, f"scoring_version empty for {r.probe_id}"
+
+    def test_prompt_hash_populated(self, runner: BaselineRunner):
+        results = runner.run_all()
+        for r in results:
+            assert r.prompt_hash, f"prompt_hash empty for {r.probe_id}"
+
+    def test_latency_non_negative(self, runner: BaselineRunner):
+        results = runner.run_all()
+        for r in results:
+            assert r.latency_ms >= 0, f"negative latency for {r.probe_id}"
+
+
+class TestBaselineRunnerPersistence:
+    """Verify save / resume round-trip."""
+
+    def test_save_results_writes_jsonl(self, runner: BaselineRunner):
+        runner.run_all()
+        path = runner.save_results()
+        assert path.is_file()
+        lines = path.read_text().strip().split("\n")
+        assert len(lines) == 5
+
+    def test_generate_summary_writes_json(self, runner: BaselineRunner):
+        runner.run_all()
+        summary = runner.generate_summary()
+        summary_path = runner.output_dir / "baseline_summary.json"
+        assert summary_path.is_file()
+        assert summary["total_probes"] == 5
+        assert "per_family" in summary
+
+    def test_resume_skips_cached(self, runner: BaselineRunner, tmp_path: Path):
+        # First run: all 5 probes
+        runner.run_all()
+        runner.save_results()
+        assert len(runner._results) == 5
+
+        # Second run with resume=True: should reuse cache
+        runner2 = BaselineRunner(
+            backend=runner.backend,
+            probe_path=runner.probe_path,
+            output_dir=runner.output_dir,
+            model_config=runner.model_config,
+            resume=True,
+        )
+        assert len(runner2._results) == 5  # loaded from cache
+        new_results = runner2.run_all()
+        # No new results — all were cached
+        assert len(new_results) == 5
+
+
+class TestBaselineRunnerHashVerification:
+    """Verify fail-closed hash checking."""
+
+    def test_hash_mismatch_raises(self, runner: BaselineRunner):
+        with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+            runner.verify_input_hashes("0" * 64)
+
+    def test_hash_match_passes(self, runner: BaselineRunner):
+        from route_data.eval.baseline_runner import _sha256_file
+
+        actual = _sha256_file(runner.probe_path)
+        assert runner.verify_input_hashes(actual) is True
+
+
+class TestTextMatch:
+    """Verify the text-match helper for name-only probes."""
+
+    def test_exact_match(self):
+        from route_data.eval.baseline_runner import _text_match
+
+        assert _text_match("Alice Smith", "Alice Smith") == 1.0
+
+    def test_case_insensitive(self):
+        from route_data.eval.baseline_runner import _text_match
+
+        assert _text_match("alice smith", "Alice Smith") == 1.0
+
+    def test_substring_match(self):
+        from route_data.eval.baseline_runner import _text_match
+
+        score = _text_match("The answer is Alice Smith.", "Alice Smith")
+        assert score == 0.8
+
+    def test_no_match(self):
+        from route_data.eval.baseline_runner import _text_match
+
+        assert _text_match("Bob Jones", "Alice Smith") == 0.0

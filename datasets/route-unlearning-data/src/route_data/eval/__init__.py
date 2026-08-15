@@ -1,5 +1,6 @@
-"""Evaluation subsystem: CelebA-40 runner, metrics, calibration, stability, reports."""
+"""Evaluation subsystem: CelebA-40 runner, FIUBench baseline runner, metrics, calibration, stability, reports."""
 
+from .baseline_runner import BaselineProbe, BaselineResult, BaselineRunner
 from .calibration import (
     Calibrator,
     IsotonicCalibrator,
@@ -32,6 +33,9 @@ from .reports import (
 )
 
 __all__ = [
+    "BaselineProbe",
+    "BaselineResult",
+    "BaselineRunner",
     "CANDIDATES",
     "Calibrator",
     "CelebaRunner",
