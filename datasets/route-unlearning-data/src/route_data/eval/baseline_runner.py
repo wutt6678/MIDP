@@ -61,6 +61,9 @@ _IMAGE_FAMILIES = frozenset({
 _TEXT_ONLY_FAMILIES = frozenset({"name_only"})
 ALL_FAMILIES = _IMAGE_FAMILIES | _TEXT_ONLY_FAMILIES
 
+# Metric schema version for baseline-manifest provenance (P1-2).
+METRIC_SCHEMA_VERSION = "baseline-metrics-v1"
+
 
 # --------------------------------------------------------------------------- #
 # Data classes
@@ -744,6 +747,130 @@ class BaselineRunner:
         return hashlib.sha256(raw.encode()).hexdigest()
 
     # ------------------------------------------------------------------ #
+    # Git-state helpers (P0-10 / P0-11)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _get_git_state() -> dict[str, Any]:
+        """Return ``{git_commit, git_dirty}`` from the working tree."""
+        git_commit = ""
+        git_dirty = False
+        try:
+            import subprocess
+            git_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            status = subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            git_dirty = bool(status)
+        except Exception:
+            pass
+        return {"git_commit": git_commit, "git_dirty": git_dirty}
+
+    def require_clean_git(self) -> dict[str, Any]:
+        """Abort if the Git tree is dirty (P0-10).
+
+        For a full research baseline the tree must be clean and the
+        commit SHA must be non-empty.
+
+        Returns
+        -------
+        dict
+            ``{git_commit, git_dirty}``.
+
+        Raises
+        ------
+        RuntimeError
+            If the tree is dirty or the commit SHA is empty.
+        """
+        state = self._get_git_state()
+        if not state["git_commit"]:
+            raise RuntimeError(
+                "Cannot determine Git commit SHA.  "
+                "Full research baseline requires a Git repository."
+            )
+        if state["git_dirty"]:
+            raise RuntimeError(
+                "Git tree is dirty.  Full research baseline requires "
+                "a clean working tree (git_dirty == false)."
+            )
+        log.info("Git state clean: %s", state["git_commit"][:12])
+        return state
+
+    # ------------------------------------------------------------------ #
+    # Fingerprint validation (P1-9)
+    # ------------------------------------------------------------------ #
+
+    def validate_fingerprint(self) -> dict[str, Any]:
+        """Validate the model fingerprint before inference (P1-9).
+
+        Requires:
+
+        - Model revision matches the config revision.
+        - Fingerprint is non-empty.
+        - Model-config SHA is non-empty.
+        - Processor / tokenizer fingerprint fields are available.
+
+        Returns
+        -------
+        dict
+            Validation details.
+
+        Raises
+        ------
+        RuntimeError
+            If any check fails.
+        """
+        checks: dict[str, Any] = {}
+        passed = True
+
+        # -- revision match ----------------------------------------------
+        backend_rev = self._fingerprint.get("model_revision", "")
+        config_rev = self.model_config.revision or ""
+        rev_match = (
+            backend_rev == config_rev
+            if backend_rev and config_rev
+            else True  # backend may not report revision
+        )
+        checks["revision_match"] = rev_match
+        checks["backend_revision"] = backend_rev
+        checks["config_revision"] = config_rev
+        if not rev_match:
+            passed = False
+
+        # -- fingerprint non-empty ---------------------------------------
+        fp_ok = self._fingerprint_id and self._fingerprint_id != "unknown"
+        checks["fingerprint_non_empty"] = fp_ok
+        checks["fingerprint_id"] = self._fingerprint_id
+        if not fp_ok:
+            passed = False
+
+        # -- model config SHA non-empty ----------------------------------
+        sha_ok = bool(self._model_config_sha)
+        checks["model_config_sha_non_empty"] = sha_ok
+        if not sha_ok:
+            passed = False
+
+        # -- processor / tokenizer fields --------------------------------
+        has_processor = any(
+            k in self._fingerprint
+            for k in ("processor_hash", "tokenizer_hash", "tokenizer_name")
+        )
+        checks["processor_tokenizer_available"] = has_processor
+        if not has_processor:
+            passed = False
+
+        if not passed:
+            raise RuntimeError(
+                f"Fingerprint validation failed: {checks}"
+            )
+        log.info("Fingerprint validation passed: %s", self._fingerprint_id)
+        return checks
+
+    # ------------------------------------------------------------------ #
     # Cache / resume
     # ------------------------------------------------------------------ #
 
@@ -812,19 +939,30 @@ class BaselineRunner:
         current_config_sha: str,
         current_fp: str,
     ) -> bool:
-        """Return True if a cached row's immutable provenance matches."""
-        if row.route_probe_sha256 and row.route_probe_sha256 != current_route_sha:
-            return False
-        if row.model_config_sha256 and row.model_config_sha256 != current_config_sha:
-            return False
-        if row.model_fingerprint and row.model_fingerprint != current_fp:
-            return False
-        if row.scoring_version and row.scoring_version != SCORING_VERSION:
-            return False
-        return not (
-            row.candidate_protocol_version
-            and row.candidate_protocol_version != CANDIDATE_PROTOCOL_VERSION
+        """Return True if a cached row's immutable provenance matches.
+
+        Rows with missing provenance fields are rejected (P1-3).
+        """
+        # P1-3: reject rows with missing provenance fields.
+        required = (
+            row.cache_key,
+            row.route_probe_sha256,
+            row.model_config_sha256,
+            row.model_fingerprint,
+            row.scoring_version,
+            row.candidate_protocol_version,
         )
+        if not all(required):
+            return False
+        if row.route_probe_sha256 != current_route_sha:
+            return False
+        if row.model_config_sha256 != current_config_sha:
+            return False
+        if row.model_fingerprint != current_fp:
+            return False
+        if row.scoring_version != SCORING_VERSION:
+            return False
+        return row.candidate_protocol_version == CANDIDATE_PROTOCOL_VERSION
 
     def _route_probe_sha(self) -> str:
         """Return the route-probe SHA from the dataset manifest (or 'none')."""
@@ -1468,11 +1606,27 @@ class BaselineRunner:
         environment, results summary, and code provenance into a single
         manifest file.  Also computes SHA-256 of all output artifacts.
 
+        A clean Git tree is required (P0-11): a full baseline produced
+        from a dirty tree is never marked research-valid.
+
         Returns
         -------
         dict
             The manifest dictionary.
         """
+        # P0-11: clean-tree check before writing the manifest.
+        git_state = self._get_git_state()
+        if git_state["git_dirty"]:
+            raise RuntimeError(
+                "Git tree is dirty.  Refusing to write a research "
+                "baseline manifest from a dirty tree."
+            )
+        if not git_state["git_commit"]:
+            raise RuntimeError(
+                "Cannot determine Git commit SHA.  Refusing to write "
+                "a research baseline manifest outside a Git repository."
+            )
+
         results_path = self.output_dir / "baseline_results.jsonl"
         summary_path = self.output_dir / "baseline_summary.json"
         validation_report_path = self.output_dir / "validation_report.json"
@@ -1498,29 +1652,43 @@ class BaselineRunner:
             with open(summary_path) as f:
                 summary_data = json.load(f)
 
-        # Git provenance.
-        git_commit = ""
-        git_dirty = False
-        try:
-            import subprocess
-            git_commit = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
-            status = subprocess.check_output(
-                ["git", "status", "--porcelain"],
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
-            git_dirty = bool(status)
-        except Exception:
-            pass
+        # Git provenance (refactored via _get_git_state helper).
+        git_commit = git_state["git_commit"]
+        git_dirty = git_state["git_dirty"]
 
-        # Dataset manifest provenance (P1-3).
+        # Dataset provenance (P1-8: full freeze chain).
         dataset_version = ""
         dataset_manifest_sha = ""
-        if self._dataset_manifest:
-            dataset_version = self._dataset_manifest.get("dataset_version", "")
+        if self._freeze_verification:
+            dataset_version = self._freeze_verification.get(
+                "dataset_version", ""
+            )
+            dataset_manifest_sha = self._freeze_verification.get(
+                "dataset_manifest_sha256", ""
+            )
+        if not dataset_manifest_sha and self.dataset_manifest_path:
             dataset_manifest_sha = _sha256_file(self.dataset_manifest_path)
+        if not dataset_version and self._dataset_manifest:
+            dataset_version = self._dataset_manifest.get("dataset_version", "")
+
+        # Freeze-verification SHA (P1-8).
+        freeze_verification_sha = ""
+        if self.freeze_verification_path:
+            freeze_verification_sha = _sha256_file(
+                self.freeze_verification_path
+            )
+
+        # Route-probe SHA from freeze verification or manifest.
+        route_probe_sha = ""
+        route_probe_count = len(self.probes)
+        if self._freeze_verification:
+            route_probe_sha = self._freeze_verification.get(
+                "route_probe_sha256", ""
+            )
+        if not route_probe_sha:
+            route_probe_sha = self._route_probe_sha()
+            if route_probe_sha == "none":
+                route_probe_sha = ""
 
         # Runtime library versions (P1-3).
         torch_version = ""
@@ -1553,21 +1721,34 @@ class BaselineRunner:
             "scoring_version": SCORING_VERSION,
             "thinking_mode": "disabled",
             "decision_rule": "p_yes_geq_0.5",
-            "signed_margin_definition": "logp_yes_minus_logp_no",
+            "raw_log_margin_definition": "logp_yes_minus_logp_no",
+            "signed_answer_margin_definition": (
+                "raw_log_margin_if_target_yes_else_negated_raw_log_margin"
+            ),
+            "signed_answer_margin_interpretation": "higher_is_better",
         }
 
         manifest: dict[str, Any] = {
-            "schema_version": "1.1",
+            "schema_version": "1.2",
+            "metric_schema_version": METRIC_SCHEMA_VERSION,
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "dataset_provenance": {
                 "probe_file": str(self.probe_path),
                 "probe_file_sha256": _sha256_file(self.probe_path),
                 "probe_count": len(self.probes),
                 "dataset_manifest": (
-                    str(self.dataset_manifest_path) if self.dataset_manifest_path else None
+                    str(self.dataset_manifest_path)
+                    if self.dataset_manifest_path else None
                 ),
                 "dataset_version": dataset_version,
                 "dataset_manifest_sha256": dataset_manifest_sha,
+                "freeze_verification": (
+                    str(self.freeze_verification_path)
+                    if self.freeze_verification_path else None
+                ),
+                "freeze_verification_sha256": freeze_verification_sha,
+                "route_probe_sha256": route_probe_sha,
+                "route_probe_count": route_probe_count,
             },
             "model_identity": {
                 "model_id": self.model_config.model_id,

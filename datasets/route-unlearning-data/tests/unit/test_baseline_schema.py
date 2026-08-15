@@ -1012,6 +1012,19 @@ class TestValidateResults:
 class TestBaselineManifest:
     """Verify baseline_manifest.json generation (Commit C)."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_clean_git(self):
+        """Patch _get_git_state to simulate a clean Git tree."""
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {
+                "git_commit": "a" * 40,
+                "git_dirty": False,
+            }),
+        ):
+            yield
+
     def test_manifest_written(self, runner: BaselineRunner):
         runner.run_all()
         runner.save_results()
@@ -1217,6 +1230,19 @@ class TestSpyCallPaths:
 
 class TestCommit5MetadataEnrichment:
     """Verify Commit 5 metadata enrichment (P1-1 through P1-6)."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_clean_git(self):
+        """Patch _get_git_state to simulate a clean Git tree."""
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {
+                "git_commit": "a" * 40,
+                "git_dirty": False,
+            }),
+        ):
+            yield
 
     def test_protocol_role_field_exists(self):
         """P1-2: BaselineResult has protocol_role field."""
@@ -1866,3 +1892,218 @@ class TestProtocolRolePopulation:
         assert ppr["exclude"]["n"] == 0
         assert ppr["train"]["n"] == 0
         assert ppr["eval"]["n"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# Commit C — Research freeze hardening tests
+# --------------------------------------------------------------------------- #
+
+
+class TestRequireCleanGit:
+    """P0-10: require_clean_git() enforces clean Git tree."""
+
+    def test_clean_tree_returns_state(self, runner):
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "b" * 40, "git_dirty": False}),
+        ):
+            state = runner.require_clean_git()
+        assert state["git_commit"] == "b" * 40
+        assert state["git_dirty"] is False
+
+    def test_dirty_tree_raises(self, runner):
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "c" * 40, "git_dirty": True}),
+        ):
+            with pytest.raises(RuntimeError, match="Git tree is dirty"):
+                runner.require_clean_git()
+
+    def test_no_git_commit_raises(self, runner):
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "", "git_dirty": False}),
+        ):
+            with pytest.raises(RuntimeError, match="Cannot determine Git commit"):
+                runner.require_clean_git()
+
+
+class TestManifestDirtyTree:
+    """P0-11: generate_baseline_manifest() refuses dirty tree."""
+
+    def test_dirty_tree_raises(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "d" * 40, "git_dirty": True}),
+        ):
+            with pytest.raises(RuntimeError, match="Git tree is dirty"):
+                runner.generate_baseline_manifest()
+
+    def test_no_git_commit_raises(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "", "git_dirty": False}),
+        ):
+            with pytest.raises(RuntimeError, match="Cannot determine Git commit"):
+                runner.generate_baseline_manifest()
+
+
+class TestScoringProvenanceP11:
+    """P1-1: Signed-margin provenance fields in manifest."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_clean_git(self):
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "a" * 40, "git_dirty": False}),
+        ):
+            yield
+
+    def test_raw_log_margin_definition(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        sc = manifest["scoring_config"]
+        assert sc["raw_log_margin_definition"] == "logp_yes_minus_logp_no"
+
+    def test_signed_answer_margin_definition(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        sc = manifest["scoring_config"]
+        assert "signed_answer_margin_definition" in sc
+        assert "signed_answer_margin_interpretation" in sc
+        assert sc["signed_answer_margin_interpretation"] == "higher_is_better"
+
+
+class TestMetricSchemaVersion:
+    """P1-2: metric_schema_version in manifest."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_clean_git(self):
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "a" * 40, "git_dirty": False}),
+        ):
+            yield
+
+    def test_schema_version_is_1_2(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        assert manifest["schema_version"] == "1.2"
+
+    def test_metric_schema_version_present(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        assert manifest["metric_schema_version"] == "baseline-metrics-v1"
+
+
+class TestFreezeProvenanceInManifest:
+    """P1-8: Freeze verification SHA and route probe SHA in manifest."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_clean_git(self):
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "a" * 40, "git_dirty": False}),
+        ):
+            yield
+
+    def test_route_probe_sha256_in_provenance(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        dp = manifest["dataset_provenance"]
+        assert "route_probe_sha256" in dp
+
+    def test_route_probe_count_in_provenance(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        dp = manifest["dataset_provenance"]
+        assert "route_probe_count" in dp
+        assert dp["route_probe_count"] == 10
+
+    def test_freeze_verification_sha256_present(self, runner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        dp = manifest["dataset_provenance"]
+        assert "freeze_verification_sha256" in dp
+
+
+class TestValidateFingerprint:
+    """P1-9: validate_fingerprint() before inference."""
+
+    def test_valid_fingerprint_passes(self, runner):
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "model_revision": "abc123",
+            "processor_hash": "abc123",
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+        checks = runner.validate_fingerprint()
+        assert checks["revision_match"] is True
+        assert checks["fingerprint_non_empty"] is True
+        assert checks["model_config_sha_non_empty"] is True
+        assert checks["processor_tokenizer_available"] is True
+
+    def test_revision_mismatch_raises(self, runner):
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "model_revision": "rev999",
+            "processor_hash": "abc123",
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+        # model_config.revision is "abc123" from the fixture
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()
+
+    def test_unknown_fingerprint_raises(self, runner):
+        runner._fingerprint = {"processor_hash": "abc123"}
+        runner._fingerprint_id = "unknown"
+        runner._model_config_sha = "x" * 64
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()
+
+    def test_empty_model_config_sha_raises(self, runner):
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "processor_hash": "abc123",
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = ""
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()
+
+    def test_no_processor_tokenizer_raises(self, runner):
+        runner._fingerprint = {"fingerprint_id": "test-model-v1"}
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()

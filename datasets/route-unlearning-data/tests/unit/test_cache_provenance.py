@@ -262,8 +262,8 @@ class TestCacheRowCompatibility:
             row, "route_sha_A", "config_sha_A", "fp_A",
         )
 
-    def test_empty_provenance_fields_accepted(self):
-        """Legacy rows with empty provenance are accepted (backward compat)."""
+    def test_empty_provenance_fields_rejected(self):
+        """P1-3: Legacy rows with empty provenance are rejected."""
         runner = _make_runner()
         row = _make_result(
             route_sha="",
@@ -272,7 +272,7 @@ class TestCacheRowCompatibility:
             scoring_version="",
             candidate_protocol_version="",
         )
-        assert runner._cache_row_compatible(
+        assert not runner._cache_row_compatible(
             row, "route_sha_A", "config_sha_A", "fp_A",
         )
 
