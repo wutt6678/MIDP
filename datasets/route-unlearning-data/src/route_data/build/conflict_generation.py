@@ -1016,12 +1016,19 @@ def assign_balanced_route_attributes(
     # Stage 1: seed at least 1 positive + 1 negative per attribute.
     for attr in experiment_attrs:
         if eligible_pos[attr] and eligible_neg[attr]:
-            pos_id = eligible_pos[attr][0]
-            if pos_id not in assignment:
+            # P1-1: skip candidates already assigned to an earlier attribute.
+            pos_id = next(
+                (iid for iid in eligible_pos[attr] if iid not in assignment),
+                None,
+            )
+            if pos_id is not None:
                 assignment[pos_id] = attr
                 attr_counts[attr] += 1
-            neg_id = eligible_neg[attr][0]
-            if neg_id not in assignment:
+            neg_id = next(
+                (iid for iid in eligible_neg[attr] if iid not in assignment),
+                None,
+            )
+            if neg_id is not None:
                 assignment[neg_id] = attr
                 attr_counts[attr] += 1
 

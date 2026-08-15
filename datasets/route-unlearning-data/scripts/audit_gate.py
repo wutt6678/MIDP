@@ -23,12 +23,22 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
+
+
+def _sha256_file(path: Path) -> str:
+    """SHA-256 hex digest of a file's bytes."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _load_data_config(dataset: str) -> dict:
@@ -734,12 +744,17 @@ def _persist_audit_report(
     output_dir: Path | None,
     items: list[dict],
     failures: list[str],
+    route_probe_sha: str | None = None,
+    route_probe_count: int | None = None,
 ) -> Path | None:
     """P2-9/P2-10: write ``<dataset>_manual_audit_report.json``.
 
     The report version is ``v1``.  All items default to ``review_outcome='unreviewed'``;
     the gate passes only when there are zero unreviewed items and zero critical
     failures (P2-9).  Schema validation is performed before persisting (P2-10).
+
+    P0-13: *route_probe_sha* and *route_probe_count* are recorded so the
+    audit is cryptographically bound to the exact route artifact.
     """
     if output_dir is None:
         return None
@@ -766,6 +781,12 @@ def _persist_audit_report(
             "pair": sum(1 for it in items if it["category"] == "pair"),
         },
     }
+
+    # P0-13: bind audit to exact route artifact.
+    if route_probe_sha is not None:
+        report["audited_route_probe_sha256"] = route_probe_sha
+    if route_probe_count is not None:
+        report["audited_route_probe_count"] = route_probe_count
 
     # P2-10: validate schema before persisting.
     schema_issues = _validate_audit_schema(report)
@@ -1031,11 +1052,30 @@ def run_full_audit(
     prov_errors = _check_provenance_frozen(dataset, config)
     failures.extend(prov_errors)
 
+    # P0-13: resolve route probe artifact and compute SHA binding.
+    route_probe_path = _resolve_artifact_path(
+        output_dir, dataset, "route_probes", "route_probes.jsonl",
+    )
+    route_probe_sha: str | None = None
+    route_probe_count: int | None = None
+    if route_probe_path and route_probe_path.exists():
+        route_probe_sha = _sha256_file(route_probe_path)
+        with open(route_probe_path) as _fh:
+            route_probe_count = sum(1 for ln in _fh if ln.strip())
+        print(f"\nP0-13: route probe SHA-256 = {route_probe_sha}")
+        print(f"P0-13: route probe count = {route_probe_count}")
+    else:
+        print("\nP0-13: WARNING — route probe artifact not found, cannot bind SHA")
+
     # Build structured audit items and persist report.
     audit_items = _build_audit_items(
         source_mappings, pos_labels, neg_labels, probes, pairs, facts, failures,
     )
-    _persist_audit_report(dataset, output_dir, audit_items, failures)
+    _persist_audit_report(
+        dataset, output_dir, audit_items, failures,
+        route_probe_sha=route_probe_sha,
+        route_probe_count=route_probe_count,
+    )
 
     # Gate requires zero failures, zero unreviewed, zero critical.
     unreviewed_count = sum(1 for it in audit_items if it["review_outcome"] == "unreviewed")

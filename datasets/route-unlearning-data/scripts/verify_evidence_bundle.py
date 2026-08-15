@@ -931,6 +931,35 @@ def verify() -> int:
             else:
                 fail(g, "manual audit SHA-256 mismatch")
 
+        # P0-14: audit route SHA must match current route artifact.
+        audited_route_sha = audit.get("audited_route_probe_sha256")
+        if audited_route_sha:
+            ok(g, "audited_route_probe_sha256 present in audit report")
+            if route_path.exists():
+                current_route_sha = _sha256_file(route_path)
+                if audited_route_sha == current_route_sha:
+                    ok(g, f"audit route SHA matches current route artifact ({current_route_sha[:16]}…)")
+                else:
+                    fail(g, f"audit route SHA MISMATCH: audit={audited_route_sha[:16]}… current={current_route_sha[:16]}…")
+            else:
+                fail(g, "route artifact missing, cannot verify audit route SHA")
+        else:
+            fail(g, "audited_route_probe_sha256 MISSING from audit report (P0-13 not applied)")
+
+        # P0-15: audit route probe count must match actual count.
+        audited_route_count = audit.get("audited_route_probe_count")
+        if audited_route_count is not None:
+            if route_path.exists():
+                actual_route_count = _count_jsonl(route_path)
+                if audited_route_count == actual_route_count:
+                    ok(g, f"audit route probe count matches actual ({actual_route_count})")
+                else:
+                    fail(g, f"audit route probe count MISMATCH: audit={audited_route_count} actual={actual_route_count}")
+            else:
+                fail(g, "route artifact missing, cannot verify audit route count")
+        else:
+            fail(g, "audited_route_probe_count MISSING from audit report")
+
     # ==================================================================
     # REPORT
     # ==================================================================

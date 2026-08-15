@@ -263,3 +263,37 @@ class TestBalancedRouteAttributeAssignment:
             assert attr in eligible[iid], (
                 f"{iid} assigned to {attr} but is not eligible"
             )
+
+    def test_overlapping_pool_first_candidate_taken(self):
+        """P1-1: when attribute A consumes the first positive identity
+        shared with attribute B, attribute B must still receive a
+        positive seed from its next available candidate.
+
+        Setup:
+          id_001 has Bald=True AND Eyeglasses=True  (shared candidate)
+          id_002 has Bald=False                      (Bald negative)
+          id_003 has Eyeglasses=True                 (Eyeglasses positive backup)
+          id_004 has Eyeglasses=False                (Eyeglasses negative)
+
+        Bald is processed first (alphabetical).  It takes id_001 as
+        positive seed.  When Eyeglasses is processed, id_001 is already
+        assigned, so the helper must fall through to id_003.
+        """
+        eligible = {
+            "id_001": {"Bald": True, "Eyeglasses": True},
+            "id_002": {"Bald": False},
+            "id_003": {"Eyeglasses": True},
+            "id_004": {"Eyeglasses": False},
+        }
+        assignment, stats = assign_balanced_route_attributes(
+            eligible, {"Bald", "Eyeglasses"}, target_quota=10,
+        )
+        # Both attributes must have both states seeded.
+        assert stats["Bald"]["positive"] >= 1
+        assert stats["Bald"]["negative"] >= 1
+        assert stats["Eyeglasses"]["positive"] >= 1
+        assert stats["Eyeglasses"]["negative"] >= 1
+        # id_003 must be assigned to Eyeglasses (the fallback positive).
+        assert assignment.get("id_003") == "Eyeglasses"
+        # id_001 must be assigned to Bald (first alphabetically).
+        assert assignment.get("id_001") == "Bald"

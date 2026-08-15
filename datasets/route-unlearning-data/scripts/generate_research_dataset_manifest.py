@@ -210,6 +210,10 @@ def generate(output_dir: Path, allow_dirty: bool = False) -> dict:
     audit_unreviewed = audit_data.get("unreviewed_items", audit_data.get("unreviewed", 0))
     audit_gate_pass = audit_data.get("gate_pass", False)
 
+    # P0-16: extract route SHA binding from audit report.
+    audited_route_sha = audit_data.get("audited_route_probe_sha256")
+    audited_route_count = audit_data.get("audited_route_probe_count")
+
     # --- Attribute distribution ------------------------------------------ #
     attr_dist_path = evidence_dir / "attribute_distribution_report.json"
     attr_dist_data = _load_json(attr_dist_path)
@@ -253,6 +257,15 @@ def generate(output_dir: Path, allow_dirty: bool = False) -> dict:
     checks["manual_audit_no_fail"] = audit_fail == 0
     checks["manual_audit_no_uncertain"] = audit_uncertain == 0
     checks["manual_audit_no_unreviewed"] = audit_unreviewed == 0
+    # P0-17: hard stop for audit/route SHA mismatch.
+    checks["manual_audit_matches_current_route_artifact"] = (
+        audited_route_sha is not None
+        and audited_route_sha == route_sha
+    )
+    checks["manual_audit_route_count_matches"] = (
+        audited_route_count is not None
+        and audited_route_count == route_total
+    )
     checks["non_whitelisted_accepted_zero"] = (
         annotation_summary.get(
             "non_whitelisted_accepted_labels_processed", -1,
@@ -449,6 +462,8 @@ def generate(output_dir: Path, allow_dirty: bool = False) -> dict:
                 "uncertain": audit_uncertain,
                 "unreviewed": audit_unreviewed,
                 "gate_pass": audit_gate_pass,
+                "audited_route_probe_sha256": audited_route_sha,
+                "audited_route_probe_count": audited_route_count,
             },
             "attribute_distribution": {
                 "path": str(
