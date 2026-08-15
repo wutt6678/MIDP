@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 import math
-import tempfile
 from dataclasses import asdict
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -144,8 +144,7 @@ def probe_jsonl(tmp_path: Path) -> Path:
     """Write the 5 test probes to a temporary JSONL file."""
     path = tmp_path / "test_probes.jsonl"
     with open(path, "w") as f:
-        for p in _PROBES_RAW:
-            f.write(json.dumps(p) + "\n")
+        f.writelines(json.dumps(p) + "\n" for p in _PROBES_RAW)
     return path
 
 
@@ -219,7 +218,7 @@ class TestBaselineProbeSchema:
 class TestBaselineResultSchema:
     """Verify the result dataclass has all required fields."""
 
-    REQUIRED_FIELDS = {
+    REQUIRED_FIELDS: ClassVar[frozenset[str]] = frozenset({
         "probe_id",
         "sample_id",
         "identity_id",
@@ -235,7 +234,7 @@ class TestBaselineResultSchema:
         "scoring_version",
         "prompt_hash",
         "latency_ms",
-    }
+    })
 
     def test_all_required_fields_present(self):
         result = BaselineResult(
@@ -818,7 +817,7 @@ class TestBaselineManifest:
         runner.run_all()
         runner.save_results()
         runner.generate_summary()
-        manifest = runner.generate_baseline_manifest()
+        runner.generate_baseline_manifest()
         manifest_path = runner.output_dir / "baseline_manifest.json"
         assert manifest_path.is_file()
 
@@ -919,7 +918,7 @@ class TestSpyCallPaths:
 
     def test_image_probe_calls_score_candidates(self, runner: BaselineRunner):
         """Image-bearing probes should call score_candidates."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         probe = BaselineProbe(
             probe_id="spy_img",

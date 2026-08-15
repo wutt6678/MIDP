@@ -18,12 +18,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import math
 import os
 import platform
 import re
 import string
-import sys
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -598,8 +596,7 @@ class BaselineRunner:
         path = self.output_dir / "baseline_results.jsonl"
         rows = [asdict(r) for r in self._results]
         with open(path, "w") as f:
-            for row in rows:
-                f.write(json.dumps(row, default=str) + "\n")
+            f.writelines(json.dumps(row, default=str) + "\n" for row in rows)
         log.info("Wrote %d results to %s", len(rows), path)
         return path
 
