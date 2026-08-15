@@ -18,11 +18,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import platform
 import re
 import string
 import time
+from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -767,23 +769,27 @@ class BaselineRunner:
     # Validation & manifest generation
     # ------------------------------------------------------------------ #
 
-    def validate_results(
-        self,
-        expected_probe_count: int | None = None,
-    ) -> dict[str, Any]:
-        """Strict completeness validator for baseline results.
+    def validate_results(self) -> dict[str, Any]:
+        """Strict P0-4 baseline validation for research-grade results.
 
-        Checks:
-        - All probes have been scored (count matches expected or total probes).
-        - No errors in any result.
-        - All five probe families are represented.
-        - Every result has a valid scoring_version and prompt_hash.
+        Performs eight checks:
 
-        Parameters
-        ----------
-        expected_probe_count:
-            If given, assert that exactly this many results exist.  When
-            *None*, the check is against ``len(self.probes)``.
+        1. **exact_probe_id_set** — result probe IDs match source probes
+           exactly (no duplicates, no missing, no unexpected).
+        2. **family_counts_match** — per-family result counts match the
+           source probe artifact exactly.
+        3. **binary_scores_complete** — every image-family result has finite
+           log-probabilities, p_yes in [0, 1], finite margins, valid
+           predicted_label and correct fields.
+        4. **name_only_scores_complete** — every name_only result has
+           non-empty generated/parsed answers, non-null text-match metrics,
+           and non-null target_fact_id.
+        5. **source_metadata_match** — every result's carried-through probe
+           metadata matches the source probe exactly.
+        6. **run_provenance_consistent** — all results share exactly one
+           unique value for model revision, fingerprint, config SHA,
+           route SHA, scoring version, and candidate protocol version.
+        7. **zero_inference_errors** — no result row has an error.
 
         Returns
         -------
@@ -796,58 +802,179 @@ class BaselineRunner:
             If any check fails.
         """
         results = self._results
+        probes_by_id: dict[str, BaselineProbe] = {
+            p.probe_id: p for p in self.probes
+        }
         checks: dict[str, Any] = {}
         passed = True
 
-        # 1. Probe count check
-        expected = expected_probe_count if expected_probe_count is not None else len(self.probes)
-        actual = len(results)
-        count_ok = actual == expected
-        checks["probe_count"] = {
-            "expected": expected,
-            "actual": actual,
-            "pass": count_ok,
-        }
-        if not count_ok:
-            passed = False
+        def _record(name: str, ok: bool, **details: Any) -> None:
+            nonlocal passed
+            checks[name] = {"pass": ok, **details}
+            if not ok:
+                passed = False
 
-        # 2. No errors
+        # -- 4.1  Exact probe-ID equality --------------------------------
+        expected_ids = {p.probe_id for p in self.probes}
+        actual_ids = [r.probe_id for r in results]
+        actual_id_set = set(actual_ids)
+        no_dupes = len(actual_ids) == len(actual_id_set)
+        id_set_match = actual_id_set == expected_ids
+        _record(
+            "exact_probe_id_set",
+            id_set_match and no_dupes,
+            expected_count=len(expected_ids),
+            actual_count=len(actual_ids),
+            unique_count=len(actual_id_set),
+            no_duplicates=no_dupes,
+            missing=sorted(expected_ids - actual_id_set),
+            unexpected=sorted(actual_id_set - expected_ids),
+        )
+
+        # -- 4.2  Exact family counts ------------------------------------
+        expected_family_counts = dict(Counter(p.probe_family for p in self.probes))
+        actual_family_counts = dict(Counter(r.probe_family for r in results))
+        family_ok = expected_family_counts == actual_family_counts
+        _record(
+            "family_counts_match",
+            family_ok,
+            expected=expected_family_counts,
+            actual=actual_family_counts,
+        )
+
+        # -- 4.3  Binary-family score completeness ------------------------
+        _BINARY_FIELDS = (
+            "logp_yes", "logp_no", "p_yes",
+            "raw_log_margin", "signed_answer_margin",
+        )
+        binary_failures: list[dict[str, Any]] = []
+        for r in results:
+            if r.probe_family not in _IMAGE_FAMILIES:
+                continue
+            issues: list[str] = []
+            if r.image_sha256 is None:
+                issues.append("image_sha256_null")
+            if r.answer_label is None:
+                issues.append("answer_label_null")
+            for fname in _BINARY_FIELDS:
+                val = getattr(r, fname)
+                if val is None:
+                    issues.append(f"{fname}_null")
+                elif not math.isfinite(val):
+                    issues.append(f"{fname}_non_finite")
+            if r.p_yes is not None and not (0.0 <= r.p_yes <= 1.0):
+                issues.append("p_yes_out_of_range")
+            if r.predicted_label not in ("Yes", "No"):
+                issues.append(f"predicted_label_invalid={r.predicted_label!r}")
+            if r.correct not in (True, False):
+                issues.append(f"correct_invalid={r.correct!r}")
+            if issues:
+                binary_failures.append({"probe_id": r.probe_id, "issues": issues})
+        _record(
+            "binary_scores_complete",
+            len(binary_failures) == 0,
+            failure_count=len(binary_failures),
+            failures=binary_failures[:10],
+        )
+
+        # -- 4.4  Name-only completeness ---------------------------------
+        _TEXT_METRIC_FIELDS = (
+            "exact_match", "normalized_exact_match",
+            "token_overlap", "fuzzy_match",
+        )
+        name_only_failures: list[dict[str, Any]] = []
+        for r in results:
+            if r.probe_family != "name_only":
+                continue
+            issues: list[str] = []
+            if not r.generated_answer:
+                issues.append("generated_answer_empty")
+            if not r.parsed_answer:
+                issues.append("parsed_answer_empty")
+            for fname in _TEXT_METRIC_FIELDS:
+                if getattr(r, fname) is None:
+                    issues.append(f"{fname}_null")
+            if r.target_fact_id is None:
+                issues.append("target_fact_id_null")
+            if not r.answer_text:
+                issues.append("answer_text_empty")
+            if issues:
+                name_only_failures.append({"probe_id": r.probe_id, "issues": issues})
+        _record(
+            "name_only_scores_complete",
+            len(name_only_failures) == 0,
+            failure_count=len(name_only_failures),
+            failures=name_only_failures[:10],
+        )
+
+        # -- 4.5  Result / source metadata consistency -------------------
+        _COMPARE_FIELDS = (
+            "sample_id", "identity_id", "probe_family",
+            "target_attribute", "answer_label", "answer_text",
+            "image_sha256", "registry_hash", "paired_sample_id",
+        )
+        _WRONG_NAME_EXTRA = (
+            "matched_wrong_identity_id",
+            "matching_similarity",
+            "matching_strategy",
+        )
+        metadata_mismatches: list[dict[str, Any]] = []
+        for r in results:
+            probe = probes_by_id.get(r.probe_id)
+            if probe is None:
+                continue
+            diffs: list[dict[str, Any]] = []
+            for fname in _COMPARE_FIELDS:
+                exp = getattr(probe, fname, None)
+                act = getattr(r, fname, None)
+                if exp != act:
+                    diffs.append({"field": fname, "expected": exp, "actual": act})
+            if r.probe_family == "wrong_name":
+                for fname in _WRONG_NAME_EXTRA:
+                    exp = getattr(probe, fname, None)
+                    act = getattr(r, fname, None)
+                    if exp != act:
+                        diffs.append({"field": fname, "expected": exp, "actual": act})
+            if diffs:
+                metadata_mismatches.append({"probe_id": r.probe_id, "mismatches": diffs})
+        _record(
+            "source_metadata_match",
+            len(metadata_mismatches) == 0,
+            mismatch_count=len(metadata_mismatches),
+            mismatches=metadata_mismatches[:10],
+        )
+
+        # -- 4.6  Run-wide provenance consistency ------------------------
+        _PROVENANCE_FIELDS = (
+            "model_revision", "model_fingerprint",
+            "model_config_sha256", "route_probe_sha256",
+            "scoring_version", "candidate_protocol_version",
+        )
+        provenance_issues: dict[str, Any] = {}
+        for fname in _PROVENANCE_FIELDS:
+            values = {getattr(r, fname) for r in results}
+            if len(values) != 1:
+                provenance_issues[fname] = {
+                    "unique_count": len(values),
+                    "values": sorted(str(v) for v in values),
+                }
+        _record(
+            "run_provenance_consistent",
+            len(provenance_issues) == 0,
+            issues=provenance_issues,
+        )
+
+        # -- 4.7  Zero inference errors ----------------------------------
         errors = [(r.probe_id, r.error) for r in results if r.error is not None]
-        no_errors = len(errors) == 0
-        checks["no_errors"] = {
-            "error_count": len(errors),
-            "errors": errors[:10],  # first 10 for diagnostics
-            "pass": no_errors,
-        }
-        if not no_errors:
-            passed = False
+        _record(
+            "zero_inference_errors",
+            len(errors) == 0,
+            error_count=len(errors),
+            errors=errors[:10],
+        )
 
-        # 3. All families covered
-        families_present = {r.probe_family for r in results}
-        families_ok = families_present == ALL_FAMILIES
-        checks["all_families"] = {
-            "expected": sorted(ALL_FAMILIES),
-            "actual": sorted(families_present),
-            "pass": families_ok,
-        }
-        if not families_ok:
-            passed = False
-
-        # 4. Provenance fields populated
-        missing_scoring = [r.probe_id for r in results if not r.scoring_version]
-        missing_prompt = [r.probe_id for r in results if not r.prompt_hash]
-        provenance_ok = len(missing_scoring) == 0 and len(missing_prompt) == 0
-        checks["provenance_populated"] = {
-            "missing_scoring_version": len(missing_scoring),
-            "missing_prompt_hash": len(missing_prompt),
-            "pass": provenance_ok,
-        }
-        if not provenance_ok:
-            passed = False
-
+        # -- 4.8  Write validation report --------------------------------
         report = {"pass": passed, "checks": checks}
-
-        # Write validation report
         self.output_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.output_dir / "validation_report.json"
         with open(report_path, "w") as f:

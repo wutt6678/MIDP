@@ -12,6 +12,7 @@ import math
 from dataclasses import asdict
 from pathlib import Path
 from typing import ClassVar
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -42,7 +43,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "visual",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/aaaa_dv.jpg",
         "image_sha256": "aaa111",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Bald",
@@ -63,7 +64,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "visual",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/aaaa_ipn.jpg",
         "image_sha256": "aaa111",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Bald",
@@ -81,7 +82,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "visual",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/aaaa_wn.jpg",
         "image_sha256": "aaa111",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Bald",
@@ -104,7 +105,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "conflict",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/aaaa_vtc.jpg",
         "image_sha256": "aaa111",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Bald",
@@ -148,7 +149,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "visual",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/bbbb_dv.jpg",
         "image_sha256": "bbb222",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Male",
@@ -169,7 +170,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "visual",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/bbbb_ipn.jpg",
         "image_sha256": "bbb222",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Male",
@@ -187,7 +188,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "visual",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/bbbb_wn.jpg",
         "image_sha256": "bbb222",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Male",
@@ -210,7 +211,7 @@ _PROBES_RAW: list[dict] = [
         "expected_evidence_source": "conflict",
         "paired_sample_id": None,
         "controlled_variables": ["image"],
-        "image_uri": None,
+        "image_uri": "/fake/bbbb_vtc.jpg",
         "image_sha256": "bbb222",
         "registry_hash": "28481d2ebb85a6fb",
         "target_attribute": "Male",
@@ -243,6 +244,16 @@ _PROBES_RAW: list[dict] = [
         "answer_text": "Bob Jones",
     },
 ]
+
+
+@pytest.fixture(autouse=True)
+def _mock_image_loading():
+    """Patch _load_image so stub tests never touch the filesystem."""
+    with patch(
+        "route_data.eval.baseline_runner._load_image",
+        return_value=MagicMock(),
+    ):
+        yield
 
 
 @pytest.fixture()
@@ -314,11 +325,10 @@ class TestBaselineProbeSchema:
         assert probe.image_sha256 is None
 
     def test_has_image_property(self):
-        assert BaselineProbe.from_dict(_PROBES_RAW[0]).has_image is False  # image_uri is None
-        # With a non-None image_uri
-        d = dict(_PROBES_RAW[0])
-        d["image_uri"] = "/some/path.jpg"
-        assert BaselineProbe.from_dict(d).has_image is True
+        # _PROBES_RAW[0] has image_uri set → has_image is True
+        assert BaselineProbe.from_dict(_PROBES_RAW[0]).has_image is True
+        # name_only probe has image_uri=None → has_image is False
+        assert BaselineProbe.from_dict(_PROBES_RAW[4]).has_image is False
 
 
 class TestBaselineResultSchema:
@@ -879,16 +889,26 @@ class TestStrongerFingerprint:
 
 
 class TestValidateResults:
-    """Verify the strict completeness validator (Commit C)."""
+    """Verify the P0-4 strict baseline validator (8 named checks)."""
+
+    _ALL_CHECK_NAMES: ClassVar[list[str]] = [
+        "exact_probe_id_set",
+        "family_counts_match",
+        "binary_scores_complete",
+        "name_only_scores_complete",
+        "source_metadata_match",
+        "run_provenance_consistent",
+        "zero_inference_errors",
+    ]
 
     def test_validate_passes_with_complete_results(self, runner: BaselineRunner):
         runner.run_all()
         report = runner.validate_results()
         assert report["pass"] is True
-        assert report["checks"]["probe_count"]["pass"] is True
-        assert report["checks"]["no_errors"]["pass"] is True
-        assert report["checks"]["all_families"]["pass"] is True
-        assert report["checks"]["provenance_populated"]["pass"] is True
+        for name in self._ALL_CHECK_NAMES:
+            assert report["checks"][name]["pass"] is True, (
+                f"check {name!r} should pass"
+            )
 
     def test_validate_writes_report(self, runner: BaselineRunner):
         runner.run_all()
@@ -898,22 +918,94 @@ class TestValidateResults:
         with open(report_path) as f:
             data = json.load(f)
         assert data["pass"] is True
-
-    def test_validate_fails_on_count_mismatch(self, runner: BaselineRunner):
-        runner.run_all()
-        with pytest.raises(RuntimeError, match="probe_count"):
-            runner.validate_results(expected_probe_count=999)
+        assert set(data["checks"].keys()) == set(self._ALL_CHECK_NAMES)
 
     def test_validate_fails_on_missing_results(self, runner: BaselineRunner):
-        # Don't run any probes — results list is empty
-        with pytest.raises(RuntimeError, match="probe_count"):
+        with pytest.raises(RuntimeError, match="exact_probe_id_set"):
             runner.validate_results()
 
-    def test_validate_custom_expected_count(self, runner: BaselineRunner):
+    def test_validate_fails_on_partial_results(self, runner: BaselineRunner):
+        """Running only a subset of probes fails the ID-set check."""
+        runner.run_all(limit=3)
+        with pytest.raises(RuntimeError, match="exact_probe_id_set"):
+            runner.validate_results()
+
+    def test_validate_fails_on_duplicate_probe_id(self, runner: BaselineRunner):
+        """Injecting a duplicate result fails the no-duplicates check."""
         runner.run_all()
-        # We have 10 probes, so expect 10
-        report = runner.validate_results(expected_probe_count=10)
-        assert report["pass"] is True
+        dup = runner._results[0]
+        runner._results.append(dup)
+        with pytest.raises(RuntimeError, match="exact_probe_id_set"):
+            runner.validate_results()
+
+    def test_validate_fails_on_metadata_corruption(self, runner: BaselineRunner):
+        """Corrupting a result's sample_id fails source_metadata_match."""
+        runner.run_all()
+        runner._results[0].sample_id = "CORRUPTED"
+        with pytest.raises(RuntimeError, match="source_metadata_match"):
+            runner.validate_results()
+
+    def test_validate_fails_on_error_row(self, runner: BaselineRunner):
+        """A result with an error fails zero_inference_errors."""
+        runner.run_all()
+        runner._results[0].error = "simulated failure"
+        with pytest.raises(RuntimeError, match="zero_inference_errors"):
+            runner.validate_results()
+
+    def test_validate_binary_scores_complete(self, runner: BaselineRunner):
+        runner.run_all()
+        report = runner.validate_results()
+        assert report["checks"]["binary_scores_complete"]["pass"] is True
+        assert report["checks"]["binary_scores_complete"]["failure_count"] == 0
+
+    def test_validate_name_only_scores_complete(self, runner: BaselineRunner):
+        runner.run_all()
+        report = runner.validate_results()
+        assert report["checks"]["name_only_scores_complete"]["pass"] is True
+        assert report["checks"]["name_only_scores_complete"]["failure_count"] == 0
+
+    def test_validate_family_counts_exact(self, runner: BaselineRunner):
+        """Family counts match the source probes exactly (2 per family)."""
+        runner.run_all()
+        report = runner.validate_results()
+        expected = {fam: 2 for fam in ALL_FAMILIES}
+        assert report["checks"]["family_counts_match"]["expected"] == expected
+        assert report["checks"]["family_counts_match"]["actual"] == expected
+
+    def test_validate_provenance_consistent(self, runner: BaselineRunner):
+        runner.run_all()
+        report = runner.validate_results()
+        assert report["checks"]["run_provenance_consistent"]["pass"] is True
+        assert report["checks"]["run_provenance_consistent"]["issues"] == {}
+
+    def test_validate_fails_on_provenance_mismatch(self, runner: BaselineRunner):
+        """Changing one result's model_revision breaks consistency."""
+        runner.run_all()
+        runner._results[0].model_revision = "DIFFERENT_REVISION"
+        with pytest.raises(RuntimeError, match="run_provenance_consistent"):
+            runner.validate_results()
+
+    def test_validate_binary_fails_on_null_logp(self, runner: BaselineRunner):
+        """A binary probe with null logp_yes fails binary_scores_complete."""
+        runner.run_all()
+        # Find a binary-family result and null out logp_yes
+        for r in runner._results:
+            if r.probe_family in {"direct_visual", "image_plus_name",
+                                  "wrong_name", "visual_text_conflict"}:
+                r.logp_yes = None
+                break
+        with pytest.raises(RuntimeError, match="binary_scores_complete"):
+            runner.validate_results()
+
+    def test_validate_name_only_fails_on_empty_answer(self, runner: BaselineRunner):
+        """A name_only probe with empty generated_answer fails."""
+        runner.run_all()
+        for r in runner._results:
+            if r.probe_family == "name_only":
+                r.generated_answer = ""
+                break
+        with pytest.raises(RuntimeError, match="name_only_scores_complete"):
+            runner.validate_results()
 
 
 class TestBaselineManifest:
