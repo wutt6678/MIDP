@@ -33,10 +33,10 @@ from .reports import (
 )
 
 __all__ = [
+    "CANDIDATES",
     "BaselineProbe",
     "BaselineResult",
     "BaselineRunner",
-    "CANDIDATES",
     "Calibrator",
     "CelebaRunner",
     "IsotonicCalibrator",
