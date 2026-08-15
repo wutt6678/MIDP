@@ -1,0 +1,29 @@
+{
+  "verification_version": "1.0",
+  "created_at": "2026-08-15T12:00:00Z",
+  "dataset_version": "fiubench-route-v1",
+  "dataset_manifest_sha256": "172eb141bf1e80b463bf433a7c1795c560be03facd72d27bcd05bfd5a75256ec",
+  "route_probe_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+  "manual_audit_sha256": "71243c76a7ef77f98f61c70d2beea19de7b7f9337df2e349b643b83ab9e16c4b",
+  "bundle_verifier_pass": true,
+  "bundle_verifier_checks": 133,
+  "strict_final_verify_pass": true,
+  "manual_audit_pass": true,
+  "manual_audit_gate": {
+    "critical_failures": 0,
+    "uncertain_items": 0,
+    "unreviewed_items": 0,
+    "gate_pass": true,
+    "audited_route_probe_count": 500
+  },
+  "exact_ci_commit": "34e2ca39667ceecba2c829b83f2106e6468ebcac",
+  "exact_ci_pass": true,
+  "ready_for_experiments": true,
+  "hard_stop_conditions": {
+    "manual_audit_matches_current_route_artifact": true,
+    "manual_audit_route_count_matches": true,
+    "all_artifact_hashes_verified": true,
+    "all_commits_reachable": true,
+    "git_dirty_false": true
+  }
+}
