@@ -4190,6 +4190,16 @@ def cmd_experiment_baseline(args) -> int:
     runner.run_all(limit=limit)
     runner.save_results()
     summary = runner.generate_summary()
+
+    # Validate and generate manifest for full (non-limited) runs.
+    if limit is None:
+        try:
+            runner.validate_results()
+        except RuntimeError as exc:
+            log.error("Validation failed: %s", exc)
+            return 1
+        runner.generate_baseline_manifest()
+
     _print_json(summary)
     return 0
 

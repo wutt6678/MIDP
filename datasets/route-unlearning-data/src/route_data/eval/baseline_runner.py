@@ -19,8 +19,11 @@ import hashlib
 import json
 import logging
 import math
+import os
+import platform
 import re
 import string
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -718,6 +721,193 @@ class BaselineRunner:
             json.dump(summary, f, indent=2, default=str)
         log.info("Summary written to %s", path)
         return summary
+
+    # ------------------------------------------------------------------ #
+    # Validation & manifest generation
+    # ------------------------------------------------------------------ #
+
+    def validate_results(
+        self,
+        expected_probe_count: int | None = None,
+    ) -> dict[str, Any]:
+        """Strict completeness validator for baseline results.
+
+        Checks:
+        - All probes have been scored (count matches expected or total probes).
+        - No errors in any result.
+        - All five probe families are represented.
+        - Every result has a valid scoring_version and prompt_hash.
+
+        Parameters
+        ----------
+        expected_probe_count:
+            If given, assert that exactly this many results exist.  When
+            *None*, the check is against ``len(self.probes)``.
+
+        Returns
+        -------
+        dict
+            Validation report with ``pass`` (bool) and ``checks`` (dict).
+
+        Raises
+        ------
+        RuntimeError
+            If any check fails.
+        """
+        results = self._results
+        checks: dict[str, Any] = {}
+        passed = True
+
+        # 1. Probe count check
+        expected = expected_probe_count if expected_probe_count is not None else len(self.probes)
+        actual = len(results)
+        count_ok = actual == expected
+        checks["probe_count"] = {
+            "expected": expected,
+            "actual": actual,
+            "pass": count_ok,
+        }
+        if not count_ok:
+            passed = False
+
+        # 2. No errors
+        errors = [(r.probe_id, r.error) for r in results if r.error is not None]
+        no_errors = len(errors) == 0
+        checks["no_errors"] = {
+            "error_count": len(errors),
+            "errors": errors[:10],  # first 10 for diagnostics
+            "pass": no_errors,
+        }
+        if not no_errors:
+            passed = False
+
+        # 3. All families covered
+        families_present = {r.probe_family for r in results}
+        families_ok = families_present == ALL_FAMILIES
+        checks["all_families"] = {
+            "expected": sorted(ALL_FAMILIES),
+            "actual": sorted(families_present),
+            "pass": families_ok,
+        }
+        if not families_ok:
+            passed = False
+
+        # 4. Provenance fields populated
+        missing_scoring = [r.probe_id for r in results if not r.scoring_version]
+        missing_prompt = [r.probe_id for r in results if not r.prompt_hash]
+        provenance_ok = len(missing_scoring) == 0 and len(missing_prompt) == 0
+        checks["provenance_populated"] = {
+            "missing_scoring_version": len(missing_scoring),
+            "missing_prompt_hash": len(missing_prompt),
+            "pass": provenance_ok,
+        }
+        if not provenance_ok:
+            passed = False
+
+        report = {"pass": passed, "checks": checks}
+
+        # Write validation report
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        report_path = self.output_dir / "validation_report.json"
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2, default=str)
+        log.info("Validation report written to %s (pass=%s)", report_path, passed)
+
+        if not passed:
+            failed = [k for k, v in checks.items() if not v["pass"]]
+            raise RuntimeError(
+                f"Baseline validation failed checks: {failed}"
+            )
+        return report
+
+    def generate_baseline_manifest(self) -> dict[str, Any]:
+        """Generate and write ``baseline_manifest.json``.
+
+        Freezes dataset provenance, model identity, scoring config, runtime
+        environment, results summary, and code provenance into a single
+        manifest file.  Also computes SHA-256 of the results JSONL.
+
+        Returns
+        -------
+        dict
+            The manifest dictionary.
+        """
+        results_path = self.output_dir / "baseline_results.jsonl"
+        summary_path = self.output_dir / "baseline_summary.json"
+
+        # Compute SHA-256 of results file
+        results_sha = ""
+        if results_path.is_file():
+            results_sha = _sha256_file(results_path)
+
+        # Load summary if available
+        summary_data: dict[str, Any] = {}
+        if summary_path.is_file():
+            with open(summary_path) as f:
+                summary_data = json.load(f)
+
+        # Git provenance
+        git_commit = ""
+        git_dirty = False
+        try:
+            import subprocess
+            git_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            status = subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            git_dirty = bool(status)
+        except Exception:
+            pass
+
+        manifest: dict[str, Any] = {
+            "schema_version": "1.0",
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "dataset_provenance": {
+                "probe_file": str(self.probe_path),
+                "probe_file_sha256": _sha256_file(self.probe_path),
+                "probe_count": len(self.probes),
+                "dataset_manifest": (
+                    str(self.dataset_manifest_path) if self.dataset_manifest_path else None
+                ),
+            },
+            "model_identity": {
+                "model_id": self.model_config.model_id,
+                "model_revision": self.model_config.revision,
+                "backend": self.model_config.backend,
+                "fingerprint_id": self._fingerprint_id,
+                "model_config_sha256": self._model_config_sha,
+            },
+            "scoring_config": {
+                "scoring_version": SCORING_VERSION,
+                "candidates": list(CANDIDATES),
+            },
+            "runtime_environment": {
+                "python_version": platform.python_version(),
+                "platform": platform.platform(),
+                "cwd": os.getcwd(),
+            },
+            "results": {
+                "results_file": str(results_path),
+                "results_sha256": results_sha,
+                "total_results": len(self._results),
+                "summary": summary_data,
+            },
+            "code_provenance": {
+                "git_commit": git_commit,
+                "git_dirty": git_dirty,
+            },
+        }
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = self.output_dir / "baseline_manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2, default=str)
+        log.info("Baseline manifest written to %s", manifest_path)
+        return manifest
 
     # ------------------------------------------------------------------ #
     # Internal cache I/O

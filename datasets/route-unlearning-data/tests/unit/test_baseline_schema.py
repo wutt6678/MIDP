@@ -769,3 +769,98 @@ class TestStrongerFingerprint:
         b1 = create_backend(stub_model_config)
         b2 = create_backend(cfg2)
         assert b1.fingerprint()["fingerprint_id"] != b2.fingerprint()["fingerprint_id"]
+
+
+class TestValidateResults:
+    """Verify the strict completeness validator (Commit C)."""
+
+    def test_validate_passes_with_complete_results(self, runner: BaselineRunner):
+        runner.run_all()
+        report = runner.validate_results()
+        assert report["pass"] is True
+        assert report["checks"]["probe_count"]["pass"] is True
+        assert report["checks"]["no_errors"]["pass"] is True
+        assert report["checks"]["all_families"]["pass"] is True
+        assert report["checks"]["provenance_populated"]["pass"] is True
+
+    def test_validate_writes_report(self, runner: BaselineRunner):
+        runner.run_all()
+        runner.validate_results()
+        report_path = runner.output_dir / "validation_report.json"
+        assert report_path.is_file()
+        with open(report_path) as f:
+            data = json.load(f)
+        assert data["pass"] is True
+
+    def test_validate_fails_on_count_mismatch(self, runner: BaselineRunner):
+        runner.run_all()
+        with pytest.raises(RuntimeError, match="probe_count"):
+            runner.validate_results(expected_probe_count=999)
+
+    def test_validate_fails_on_missing_results(self, runner: BaselineRunner):
+        # Don't run any probes — results list is empty
+        with pytest.raises(RuntimeError, match="probe_count"):
+            runner.validate_results()
+
+    def test_validate_custom_expected_count(self, runner: BaselineRunner):
+        runner.run_all()
+        # We have 5 probes, so expect 5
+        report = runner.validate_results(expected_probe_count=5)
+        assert report["pass"] is True
+
+
+class TestBaselineManifest:
+    """Verify baseline_manifest.json generation (Commit C)."""
+
+    def test_manifest_written(self, runner: BaselineRunner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        manifest_path = runner.output_dir / "baseline_manifest.json"
+        assert manifest_path.is_file()
+
+    def test_manifest_has_dataset_provenance(self, runner: BaselineRunner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        assert "dataset_provenance" in manifest
+        dp = manifest["dataset_provenance"]
+        assert "probe_file_sha256" in dp
+        assert dp["probe_count"] == 5
+
+    def test_manifest_has_model_identity(self, runner: BaselineRunner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        assert "model_identity" in manifest
+        mi = manifest["model_identity"]
+        assert "fingerprint_id" in mi
+        assert "model_config_sha256" in mi
+
+    def test_manifest_has_results_sha(self, runner: BaselineRunner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        assert "results" in manifest
+        assert manifest["results"]["results_sha256"] != ""
+        assert len(manifest["results"]["results_sha256"]) == 64
+
+    def test_manifest_has_runtime_environment(self, runner: BaselineRunner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        assert "runtime_environment" in manifest
+        assert "python_version" in manifest["runtime_environment"]
+
+    def test_manifest_has_scoring_config(self, runner: BaselineRunner):
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        assert "scoring_config" in manifest
+        assert manifest["scoring_config"]["scoring_version"] != ""
