@@ -243,6 +243,7 @@ class BaselineRunner:
         dataset_manifest_path: str | Path | None = None,
         model_config_path: str | Path | None = None,
         freeze_verification_path: str | Path | None = None,
+        processed_dataset_path: str | Path | None = None,
     ):
         self.backend = backend
         self.probe_path = Path(probe_path)
@@ -257,6 +258,9 @@ class BaselineRunner:
         )
         self.freeze_verification_path = (
             Path(freeze_verification_path) if freeze_verification_path else None
+        )
+        self.processed_dataset_path = (
+            Path(processed_dataset_path) if processed_dataset_path else None
         )
 
         self._fingerprint = backend.fingerprint()
@@ -277,6 +281,9 @@ class BaselineRunner:
         self._freeze_verification: dict[str, Any] | None = (
             self._load_freeze_verification() if self.freeze_verification_path else None
         )
+
+        # Build the identity → protocol-role map (P0-5 / P0-6).
+        self.identity_role_map: dict[str, str] = self._build_identity_role_map()
 
         self.probes: list[BaselineProbe] = self.load_probes()
         self._results: list[BaselineResult] = (
@@ -587,6 +594,113 @@ class BaselineRunner:
         return checks
 
     # ------------------------------------------------------------------ #
+    # Identity → protocol-role mapping (P0-5 / P0-6)
+    # ------------------------------------------------------------------ #
+
+    def _build_identity_role_map(self) -> dict[str, str]:
+        """Build a deterministic ``identity_id → protocol_role`` map.
+
+        The map is constructed by scanning the processed dataset JSONL
+        (``fiubench_processed.jsonl``) to extract each identity's
+        ``source_subject_id`` and ``official_memberships``, then resolving
+        the role via :func:`resolve_protocol_role` using the protocol
+        configuration from the dataset manifest.
+
+        Returns
+        -------
+        dict[str, str]
+            Mapping of ``identity_id`` to one of ``"train"``, ``"eval"``,
+            or ``"exclude"``.
+
+        Raises
+        ------
+        RuntimeError
+            If the processed dataset path is not provided or the protocol
+            configuration is unavailable.
+        """
+        if not self.processed_dataset_path:
+            log.warning(
+                "No processed_dataset_path provided; identity_role_map will "
+                "be empty.  Pass processed_dataset_path to enable "
+                "protocol-role population."
+            )
+            return {}
+
+        if not self.processed_dataset_path.is_file():
+            raise FileNotFoundError(
+                f"Processed dataset not found: {self.processed_dataset_path}"
+            )
+
+        # Extract the protocol config from the dataset manifest.
+        protocol = self._extract_protocol()
+        if protocol is None:
+            raise RuntimeError(
+                "Cannot build identity_role_map: no protocol configuration "
+                "available in the dataset manifest."
+            )
+
+        from ..data.split_mapping import resolve_protocol_role
+
+        # First pass: collect unique identity_id → (source_subject_id, memberships).
+        identity_info: dict[str, tuple[str | None, list[str]]] = {}
+        with open(self.processed_dataset_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                iid = row.get("identity_id", "")
+                if not iid or iid in identity_info:
+                    continue
+                smeta = row.get("source_metadata", {})
+                subject_id = smeta.get("source_subject_id")
+                memberships = smeta.get("official_memberships", [])
+                identity_info[iid] = (subject_id, memberships)
+
+        log.info(
+            "Extracted %d unique identities from processed dataset %s",
+            len(identity_info), self.processed_dataset_path,
+        )
+
+        # Second pass: resolve each identity's protocol role.
+        role_map: dict[str, str] = {}
+        for iid, (subject_id, memberships) in identity_info.items():
+            role = resolve_protocol_role(
+                memberships, protocol, source_subject_id=subject_id,
+            )
+            role_map[iid] = role
+
+        # Log role distribution.
+        role_counts: dict[str, int] = {}
+        for role in role_map.values():
+            role_counts[role] = role_counts.get(role, 0) + 1
+        log.info("Identity role distribution: %s", role_counts)
+
+        return role_map
+
+    def _extract_protocol(self) -> dict[str, Any] | None:
+        """Extract the protocol config dict from the dataset manifest.
+
+        Returns a dict suitable for :func:`resolve_protocol_role` with
+        keys ``forget_bucket``, ``train_bucket``, ``eval_bucket``,
+        ``eval_fraction``, ``eval_seed``.
+        """
+        if not self._dataset_manifest:
+            return None
+        proto_section = self._dataset_manifest.get("protocol")
+        if not proto_section:
+            return None
+        # The manifest may nest under "canonical_protocol".
+        canonical = proto_section.get("canonical_protocol", proto_section)
+        return {
+            "forget_bucket": canonical.get("forget_bucket"),
+            "train_bucket": canonical.get("train_bucket"),
+            "eval_bucket": canonical.get("eval_bucket"),
+            "eval_fraction": canonical.get("eval_fraction", 0.0),
+            "eval_seed": canonical.get("eval_seed", 0),
+        }
+
+    # ------------------------------------------------------------------ #
     # Manifest / config helpers
     # ------------------------------------------------------------------ #
 
@@ -808,6 +922,22 @@ class BaselineRunner:
 
         latency = (time.perf_counter() - started) * 1000.0
 
+        # Protocol role (P0-7).
+        if self.identity_role_map:
+            role = self.identity_role_map.get(probe.identity_id, "")
+            if not role:
+                raise RuntimeError(
+                    f"Identity {probe.identity_id} not found in "
+                    f"identity_role_map.  Cannot populate protocol_role."
+                )
+            if role not in ("train", "eval", "exclude"):
+                raise RuntimeError(
+                    f"Identity {probe.identity_id} has invalid role "
+                    f"{role!r}.  Expected one of: train, eval, exclude."
+                )
+        else:
+            role = ""
+
         return BaselineResult(
             # Probe identity
             probe_id=probe.probe_id,
@@ -862,6 +992,8 @@ class BaselineRunner:
             normalized_exact_match=normalized_exact_match,
             token_overlap=token_overlap_score,
             fuzzy_match=fuzzy_match,
+            # Protocol role (P0-7)
+            protocol_role=role,
             # Provenance
             scoring_version=SCORING_VERSION,
             prompt_hash=ph,
@@ -1033,11 +1165,22 @@ class BaselineRunner:
 
         total = len(results)
         total_correct = sum(1 for r in results if r.correct is True)
+
+        # Per-protocol-role counts (P0-9).
+        role_counts: dict[str, int] = {"train": 0, "eval": 0, "exclude": 0}
+        for r in results:
+            if r.protocol_role in role_counts:
+                role_counts[r.protocol_role] += 1
+        per_protocol_role: dict[str, Any] = {
+            role: {"n": count} for role, count in sorted(role_counts.items())
+        }
+
         summary: dict[str, Any] = {
             "total_probes": total,
             "total_correct": total_correct,
             "mixed_task_overall_accuracy": total_correct / total if total else None,
             "per_family": per_family,
+            "per_protocol_role": per_protocol_role,
             "model_fingerprint": self._fingerprint_id,
             "model_revision": self.model_config.revision,
             "scoring_version": SCORING_VERSION,
@@ -1057,7 +1200,7 @@ class BaselineRunner:
     def validate_results(self) -> dict[str, Any]:
         """Strict P0-4 baseline validation for research-grade results.
 
-        Performs eight checks:
+        Performs the following checks:
 
         1. **exact_probe_id_set** — result probe IDs match source probes
            exactly (no duplicates, no missing, no unexpected).
@@ -1075,6 +1218,9 @@ class BaselineRunner:
            unique value for model revision, fingerprint, config SHA,
            route SHA, scoring version, and candidate protocol version.
         7. **zero_inference_errors** — no result row has an error.
+        8. **protocol_role_complete** — every result has a valid protocol
+           role in {train, eval, exclude} and all probes for one identity
+           share the same role.
 
         Returns
         -------
@@ -1258,7 +1404,49 @@ class BaselineRunner:
             errors=errors[:10],
         )
 
-        # -- 4.8  Write validation report --------------------------------
+        # -- 4.8  Protocol-role completeness (P0-8) -----------------------
+        _VALID_ROLES = {"train", "eval", "exclude"}
+        role_issues: list[dict[str, Any]] = []
+        identity_roles: dict[str, set[str]] = {}
+        for r in results:
+            if r.protocol_role not in _VALID_ROLES:
+                role_issues.append({
+                    "probe_id": r.probe_id,
+                    "identity_id": r.identity_id,
+                    "role": r.protocol_role,
+                    "issue": "invalid_or_empty_role",
+                })
+            identity_roles.setdefault(r.identity_id, set()).add(r.protocol_role)
+        # Check identity-level consistency: all probes for one identity
+        # must share the same role.
+        inconsistent_identities: list[dict[str, Any]] = []
+        for iid, roles in sorted(identity_roles.items()):
+            if len(roles) > 1:
+                inconsistent_identities.append({
+                    "identity_id": iid,
+                    "roles": sorted(roles),
+                })
+        # Only enforce when the identity-role map was populated (i.e.
+        # processed_dataset_path was provided).  Without the map, roles
+        # are empty strings and the check is not applicable.
+        if self.identity_role_map:
+            _record(
+                "protocol_role_complete",
+                len(role_issues) == 0 and len(inconsistent_identities) == 0,
+                invalid_role_count=len(role_issues),
+                inconsistent_identity_count=len(inconsistent_identities),
+                invalid_roles=role_issues[:10],
+                inconsistent_identities=inconsistent_identities[:10],
+            )
+        else:
+            _record(
+                "protocol_role_complete",
+                True,
+                skipped=True,
+                reason="identity_role_map not populated",
+            )
+
+        # -- 4.9  Write validation report --------------------------------
         report = {"pass": passed, "checks": checks}
         self.output_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.output_dir / "validation_report.json"

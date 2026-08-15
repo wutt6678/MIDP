@@ -96,6 +96,9 @@ def _make_runner(
         runner._cache_dir = output_dir / ".cache"
         runner._model_config_sha = model_config_sha
         runner._dataset_manifest = None
+        runner.freeze_verification_path = None
+        runner.processed_dataset_path = None
+        runner.identity_role_map = {}
         runner.probes = []
         runner._results = []
 

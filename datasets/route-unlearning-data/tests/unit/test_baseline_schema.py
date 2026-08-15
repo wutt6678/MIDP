@@ -899,6 +899,7 @@ class TestValidateResults:
         "source_metadata_match",
         "run_provenance_consistent",
         "zero_inference_errors",
+        "protocol_role_complete",
     ]
 
     def test_validate_passes_with_complete_results(self, runner: BaselineRunner):
@@ -1494,3 +1495,374 @@ class TestFrozenEvidenceIntegration:
         freeze_sha = freeze["route_probe_sha256"]
         assert manifest_sha == freeze_sha
         assert len(manifest_sha) == 64  # SHA-256 hex digest length
+
+
+class TestProtocolRolePopulation:
+    """Verify protocol-role population (Commit B: P0-5 to P0-9).
+
+    Tests the identity-to-protocol-role mapping pipeline:
+    processed JSONL + manifest protocol config → identity_role_map →
+    BaselineResult.protocol_role → validation → summary counts.
+    """
+
+    # Protocol config matching the real frozen manifest.
+    _PROTO: ClassVar[dict] = {
+        "forget_bucket": "forget10",
+        "train_bucket": "retain15",
+        "eval_bucket": None,
+        "eval_fraction": 0.2,
+        "eval_seed": 17,
+    }
+
+    @staticmethod
+    def _find_holdout_id(target_role: str, seed: int = 17) -> str:
+        """Find a subject ID that hashes to *target_role* in holdout."""
+        import hashlib as _hl
+
+        for i in range(10000):
+            sid = f"SUBJ_{i:05d}"
+            h = _hl.sha256(f"{seed}|{sid}".encode()).digest()
+            x = int.from_bytes(h[:8], "big") / (2**64)
+            role = "eval" if x < 0.2 else "train"
+            if role == target_role:
+                return sid
+        raise RuntimeError(f"Could not find holdout ID for {target_role}")
+
+    # -- fixtures --------------------------------------------------------- #
+
+    @pytest.fixture()
+    def processed_jsonl(self, tmp_path: Path) -> Path:
+        """Synthetic processed JSONL with known role assignments."""
+        train_id = self._find_holdout_id("train")
+        path = tmp_path / "processed.jsonl"
+        rows = [
+            {"identity_id": "id_a", "source_metadata": {
+                "source_subject_id": "S001",
+                "official_memberships": ["forget10"],
+            }},
+            {"identity_id": "id_b", "source_metadata": {
+                "source_subject_id": train_id,
+                "official_memberships": ["retain15"],
+            }},
+            {"identity_id": "id_c", "source_metadata": {
+                "source_subject_id": "S003",
+                "official_memberships": ["other_bucket"],
+            }},
+        ]
+        with open(path, "w") as f:
+            for row in rows:
+                f.write(json.dumps(row) + "\n")
+        return path
+
+    @pytest.fixture()
+    def manifest_jsonl(self, tmp_path: Path, processed_jsonl: Path) -> Path:
+        """Synthetic manifest with protocol config and probe SHA."""
+        from route_data.eval.baseline_runner import _sha256_file
+
+        probe_file = tmp_path / "test_probes.jsonl"
+        probe_file.write_text("\n".join(json.dumps(p) for p in _PROBES_RAW))
+        path = tmp_path / "manifest.json"
+        data = {
+            "protocol": {"canonical_protocol": dict(self._PROTO)},
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(probe_file)},
+            },
+        }
+        path.write_text(json.dumps(data))
+        return path
+
+    @pytest.fixture()
+    def runner_with_roles(
+        self,
+        stub_backend,
+        probe_jsonl: Path,
+        tmp_path: Path,
+        stub_model_config: ModelConfig,
+        processed_jsonl: Path,
+        manifest_jsonl: Path,
+    ) -> BaselineRunner:
+        """Runner with identity_role_map populated.
+
+        Note: the probe identities (aaaa, bbbb, …) do NOT overlap with
+        the processed JSONL identities (id_a, id_b, id_c).  This is
+        intentional — tests that call ``run_probe`` on the loaded probes
+        will trigger the missing-identity hard-fail, while tests that
+        inspect the map directly work correctly.
+        """
+        return BaselineRunner(
+            backend=stub_backend,
+            probe_path=probe_jsonl,
+            output_dir=tmp_path / "output",
+            model_config=stub_model_config,
+            resume=False,
+            dataset_manifest_path=manifest_jsonl,
+            processed_dataset_path=processed_jsonl,
+        )
+
+    @pytest.fixture()
+    def runner_full_overlap(
+        self,
+        stub_backend,
+        tmp_path: Path,
+        stub_model_config: ModelConfig,
+    ) -> BaselineRunner:
+        """Runner where probe identities match processed JSONL identities.
+
+        Probes use identity_ids ``id_a``, ``id_b``, ``id_c`` matching the
+        synthetic processed JSONL, so ``run_probe`` succeeds.
+        """
+        from route_data.eval.baseline_runner import _sha256_file
+
+        # Build probes that use the same identity_ids as processed JSONL.
+        probes = []
+        for idx, iid in enumerate(["id_a", "id_b", "id_c"]):
+            for fam in ["direct_visual", "name_only"]:
+                base = dict(_PROBES_RAW[0] if fam == "direct_visual"
+                            else _PROBES_RAW[4])
+                base = dict(base)
+                base["probe_id"] = f"p_{iid}_{fam}"
+                base["identity_id"] = iid
+                base["probe_family"] = fam
+                base["sample_id"] = f"s_{iid}_{fam}"
+                probes.append(base)
+        probe_file = tmp_path / "probes.jsonl"
+        probe_file.write_text("\n".join(json.dumps(p) for p in probes))
+
+        # Manifest with correct probe SHA.
+        manifest_data = {
+            "protocol": {"canonical_protocol": dict(self._PROTO)},
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(probe_file)},
+            },
+        }
+        manifest_file = tmp_path / "manifest.json"
+        manifest_file.write_text(json.dumps(manifest_data))
+
+        # Processed JSONL (shared across fixtures via tmp_path).
+        train_id = self._find_holdout_id("train")
+        processed_file = tmp_path / "processed.jsonl"
+        rows = [
+            {"identity_id": "id_a", "source_metadata": {
+                "source_subject_id": "S001",
+                "official_memberships": ["forget10"],
+            }},
+            {"identity_id": "id_b", "source_metadata": {
+                "source_subject_id": train_id,
+                "official_memberships": ["retain15"],
+            }},
+            {"identity_id": "id_c", "source_metadata": {
+                "source_subject_id": "S003",
+                "official_memberships": ["other_bucket"],
+            }},
+        ]
+        processed_file.write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n"
+        )
+
+        return BaselineRunner(
+            backend=stub_backend,
+            probe_path=probe_file,
+            output_dir=tmp_path / "output",
+            model_config=stub_model_config,
+            resume=False,
+            dataset_manifest_path=manifest_file,
+            processed_dataset_path=processed_file,
+        )
+
+    # -- _extract_protocol ------------------------------------------------ #
+
+    def test_extract_protocol_from_canonical(self, runner_with_roles):
+        proto = runner_with_roles._extract_protocol()
+        assert proto is not None
+        assert proto["forget_bucket"] == "forget10"
+        assert proto["train_bucket"] == "retain15"
+        assert proto["eval_bucket"] is None
+        assert proto["eval_fraction"] == pytest.approx(0.2)
+        assert proto["eval_seed"] == 17
+
+    def test_extract_protocol_returns_none_without_manifest(self, runner):
+        """runner has no manifest → _extract_protocol returns None."""
+        assert runner._extract_protocol() is None
+
+    # -- _build_identity_role_map ----------------------------------------- #
+
+    def test_build_map_exclude_role(self, runner_with_roles):
+        assert runner_with_roles.identity_role_map["id_a"] == "exclude"
+
+    def test_build_map_train_role(self, runner_with_roles):
+        assert runner_with_roles.identity_role_map["id_b"] == "train"
+
+    def test_build_map_out_of_protocol_role(self, runner_with_roles):
+        assert runner_with_roles.identity_role_map["id_c"] == "out_of_protocol"
+
+    def test_build_map_empty_without_processed_path(self, runner):
+        assert runner.identity_role_map == {}
+
+    def test_build_map_missing_file_raises(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config, manifest_jsonl
+    ):
+        with pytest.raises(FileNotFoundError, match="Processed dataset not found"):
+            BaselineRunner(
+                backend=stub_backend,
+                probe_path=probe_jsonl,
+                output_dir=tmp_path / "out",
+                model_config=stub_model_config,
+                dataset_manifest_path=manifest_jsonl,
+                processed_dataset_path=tmp_path / "nonexistent.jsonl",
+            )
+
+    def test_build_map_without_manifest_raises(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config, processed_jsonl
+    ):
+        with pytest.raises(RuntimeError, match="no protocol configuration"):
+            BaselineRunner(
+                backend=stub_backend,
+                probe_path=probe_jsonl,
+                output_dir=tmp_path / "out",
+                model_config=stub_model_config,
+                processed_dataset_path=processed_jsonl,
+                # no dataset_manifest_path
+            )
+
+    # -- run_probe protocol_role population (P0-7) ------------------------ #
+
+    def test_run_probe_populates_exclude(self, runner_full_overlap):
+        probe = runner_full_overlap.probes[0]
+        assert probe.identity_id == "id_a"
+        result = runner_full_overlap.run_probe(probe)
+        assert result.protocol_role == "exclude"
+
+    def test_run_probe_populates_train(self, runner_full_overlap):
+        for p in runner_full_overlap.probes:
+            if p.identity_id == "id_b":
+                result = runner_full_overlap.run_probe(p)
+                assert result.protocol_role == "train"
+                break
+
+    def test_run_probe_missing_identity_raises(self, runner_with_roles):
+        """Probe identity not in processed JSONL → hard fail."""
+        probe = runner_with_roles.probes[0]  # identity "aaaa"
+        with pytest.raises(RuntimeError, match="not found in identity_role_map"):
+            runner_with_roles.run_probe(probe)
+
+    def test_run_probe_invalid_role_raises(
+        self, stub_backend, tmp_path, stub_model_config
+    ):
+        """Identity with out_of_protocol role → hard fail."""
+        from route_data.eval.baseline_runner import _sha256_file
+
+        # Single probe with identity "id_c" (out_of_protocol).
+        probe_data = dict(_PROBES_RAW[0])
+        probe_data["identity_id"] = "id_c"
+        probe_data["probe_id"] = "p_oop"
+        probe_file = tmp_path / "probes.jsonl"
+        probe_file.write_text(json.dumps(probe_data))
+
+        manifest_data = {
+            "protocol": {"canonical_protocol": dict(self._PROTO)},
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(probe_file)},
+            },
+        }
+        manifest_file = tmp_path / "manifest.json"
+        manifest_file.write_text(json.dumps(manifest_data))
+
+        processed_file = tmp_path / "processed.jsonl"
+        processed_file.write_text(json.dumps({
+            "identity_id": "id_c",
+            "source_metadata": {
+                "source_subject_id": "S003",
+                "official_memberships": ["other_bucket"],
+            },
+        }) + "\n")
+
+        runner = BaselineRunner(
+            backend=stub_backend,
+            probe_path=probe_file,
+            output_dir=tmp_path / "out",
+            model_config=stub_model_config,
+            resume=False,
+            dataset_manifest_path=manifest_file,
+            processed_dataset_path=processed_file,
+        )
+        with pytest.raises(RuntimeError, match="invalid role"):
+            runner.run_probe(runner.probes[0])
+
+    def test_run_probe_no_map_gives_empty_role(self, runner):
+        """Without identity_role_map, protocol_role is empty string."""
+        probe = runner.probes[0]
+        result = runner.run_probe(probe)
+        assert result.protocol_role == ""
+
+    # -- validate_results protocol_role_complete (P0-8) ------------------- #
+
+    def test_validate_passes_with_valid_roles(self, runner_full_overlap):
+        """All probes have valid roles → protocol_role_complete passes."""
+        # id_c has out_of_protocol role which will cause run_probe to raise.
+        # We need only id_a (exclude) and id_b (train) probes.
+        # Filter to only valid-role probes.
+        valid_probes = [
+            p for p in runner_full_overlap.probes
+            if p.identity_id in ("id_a", "id_b")
+        ]
+        results = runner_full_overlap.run_selected(valid_probes)
+        runner_full_overlap._results = results
+        # Override probes to match the filtered set for validation.
+        runner_full_overlap.probes = valid_probes
+        report = runner_full_overlap.validate_results()
+        check = report["checks"]["protocol_role_complete"]
+        assert check["pass"] is True
+        assert check["invalid_role_count"] == 0
+        assert check["inconsistent_identity_count"] == 0
+
+    def test_validate_fails_on_empty_role(self, runner_full_overlap):
+        """Corrupting a result's role to empty fails the check."""
+        valid_probes = [
+            p for p in runner_full_overlap.probes
+            if p.identity_id in ("id_a", "id_b")
+        ]
+        results = runner_full_overlap.run_selected(valid_probes)
+        runner_full_overlap._results = results
+        runner_full_overlap.probes = valid_probes
+        # Corrupt one result's role.
+        runner_full_overlap._results[0].protocol_role = ""
+        with pytest.raises(RuntimeError, match="protocol_role_complete"):
+            runner_full_overlap.validate_results()
+
+    def test_validate_skipped_without_map(self, runner):
+        """Without identity_role_map the check passes with skipped=True."""
+        runner.run_all()
+        report = runner.validate_results()
+        check = report["checks"]["protocol_role_complete"]
+        assert check["pass"] is True
+        assert check.get("skipped") is True
+
+    # -- generate_summary per_protocol_role (P0-9) ------------------------ #
+
+    def test_summary_per_protocol_role_with_roles(self, runner_full_overlap):
+        """Summary includes per_protocol_role counts when roles populated."""
+        valid_probes = [
+            p for p in runner_full_overlap.probes
+            if p.identity_id in ("id_a", "id_b")
+        ]
+        results = runner_full_overlap.run_selected(valid_probes)
+        runner_full_overlap._results = results
+        summary = runner_full_overlap.generate_summary()
+        ppr = summary["per_protocol_role"]
+        assert "exclude" in ppr
+        assert "train" in ppr
+        assert "eval" in ppr
+        # 2 probes for id_a (exclude) + 2 for id_b (train) = 4 total
+        assert ppr["exclude"]["n"] == 2
+        assert ppr["train"]["n"] == 2
+        assert ppr["eval"]["n"] == 0
+
+    def test_summary_per_protocol_role_without_map(self, runner):
+        """Summary includes per_protocol_role even without map (all zero)."""
+        runner.run_all()
+        summary = runner.generate_summary()
+        assert "per_protocol_role" in summary
+        ppr = summary["per_protocol_role"]
+        assert ppr["exclude"]["n"] == 0
+        assert ppr["train"]["n"] == 0
+        assert ppr["eval"]["n"] == 0

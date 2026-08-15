@@ -4158,6 +4158,8 @@ def cmd_experiment_baseline(args) -> int:
     freeze_verification = getattr(args, "freeze_verification", None)
     # Resolve model config path for cache-key strengthening.
     model_config_path = getattr(args, "model_config", None)
+    # Resolve processed dataset path for protocol-role population.
+    processed_dataset = getattr(args, "processed_dataset", None)
 
     runner = BaselineRunner(
         backend=backend,
@@ -4168,6 +4170,7 @@ def cmd_experiment_baseline(args) -> int:
         dataset_manifest_path=dataset_manifest,
         model_config_path=model_config_path,
         freeze_verification_path=freeze_verification,
+        processed_dataset_path=processed_dataset,
     )
 
     # Verify the frozen probe-file hash before any inference.
@@ -4486,6 +4489,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="freeze_verification",
         help="path to final_freeze_verification.json for cross-file freeze validation",
+    )
+    p.add_argument(
+        "--processed-dataset",
+        default=None,
+        dest="processed_dataset",
+        help="path to fiubench_processed.jsonl for identity-to-protocol-role mapping",
     )
     _common_flags(p)
     p.set_defaults(func=cmd_experiment_baseline)
