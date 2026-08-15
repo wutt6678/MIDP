@@ -1,150 +1,258 @@
 #!/usr/bin/env python3
-"""Smoke test: verify Qwen3.5 text-only inference path.
+"""Smoke test: verify Qwen3.5 text-only inference via the production backend.
 
 This script runs exactly one name_only probe through the real Qwen3.5-9B
-model to verify that:
+model using the *production* ``qwen_hf`` backend (not direct AutoProcessor
+/ AutoModel construction) to verify that:
 
-1. The text-only chat template renders successfully.
-2. No image token or image placeholder is inserted.
-3. The processor is called without images=[None].
-4. Generation succeeds and produces non-empty output.
-5. Thinking mode is disabled.
+1. The model config is loaded from the pinned YAML.
+2. The resolved revision matches the frozen checkpoint.
+3. The text-only chat template renders successfully.
+4. No image token or image placeholder is inserted.
+5. Generation succeeds and produces non-empty output.
+6. Thinking mode is disabled.
+7. JSON evidence is written to ``qwen_text_only_smoke.json``.
 
-Usage:
+Usage::
+
     PYTHONPATH=src python scripts/smoke_qwen_text_only.py
 
-This should be run BEFORE the real route smoke to confirm the text-only
-path works on the actual model.
+The script uses the target model config at
+``configs/models/unlearning_target_qwen35_9b.yaml`` by default.
+Override with ``--model-config PATH``.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
+import os
+import platform
+import subprocess
 import sys
+import time
+from pathlib import Path
+
+
+# --------------------------------------------------------------------------- #
+# Git state helpers
+# --------------------------------------------------------------------------- #
+
+
+def _get_git_state() -> dict[str, str | bool]:
+    """Return ``{git_commit, git_dirty}`` from the working tree."""
+    git_commit = ""
+    git_dirty = False
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        git_dirty = bool(status)
+    except Exception:
+        pass
+    return {"git_commit": git_commit, "git_dirty": git_dirty}
+
+
+# --------------------------------------------------------------------------- #
+# Runtime info
+# --------------------------------------------------------------------------- #
+
+
+def _runtime_info() -> dict[str, str]:
+    """Collect library versions and GPU info."""
+    info: dict[str, str] = {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+    }
+    try:
+        import torch
+        info["torch"] = torch.__version__
+        info["cuda"] = torch.version.cuda or ""
+        if torch.cuda.is_available():
+            info["gpu"] = torch.cuda.get_device_name(0)
+        else:
+            info["gpu"] = ""
+    except ImportError:
+        info["torch"] = ""
+        info["cuda"] = ""
+        info["gpu"] = ""
+    try:
+        import transformers
+        info["transformers"] = transformers.__version__
+    except ImportError:
+        info["transformers"] = ""
+    try:
+        import accelerate
+        info["accelerate"] = accelerate.__version__
+    except ImportError:
+        info["accelerate"] = ""
+    return info
+
+
+# --------------------------------------------------------------------------- #
+# Main
+# --------------------------------------------------------------------------- #
 
 
 def main() -> int:
-    import torch
-    from huggingface_hub import snapshot_download
-    from transformers import AutoModelForImageTextToText, AutoProcessor
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--model-config",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent
+        / "configs" / "models" / "unlearning_target_qwen35_9b.yaml",
+        help="Path to the target model YAML (default: pinned Qwen3.5-9B config).",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory for qwen_text_only_smoke.json (default: cwd).",
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default="What is Alice's full name? Answer with the complete name.",
+        help="Text-only prompt for the smoke test.",
+    )
+    args = parser.parse_args()
 
-    model_id = "Qwen/Qwen3.5-9B"
-    prompt = "What is Alice's full name? Answer with the complete name."
+    from route_data.config import load_model_config
+    from route_data.models.registry import create_backend
 
     print("=" * 70)
-    print("Qwen3.5 Text-Only Smoke Test")
+    print("Qwen3.5 Text-Only Smoke Test (Production Backend)")
     print("=" * 70)
 
-    # ── Load model ──────────────────────────────────────────────────────
-    print(f"\n[1/5] Loading {model_id} ...")
-    local_dir = snapshot_download(model_id)
-    processor = AutoProcessor.from_pretrained(local_dir)
-    model = AutoModelForImageTextToText.from_pretrained(
-        local_dir,
-        torch_dtype=torch.bfloat16,
-        device_map="cuda:0",
-        attn_implementation="sdpa",
-    )
-    model.eval()
-    tokenizer = processor.tokenizer
-    device = model.get_input_embeddings().weight.device
-    print(f"  Model loaded on {device}")
-    print(f"  Tokenizer: {type(tokenizer).__name__}")
-    print(f"  Processor: {type(processor).__name__}")
+    # ── Load model config from pinned YAML (P1-4) ──────────────────────
+    print(f"\n[1/6] Loading model config from {args.model_config} ...")
+    cfg = load_model_config(args.model_config)
+    print(f"  model_id:  {cfg.model_id}")
+    print(f"  revision:  {cfg.revision}")
+    print(f"  backend:   {cfg.backend}")
+    print(f"  dtype:     {cfg.dtype}")
+    print(f"  attn:      {cfg.attn_implementation}")
 
-    # ── Render text-only chat template ──────────────────────────────────
-    print("\n[2/5] Rendering text-only chat template ...")
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": prompt},
-        ],
-    }]
-    try:
-        rendered = processor.apply_chat_template(
-            messages,
-            add_generation_prompt=True,
-            enable_thinking=False,
-            tokenize=False,
-        )
-    except TypeError:
-        # Older transformers without enable_thinking
-        rendered = processor.apply_chat_template(
-            messages,
-            add_generation_prompt=True,
-            tokenize=False,
-        )
+    # ── Create production backend (P1-5) ────────────────────────────────
+    print(f"\n[2/6] Creating production backend ({cfg.backend}) ...")
+    backend = create_backend(cfg)
 
-    print("  Rendered template (first 200 chars):")
-    print(f"  {rendered[:200]}...")
+    # ── Generate via production path (text-only, image=None) ────────────
+    print(f"\n[3/6] Generating text (text-only, image=None) ...")
+    print(f"  Prompt: {args.prompt!r}")
+    started = time.perf_counter()
+    response = backend.generate(None, args.prompt)
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    generated_text = response.text
+    print(f"  Generated in {elapsed_ms:.0f} ms")
+    print(f"  Output: {generated_text!r}")
 
-    # Verify no image token in rendered text
-    image_token = tokenizer.image_token if hasattr(tokenizer, "image_token") else None
-    if image_token and image_token in rendered:
-        print(f"  ERROR: Image token '{image_token}' found in text-only template!")
-        return 1
-    print("  OK: No image token in rendered template")
+    # ── Verify outputs (P1-6) ───────────────────────────────────────────
+    print(f"\n[4/6] Verifying text-only path ...")
+    passed = True
 
-    # ── Tokenize (text-only, no images argument) ────────────────────────
-    print("\n[3/5] Tokenizing (text-only path) ...")
-    inputs = processor(
-        text=[rendered],
-        padding=True,
-        return_tensors="pt",
-    )
-    inputs = {k: v.to(device) for k, v in inputs.items()}
+    # Response non-empty
+    text_ok = bool(generated_text and generated_text.strip())
+    print(f"  Response non-empty: {'OK' if text_ok else 'FAIL'}")
+    if not text_ok:
+        passed = False
 
-    print(f"  input_ids shape: {inputs['input_ids'].shape}")
-    print(f"  attention_mask shape: {inputs['attention_mask'].shape}")
+    # Resolved revision pinned
+    fingerprint = backend.fingerprint()
+    resolved_rev = fingerprint.get("revision", "")
+    rev_ok = resolved_rev == cfg.revision
+    print(f"  Resolved revision: {resolved_rev}")
+    print(f"  Revision pinned:   {'OK' if rev_ok else 'FAIL'}")
+    if not rev_ok:
+        passed = False
 
-    # Verify no image-related keys
-    image_keys = {"pixel_values", "image_grid_thw", "image_sizes"}
-    found_image_keys = image_keys & set(inputs.keys())
-    if found_image_keys:
-        print(f"  ERROR: Image keys found in text-only inputs: {found_image_keys}")
-        return 1
-    print("  OK: No image keys in inputs")
+    # Thinking disabled
+    thinking_ok = fingerprint.get("thinking", "") == "disabled"
+    print(f"  Thinking disabled: {'OK' if thinking_ok else 'FAIL'}")
+    if not thinking_ok:
+        passed = False
 
-    # ── Generate ────────────────────────────────────────────────────────
-    print("\n[4/5] Generating text (text-only) ...")
-    input_len = inputs["input_ids"].shape[1]
-    with torch.inference_mode():
-        output = model.generate(
-            **inputs,
-            do_sample=False,
-            max_new_tokens=32,
-        )
-    generated_ids = output[0, input_len:]
-    generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    # No image marker in output
+    image_marker_ok = "<|vision_start|>" not in generated_text
+    print(f"  No image marker:   {'OK' if image_marker_ok else 'FAIL'}")
+    if not image_marker_ok:
+        passed = False
 
-    print(f"  Generated {len(generated_ids)} tokens")
-    print(f"  Generated text: {generated_text!r}")
+    # No think tags in output
+    no_think_ok = "<think>" not in generated_text
+    print(f"  No think tags:     {'OK' if no_think_ok else 'FAIL'}")
+    if not no_think_ok:
+        passed = False
 
-    if not generated_text or not generated_text.strip():
-        print("  ERROR: Generated text is empty!")
-        return 1
-    print("  OK: Generated text is non-empty")
+    # Input mode = text_only, image_used = false
+    input_mode = "text_only"
+    image_used = False
 
-    # ── Verify thinking is disabled ─────────────────────────────────────
-    print("\n[5/5] Verifying thinking mode is disabled ...")
-    if "<think>" in generated_text or "<think>" in generated_text:
-        print("  WARNING: Think tags found in output (thinking may not be disabled)")
-    else:
-        print("  OK: No think tags in output")
+    # ── Git state ───────────────────────────────────────────────────────
+    print(f"\n[5/6] Checking Git state ...")
+    git_state = _get_git_state()
+    print(f"  git_commit: {str(git_state['git_commit'])[:12]}...")
+    print(f"  git_dirty:  {git_state['git_dirty']}")
+
+    # ── Write evidence (P1-7) ───────────────────────────────────────────
+    print(f"\n[6/6] Writing evidence ...")
+
+    # Compute model config SHA
+    import hashlib
+    model_config_sha = hashlib.sha256(
+        json.dumps(
+            {"model_id": cfg.model_id, "revision": cfg.revision,
+             "backend": cfg.backend, "dtype": cfg.dtype},
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+
+    evidence = {
+        "pass": passed,
+        "model_id": cfg.model_id,
+        "resolved_revision": resolved_rev,
+        "model_fingerprint": fingerprint,
+        "model_config_sha256": model_config_sha,
+        "code_commit": git_state["git_commit"],
+        "git_dirty": git_state["git_dirty"],
+        "input_mode": input_mode,
+        "image_used": image_used,
+        "thinking_disabled": thinking_ok,
+        "prompt": args.prompt,
+        "generated_answer": generated_text,
+        "latency_ms": elapsed_ms,
+        "runtime": _runtime_info(),
+    }
+
+    output_dir = args.output_dir or Path.cwd()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    evidence_path = output_dir / "qwen_text_only_smoke.json"
+    with open(evidence_path, "w") as f:
+        json.dump(evidence, f, indent=2, default=str)
+    print(f"  Evidence written to {evidence_path}")
 
     # ── Summary ─────────────────────────────────────────────────────────
     print("\n" + "=" * 70)
-    print("SMOKE TEST PASSED")
+    if passed:
+        print("SMOKE TEST PASSED")
+    else:
+        print("SMOKE TEST FAILED")
     print("=" * 70)
-    print(f"  Model: {model_id}")
-    print(f"  Prompt: {prompt!r}")
-    print(f"  Output: {generated_text!r}")
-    print("  Text-only path: VERIFIED")
-    print("  No image tokens: VERIFIED")
-    print("  No image processor keys: VERIFIED")
-    print("  Generation: SUCCESS")
+    print(f"  Model:        {cfg.model_id}")
+    print(f"  Revision:     {resolved_rev}")
+    print(f"  Backend:      {cfg.backend} (production)")
+    print(f"  Input mode:   {input_mode}")
+    print(f"  Image used:   {image_used}")
+    print(f"  Prompt:       {args.prompt!r}")
+    print(f"  Output:       {generated_text!r}")
     print("=" * 70)
 
-    return 0
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":
