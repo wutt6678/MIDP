@@ -1212,3 +1212,142 @@ class TestSpyCallPaths:
             runner.run_probe(probe)
             mock_gen.assert_called_once()
             mock_score.assert_not_called()
+
+
+class TestCommit5MetadataEnrichment:
+    """Verify Commit 5 metadata enrichment (P1-1 through P1-6)."""
+
+    def test_protocol_role_field_exists(self):
+        """P1-2: BaselineResult has protocol_role field."""
+        result = BaselineResult(probe_id="test", sample_id="s", identity_id="i",
+                                probe_family="name_only", modality="text_only",
+                                question="q")
+        assert hasattr(result, "protocol_role")
+        assert result.protocol_role == ""
+
+    def test_mixed_task_overall_accuracy_in_summary(self, runner: BaselineRunner):
+        """P1-4: Summary uses mixed_task_overall_accuracy instead of overall_accuracy."""
+        runner.run_all()
+        summary = runner.generate_summary()
+        assert "mixed_task_overall_accuracy" in summary
+        assert "overall_accuracy" not in summary
+
+    def test_enriched_manifest_has_dataset_version(self, runner: BaselineRunner):
+        """P1-3: Manifest includes dataset_version and dataset_manifest_sha256."""
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        dp = manifest["dataset_provenance"]
+        assert "dataset_version" in dp
+        assert "dataset_manifest_sha256" in dp
+
+    def test_enriched_manifest_has_output_shas(self, runner: BaselineRunner):
+        """P1-3: Manifest includes SHA-256 of all output artifacts."""
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        runner.validate_results()
+        manifest = runner.generate_baseline_manifest()
+        results = manifest["results"]
+        assert "summary_sha256" in results
+        assert "validation_report_sha256" in results
+        assert "smoke_manifest_sha256" in results
+
+    def test_enriched_manifest_has_library_versions(self, runner: BaselineRunner):
+        """P1-3: Manifest includes torch/transformers/accelerate versions."""
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        runtime = manifest["runtime_environment"]
+        assert "torch_version" in runtime
+        assert "transformers_version" in runtime
+        assert "accelerate_version" in runtime
+
+    def test_enriched_manifest_has_fingerprint_payload(self, runner: BaselineRunner):
+        """P1-3: Manifest includes full fingerprint payload."""
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        mi = manifest["model_identity"]
+        assert "fingerprint_payload" in mi
+        assert isinstance(mi["fingerprint_payload"], dict)
+
+    def test_enriched_manifest_has_scoring_provenance(self, runner: BaselineRunner):
+        """P1-3: Manifest includes scoring provenance details."""
+        runner.run_all()
+        runner.save_results()
+        runner.generate_summary()
+        manifest = runner.generate_baseline_manifest()
+        sc = manifest["scoring_config"]
+        assert "candidate_protocol" in sc
+        assert "candidate_protocol_version" in sc
+        assert "decision_rule" in sc
+
+    def test_validate_dataset_manifest_requires_manifest(self, runner: BaselineRunner):
+        """P1-1: validate_dataset_manifest raises without manifest."""
+        with pytest.raises(RuntimeError, match="requires --dataset-manifest"):
+            runner.validate_dataset_manifest()
+
+    def test_validate_dataset_manifest_with_valid_manifest(
+        self, stub_backend, tmp_path, stub_model_config
+    ):
+        """P1-1: validate_dataset_manifest passes with valid manifest."""
+        import json
+        probe_file = tmp_path / "probes.jsonl"
+        probe_file.write_text("\n".join(json.dumps(p) for p in _PROBES_RAW))
+        from route_data.eval.baseline_runner import _sha256_file
+        sha = _sha256_file(probe_file)
+        manifest_data = {
+            "ready_for_experiments": True,
+            "dataset_version": "fiubench-route-v1",
+            "dataset_artifacts": {
+                "route_probes": {
+                    "sha256": sha,
+                    "count": 500,  # Required for full research baseline
+                }
+            },
+        }
+        manifest_file = tmp_path / "manifest.json"
+        manifest_file.write_text(json.dumps(manifest_data))
+        runner = BaselineRunner(
+            backend=stub_backend,
+            probe_path=str(probe_file),
+            output_dir=tmp_path / "out",
+            model_config=stub_model_config,
+            dataset_manifest_path=str(manifest_file),
+        )
+        checks = runner.validate_dataset_manifest()
+        assert checks["ready_for_experiments"] is True
+        assert checks["dataset_version"] == "fiubench-route-v1"
+        assert checks["route_probe_count"] == 500
+
+    def test_validate_dataset_manifest_fails_on_wrong_version(
+        self, stub_backend, tmp_path, stub_model_config
+    ):
+        """P1-1: validate_dataset_manifest fails on wrong dataset_version."""
+        import json
+        probe_file = tmp_path / "probes.jsonl"
+        probe_file.write_text("\n".join(json.dumps(p) for p in _PROBES_RAW))
+        from route_data.eval.baseline_runner import _sha256_file
+        sha = _sha256_file(probe_file)
+        manifest_data = {
+            "ready_for_experiments": True,
+            "dataset_version": "wrong-version",
+            "dataset_artifacts": {
+                "route_probes": {"sha256": sha, "count": 500}
+            },
+        }
+        manifest_file = tmp_path / "manifest.json"
+        manifest_file.write_text(json.dumps(manifest_data))
+        runner = BaselineRunner(
+            backend=stub_backend,
+            probe_path=str(probe_file),
+            output_dir=tmp_path / "out",
+            model_config=stub_model_config,
+            dataset_manifest_path=str(manifest_file),
+        )
+        with pytest.raises(RuntimeError, match="validation failed"):
+            runner.validate_dataset_manifest()

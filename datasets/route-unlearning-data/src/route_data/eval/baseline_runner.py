@@ -189,6 +189,9 @@ class BaselineResult:
     token_overlap: float | None = None
     fuzzy_match: float | None = None
 
+    # -- Protocol role (P1-2) --
+    protocol_role: str = ""  # train | eval | exclude
+
     # -- Provenance --
     scoring_version: str = ""
     prompt_hash: str = ""
@@ -319,6 +322,69 @@ class BaselineRunner:
                 "dataset_artifacts.route_probes.sha256"
             )
         return self.verify_input_hashes(expected)
+
+    def validate_dataset_manifest(self) -> dict[str, Any]:
+        """Validate the dataset manifest for full research baselines (P1-1).
+
+        Checks:
+        - ``ready_for_experiments`` is true
+        - ``dataset_version`` is ``fiubench-route-v1``
+        - Route SHA matches the probe file
+        - Route probe count is 500
+
+        Returns
+        -------
+        dict
+            Validation details.
+
+        Raises
+        ------
+        RuntimeError
+            If any check fails.
+        """
+        if self._dataset_manifest is None:
+            raise RuntimeError(
+                "Full research baseline requires --dataset-manifest."
+            )
+        m = self._dataset_manifest
+        checks: dict[str, Any] = {}
+        passed = True
+
+        # ready_for_experiments
+        ready = m.get("ready_for_experiments", False)
+        checks["ready_for_experiments"] = ready
+        if not ready:
+            passed = False
+
+        # dataset_version
+        dv = m.get("dataset_version", "")
+        checks["dataset_version"] = dv
+        if dv != "fiubench-route-v1":
+            passed = False
+
+        # route SHA matches probe file
+        expected_sha = (
+            m.get("dataset_artifacts", {})
+            .get("route_probes", {})
+            .get("sha256", "")
+        )
+        actual_sha = _sha256_file(self.probe_path)
+        checks["route_sha_match"] = expected_sha == actual_sha
+        if expected_sha != actual_sha:
+            passed = False
+
+        # route probe count == 500
+        probe_count = m.get("dataset_artifacts", {}).get("route_probes", {}).get("count", 0)
+        checks["route_probe_count"] = probe_count
+        if probe_count != 500:
+            passed = False
+
+        if not passed:
+            raise RuntimeError(
+                f"Dataset manifest validation failed: {checks}"
+            )
+        log.info("Dataset manifest validated: %s", checks)
+        return checks
 
     # ------------------------------------------------------------------ #
     # Manifest / config helpers
@@ -751,7 +817,7 @@ class BaselineRunner:
         summary: dict[str, Any] = {
             "total_probes": total,
             "total_correct": total_correct,
-            "overall_accuracy": total_correct / total if total else None,
+            "mixed_task_overall_accuracy": total_correct / total if total else None,
             "per_family": per_family,
             "model_fingerprint": self._fingerprint_id,
             "model_revision": self.model_config.revision,
@@ -993,7 +1059,7 @@ class BaselineRunner:
 
         Freezes dataset provenance, model identity, scoring config, runtime
         environment, results summary, and code provenance into a single
-        manifest file.  Also computes SHA-256 of the results JSONL.
+        manifest file.  Also computes SHA-256 of all output artifacts.
 
         Returns
         -------
@@ -1002,19 +1068,30 @@ class BaselineRunner:
         """
         results_path = self.output_dir / "baseline_results.jsonl"
         summary_path = self.output_dir / "baseline_summary.json"
+        validation_report_path = self.output_dir / "validation_report.json"
+        smoke_manifest_path = self.output_dir / "smoke_manifest.json"
 
-        # Compute SHA-256 of results file
-        results_sha = ""
-        if results_path.is_file():
-            results_sha = _sha256_file(results_path)
+        # Compute SHA-256 of output files.
+        results_sha = _sha256_file(results_path) if results_path.is_file() else ""
+        summary_sha = _sha256_file(summary_path) if summary_path.is_file() else ""
+        validation_sha = (
+            _sha256_file(validation_report_path)
+            if validation_report_path.is_file()
+            else ""
+        )
+        smoke_sha = (
+            _sha256_file(smoke_manifest_path)
+            if smoke_manifest_path.is_file()
+            else ""
+        )
 
-        # Load summary if available
+        # Load summary if available.
         summary_data: dict[str, Any] = {}
         if summary_path.is_file():
             with open(summary_path) as f:
                 summary_data = json.load(f)
 
-        # Git provenance
+        # Git provenance.
         git_commit = ""
         git_dirty = False
         try:
@@ -1031,8 +1108,49 @@ class BaselineRunner:
         except Exception:
             pass
 
+        # Dataset manifest provenance (P1-3).
+        dataset_version = ""
+        dataset_manifest_sha = ""
+        if self._dataset_manifest:
+            dataset_version = self._dataset_manifest.get("dataset_version", "")
+            dataset_manifest_sha = _sha256_file(self.dataset_manifest_path)
+
+        # Runtime library versions (P1-3).
+        torch_version = ""
+        transformers_version = ""
+        accelerate_version = ""
+        try:
+            import torch
+            torch_version = torch.__version__
+        except ImportError:
+            pass
+        try:
+            import transformers
+            transformers_version = transformers.__version__
+        except ImportError:
+            pass
+        try:
+            import accelerate
+            accelerate_version = accelerate.__version__
+        except ImportError:
+            pass
+
+        # Full fingerprint payload from backend (P1-3 / P1-6).
+        fingerprint_payload = dict(self._fingerprint)
+
+        # Scoring provenance (P1-3).
+        from ..models.scoring import CANDIDATE_PROTOCOL_VERSION as _cpv
+        scoring_provenance = {
+            "candidate_protocol": "binary_yes_no",
+            "candidate_protocol_version": _cpv,
+            "scoring_version": SCORING_VERSION,
+            "thinking_mode": "disabled",
+            "decision_rule": "p_yes_geq_0.5",
+            "signed_margin_definition": "logp_yes_minus_logp_no",
+        }
+
         manifest: dict[str, Any] = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "dataset_provenance": {
                 "probe_file": str(self.probe_path),
@@ -1041,26 +1159,39 @@ class BaselineRunner:
                 "dataset_manifest": (
                     str(self.dataset_manifest_path) if self.dataset_manifest_path else None
                 ),
+                "dataset_version": dataset_version,
+                "dataset_manifest_sha256": dataset_manifest_sha,
             },
             "model_identity": {
                 "model_id": self.model_config.model_id,
                 "model_revision": self.model_config.revision,
                 "backend": self.model_config.backend,
                 "fingerprint_id": self._fingerprint_id,
+                "fingerprint_payload": fingerprint_payload,
                 "model_config_sha256": self._model_config_sha,
             },
             "scoring_config": {
                 "scoring_version": SCORING_VERSION,
                 "candidates": list(CANDIDATES),
+                **scoring_provenance,
             },
             "runtime_environment": {
                 "python_version": platform.python_version(),
                 "platform": platform.platform(),
                 "cwd": os.getcwd(),
+                "torch_version": torch_version,
+                "transformers_version": transformers_version,
+                "accelerate_version": accelerate_version,
             },
             "results": {
                 "results_file": str(results_path),
                 "results_sha256": results_sha,
+                "summary_file": str(summary_path),
+                "summary_sha256": summary_sha,
+                "validation_report_file": str(validation_report_path),
+                "validation_report_sha256": validation_sha,
+                "smoke_manifest_file": str(smoke_manifest_path),
+                "smoke_manifest_sha256": smoke_sha,
                 "total_results": len(self._results),
                 "summary": summary_data,
             },

@@ -438,6 +438,24 @@ class QwenHFBackend(VisionLanguageModel):
             "transformers": transformers.__version__,
             "torch": torch.__version__,
         }
+        # P1-6: Strengthen fingerprint with processor/tokenizer/chat-template.
+        try:
+            proc = self.processor
+            payload["processor_class"] = type(proc).__name__
+            if hasattr(proc, "tokenizer"):
+                payload["tokenizer_class"] = type(proc.tokenizer).__name__
+            if hasattr(proc, "chat_template"):
+                tpl = proc.chat_template or ""
+                payload["chat_template_hash"] = hashlib.sha256(
+                    tpl.encode()
+                ).hexdigest()[:16]
+        except Exception:
+            pass
+        try:
+            import accelerate
+            payload["accelerate"] = accelerate.__version__
+        except ImportError:
+            pass
         digest = hashlib.sha256(
             json.dumps(payload, sort_keys=True).encode()
         ).hexdigest()[:16]

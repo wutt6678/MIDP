@@ -4180,6 +4180,22 @@ def cmd_experiment_baseline(args) -> int:
         log.info("[dry-run] baseline for %d probes", len(runner.probes))
         return 0
 
+    # P1-1: Full research baselines require a valid dataset manifest.
+    is_smoke = getattr(args, "smoke", False)
+    is_limited = args.limit is not None
+    if not is_smoke and not is_limited:
+        if not dataset_manifest:
+            log.error(
+                "Full research baseline requires --dataset-manifest. "
+                "Use --smoke or --limit for development runs."
+            )
+            return 1
+        try:
+            runner.validate_dataset_manifest()
+        except RuntimeError as exc:
+            log.error("Dataset manifest validation failed: %s", exc)
+            return 1
+
     # Determine whether to run smoke or full baseline.
     if getattr(args, "smoke", False):
         from .eval.baseline_runner import select_smoke_probes, write_smoke_manifest
@@ -4200,8 +4216,6 @@ def cmd_experiment_baseline(args) -> int:
     summary = runner.generate_summary()
 
     # Validate and generate manifest for full (non-smoke, non-limited) runs.
-    is_smoke = getattr(args, "smoke", False)
-    is_limited = args.limit is not None
     if not is_smoke and not is_limited:
         try:
             runner.validate_results()
