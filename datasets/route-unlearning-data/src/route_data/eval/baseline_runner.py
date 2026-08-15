@@ -39,6 +39,7 @@ __all__ = [
     "BaselineProbe",
     "BaselineResult",
     "BaselineRunner",
+    "select_smoke_probes",
 ]
 
 # Candidate strings used for binary (Yes/No) probe families.
@@ -1004,3 +1005,94 @@ def _text_match(generated: str, expected: str) -> float:
         return 0.0
     overlap = len(g_tokens & e_tokens) / len(e_tokens)
     return overlap if overlap > 0.3 else 0.0
+
+
+def select_smoke_probes(
+    probes: list[BaselineProbe],
+    n_identities: int = 2,
+) -> list[BaselineProbe]:
+    """Select a deterministic smoke-test subset of probes.
+
+    Picks up to *n_identities* distinct identities and returns one probe per
+    family per identity, covering all 5 families.  The selection is
+    deterministic (sorted by probe_id) so results are reproducible.
+
+    Parameters
+    ----------
+    probes:
+        Full list of baseline probes.
+    n_identities:
+        Number of distinct identities to include (default 2).
+
+    Returns
+    -------
+    list[BaselineProbe]
+        Selected probes (up to ``n_identities * len(ALL_FAMILIES)``).
+    """
+    # Group by identity, sorted for determinism.
+    by_identity: dict[str, list[BaselineProbe]] = {}
+    for p in sorted(probes, key=lambda p: p.probe_id):
+        by_identity.setdefault(p.identity_id, []).append(p)
+
+    selected: list[BaselineProbe] = []
+    seen_families: set[str] = set()
+
+    # Pick the first n_identities identities that together cover all families.
+    for identity_id in sorted(by_identity):
+        if len(selected) >= n_identities * len(ALL_FAMILIES):
+            break
+        identity_probes = by_identity[identity_id]
+        # Pick one probe per family for this identity.
+        family_pick: dict[str, BaselineProbe] = {}
+        for p in identity_probes:
+            if p.probe_family not in family_pick:
+                family_pick[p.probe_family] = p
+        # Only add this identity if it contributes new families.
+        new_families = set(family_pick) - seen_families
+        if new_families:
+            for fam in sorted(family_pick):
+                if fam not in seen_families:
+                    selected.append(family_pick[fam])
+                    seen_families.add(fam)
+
+    return selected
+
+
+def write_smoke_manifest(
+    probes: list[BaselineProbe],
+    output_path: str | Path,
+    probe_file_sha256: str = "",
+) -> Path:
+    """Write a smoke manifest JSON for the selected probes.
+
+    The manifest records the selected probe IDs and (optionally) the
+    SHA-256 of the source probe file for reproducibility.
+
+    Parameters
+    ----------
+    probes:
+        Selected smoke-test probes.
+    output_path:
+        Path to write the manifest JSON.
+    probe_file_sha256:
+        Optional SHA-256 of the source probe file.
+
+    Returns
+    -------
+    Path
+        The path to the written manifest.
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "selected_probe_ids": sorted(p.probe_id for p in probes),
+        "probe_count": len(probes),
+        "families_covered": sorted({p.probe_family for p in probes}),
+        "identities_covered": sorted({p.identity_id for p in probes}),
+    }
+    if probe_file_sha256:
+        manifest["probe_file_sha256"] = probe_file_sha256
+    with open(output_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    log.info("Smoke manifest written to %s (%d probes)", output_path, len(probes))
+    return output_path

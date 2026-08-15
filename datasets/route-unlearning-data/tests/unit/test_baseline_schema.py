@@ -21,6 +21,8 @@ from route_data.eval.baseline_runner import (
     BaselineProbe,
     BaselineResult,
     BaselineRunner,
+    select_smoke_probes,
+    write_smoke_manifest,
 )
 
 # --------------------------------------------------------------------------- #
@@ -864,3 +866,110 @@ class TestBaselineManifest:
         manifest = runner.generate_baseline_manifest()
         assert "scoring_config" in manifest
         assert manifest["scoring_config"]["scoring_version"] != ""
+
+
+class TestSmokeSelector:
+    """Verify the deterministic smoke probe selector (Commit D)."""
+
+    def test_selects_all_families(self, runner: BaselineRunner):
+        selected = select_smoke_probes(runner.probes)
+        families = {p.probe_family for p in selected}
+        assert families == ALL_FAMILIES
+
+    def test_deterministic(self, runner: BaselineRunner):
+        s1 = select_smoke_probes(runner.probes)
+        s2 = select_smoke_probes(runner.probes)
+        assert [p.probe_id for p in s1] == [p.probe_id for p in s2]
+
+    def test_respects_n_identities(self, runner: BaselineRunner):
+        selected = select_smoke_probes(runner.probes, n_identities=1)
+        identities = {p.identity_id for p in selected}
+        assert len(identities) <= 1
+
+    def test_no_duplicate_probe_ids(self, runner: BaselineRunner):
+        selected = select_smoke_probes(runner.probes)
+        ids = [p.probe_id for p in selected]
+        assert len(ids) == len(set(ids))
+
+    def test_write_smoke_manifest(self, runner: BaselineRunner, tmp_path: Path):
+        selected = select_smoke_probes(runner.probes)
+        manifest_path = write_smoke_manifest(
+            selected, tmp_path / "smoke_manifest.json"
+        )
+        assert manifest_path.is_file()
+        with open(manifest_path) as f:
+            data = json.load(f)
+        assert data["probe_count"] == len(selected)
+        assert set(data["families_covered"]) == ALL_FAMILIES
+
+    def test_write_smoke_manifest_with_sha(
+        self, runner: BaselineRunner, tmp_path: Path
+    ):
+        selected = select_smoke_probes(runner.probes)
+        manifest_path = write_smoke_manifest(
+            selected, tmp_path / "smoke.json", probe_file_sha256="abc123"
+        )
+        with open(manifest_path) as f:
+            data = json.load(f)
+        assert data["probe_file_sha256"] == "abc123"
+
+
+class TestSpyCallPaths:
+    """Verify the runner calls backend methods correctly (Commit D)."""
+
+    def test_image_probe_calls_score_candidates(self, runner: BaselineRunner):
+        """Image-bearing probes should call score_candidates."""
+        from unittest.mock import patch, MagicMock
+
+        probe = BaselineProbe(
+            probe_id="spy_img",
+            sample_id="s1",
+            identity_id="i1",
+            benchmark="fiubench",
+            probe_family="direct_visual",
+            modality="image_only",
+            question="Is the person bald?",
+            expected_evidence_source="visual",
+            controlled_variables=["image"],
+            image_uri="/fake.jpg",
+            image_sha256="abc",
+            registry_hash="rh",
+            target_attribute="Bald",
+            answer_label=False,
+            answer_text="no",
+        )
+        fake_image = MagicMock()
+        with patch("route_data.eval.baseline_runner._load_image", return_value=fake_image), \
+             patch.object(runner.backend, "score_candidates", wraps=runner.backend.score_candidates) as mock:
+            runner.run_probe(probe)
+            mock.assert_called_once()
+
+    def test_name_only_probe_calls_generate(self, runner: BaselineRunner):
+        """Name-only probes should call generate, not score_candidates."""
+        from unittest.mock import patch
+
+        probe = BaselineProbe(
+            probe_id="spy_txt",
+            sample_id="s1",
+            identity_id="i1",
+            benchmark="fiubench",
+            probe_family="name_only",
+            modality="text_only",
+            question="What is the person's name?",
+            expected_evidence_source="identity_fact",
+            controlled_variables=["image"],
+            image_uri=None,
+            image_sha256=None,
+            registry_hash="rh",
+            target_attribute=None,
+            answer_label=None,
+            answer_text="Alice Smith",
+            target_fact_id="q1",
+            target_fact_relation="name",
+            target_fact_value="Alice Smith",
+        )
+        with patch.object(runner.backend, "generate", wraps=runner.backend.generate) as mock_gen, \
+             patch.object(runner.backend, "score_candidates") as mock_score:
+            runner.run_probe(probe)
+            mock_gen.assert_called_once()
+            mock_score.assert_not_called()
