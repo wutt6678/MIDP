@@ -175,6 +175,132 @@ class TestPrefixConstruction:
         assert content[1]["type"] == "text"
         assert content[1]["text"] == "test prompt"
 
+    def test_build_prefix_text_only_no_image(self):
+        """Text-only path: image=None produces no image content item."""
+        backend = _make_mock_backend(prefix_len=10)
+
+        captured_messages = []
+        orig_apply = backend.processor.apply_chat_template
+
+        def _spy(messages, **kwargs):
+            captured_messages.append(messages)
+            return orig_apply(messages, **kwargs)
+
+        backend.processor.apply_chat_template = _spy
+
+        # Text-only: image is None
+        prefix = backend._build_prefix(None, "What is Alice's name?")
+
+        assert len(captured_messages) == 1
+        messages = captured_messages[0]
+        assert len(messages) == 1
+        assert messages[0]["role"] == "user"
+        content = messages[0]["content"]
+        # Text-only: only one content item (text), no image
+        assert len(content) == 1
+        assert content[0]["type"] == "text"
+        assert content[0]["text"] == "What is Alice's name?"
+        # No image-related keys in prefix
+        assert "pixel_values" not in prefix
+        assert "image_grid_thw" not in prefix
+
+
+class TestRenderTextOnly:
+    """Verify _render produces correct messages for text-only vs multimodal."""
+
+    def test_render_multimodal_has_image_content(self):
+        backend = _make_mock_backend()
+        captured_messages = []
+        orig_apply = backend.processor.apply_chat_template
+
+        def _spy(messages, **kwargs):
+            captured_messages.append(messages)
+            return orig_apply(messages, **kwargs)
+
+        backend.processor.apply_chat_template = _spy
+        backend._render("test prompt", image=True)
+
+        content = captured_messages[0][0]["content"]
+        types = [c["type"] for c in content]
+        assert "image" in types
+        assert "text" in types
+
+    def test_render_text_only_no_image_content(self):
+        backend = _make_mock_backend()
+        captured_messages = []
+        orig_apply = backend.processor.apply_chat_template
+
+        def _spy(messages, **kwargs):
+            captured_messages.append(messages)
+            return orig_apply(messages, **kwargs)
+
+        backend.processor.apply_chat_template = _spy
+        backend._render("test prompt", image=False)
+
+        content = captured_messages[0][0]["content"]
+        types = [c["type"] for c in content]
+        assert "image" not in types
+        assert types == ["text"]
+
+
+class TestPrepareTextOnly:
+    """Verify _prepare handles text-only batches correctly."""
+
+    def test_prepare_text_only_no_images_arg(self):
+        """When all images are None, processor is called without images."""
+        backend = _make_mock_backend()
+
+        captured_calls = []
+        orig_call = backend._processor.__class__.__call__
+
+        def capturing_call(self_proc, **kwargs):
+            captured_calls.append(dict(kwargs))
+            return {
+                "input_ids": torch.tensor([[1, 2, 3]]),
+                "attention_mask": torch.ones(1, 3, dtype=torch.long),
+            }
+
+        backend._processor.__class__.__call__ = capturing_call
+
+        try:
+            # Text-only batch: all images are None
+            backend._prepare([None, None], ["prompt1", "prompt2"], padding_side="left")
+        finally:
+            backend._processor.__class__.__call__ = orig_call
+
+        assert len(captured_calls) == 1
+        call = captured_calls[0]
+        assert "images" not in call, "text-only batch should not pass images"
+        assert "text" in call
+
+    def test_prepare_multimodal_has_images_arg(self):
+        """When images are present, processor is called with images."""
+        backend = _make_mock_backend()
+
+        captured_calls = []
+        orig_call = backend._processor.__class__.__call__
+
+        def capturing_call(self_proc, **kwargs):
+            captured_calls.append(dict(kwargs))
+            return {
+                "input_ids": torch.tensor([[1, 2, 3]]),
+                "attention_mask": torch.ones(1, 3, dtype=torch.long),
+            }
+
+        backend._processor.__class__.__call__ = capturing_call
+
+        try:
+            fake_image = MagicMock()
+            # Multimodal batch: images are present
+            backend._prepare([fake_image], ["prompt1"], padding_side="left")
+        finally:
+            backend._processor.__class__.__call__ = orig_call
+
+        assert len(captured_calls) == 1
+        call = captured_calls[0]
+        assert "images" in call
+        assert call["images"] == [fake_image]
+
 
 # ── Scoring logic tests ─────────────────────────────────────────────────
 

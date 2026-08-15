@@ -117,14 +117,29 @@ class QwenHFBackend(VisionLanguageModel):
         self._load()
         return self._processor
 
-    def _render(self, prompt: str) -> str:
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "image"},
-                {"type": "text", "text": prompt},
-            ],
-        }]
+    def _render(self, prompt: str, *, image: bool = True) -> str:
+        """Render chat template for Qwen3.5.
+
+        Args:
+            prompt: The user prompt text.
+            image: If True, include image placeholder (multimodal path).
+                   If False, text-only path with no image token.
+        """
+        if image:
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": prompt},
+                ],
+            }]
+        else:
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                ],
+            }]
         try:
             return self.processor.apply_chat_template(
                 messages,
@@ -138,20 +153,32 @@ class QwenHFBackend(VisionLanguageModel):
             )
 
     def _build_prefix(self, image, prompt: str) -> dict:
-        """Construct the multimodal prefix tensor dict via the official route.
+        """Construct the prefix tensor dict via the official route.
+
+        For multimodal (image is not None): uses image + text chat template.
+        For text-only (image is None): uses text-only chat template with no
+        image token, no pixel_values, no image_grid_thw.
 
         Uses ``processor.apply_chat_template`` with ``enable_thinking=False``
         so the assistant prefix ends after the empty ``<think>...</think>``
         block.  The returned dict contains ``input_ids`` and
         ``attention_mask`` ready for ``model(**prefix)``.
         """
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "image", "image": image},
-                {"type": "text", "text": prompt},
-            ],
-        }]
+        if image is not None:
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": prompt},
+                ],
+            }]
+        else:
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                ],
+            }]
         try:
             prefix = self.processor.apply_chat_template(
                 messages,
@@ -173,19 +200,36 @@ class QwenHFBackend(VisionLanguageModel):
         return {k: v.to(device) for k, v in prefix.items()}
 
     def _prepare(self, images, prompts, *, padding_side: str):
+        """Prepare batch inputs for generation.
+
+        Handles both multimodal (images present) and text-only (all images
+        are None) cases. For text-only, the processor is called without
+        the images argument to avoid passing [None].
+        """
         processor = self.processor
-        texts = [self._render(prompt) for prompt in prompts]
+        # Determine if this is a text-only batch (all images are None).
+        all_none = all(img is None for img in images)
+        texts = [self._render(prompt, image=not all_none) for prompt in prompts]
         tokenizer = getattr(processor, "tokenizer", None)
         old_side = getattr(tokenizer, "padding_side", "right") if tokenizer else None
         if tokenizer is not None:
             tokenizer.padding_side = padding_side
         try:
-            batch = processor(
-                images=list(images),
-                text=texts,
-                padding=True,
-                return_tensors="pt",
-            )
+            if all_none:
+                # Text-only path: no images argument to processor.
+                batch = processor(
+                    text=texts,
+                    padding=True,
+                    return_tensors="pt",
+                )
+            else:
+                # Multimodal path: pass images list.
+                batch = processor(
+                    images=list(images),
+                    text=texts,
+                    padding=True,
+                    return_tensors="pt",
+                )
         finally:
             if tokenizer is not None and old_side is not None:
                 tokenizer.padding_side = old_side
