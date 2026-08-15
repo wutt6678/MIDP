@@ -598,3 +598,174 @@ class TestMetadataCarryThrough:
         assert result.scoring_version != ""
         assert result.prompt_hash != ""
         assert result.latency_ms >= 0
+
+
+class TestModelConfigSha:
+    """Verify model-config SHA computation (Commit B)."""
+
+    def test_model_config_sha_computed(self, runner: BaselineRunner):
+        """Even without a YAML file, the runner computes a deterministic SHA."""
+        assert runner._model_config_sha
+        assert len(runner._model_config_sha) == 64  # SHA-256 hex
+
+    def test_model_config_sha_deterministic(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config
+    ):
+        r1 = BaselineRunner(
+            stub_backend, probe_jsonl, tmp_path / "o1", stub_model_config, resume=False
+        )
+        r2 = BaselineRunner(
+            stub_backend, probe_jsonl, tmp_path / "o2", stub_model_config, resume=False
+        )
+        assert r1._model_config_sha == r2._model_config_sha
+
+    def test_model_config_sha_from_yaml(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config
+    ):
+        """When a YAML path is given, the SHA is of the file content."""
+        yaml_path = tmp_path / "model.yaml"
+        yaml_path.write_text("model:\n  backend: stub\n")
+        runner = BaselineRunner(
+            stub_backend,
+            probe_jsonl,
+            tmp_path / "out",
+            stub_model_config,
+            resume=False,
+            model_config_path=yaml_path,
+        )
+        from route_data.eval.baseline_runner import _sha256_file
+
+        expected = _sha256_file(yaml_path)
+        assert runner._model_config_sha == expected
+
+
+class TestManifestDrivenVerification:
+    """Verify manifest-driven SHA verification (Commit B)."""
+
+    def test_no_manifest_raises(self, runner: BaselineRunner):
+        with pytest.raises(RuntimeError, match="No dataset manifest"):
+            runner.verify_input_hashes_from_manifest()
+
+    def test_manifest_missing_field_raises(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config
+    ):
+        bad_manifest = tmp_path / "bad_manifest.json"
+        bad_manifest.write_text(json.dumps({"unrelated": True}))
+        runner = BaselineRunner(
+            stub_backend,
+            probe_jsonl,
+            tmp_path / "out",
+            stub_model_config,
+            resume=False,
+            dataset_manifest_path=bad_manifest,
+        )
+        with pytest.raises(RuntimeError, match="does not contain"):
+            runner.verify_input_hashes_from_manifest()
+
+    def test_manifest_verification_passes(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config
+    ):
+        from route_data.eval.baseline_runner import _sha256_file
+
+        actual_sha = _sha256_file(probe_jsonl)
+        manifest = {
+            "dataset_artifacts": {
+                "route_probes": {"sha256": actual_sha}
+            }
+        }
+        manifest_path = tmp_path / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+        runner = BaselineRunner(
+            stub_backend,
+            probe_jsonl,
+            tmp_path / "out",
+            stub_model_config,
+            resume=False,
+            dataset_manifest_path=manifest_path,
+        )
+        assert runner.verify_input_hashes_from_manifest() is True
+
+    def test_manifest_verification_fails_on_mismatch(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config
+    ):
+        manifest = {
+            "dataset_artifacts": {
+                "route_probes": {"sha256": "0" * 64}
+            }
+        }
+        manifest_path = tmp_path / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+        runner = BaselineRunner(
+            stub_backend,
+            probe_jsonl,
+            tmp_path / "out",
+            stub_model_config,
+            resume=False,
+            dataset_manifest_path=manifest_path,
+        )
+        with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+            runner.verify_input_hashes_from_manifest()
+
+
+class TestStrongerCacheKey:
+    """Verify the cache key includes model-config provenance (Commit B)."""
+
+    def test_cache_key_includes_model_config_sha(self, runner: BaselineRunner):
+        """The cache key should be a valid SHA-256 hex digest."""
+        probe = runner.probes[0]
+        key = runner._cache_key(probe)
+        assert len(key) == 64
+        assert all(c in "0123456789abcdef" for c in key)
+
+    def test_different_config_different_key(
+        self, stub_backend, probe_jsonl, tmp_path
+    ):
+        from route_data.models.registry import create_backend
+
+        cfg1 = ModelConfig(backend="stub", model_id="model-a", revision="r1")
+        cfg2 = ModelConfig(backend="stub", model_id="model-b", revision="r1")
+        b1 = create_backend(cfg1)
+        b2 = create_backend(cfg2)
+        r1 = BaselineRunner(b1, probe_jsonl, tmp_path / "o1", cfg1, resume=False)
+        r2 = BaselineRunner(b2, probe_jsonl, tmp_path / "o2", cfg2, resume=False)
+        probe = r1.probes[0]
+        assert r1._cache_key(probe) != r2._cache_key(probe)
+
+
+class TestStrongerFingerprint:
+    """Verify the stub fingerprint includes richer metadata (Commit B)."""
+
+    def test_fingerprint_has_dtype(self, stub_backend):
+        fp = stub_backend.fingerprint()
+        assert "dtype" in fp
+        assert fp["dtype"] != ""
+
+    def test_fingerprint_has_quantization(self, stub_backend):
+        fp = stub_backend.fingerprint()
+        assert "quantization" in fp
+
+    def test_fingerprint_has_attn_implementation(self, stub_backend):
+        fp = stub_backend.fingerprint()
+        assert "attn_implementation" in fp
+
+    def test_fingerprint_has_processor_id(self, stub_backend):
+        fp = stub_backend.fingerprint()
+        assert "processor_id" in fp
+
+    def test_fingerprint_id_deterministic(self, stub_model_config):
+        from route_data.models.registry import create_backend
+
+        b1 = create_backend(stub_model_config)
+        b2 = create_backend(stub_model_config)
+        assert b1.fingerprint()["fingerprint_id"] == b2.fingerprint()["fingerprint_id"]
+
+    def test_different_dtype_different_fingerprint(self, stub_model_config):
+        from route_data.models.registry import create_backend
+
+        cfg2 = ModelConfig(
+            backend="stub", model_id="test-model",
+            revision="abc123", dtype="float32",
+        )
+        b1 = create_backend(stub_model_config)
+        b2 = create_backend(cfg2)
+        assert b1.fingerprint()["fingerprint_id"] != b2.fingerprint()["fingerprint_id"]

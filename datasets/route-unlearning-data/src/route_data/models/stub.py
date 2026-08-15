@@ -88,6 +88,15 @@ class StubVisionModel(VisionLanguageModel):
             "model_id": self.config.model_id,
             "revision": self._resolved_revision,
             "seed": self.config.seed,
+            "dtype": self.config.dtype,
+            "attn_implementation": self.config.attn_implementation,
+            "processor_id": self.config.resolved_processor_id,
+            "quantization": {
+                "enabled": self.config.quantization.enabled,
+                "mode": self.config.quantization.mode,
+                "compute_dtype": self.config.quantization.compute_dtype,
+                "double_quant": self.config.quantization.double_quant,
+            },
             "generation": {
                 "do_sample": self.config.generation.do_sample,
                 "temperature": self.config.generation.temperature,

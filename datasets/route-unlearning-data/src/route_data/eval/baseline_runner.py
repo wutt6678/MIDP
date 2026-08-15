@@ -208,6 +208,13 @@ class BaselineRunner:
         Validated model configuration (provides revision + fingerprint).
     resume:
         When *True*, load the on-disk cache and skip already-scored probes.
+    dataset_manifest_path:
+        Optional path to the research dataset manifest JSON.  When provided,
+        :meth:`verify_input_hashes_from_manifest` reads the expected probe
+        SHA-256 from the manifest instead of relying on a hard-coded literal.
+    model_config_path:
+        Optional path to the model config YAML.  When provided, its SHA-256
+        is computed and incorporated into the cache key.
     """
 
     def __init__(
@@ -217,18 +224,34 @@ class BaselineRunner:
         output_dir: str | Path,
         model_config: ModelConfig,
         resume: bool = True,
+        dataset_manifest_path: str | Path | None = None,
+        model_config_path: str | Path | None = None,
     ):
         self.backend = backend
         self.probe_path = Path(probe_path)
         self.output_dir = Path(output_dir)
         self.model_config = model_config
         self.resume = resume
+        self.dataset_manifest_path = (
+            Path(dataset_manifest_path) if dataset_manifest_path else None
+        )
+        self.model_config_path = (
+            Path(model_config_path) if model_config_path else None
+        )
 
         self._fingerprint = backend.fingerprint()
         self._fingerprint_id: str = str(
             self._fingerprint.get("fingerprint_id", "unknown")
         )
         self._cache_dir = self.output_dir / ".cache"
+
+        # Compute model-config SHA from the source YAML (or serialised dataclass).
+        self._model_config_sha: str = self._compute_model_config_sha()
+
+        # Load the dataset manifest if provided.
+        self._dataset_manifest: dict[str, Any] | None = (
+            self._load_dataset_manifest() if self.dataset_manifest_path else None
+        )
 
         self.probes: list[BaselineProbe] = self.load_probes()
         self._results: list[BaselineResult] = (
@@ -260,6 +283,54 @@ class BaselineRunner:
         log.info("Probe file hash verified: %s", actual[:16])
         return True
 
+    def verify_input_hashes_from_manifest(self) -> bool:
+        """Read the expected probe SHA-256 from the dataset manifest.
+
+        The manifest must contain ``dataset_artifacts.route_probes.sha256``.
+        Falls back to :meth:`verify_input_hashes` with the manifest value.
+        """
+        if self._dataset_manifest is None:
+            raise RuntimeError(
+                "No dataset manifest loaded.  Pass dataset_manifest_path to "
+                "the constructor or call verify_input_hashes() directly."
+            )
+        expected = (
+            self._dataset_manifest
+            .get("dataset_artifacts", {})
+            .get("route_probes", {})
+            .get("sha256")
+        )
+        if not expected:
+            raise RuntimeError(
+                "Dataset manifest does not contain "
+                "dataset_artifacts.route_probes.sha256"
+            )
+        return self.verify_input_hashes(expected)
+
+    # ------------------------------------------------------------------ #
+    # Manifest / config helpers
+    # ------------------------------------------------------------------ #
+
+    def _load_dataset_manifest(self) -> dict[str, Any] | None:
+        """Load and return the dataset manifest JSON, or *None* on failure."""
+        if not self.dataset_manifest_path or not self.dataset_manifest_path.is_file():
+            log.warning(
+                "Dataset manifest not found: %s", self.dataset_manifest_path
+            )
+            return None
+        with open(self.dataset_manifest_path) as f:
+            manifest = json.load(f)
+        log.info("Loaded dataset manifest from %s", self.dataset_manifest_path)
+        return manifest
+
+    def _compute_model_config_sha(self) -> str:
+        """SHA-256 of the model config YAML (or serialised dataclass)."""
+        if self.model_config_path and self.model_config_path.is_file():
+            return _sha256_file(self.model_config_path)
+        # Fallback: hash the serialised dataclass.
+        raw = json.dumps(asdict(self.model_config), sort_keys=True, default=str)
+        return hashlib.sha256(raw.encode()).hexdigest()
+
     # ------------------------------------------------------------------ #
     # Cache / resume
     # ------------------------------------------------------------------ #
@@ -269,7 +340,13 @@ class BaselineRunner:
         return self._cache_dir / "baseline_cache.jsonl"
 
     def _cache_key(self, probe: BaselineProbe) -> str:
-        """Composite cache key for deterministic resumption."""
+        """Composite cache key for deterministic resumption.
+
+        The key includes the probe identity, model revision, prompt hash,
+        image hash, scoring version, and — when available — the route-probe
+        SHA from the dataset manifest and the model-config SHA so that any
+        change to the dataset or model config invalidates the cache.
+        """
         parts = [
             probe.probe_id,
             self.model_config.revision or "none",
@@ -277,6 +354,17 @@ class BaselineRunner:
             probe.image_sha256 or "none",
             SCORING_VERSION,
         ]
+        # Stronger key: include dataset and model config provenance.
+        route_sha = "none"
+        if self._dataset_manifest:
+            route_sha = (
+                self._dataset_manifest
+                .get("dataset_artifacts", {})
+                .get("route_probes", {})
+                .get("sha256", "none")
+            )
+        parts.append(route_sha)
+        parts.append(self._model_config_sha[:16])
         raw = "|".join(parts)
         return hashlib.sha256(raw.encode()).hexdigest()
 
@@ -294,7 +382,10 @@ class BaselineRunner:
         return {self._cache_key_for_result(r) for r in self._results}
 
     def _cache_key_for_result(self, result: BaselineResult) -> str:
-        """Recompute the cache key from a result record."""
+        """Recompute the cache key from a result record.
+
+        Must produce the same key as :meth:`_cache_key` for the same probe.
+        """
         parts = [
             result.probe_id,
             result.model_revision or "none",
@@ -302,6 +393,16 @@ class BaselineRunner:
             result.image_sha256 or "none",
             result.scoring_version,
         ]
+        route_sha = "none"
+        if self._dataset_manifest:
+            route_sha = (
+                self._dataset_manifest
+                .get("dataset_artifacts", {})
+                .get("route_probes", {})
+                .get("sha256", "none")
+            )
+        parts.append(route_sha)
+        parts.append(self._model_config_sha[:16])
         raw = "|".join(parts)
         return hashlib.sha256(raw.encode()).hexdigest()
 

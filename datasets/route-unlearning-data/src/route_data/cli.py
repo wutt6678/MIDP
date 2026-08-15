@@ -4152,19 +4152,29 @@ def cmd_experiment_baseline(args) -> int:
 
     from .eval.baseline_runner import BaselineRunner
 
+    # Resolve optional dataset manifest path.
+    dataset_manifest = getattr(args, "dataset_manifest", None)
+    # Resolve model config path for cache-key strengthening.
+    model_config_path = getattr(args, "model_config", None)
+
     runner = BaselineRunner(
         backend=backend,
         probe_path=probe_p,
         output_dir=output_dir,
         model_config=model_cfg,
         resume=args.resume,
+        dataset_manifest_path=dataset_manifest,
+        model_config_path=model_config_path,
     )
 
     # Verify the frozen probe-file hash before any inference.
     if not args.dry_run:
-        runner.verify_input_hashes(
-            "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864"
-        )
+        if dataset_manifest:
+            runner.verify_input_hashes_from_manifest()
+        else:
+            runner.verify_input_hashes(
+                "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864"
+            )
 
     if args.dry_run:
         log.info("[dry-run] baseline for %d probes", len(runner.probes))
@@ -4434,6 +4444,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="run a small probe subset covering all 5 families",
+    )
+    p.add_argument(
+        "--dataset-manifest",
+        default=None,
+        dest="dataset_manifest",
+        help="path to research_dataset_manifest.json for manifest-driven SHA verification",
     )
     _common_flags(p)
     p.set_defaults(func=cmd_experiment_baseline)
