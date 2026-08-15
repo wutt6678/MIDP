@@ -1,10 +1,10 @@
 {
   "manifest_version": "2.0",
   "manifest_purpose": "Frozen evidence bundle for FIUBench unlearning experiments. All hashes are independently recomputed from source files.",
-  "created_at": "2026-08-14T16:55:59Z",
+  "created_at": "2026-08-15T01:40:16Z",
   "code_provenance": {
     "dataset_creation_commit": "af4dbd3479e8b98d1d63e7e4cc782efce6f8eb02",
-    "evidence_generation_code_commit": "27f975e4df83cb68c4ca4649aeb72096725ba2fc",
+    "evidence_generation_code_commit": "666e4778002e521319ab6aa2ff6e20fcf6122327",
     "midp_git_dirty": false,
     "fiubench_upstream_commit": "8e12cddc431eafd129c275d46a3d882474cfcf61",
     "source_version": "fiubench-8e12cdd",
@@ -123,13 +123,15 @@
   "quality_evidence": {
     "manual_audit": {
       "path": "fiubench_manual_audit_report.json",
-      "sha256": "c493c64409a4841173962b884388a2d39735e16a63b84a7523aa7065f34046a0",
-      "size_bytes": 65508,
+      "sha256": "71243c76a7ef77f98f61c70d2beea19de7b7f9337df2e349b643b83ab9e16c4b",
+      "size_bytes": 70348,
       "total_items": 165,
       "fail": 0,
       "uncertain": 0,
       "unreviewed": 0,
-      "gate_pass": true
+      "gate_pass": true,
+      "audited_route_probe_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+      "audited_route_probe_count": 500
     },
     "attribute_distribution": {
       "path": "outputs/full_fiubench/evidence/attribute_distribution_report.json",
@@ -183,10 +185,12 @@
       "excluded_attrs_not_in_v2": true,
       "experiment_subset_within_reliability": true,
       "git_dirty_false": true,
+      "manual_audit_matches_current_route_artifact": true,
       "manual_audit_no_fail": true,
       "manual_audit_no_uncertain": true,
       "manual_audit_no_unreviewed": true,
       "manual_audit_pass": true,
+      "manual_audit_route_count_matches": true,
       "model_fingerprint_nonempty": true,
       "model_revision_is_full_sha": true,
       "non_whitelisted_accepted_zero": true,
@@ -202,6 +206,6 @@
   },
   "definition_of_done": {
     "ready_for_experiments": true,
-    "summary": "Generated programmatically from 27f975e4df83cb68c4ca4649aeb72096725ba2fc. 573 images, 22920 score rows, 30660 canonical samples. 13 CelebA-whitelisted attributes; 10 selected for experiments. All hard-stop checks: PASS."
+    "summary": "Generated programmatically from 666e4778002e521319ab6aa2ff6e20fcf6122327. 573 images, 22920 score rows, 30660 canonical samples. 13 CelebA-whitelisted attributes; 10 selected for experiments. All hard-stop checks: PASS."
   }
 }
