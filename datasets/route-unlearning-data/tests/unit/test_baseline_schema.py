@@ -1420,9 +1420,8 @@ class TestCommit5MetadataEnrichment:
         with patch(
             "route_data.eval.baseline_runner._read_jsonl",
             return_value=[{}] * 500,
-        ):
-            with pytest.raises(RuntimeError, match="validation failed"):
-                runner.validate_dataset_manifest()
+        ), pytest.raises(RuntimeError, match="validation failed"):
+            runner.validate_dataset_manifest()
 
 
 class TestFrozenEvidenceIntegration:
@@ -1576,8 +1575,7 @@ class TestProtocolRolePopulation:
             }},
         ]
         with open(path, "w") as f:
-            for row in rows:
-                f.write(json.dumps(row) + "\n")
+            f.writelines(json.dumps(row) + "\n" for row in rows)
         return path
 
     @pytest.fixture()
@@ -1917,18 +1915,16 @@ class TestRequireCleanGit:
             BaselineRunner,
             "_get_git_state",
             staticmethod(lambda: {"git_commit": "c" * 40, "git_dirty": True}),
-        ):
-            with pytest.raises(RuntimeError, match="Git tree is dirty"):
-                runner.require_clean_git()
+        ), pytest.raises(RuntimeError, match="Git tree is dirty"):
+            runner.require_clean_git()
 
     def test_no_git_commit_raises(self, runner):
         with patch.object(
             BaselineRunner,
             "_get_git_state",
             staticmethod(lambda: {"git_commit": "", "git_dirty": False}),
-        ):
-            with pytest.raises(RuntimeError, match="Cannot determine Git commit"):
-                runner.require_clean_git()
+        ), pytest.raises(RuntimeError, match="Cannot determine Git commit"):
+            runner.require_clean_git()
 
 
 class TestManifestDirtyTree:
@@ -1942,9 +1938,8 @@ class TestManifestDirtyTree:
             BaselineRunner,
             "_get_git_state",
             staticmethod(lambda: {"git_commit": "d" * 40, "git_dirty": True}),
-        ):
-            with pytest.raises(RuntimeError, match="Git tree is dirty"):
-                runner.generate_baseline_manifest()
+        ), pytest.raises(RuntimeError, match="Git tree is dirty"):
+            runner.generate_baseline_manifest()
 
     def test_no_git_commit_raises(self, runner):
         runner.run_all()
@@ -1954,9 +1949,8 @@ class TestManifestDirtyTree:
             BaselineRunner,
             "_get_git_state",
             staticmethod(lambda: {"git_commit": "", "git_dirty": False}),
-        ):
-            with pytest.raises(RuntimeError, match="Cannot determine Git commit"):
-                runner.generate_baseline_manifest()
+        ), pytest.raises(RuntimeError, match="Cannot determine Git commit"):
+            runner.generate_baseline_manifest()
 
 
 class TestScoringProvenanceP11:

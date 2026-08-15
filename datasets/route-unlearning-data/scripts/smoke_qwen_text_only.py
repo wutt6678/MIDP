@@ -26,13 +26,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import platform
 import subprocess
 import sys
 import time
 from pathlib import Path
-
 
 # --------------------------------------------------------------------------- #
 # Git state helpers
@@ -143,7 +141,7 @@ def main() -> int:
     backend = create_backend(cfg)
 
     # ── Generate via production path (text-only, image=None) ────────────
-    print(f"\n[3/6] Generating text (text-only, image=None) ...")
+    print("\n[3/6] Generating text (text-only, image=None) ...")
     print(f"  Prompt: {args.prompt!r}")
     started = time.perf_counter()
     response = backend.generate(None, args.prompt)
@@ -153,7 +151,7 @@ def main() -> int:
     print(f"  Output: {generated_text!r}")
 
     # ── Verify outputs (P1-6) ───────────────────────────────────────────
-    print(f"\n[4/6] Verifying text-only path ...")
+    print("\n[4/6] Verifying text-only path ...")
     passed = True
 
     # Response non-empty
@@ -194,13 +192,13 @@ def main() -> int:
     image_used = False
 
     # ── Git state ───────────────────────────────────────────────────────
-    print(f"\n[5/6] Checking Git state ...")
+    print("\n[5/6] Checking Git state ...")
     git_state = _get_git_state()
     print(f"  git_commit: {str(git_state['git_commit'])[:12]}...")
     print(f"  git_dirty:  {git_state['git_dirty']}")
 
     # ── Write evidence (P1-7) ───────────────────────────────────────────
-    print(f"\n[6/6] Writing evidence ...")
+    print("\n[6/6] Writing evidence ...")
 
     # Compute model config SHA
     import hashlib
