@@ -29,7 +29,11 @@ from typing import Any
 
 from ..config import ModelConfig
 from ..models.base import VisionLanguageModel
-from ..models.scoring import SCORING_VERSION, binary_probability
+from ..models.scoring import (
+    CANDIDATE_PROTOCOL_VERSION,
+    SCORING_VERSION,
+    binary_probability,
+)
 
 log = logging.getLogger(__name__)
 
@@ -188,6 +192,11 @@ class BaselineResult:
     prompt_hash: str = ""
     latency_ms: float = 0.0
     error: str | None = None
+    # Immutable cache provenance (Commit 2 — P0-2).
+    cache_key: str = ""
+    route_probe_sha256: str = ""
+    model_config_sha256: str = ""
+    candidate_protocol_version: str = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -357,56 +366,75 @@ class BaselineRunner:
             SCORING_VERSION,
         ]
         # Stronger key: include dataset and model config provenance.
-        route_sha = "none"
-        if self._dataset_manifest:
-            route_sha = (
-                self._dataset_manifest
-                .get("dataset_artifacts", {})
-                .get("route_probes", {})
-                .get("sha256", "none")
-            )
+        route_sha = self._route_probe_sha()
         parts.append(route_sha)
-        parts.append(self._model_config_sha[:16])
+        parts.append(self._model_config_sha)  # full 64-char SHA
         raw = "|".join(parts)
         return hashlib.sha256(raw.encode()).hexdigest()
 
     def _load_cache(self) -> list[BaselineResult]:
-        """Load previously completed results from the cache file."""
+        """Load previously completed results from the cache file.
+
+        Rows whose immutable provenance does not match the current runner
+        configuration are rejected (skipped with a warning).
+        """
         if not self._cache_path.is_file():
             return []
         results: list[BaselineResult] = []
+        rejected = 0
+        current_route_sha = self._route_probe_sha()
+        current_config_sha = self._model_config_sha
+        current_fp = self._fingerprint_id
         for doc in _read_jsonl(self._cache_path):
-            results.append(BaselineResult(**doc))
+            row = BaselineResult(**doc)
+            if not self._cache_row_compatible(
+                row, current_route_sha, current_config_sha, current_fp,
+            ):
+                rejected += 1
+                continue
+            results.append(row)
+        if rejected:
+            log.warning(
+                "Rejected %d incompatible cache rows from %s",
+                rejected, self._cache_path,
+            )
         log.info("Loaded %d cached results from %s", len(results), self._cache_path)
         return results
 
     def _done_keys(self) -> set[str]:
-        return {self._cache_key_for_result(r) for r in self._results}
+        return {r.cache_key for r in self._results if r.cache_key}
 
-    def _cache_key_for_result(self, result: BaselineResult) -> str:
-        """Recompute the cache key from a result record.
+    def _cache_row_compatible(
+        self,
+        row: BaselineResult,
+        current_route_sha: str,
+        current_config_sha: str,
+        current_fp: str,
+    ) -> bool:
+        """Return True if a cached row's immutable provenance matches."""
+        if row.route_probe_sha256 and row.route_probe_sha256 != current_route_sha:
+            return False
+        if row.model_config_sha256 and row.model_config_sha256 != current_config_sha:
+            return False
+        if row.model_fingerprint and row.model_fingerprint != current_fp:
+            return False
+        if row.scoring_version and row.scoring_version != SCORING_VERSION:
+            return False
+        return not (
+            row.candidate_protocol_version
+            and row.candidate_protocol_version != CANDIDATE_PROTOCOL_VERSION
+        )
 
-        Must produce the same key as :meth:`_cache_key` for the same probe.
-        """
-        parts = [
-            result.probe_id,
-            result.model_revision or "none",
-            result.prompt_hash,
-            result.image_sha256 or "none",
-            result.scoring_version,
-        ]
-        route_sha = "none"
+    def _route_probe_sha(self) -> str:
+        """Return the route-probe SHA from the dataset manifest (or 'none')."""
         if self._dataset_manifest:
-            route_sha = (
+            return (
                 self._dataset_manifest
                 .get("dataset_artifacts", {})
                 .get("route_probes", {})
                 .get("sha256", "none")
             )
-        parts.append(route_sha)
-        parts.append(self._model_config_sha[:16])
-        raw = "|".join(parts)
-        return hashlib.sha256(raw.encode()).hexdigest()
+        return "none"
 
     # ------------------------------------------------------------------ #
     # Single-probe execution
@@ -417,6 +445,8 @@ class BaselineRunner:
         fp = self._fingerprint_id
         rev = self.model_config.revision
         ph = _prompt_hash(probe.question)
+        cache_key = self._cache_key(probe)
+        route_sha = self._route_probe_sha()
         started = time.perf_counter()
 
         generated_answer = ""
@@ -550,6 +580,11 @@ class BaselineRunner:
             prompt_hash=ph,
             latency_ms=latency,
             error=error,
+            # Immutable cache provenance
+            cache_key=cache_key,
+            route_probe_sha256=route_sha,
+            model_config_sha256=self._model_config_sha,
+            candidate_protocol_version=CANDIDATE_PROTOCOL_VERSION,
         )
 
     # ------------------------------------------------------------------ #

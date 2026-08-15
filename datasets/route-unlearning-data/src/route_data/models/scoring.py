@@ -24,6 +24,11 @@ import torch
 # in the score-cache key so stale entries are automatically discarded.
 SCORING_VERSION = "2"
 
+# Increment when the candidate scoring protocol changes (e.g. different
+# candidates, different decision rule, different normalization).
+# Embedded in baseline cache provenance for strict invalidation.
+CANDIDATE_PROTOCOL_VERSION = "1"
+
 
 def gather_sequence_log_probs(logits: torch.Tensor, target_ids: torch.Tensor) -> float:
     """Total log-probability of a token sequence.
