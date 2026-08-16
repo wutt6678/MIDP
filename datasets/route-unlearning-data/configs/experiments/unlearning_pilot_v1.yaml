@@ -1,0 +1,74 @@
+# Stage 3 — Small Controlled Unlearning Pilot (v1)
+#
+# This config defines the first research-valid unlearning experiment.
+# Goal: Can a targeted intervention selectively alter behaviour associated
+#       with specific identities without damaging general visual attribute
+#       knowledge?
+#
+# Scale:  2 target identities (+ matched retain & control)
+# Method: LoRA-based targeted update (MVP)
+# Seed:   17
+#
+# This file is committed alongside the code; the selection manifest is
+# generated at runtime by ``pilot_selection.py`` and written to the
+# experiment output directory.
+
+experiment_id: fiubench_unlearning_pilot_v1
+
+base_model:
+  model_id: Qwen/Qwen3.5-9B
+  revision: "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+  backend: qwen_hf
+  dtype: bfloat16
+  fingerprint_id: d8a618064188e981
+
+baseline:
+  version: fiubench-qwen35-9b-preunlearn-v1
+  manifest_path: outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_manifest.json
+  results_path: outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_results.jsonl
+  manifest_sha256: d3366acb45851e5107ce91f408b51767e5f548f385a1269ffb61fbdab6413908
+  results_sha256: b3d497877fcfe1f4020cf7e751bbd4c0991064d2a67b0fd622090f487311cd50
+
+dataset:
+  route_probe_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl
+  route_probe_sha256: aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864
+  processed_dataset_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl
+  processed_dataset_sha256: 7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1
+
+selection:
+  target_identity_count: 2
+  retain_identity_count: 2
+  control_identity_count: 2
+  seed: 17
+  matching_criteria:
+    - protocol_role
+    - baseline_direct_visual_margin
+    - baseline_image_plus_name_margin
+    - attribute_state_composition
+    - image_count
+  preferred_role: train
+
+method:
+  name: lora_targeted_update
+  hyperparameters:
+    lora_rank: 8
+    lora_alpha: 16
+    learning_rate: 1.0e-4
+    num_steps: 50
+    retain_weight: 0.1
+    train_batch_size: 1
+    gradient_accumulation_steps: 4
+
+evaluation:
+  reuse_frozen_500_probes: true
+  primary_metric: signed_answer_margin
+  preserve_visual_capability: true
+  direct_visual_accuracy_gate: 0.98
+
+runtime:
+  seed: 17
+  output_dir: outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1
+
+code_provenance:
+  git_commit: b5ecc8a98d9c5acb5ed2979a66a4b95831fb6835
+  git_dirty: false
