@@ -25,10 +25,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
 logger = logging.getLogger(__name__)
+
+# Visual probe families that use signed_answer_margin
+VISUAL_FAMILIES = frozenset({
+    "direct_visual",
+    "image_plus_name",
+    "wrong_name",
+    "visual_text_conflict",
+})
 
 
 # --------------------------------------------------------------------------- #
@@ -56,7 +65,7 @@ class UnlearningConfig:
 
     # Training
     learning_rate: float = 1e-4
-    num_steps: int = 50
+    num_optimizer_steps: int = 50
     retain_weight: float = 0.1
     batch_size: int = 1
     gradient_accumulation_steps: int = 4
@@ -87,7 +96,14 @@ class UnlearningConfig:
 # --------------------------------------------------------------------------- #
 
 class ForgetDataset(Dataset):
-    """Dataset of samples from target identities to unlearn."""
+    """Dataset of samples from target identities to unlearn.
+
+    Each sample builds a full supervised chat example with user question
+    and assistant Yes/No answer.  Prompt tokens are masked with -100 so
+    that only the assistant answer tokens contribute to the forget loss.
+
+    All processor tensor outputs are preserved (P0-2).
+    """
 
     def __init__(
         self,
@@ -102,13 +118,15 @@ class ForgetDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         sample = self.samples[idx]
         image_uri = sample["image_uri"]
         question = sample["question"]
+        answer_label = sample["answer_label"]  # bool: True=Yes, False=No
+        answer_text = "Yes" if answer_label else "No"
 
-        # Build chat messages
-        messages = [
+        # -- Build user-only prompt to find assistant start position ------ #
+        user_messages = [
             {
                 "role": "user",
                 "content": [
@@ -119,23 +137,55 @@ class ForgetDataset(Dataset):
         ]
 
         try:
-            prompt = self.processor.apply_chat_template(
+            user_prompt = self.processor.apply_chat_template(
+                user_messages,
+                add_generation_prompt=True,
+                enable_thinking=False,
+            )
+        except TypeError:
+            user_prompt = self.processor.apply_chat_template(
+                user_messages,
+                add_generation_prompt=True,
+            )
+
+        user_tokens = self.processor.tokenizer(
+            user_prompt, return_tensors="pt", truncation=False,
+        )
+        assistant_start = user_tokens["input_ids"].shape[1]
+
+        # -- Build full conversation with assistant answer ---------------- #
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": question},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": answer_text}],
+            },
+        ]
+
+        try:
+            full_prompt = self.processor.apply_chat_template(
                 messages,
                 add_generation_prompt=False,
                 enable_thinking=False,
             )
         except TypeError:
-            prompt = self.processor.apply_chat_template(
+            full_prompt = self.processor.apply_chat_template(
                 messages,
                 add_generation_prompt=False,
             )
 
-        # Load and process image
+        # Load image
         from PIL import Image
         image = Image.open(image_uri).convert("RGB")
 
         inputs = self.processor(
-            text=prompt,
+            text=full_prompt,
             images=image,
             return_tensors="pt",
             truncation=True,
@@ -143,15 +193,58 @@ class ForgetDataset(Dataset):
             padding=False,
         )
 
-        return {
-            "input_ids": inputs["input_ids"].squeeze(0),
-            "attention_mask": inputs["attention_mask"].squeeze(0),
-            "pixel_values": inputs.get("pixel_values", torch.zeros(1, 3, 224, 224)),
-        }
+        # -- Preserve ALL processor tensor outputs (P0-2) --------------- #
+        result: dict[str, Any] = {}
+        for key, value in inputs.items():
+            if torch.is_tensor(value):
+                result[key] = value.squeeze(0)
+
+        # Hard-fail if required multimodal tensors are missing (P0-2)
+        if "pixel_values" not in result:
+            raise RuntimeError(
+                f"Required multimodal tensor 'pixel_values' missing from "
+                f"processor output for sample idx={idx}. "
+                f"Available keys: {sorted(inputs.keys())}"
+            )
+
+        # -- Build labels with prompt masking (P0-1) -------------------- #
+        labels = result["input_ids"].clone()
+        labels[:assistant_start] = -100
+        result["labels"] = labels
+
+        # -- Metadata for candidate-margin forget loss ------------------ #
+        result["_answer_position"] = assistant_start
+        result["_correct_answer_token_ids"] = self._get_answer_token_ids(
+            answer_text
+        )
+        result["_answer_label"] = answer_label
+
+        return result
+
+    def _get_answer_token_ids(self, answer_text: str) -> list[int]:
+        """Get token IDs for an answer string (e.g., 'Yes' or 'No')."""
+        tokenizer = self.processor.tokenizer
+        ids = tokenizer.encode(
+            answer_text, add_special_tokens=False, return_tensors="pt",
+        )
+        if ids.numel() > 0:
+            return ids[0].tolist()
+        # Fallback via vocab
+        tid = tokenizer.vocab.get(answer_text)
+        if tid is not None:
+            return [tid]
+        raise RuntimeError(
+            f"Cannot find token ID for answer text: {answer_text!r}"
+        )
 
 
 class RetainDataset(Dataset):
-    """Dataset of samples from retain identities or general visual examples."""
+    """Dataset of samples from retain identities or general visual examples.
+
+    Preserves all processor tensor outputs (P0-2) and builds labels with
+    prompt masking so only assistant answer tokens contribute to the
+    retain loss.
+    """
 
     def __init__(
         self,
@@ -166,12 +259,15 @@ class RetainDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         sample = self.samples[idx]
         image_uri = sample["image_uri"]
         question = sample["question"]
+        answer_label = sample["answer_label"]
+        answer_text = "Yes" if answer_label else "No"
 
-        messages = [
+        # -- Build user-only prompt for assistant start position -------- #
+        user_messages = [
             {
                 "role": "user",
                 "content": [
@@ -182,13 +278,45 @@ class RetainDataset(Dataset):
         ]
 
         try:
-            prompt = self.processor.apply_chat_template(
+            user_prompt = self.processor.apply_chat_template(
+                user_messages,
+                add_generation_prompt=True,
+                enable_thinking=False,
+            )
+        except TypeError:
+            user_prompt = self.processor.apply_chat_template(
+                user_messages,
+                add_generation_prompt=True,
+            )
+
+        user_tokens = self.processor.tokenizer(
+            user_prompt, return_tensors="pt", truncation=False,
+        )
+        assistant_start = user_tokens["input_ids"].shape[1]
+
+        # -- Full conversation with assistant answer -------------------- #
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": question},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": answer_text}],
+            },
+        ]
+
+        try:
+            full_prompt = self.processor.apply_chat_template(
                 messages,
                 add_generation_prompt=False,
                 enable_thinking=False,
             )
         except TypeError:
-            prompt = self.processor.apply_chat_template(
+            full_prompt = self.processor.apply_chat_template(
                 messages,
                 add_generation_prompt=False,
             )
@@ -197,7 +325,7 @@ class RetainDataset(Dataset):
         image = Image.open(image_uri).convert("RGB")
 
         inputs = self.processor(
-            text=prompt,
+            text=full_prompt,
             images=image,
             return_tensors="pt",
             truncation=True,
@@ -205,11 +333,25 @@ class RetainDataset(Dataset):
             padding=False,
         )
 
-        return {
-            "input_ids": inputs["input_ids"].squeeze(0),
-            "attention_mask": inputs["attention_mask"].squeeze(0),
-            "pixel_values": inputs.get("pixel_values", torch.zeros(1, 3, 224, 224)),
-        }
+        # -- Preserve ALL processor tensor outputs (P0-2) --------------- #
+        result: dict[str, Any] = {}
+        for key, value in inputs.items():
+            if torch.is_tensor(value):
+                result[key] = value.squeeze(0)
+
+        if "pixel_values" not in result:
+            raise RuntimeError(
+                f"Required multimodal tensor 'pixel_values' missing from "
+                f"processor output for sample idx={idx}. "
+                f"Available keys: {sorted(inputs.keys())}"
+            )
+
+        # -- Labels with prompt masking --------------------------------- #
+        labels = result["input_ids"].clone()
+        labels[:assistant_start] = -100
+        result["labels"] = labels
+
+        return result
 
 
 def build_forget_dataset(
@@ -386,27 +528,134 @@ def apply_lora(
 
 
 # --------------------------------------------------------------------------- #
+# Qwen-aware collator (P0-2)
+# --------------------------------------------------------------------------- #
+
+def qwen_collate_fn(
+    batch: list[dict[str, Any]],
+) -> dict[str, torch.Tensor]:
+    """Collate function for Qwen multimodal training batches.
+
+    Pads ``input_ids`` and ``labels`` with appropriate pad/ignore tokens,
+    stacks all other tensor fields, and preserves metadata keys prefixed
+    with ``_``.
+    """
+    pad_token_id = 0  # Qwen default pad token
+
+    # -- Determine max sequence length --------------------------------- #
+    max_len = max(item["input_ids"].shape[0] for item in batch)
+
+    padded_input_ids: list[torch.Tensor] = []
+    padded_attention_mask: list[torch.Tensor] = []
+    padded_labels: list[torch.Tensor] = []
+
+    for item in batch:
+        seq_len = item["input_ids"].shape[0]
+        pad_len = max_len - seq_len
+
+        padded_input_ids.append(
+            torch.cat([item["input_ids"], torch.full((pad_len,), pad_token_id, dtype=torch.long)])
+        )
+        padded_attention_mask.append(
+            torch.cat([item["attention_mask"], torch.zeros(pad_len, dtype=torch.long)])
+        )
+        padded_labels.append(
+            torch.cat([item["labels"], torch.full((pad_len,), -100, dtype=torch.long)])
+        )
+
+    result: dict[str, torch.Tensor] = {
+        "input_ids": torch.stack(padded_input_ids),
+        "attention_mask": torch.stack(padded_attention_mask),
+        "labels": torch.stack(padded_labels),
+    }
+
+    # -- Stack other tensor fields (pixel_values, image_grid_thw, …) --- #
+    all_keys = set()
+    for item in batch:
+        all_keys.update(item.keys())
+
+    for key in all_keys:
+        if key in ("input_ids", "attention_mask", "labels") or key.startswith("_"):
+            continue
+        tensors = [item[key] for key in [key] for item in batch if key in item]
+        if len(tensors) == len(batch) and torch.is_tensor(tensors[0]):
+            try:
+                result[key] = torch.stack(tensors)
+            except RuntimeError:
+                # Variable-length non-padded tensors — keep as list
+                result[key] = tensors
+
+    # -- Preserve metadata for candidate-margin loss ------------------- #
+    for key in ("_answer_position", "_correct_answer_token_ids", "_answer_label"):
+        if key in batch[0]:
+            result[key] = [item[key] for item in batch]
+
+    return result
+
+
+# --------------------------------------------------------------------------- #
 # Loss functions
 # --------------------------------------------------------------------------- #
 
 def compute_forget_loss(
     model: Any,
     batch: dict[str, torch.Tensor],
-    labels: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Compute the forget loss (negative log-likelihood on target samples).
+    """Candidate-margin forget loss (P0-1).
 
-    For unlearning, we want to *increase* the loss on forget samples,
-    so we return the negative of the standard LM loss.
+    Computes ``M = logP(correct_answer) − logP(wrong_answer)`` at the
+    assistant answer position and returns ``M`` so that minimising the
+    loss *reduces* the candidate margin.
     """
-    outputs = model(
-        input_ids=batch["input_ids"],
-        attention_mask=batch["attention_mask"],
-        pixel_values=batch.get("pixel_values"),
-        labels=batch["input_ids"] if labels is None else labels,
-    )
-    # Return negative loss so that minimizing this *increases* the LM loss
-    return -outputs.loss
+    # Forward with labels so the model computes CE loss (unused here, but
+    # ensures correct graph if needed).
+    model_kwargs: dict[str, Any] = {
+        "input_ids": batch["input_ids"],
+        "attention_mask": batch["attention_mask"],
+    }
+    # Pass all multimodal tensors
+    for key in batch:
+        if key not in ("input_ids", "attention_mask", "labels") and not key.startswith("_"):
+            if torch.is_tensor(batch[key]) or (
+                isinstance(batch[key], list) and len(batch[key]) > 0
+            ):
+                model_kwargs[key] = batch[key]
+
+    outputs = model(**model_kwargs)
+    logits = outputs.logits  # (B, T, V)
+
+    answer_positions = batch["_answer_position"]
+    correct_token_ids_list = batch["_correct_answer_token_ids"]
+
+    yes_id = model_kwargs.get("_yes_token_id")
+    no_id = model_kwargs.get("_no_token_id")
+    if yes_id is None:
+        # Resolve from the first sample's metadata
+        yes_id = correct_token_ids_list[0][0] if correct_token_ids_list[0][0] != 16484 else 16484
+        # Fallback: find Yes/No token ids from the batch metadata
+        tokenizer = None
+        if hasattr(model, "config") and hasattr(model.config, "_name_or_path"):
+            pass  # We'll use the stored token ids directly
+
+    total_margin = torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
+
+    for i in range(logits.shape[0]):
+        pos = answer_positions[i]
+        correct_ids = correct_token_ids_list[i]
+        # Use first token of the answer for margin computation
+        correct_id = correct_ids[0] if isinstance(correct_ids, list) else correct_ids
+        wrong_id = 16484 if correct_id != 16484 else 7681  # Yes=16484, No=7681
+
+        log_probs = torch.log_softmax(logits[i, pos, :], dim=-1)
+        log_p_correct = log_probs[correct_id]
+        log_p_wrong = log_probs[wrong_id]
+
+        # M = logP(correct) - logP(wrong)
+        margin = log_p_correct - log_p_wrong
+        total_margin = total_margin + margin
+
+    # L_forget = mean(M) — minimising reduces the margin
+    return total_margin / logits.shape[0]
 
 
 def compute_retain_loss(
@@ -414,42 +663,55 @@ def compute_retain_loss(
     batch: dict[str, torch.Tensor],
     reference_model: Any | None = None,
 ) -> torch.Tensor:
-    """Compute the retain loss (standard LM loss on retain samples).
+    """Compute the retain loss.
 
-    If reference_model is provided, use KL divergence instead.
+    If *reference_model* is provided, use KL divergence to the frozen
+    reference on the assistant-answer tokens (where ``labels != -100``).
+    Otherwise fall back to standard LM loss with the masked labels.
     """
+    model_kwargs: dict[str, Any] = {
+        "input_ids": batch["input_ids"],
+        "attention_mask": batch["attention_mask"],
+    }
+    for key in batch:
+        if key not in ("input_ids", "attention_mask", "labels") and not key.startswith("_"):
+            if torch.is_tensor(batch[key]) or (
+                isinstance(batch[key], list) and len(batch[key]) > 0
+            ):
+                model_kwargs[key] = batch[key]
+
     if reference_model is not None:
         # KL divergence to frozen reference
         with torch.no_grad():
-            ref_outputs = reference_model(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                pixel_values=batch.get("pixel_values"),
-            )
+            ref_outputs = reference_model(**model_kwargs)
             ref_logits = ref_outputs.logits
 
-        curr_outputs = model(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            pixel_values=batch.get("pixel_values"),
-        )
+        curr_outputs = model(**model_kwargs)
         curr_logits = curr_outputs.logits
 
-        # KL divergence: sum over vocab, mean over sequence
+        # Mask to assistant-answer positions only
+        labels = batch["labels"]
+        answer_mask = labels != -100  # (B, T)
+
+        # Shift for next-token prediction
+        shift_mask = answer_mask[:, 1:]
+        shift_curr = curr_logits[:, :-1, :]
+        shift_ref = ref_logits[:, :-1, :]
+
+        if shift_mask.sum() == 0:
+            return torch.tensor(0.0, device=curr_logits.device, requires_grad=True)
+
+        # KL divergence over answer tokens only
         kl = torch.nn.functional.kl_div(
-            torch.log_softmax(curr_logits, dim=-1),
-            torch.softmax(ref_logits, dim=-1),
+            torch.log_softmax(shift_curr, dim=-1),
+            torch.softmax(shift_ref, dim=-1),
             reduction="batchmean",
         )
         return kl
     else:
-        # Standard LM loss
-        outputs = model(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            pixel_values=batch.get("pixel_values"),
-            labels=batch["input_ids"],
-        )
+        # Standard LM loss with masked labels
+        model_kwargs["labels"] = batch["labels"]
+        outputs = model(**model_kwargs)
         return outputs.loss
 
 
@@ -482,18 +744,33 @@ class UnlearningTrainer:
             for param in self.reference_model.parameters():
                 param.requires_grad = False
 
-        # Data loaders
+        # -- Deterministic seeding (P0-13) ----------------------------- #
+        seed = config.seed
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
+        self.generator = torch.Generator()
+        self.generator.manual_seed(seed)
+
+        # Data loaders (seeded generator + Qwen collator)
         self.forget_loader = DataLoader(
             forget_dataset,
             batch_size=config.batch_size,
             shuffle=True,
             num_workers=0,
+            generator=self.generator,
+            collate_fn=qwen_collate_fn,
         )
         self.retain_loader = DataLoader(
             retain_dataset,
             batch_size=config.batch_size,
             shuffle=True,
             num_workers=0,
+            generator=self.generator,
+            collate_fn=qwen_collate_fn,
         )
 
         # Optimizer
@@ -505,6 +782,18 @@ class UnlearningTrainer:
             weight_decay=0.01,
         )
 
+        # -- Warmup LR scheduler (P1-3) -------------------------------- #
+        if config.warmup_steps > 0:
+            def lr_lambda(step: int) -> float:
+                if step < config.warmup_steps:
+                    return (step + 1) / config.warmup_steps
+                return 1.0
+            self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+                self.optimizer, lr_lambda,
+            )
+        else:
+            self.scheduler = None
+
         # Training state
         self.global_step = 0
         self.training_log: list[dict[str, float]] = []
@@ -512,9 +801,18 @@ class UnlearningTrainer:
         # Move model to device
         self.device = torch.device(config.device)
 
-    def _move_batch(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        """Move batch tensors to the training device."""
-        return {k: v.to(self.device) for k, v in batch.items()}
+    def _move_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
+        """Move batch tensors to the training device.
+
+        Non-tensor values (metadata lists) are passed through unchanged.
+        """
+        result: dict[str, Any] = {}
+        for k, v in batch.items():
+            if torch.is_tensor(v):
+                result[k] = v.to(self.device)
+            else:
+                result[k] = v
+        return result
 
     def train(self) -> dict[str, Any]:
         """Run the training loop.
@@ -530,91 +828,118 @@ class UnlearningTrainer:
         forget_iter = iter(self.forget_loader)
         retain_iter = iter(self.retain_loader)
 
-        total_steps = self.config.num_steps
+        # -- P0-12: num_optimizer_steps × gradient_accumulation_steps -- #
+        num_opt_steps = self.config.num_optimizer_steps
+        grad_accum = self.config.gradient_accumulation_steps
         checkpoint_steps = set(self.config.checkpoint_steps)
 
         # Save initial checkpoint if step 0 is requested
         if 0 in checkpoint_steps:
-            self._save_checkpoint("step_000")
+            self._save_checkpoint("optimizer_step_000")
 
-        logger.info(f"Starting training for {total_steps} steps")
+        total_microsteps = num_opt_steps * grad_accum
+        logger.info(
+            f"Starting training for {num_opt_steps} optimizer steps "
+            f"({total_microsteps} microbatches, grad_accum={grad_accum})"
+        )
         start_time = time.time()
 
-        for step in range(1, total_steps + 1):
-            # Get batches (cycle through datasets if needed)
-            try:
-                forget_batch = next(forget_iter)
-            except StopIteration:
-                forget_iter = iter(self.forget_loader)
-                forget_batch = next(forget_iter)
+        for opt_step in range(1, num_opt_steps + 1):
+            # Accumulate gradients over grad_accum microbatches
+            self.optimizer.zero_grad()
+            accum_forget = 0.0
+            accum_retain = 0.0
+            accum_total = 0.0
 
-            try:
-                retain_batch = next(retain_iter)
-            except StopIteration:
-                retain_iter = iter(self.retain_loader)
-                retain_batch = next(retain_iter)
+            for micro_idx in range(grad_accum):
+                # Get batches (cycle through datasets if needed)
+                try:
+                    forget_batch = next(forget_iter)
+                except StopIteration:
+                    forget_iter = iter(self.forget_loader)
+                    forget_batch = next(forget_iter)
 
-            forget_batch = self._move_batch(forget_batch)
-            retain_batch = self._move_batch(retain_batch)
+                try:
+                    retain_batch = next(retain_iter)
+                except StopIteration:
+                    retain_iter = iter(self.retain_loader)
+                    retain_batch = next(retain_iter)
 
-            # Compute losses
-            forget_loss = compute_forget_loss(self.model, forget_batch)
-            retain_loss = compute_retain_loss(
-                self.model, retain_batch, self.reference_model
+                forget_batch = self._move_batch(forget_batch)
+                retain_batch = self._move_batch(retain_batch)
+
+                # Compute losses
+                forget_loss = compute_forget_loss(self.model, forget_batch)
+                retain_loss = compute_retain_loss(
+                    self.model, retain_batch, self.reference_model
+                )
+
+                total_loss = forget_loss + self.config.retain_weight * retain_loss
+
+                # Scale loss for gradient accumulation
+                scaled_loss = total_loss / grad_accum
+                scaled_loss.backward()
+
+                accum_forget += forget_loss.item()
+                accum_retain += retain_loss.item()
+                accum_total += total_loss.item()
+
+            # -- Optimizer step ---------------------------------------- #
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(),
+                self.config.max_grad_norm,
+            )
+            self.optimizer.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
+            self.optimizer.zero_grad()
+            self.global_step = opt_step
+
+            # Average losses over accumulation
+            avg_forget = accum_forget / grad_accum
+            avg_retain = accum_retain / grad_accum
+            avg_total = accum_total / grad_accum
+
+            # Log
+            elapsed = time.time() - start_time
+            log_entry = {
+                "optimizer_step": opt_step,
+                "total_loss": avg_total,
+                "forget_loss": avg_forget,
+                "retain_loss": avg_retain,
+                "learning_rate": self.optimizer.param_groups[0]["lr"],
+                "elapsed_seconds": elapsed,
+            }
+            self.training_log.append(log_entry)
+            logger.info(
+                f"Optimizer step {opt_step}/{num_opt_steps} | "
+                f"loss={avg_total:.4f} "
+                f"forget={avg_forget:.4f} "
+                f"retain={avg_retain:.4f}"
             )
 
-            total_loss = forget_loss + self.config.retain_weight * retain_loss
-
-            # Scale loss for gradient accumulation
-            scaled_loss = total_loss / self.config.gradient_accumulation_steps
-            scaled_loss.backward()
-
-            # Optimizer step
-            if step % self.config.gradient_accumulation_steps == 0:
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.max_grad_norm,
-                )
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                self.global_step += 1
-
-                # Log
-                elapsed = time.time() - start_time
-                log_entry = {
-                    "step": step,
-                    "total_loss": total_loss.item(),
-                    "forget_loss": forget_loss.item(),
-                    "retain_loss": retain_loss.item(),
-                    "learning_rate": self.optimizer.param_groups[0]["lr"],
-                    "elapsed_seconds": elapsed,
-                }
-                self.training_log.append(log_entry)
-                logger.info(
-                    f"Step {step}/{total_steps} | "
-                    f"loss={total_loss.item():.4f} "
-                    f"forget={forget_loss.item():.4f} "
-                    f"retain={retain_loss.item():.4f}"
+            # Safety checks
+            if not math.isfinite(avg_total):
+                raise RuntimeError(
+                    f"Non-finite loss at optimizer step {opt_step}"
                 )
 
-                # Safety checks
-                if not math.isfinite(total_loss.item()):
-                    raise RuntimeError(f"Non-finite loss at step {step}")
-
-                # Checkpoint
-                if step in checkpoint_steps:
-                    ckpt_name = f"step_{step:03d}"
-                    self._save_checkpoint(ckpt_name)
+            # Checkpoint
+            if opt_step in checkpoint_steps:
+                ckpt_name = f"optimizer_step_{opt_step:03d}"
+                self._save_checkpoint(ckpt_name)
 
         # Save final checkpoint
-        if "final" not in [f"step_{s:03d}" for s in checkpoint_steps]:
-            self._save_checkpoint("final")
+        if num_opt_steps not in checkpoint_steps:
+            self._save_checkpoint(f"optimizer_step_{num_opt_steps:03d}_final")
 
         elapsed = time.time() - start_time
         logger.info(f"Training complete in {elapsed:.1f}s")
 
         return {
-            "total_steps": total_steps,
+            "num_optimizer_steps": num_opt_steps,
+            "gradient_accumulation_steps": grad_accum,
+            "total_microsteps": total_microsteps,
             "final_loss": self.training_log[-1]["total_loss"] if self.training_log else None,
             "elapsed_seconds": elapsed,
             "checkpoints_saved": len(checkpoint_steps) + 1,
@@ -699,20 +1024,28 @@ def generate_run_manifest(
         },
         "selection_manifest_sha256": config.selection_manifest_sha256,
         "method": {
-            "name": "lora_targeted_update",
+            "name": "lora_targeted_candidate_margin",
             "hyperparameters": {
                 "lora_rank": config.lora_rank,
                 "lora_alpha": config.lora_alpha,
                 "lora_dropout": config.lora_dropout,
                 "lora_target_modules": config.lora_target_modules,
                 "learning_rate": config.learning_rate,
-                "num_steps": config.num_steps,
+                "num_optimizer_steps": config.num_optimizer_steps,
                 "retain_weight": config.retain_weight,
                 "batch_size": config.batch_size,
                 "gradient_accumulation_steps": config.gradient_accumulation_steps,
+                "warmup_steps": config.warmup_steps,
             },
         },
         "seed": config.seed,
+        "determinism": {
+            "random_seed": config.seed,
+            "numpy_seed": config.seed,
+            "torch_manual_seed": config.seed,
+            "torch_cuda_manual_seed_all": config.seed,
+            "dataloader_generator_seed": config.seed,
+        },
         "forget_identities": config.forget_identity_ids,
         "retain_identities": config.retain_identity_ids,
         "training_summary": training_summary,

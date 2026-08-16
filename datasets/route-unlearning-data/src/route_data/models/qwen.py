@@ -60,6 +60,9 @@ class QwenHFBackend(VisionLanguageModel):
         self._model = None
         self._processor = None
         self._resolved_revision: str | None = None
+        # Adapter metadata for post-unlearning evaluation (P0-6).
+        # Populated by from_loaded_model(); None for vanilla baselines.
+        self._adapter_metadata: dict[str, str] | None = None
 
     def _load(self):
         if self._model is not None:
@@ -427,6 +430,55 @@ class QwenHFBackend(VisionLanguageModel):
             metadata=metadata,
         )
 
+    @classmethod
+    def from_loaded_model(
+        cls,
+        config: ModelConfig,
+        model: object,
+        processor: object,
+        *,
+        adapter_metadata: dict[str, str] | None = None,
+        resolved_revision: str | None = None,
+    ) -> QwenHFBackend:
+        """Construct a backend wrapping a pre-loaded (adapter) model.
+
+        This is the post-unlearning evaluation path: the caller has already
+        loaded the base model + LoRA adapter via
+        :func:`post_unlearning_eval.load_lora_checkpoint` and needs a
+        :class:`VisionLanguageModel` backend that reuses the production
+        scoring / generation logic.
+
+        Parameters
+        ----------
+        config:
+            Model configuration (must match the base model used for
+            pre-unlearning baseline).
+        model:
+            Pre-loaded model (typically a ``PeftModel`` wrapping the base).
+        processor:
+            Pre-loaded ``AutoProcessor``.
+        adapter_metadata:
+            Optional adapter provenance.  Recognised keys:
+
+            - ``adapter_checkpoint_path``
+            - ``adapter_checkpoint_sha``
+            - ``adapter_config_sha``
+            - ``checkpoint_name``
+            - ``checkpoint_step``
+            - ``lora_rank``
+            - ``lora_alpha``
+            - ``lora_target_modules``
+            - ``base_fingerprint_id``
+        resolved_revision:
+            The resolved base-model revision string.
+        """
+        instance = cls(config)
+        instance._model = model
+        instance._processor = processor
+        instance._resolved_revision = resolved_revision or config.revision
+        instance._adapter_metadata = adapter_metadata
+        return instance
+
     def fingerprint(self) -> dict[str, str]:
         import torch
         import transformers
@@ -463,6 +515,26 @@ class QwenHFBackend(VisionLanguageModel):
             payload["accelerate"] = accelerate.__version__
         except ImportError:
             pass
+
+        # P0-6: When adapter metadata is present, fold it into the
+        # fingerprint so that different adapter checkpoints produce
+        # different cache keys.
+        if self._adapter_metadata:
+            for key in (
+                "adapter_checkpoint_path",
+                "adapter_checkpoint_sha",
+                "adapter_config_sha",
+                "checkpoint_name",
+                "checkpoint_step",
+                "lora_rank",
+                "lora_alpha",
+                "lora_target_modules",
+                "base_fingerprint_id",
+            ):
+                val = self._adapter_metadata.get(key)
+                if val is not None:
+                    payload[key] = val
+
         digest = hashlib.sha256(
             json.dumps(payload, sort_keys=True).encode()
         ).hexdigest()[:16]
