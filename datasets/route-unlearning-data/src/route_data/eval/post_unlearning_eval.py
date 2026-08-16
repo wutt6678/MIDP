@@ -408,8 +408,18 @@ class PostUnlearningEvaluator:
 
         return validate_exact_probe_matching(baseline_results, post_results)
 
-    def generate_post_eval_manifest(self) -> dict[str, Any]:
+    def generate_post_eval_manifest(
+        self,
+        smoke_probe_ids: set[str] | None = None,
+    ) -> dict[str, Any]:
         """Generate the post-evaluation manifest with full provenance.
+
+        Parameters
+        ----------
+        smoke_probe_ids:
+            If provided, validate against this smoke subset instead of
+            the full baseline.  Adds ``evaluation_scope`` metadata to
+            the manifest indicating smoke vs full mode.
 
         Returns
         -------
@@ -430,8 +440,10 @@ class PostUnlearningEvaluator:
         # Compute summary
         summary = self.generate_summary()
 
-        # Validate probe matching
-        validation = self.validate_against_baseline()
+        # Validate probe matching (smoke-aware).
+        validation = self.validate_against_baseline(
+            smoke_probe_ids=smoke_probe_ids,
+        )
 
         # Get git state
         git_commit = self.config.code_commit
@@ -489,6 +501,14 @@ class PostUnlearningEvaluator:
                 "git_dirty": git_dirty,
             },
             "seed": self.config.seed,
+            "evaluation_scope": {
+                "mode": "smoke" if smoke_probe_ids is not None else "full",
+                "expected_probe_count": (
+                    len(smoke_probe_ids)
+                    if smoke_probe_ids is not None
+                    else 500
+                ),
+            },
         }
 
         # Write manifest

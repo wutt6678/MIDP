@@ -140,6 +140,140 @@ def _git_dirty() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Shared validation extraction (Fix 1/2/3)
+# --------------------------------------------------------------------------- #
+
+def _accuracy_gate(value: float | None, threshold: float) -> bool | None:
+    """Return True if *value* >= *threshold*, None if *value* is None."""
+    if value is None:
+        return None
+    return value >= threshold
+
+
+def _build_validation_gates(
+    analysis_results: dict[str, Any],
+    post_eval_summary: dict[str, Any] | None,
+    *,
+    dv_gate: float = 0.98,
+    tolerance: float = 0.1,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Extract analysis_summary and GO/NO-GO gates from *analysis_results*.
+
+    Returns ``(analysis_summary, gates)``.
+
+    Both ``PilotRunner.generate_validation_report`` and the standalone
+    ``generate_pilot_validation_report`` delegate here so that the two
+    code paths always produce identical metric routing and gate
+    semantics for identical inputs.
+    """
+    ge = analysis_results.get("group_effects", {})
+    pr = analysis_results.get("preservation_report", {})
+    pv = analysis_results.get("pairing_validation", {})
+
+    # -- P0-9: Use overall_visual (visual-only signed-margin). --
+    target_vis = ge.get("target", {}).get("overall_visual", {})
+    retain_vis = ge.get("retain", {}).get("overall_visual", {})
+    control_vis = ge.get("control", {}).get("overall_visual", {})
+    untargeted_vis = ge.get("untargeted", {}).get("overall_visual", {})
+
+    target_mean = target_vis.get("mean")
+    retain_mean = retain_vis.get("mean")
+    control_mean = control_vis.get("mean")
+    untargeted_mean = untargeted_vis.get("mean")
+
+    # -- Fix 1: group-specific direct_visual fields. --
+    global_dv = pr.get("global_direct_visual", {})
+    target_dv = pr.get("target_direct_visual", {})
+    retain_dv = pr.get("retain_direct_visual", {})
+    control_dv = pr.get("control_direct_visual", {})
+    untargeted_dv = pr.get("untargeted_direct_visual", {})
+
+    global_post_acc = global_dv.get("post_accuracy")
+
+    target_dv_pre = target_dv.get("pre_accuracy")
+    target_dv_post = target_dv.get("post_accuracy")
+    target_margin_pre = target_dv.get("pre_mean_margin")
+    target_margin_post = target_dv.get("post_mean_margin")
+
+    retain_dv_post = retain_dv.get("post_accuracy")
+    control_dv_post = control_dv.get("post_accuracy")
+    untargeted_dv_post = untargeted_dv.get("post_accuracy")
+
+    # -- Post-eval inference errors. --
+    post_eval_errors = 0
+    if post_eval_summary is not None:
+        post_eval_errors = post_eval_summary.get("inference_errors", 0)
+
+    # -- Fix 3: Pairing validation (mode-neutral name). --
+    pairing_pass = pv.get("pass", False)
+    pairing_expected_n = pv.get("expected_n")
+    pairing_baseline_rows = pv.get("baseline_rows")
+    pairing_post_rows = pv.get("post_rows")
+
+    # -- Assemble analysis_summary. --
+    analysis_summary: dict[str, Any] = {
+        "target_visual_delta_mean": target_mean,
+        "retain_visual_delta_mean": retain_mean,
+        "control_visual_delta_mean": control_mean,
+        "untargeted_visual_delta_mean": untargeted_mean,
+        "global_direct_visual_post_accuracy": global_post_acc,
+        "target_direct_visual_pre_accuracy": target_dv_pre,
+        "target_direct_visual_post_accuracy": target_dv_post,
+        "target_direct_visual_pre_margin": target_margin_pre,
+        "target_direct_visual_post_margin": target_margin_post,
+        "retain_direct_visual_post_accuracy": retain_dv_post,
+        "control_direct_visual_post_accuracy": control_dv_post,
+        "untargeted_direct_visual_post_accuracy": untargeted_dv_post,
+        "post_eval_inference_errors": post_eval_errors,
+        "pairing_exact_match": pairing_pass,
+        "pairing_expected_n": pairing_expected_n,
+        "pairing_baseline_rows": pairing_baseline_rows,
+        "pairing_post_rows": pairing_post_rows,
+    }
+
+    # -- GO/NO-GO gates. --
+    target_mag = abs(target_mean) if target_mean is not None else 0.0
+    retain_drift = abs(retain_mean) if retain_mean is not None else 0.0
+    control_drift = abs(control_mean) if control_mean is not None else 0.0
+
+    gates: dict[str, Any] = {
+        # Primary selectivity gates.
+        "target_exceeds_retain_plus_tolerance": (
+            target_mag > retain_drift + tolerance
+            if target_mean is not None and retain_mean is not None
+            else None
+        ),
+        "target_exceeds_control_plus_tolerance": (
+            target_mag > control_drift + tolerance
+            if target_mean is not None and control_mean is not None
+            else None
+        ),
+        # Fix 1: group-specific direct-visual preservation gates.
+        "retain_direct_visual_accuracy_gate": _accuracy_gate(
+            retain_dv_post, dv_gate,
+        ),
+        "control_direct_visual_accuracy_gate": _accuracy_gate(
+            control_dv_post, dv_gate,
+        ),
+        "untargeted_direct_visual_accuracy_gate": _accuracy_gate(
+            untargeted_dv_post, dv_gate,
+        ),
+        "global_direct_visual_accuracy_gate": _accuracy_gate(
+            global_post_acc, dv_gate,
+        ),
+        # Quality gates.
+        "zero_post_eval_inference_errors": post_eval_errors == 0,
+        # Fix 3: mode-neutral pairing gate name.
+        "exact_pairing": pairing_pass,
+        # Configuration.
+        "_gate_tolerance": tolerance,
+        "_direct_visual_accuracy_gate": dv_gate,
+    }
+
+    return analysis_summary, gates
+
+
+# --------------------------------------------------------------------------- #
 # Pilot runner
 # --------------------------------------------------------------------------- #
 
@@ -432,8 +566,8 @@ class PilotRunner:
 
         P0-14: Gates use visual-only signed-margin metrics and enforce
         target effect magnitude > retain/control drift + tolerance.
-        Also requires 0 post-eval inference errors and exact 500↔500
-        pairing.
+        Also requires 0 post-eval inference errors and exact probe
+        pairing (mode-neutral: N↔N where N depends on smoke/full).
         """
         evidence_dir = self.output_dir / "evidence"
         evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -456,105 +590,19 @@ class PilotRunner:
         }
 
         if analysis_results is not None:
-            ge = analysis_results.get("group_effects", {})
-            pr = analysis_results.get("preservation_report", {})
-            pv = analysis_results.get("pairing_validation", {})
-
-            # P0-9/P0-14: Use overall_visual (visual-only signed-margin).
-            target_vis = ge.get("target", {}).get("overall_visual", {})
-            retain_vis = ge.get("retain", {}).get("overall_visual", {})
-            control_vis = ge.get("control", {}).get("overall_visual", {})
-            untargeted_vis = ge.get("untargeted", {}).get("overall_visual", {})
-
-            target_mean = target_vis.get("mean")
-            retain_mean = retain_vis.get("mean")
-            control_mean = control_vis.get("mean")
-            untargeted_mean = untargeted_vis.get("mean")
-
-            # Direct-visual accuracy per group (preserve / retain / control).
-            dv_post = pr.get("global_direct_visual", {}).get("post_accuracy")
-            retain_post_acc = pr.get("retain_group", {}).get("post_accuracy")
-            control_post_acc = pr.get("control_group", {}).get("post_accuracy")
-
-            # Target direct-visual reporting (always separate).
-            target_dv_pre = pr.get("global_direct_visual", {}).get("pre_accuracy")
-            target_dv_post = pr.get("global_direct_visual", {}).get("post_accuracy")
-            target_margin_pre = pr.get("global_direct_visual", {}).get("pre_mean_margin")
-            target_margin_post = pr.get("global_direct_visual", {}).get("post_mean_margin")
-
-            # Post-eval inference errors.
-            post_eval_errors = 0
-            if post_eval_summary is not None:
-                post_eval_errors = post_eval_summary.get("inference_errors", 0)
-
-            # P0-10: Pairing validation.
-            pairing_pass = pv.get("pass", False)
-
-            report["analysis_summary"] = {
-                "target_visual_delta_mean": target_mean,
-                "retain_visual_delta_mean": retain_mean,
-                "control_visual_delta_mean": control_mean,
-                "untargeted_visual_delta_mean": untargeted_mean,
-                "post_direct_visual_accuracy": dv_post,
-                "retain_direct_visual_post_accuracy": retain_post_acc,
-                "control_direct_visual_post_accuracy": control_post_acc,
-                "target_direct_visual_pre_accuracy": target_dv_pre,
-                "target_direct_visual_post_accuracy": target_dv_post,
-                "target_direct_visual_pre_margin": target_margin_pre,
-                "target_direct_visual_post_margin": target_margin_post,
-                "post_eval_inference_errors": post_eval_errors,
-                "pairing_exact_match": pairing_pass,
-            }
-
-            # P0-14: Strengthened GO/NO-GO gates.
-            tolerance = self.config.get("evaluation", {}).get(
-                "gate_tolerance", 0.1,
-            )
             dv_gate = self.config.get("evaluation", {}).get(
                 "direct_visual_accuracy_gate", 0.98,
             )
-
-            # Target effect magnitude.
-            target_mag = abs(target_mean) if target_mean is not None else 0.0
-            retain_drift = abs(retain_mean) if retain_mean is not None else 0.0
-            control_drift = abs(control_mean) if control_mean is not None else 0.0
-
-            gates: dict[str, Any] = {
-                # Primary selectivity gates.
-                "target_exceeds_retain_plus_tolerance": (
-                    target_mag > retain_drift + tolerance
-                    if target_mean is not None and retain_mean is not None
-                    else None
-                ),
-                "target_exceeds_control_plus_tolerance": (
-                    target_mag > control_drift + tolerance
-                    if target_mean is not None and control_mean is not None
-                    else None
-                ),
-                # Preservation gates.
-                "retain_direct_visual_accuracy_gate": (
-                    retain_post_acc is not None and retain_post_acc >= dv_gate
-                    if retain_post_acc is not None
-                    else None
-                ),
-                "control_direct_visual_accuracy_gate": (
-                    control_post_acc is not None and control_post_acc >= dv_gate
-                    if control_post_acc is not None
-                    else None
-                ),
-                # Global visual accuracy gate.
-                "global_direct_visual_accuracy_gate": (
-                    dv_post is not None and dv_post >= dv_gate
-                    if dv_post is not None
-                    else None
-                ),
-                # Quality gates.
-                "zero_post_eval_inference_errors": post_eval_errors == 0,
-                "exact_500_pairing": pairing_pass,
-                # Configuration.
-                "_gate_tolerance": tolerance,
-                "_direct_visual_accuracy_gate": dv_gate,
-            }
+            tolerance = self.config.get("evaluation", {}).get(
+                "gate_tolerance", 0.1,
+            )
+            analysis_summary, gates = _build_validation_gates(
+                analysis_results,
+                post_eval_summary,
+                dv_gate=dv_gate,
+                tolerance=tolerance,
+            )
+            report["analysis_summary"] = analysis_summary
             report["gates"] = gates
 
         report_path = evidence_dir / "pilot_validation_report.json"
@@ -602,69 +650,12 @@ def generate_pilot_validation_report(
     }
 
     if analysis_results is not None:
-        ge = analysis_results.get("group_effects", {})
-        pr = analysis_results.get("preservation_report", {})
-        pv = analysis_results.get("pairing_validation", {})
-
-        # P0-9/P0-14: Use overall_visual.
-        target_vis = ge.get("target", {}).get("overall_visual", {})
-        retain_vis = ge.get("retain", {}).get("overall_visual", {})
-        control_vis = ge.get("control", {}).get("overall_visual", {})
-
-        target_mean = target_vis.get("mean")
-        retain_mean = retain_vis.get("mean")
-        control_mean = control_vis.get("mean")
-
-        dv_post = pr.get("global_direct_visual", {}).get("post_accuracy")
-        retain_post_acc = pr.get("retain_group", {}).get("post_accuracy")
-        control_post_acc = pr.get("control_group", {}).get("post_accuracy")
-
-        post_eval_errors = 0
-        if post_eval_summary is not None:
-            post_eval_errors = post_eval_summary.get("inference_errors", 0)
-
-        pairing_pass = pv.get("pass", False)
-        target_mag = abs(target_mean) if target_mean is not None else 0.0
-        retain_drift = abs(retain_mean) if retain_mean is not None else 0.0
-        control_drift = abs(control_mean) if control_mean is not None else 0.0
-        tolerance = 0.1
-        dv_gate = 0.98
-
-        report["analysis_summary"] = {
-            "target_visual_delta_mean": target_mean,
-            "retain_visual_delta_mean": retain_mean,
-            "control_visual_delta_mean": control_mean,
-            "post_direct_visual_accuracy": dv_post,
-            "retain_direct_visual_post_accuracy": retain_post_acc,
-            "control_direct_visual_post_accuracy": control_post_acc,
-            "post_eval_inference_errors": post_eval_errors,
-            "pairing_exact_match": pairing_pass,
-        }
-
-        report["gates"] = {
-            "target_exceeds_retain_plus_tolerance": (
-                target_mag > retain_drift + tolerance
-                if target_mean is not None and retain_mean is not None
-                else None
-            ),
-            "target_exceeds_control_plus_tolerance": (
-                target_mag > control_drift + tolerance
-                if target_mean is not None and control_mean is not None
-                else None
-            ),
-            "retain_direct_visual_accuracy_gate": (
-                retain_post_acc is not None and retain_post_acc >= dv_gate
-                if retain_post_acc is not None
-                else None
-            ),
-            "control_direct_visual_accuracy_gate": (
-                control_post_acc is not None and control_post_acc >= dv_gate
-                if control_post_acc is not None
-                else None
-            ),
-            "zero_post_eval_inference_errors": post_eval_errors == 0,
-            "exact_500_pairing": pairing_pass,
-        }
+        analysis_summary, gates = _build_validation_gates(
+            analysis_results,
+            post_eval_summary,
+        )
+        report["analysis_summary"] = analysis_summary
+        report["gates"] = gates
 
     report_path = evidence_dir / "pilot_validation_report.json"
     report_path.write_text(json.dumps(report, indent=2) + "\n")

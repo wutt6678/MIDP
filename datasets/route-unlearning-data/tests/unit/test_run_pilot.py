@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from route_data.eval.run_pilot import (
     PilotRunner,
+    _build_validation_gates,
     generate_pilot_validation_report,
     load_experiment_config,
 )
@@ -332,8 +333,13 @@ class TestPilotRunner:
                 },
                 "preservation_report": {
                     "global_direct_visual": {"post_accuracy": 0.99},
-                    "retain_group": {"post_accuracy": 0.99},
-                    "control_group": {"post_accuracy": 0.99},
+                    "target_direct_visual": {
+                        "pre_accuracy": 1.0, "post_accuracy": 0.5,
+                        "pre_mean_margin": 5.0, "post_mean_margin": 3.0,
+                    },
+                    "retain_direct_visual": {"post_accuracy": 0.99},
+                    "control_direct_visual": {"post_accuracy": 0.99},
+                    "untargeted_direct_visual": {"post_accuracy": 0.99},
                 },
                 "pairing_validation": {"pass": True},
             },
@@ -347,7 +353,7 @@ class TestPilotRunner:
         assert report["gates"]["target_exceeds_retain_plus_tolerance"] is True
         assert report["gates"]["global_direct_visual_accuracy_gate"] is True
         assert report["gates"]["zero_post_eval_inference_errors"] is True
-        assert report["gates"]["exact_500_pairing"] is True
+        assert report["gates"]["exact_pairing"] is True
 
         report_path = runner.output_dir / "evidence" / "pilot_validation_report.json"
         assert report_path.exists()
@@ -376,8 +382,13 @@ class TestStandaloneReport:
                 },
                 "preservation_report": {
                     "global_direct_visual": {"post_accuracy": 0.98},
-                    "retain_group": {"post_accuracy": 0.99},
-                    "control_group": {"post_accuracy": 0.99},
+                    "target_direct_visual": {
+                        "pre_accuracy": 1.0, "post_accuracy": 0.5,
+                        "pre_mean_margin": 5.0, "post_mean_margin": 3.0,
+                    },
+                    "retain_direct_visual": {"post_accuracy": 0.99},
+                    "control_direct_visual": {"post_accuracy": 0.99},
+                    "untargeted_direct_visual": {"post_accuracy": 0.99},
                 },
                 "pairing_validation": {"pass": True},
             },
@@ -390,5 +401,202 @@ class TestStandaloneReport:
         assert report["analysis_summary"]["target_visual_delta_mean"] == -2.0
         # P0-14: New gate keys.
         assert report["gates"]["target_exceeds_retain_plus_tolerance"] is True
-        assert report["gates"]["exact_500_pairing"] is True
+        assert report["gates"]["exact_pairing"] is True
         assert (tmp_path / "evidence" / "pilot_validation_report.json").exists()
+
+
+# --------------------------------------------------------------------------- #
+# Tests: Fix 1/2/3 regression tests (A–E)
+# --------------------------------------------------------------------------- #
+
+class TestGroupSpecificGateWiring:
+    """Fix 1: gates must read group-specific direct_visual fields."""
+
+    def test_a_group_specific_gates_ignore_legacy_group_fields(self) -> None:
+        """Test A: gate reads retain/control/untargeted direct_visual,
+        NOT retain_group/control_group."""
+        analysis_results = {
+            "group_effects": {
+                "target": {"overall_visual": {"mean": -2.0}},
+                "retain": {"overall_visual": {"mean": 0.0}},
+                "control": {"overall_visual": {"mean": 0.0}},
+            },
+            "preservation_report": {
+                "global_direct_visual": {"post_accuracy": 1.00},
+                "target_direct_visual": {"post_accuracy": 0.50},
+                "retain_direct_visual": {"post_accuracy": 1.00},
+                "control_direct_visual": {"post_accuracy": 1.00},
+                "untargeted_direct_visual": {"post_accuracy": 0.99},
+                # Deliberately misleading legacy fields — must be ignored.
+                "retain_group": {"post_accuracy": 0.10},
+                "control_group": {"post_accuracy": 0.20},
+            },
+            "pairing_validation": {"pass": True},
+        }
+        _summary, gates = _build_validation_gates(
+            analysis_results, None,
+        )
+        assert gates["retain_direct_visual_accuracy_gate"] is True
+        assert gates["control_direct_visual_accuracy_gate"] is True
+        assert gates["untargeted_direct_visual_accuracy_gate"] is True
+        assert gates["global_direct_visual_accuracy_gate"] is True
+
+    def test_b_target_values_are_not_global_values(self) -> None:
+        """Test B: analysis_summary must use target_direct_visual,
+        NOT global_direct_visual, for target_* fields."""
+        analysis_results = {
+            "group_effects": {
+                "target": {"overall_visual": {"mean": -1.0}},
+                "retain": {"overall_visual": {"mean": 0.0}},
+                "control": {"overall_visual": {"mean": 0.0}},
+            },
+            "preservation_report": {
+                "global_direct_visual": {
+                    "pre_accuracy": 1.0, "post_accuracy": 1.0,
+                },
+                "target_direct_visual": {
+                    "pre_accuracy": 0.8, "post_accuracy": 0.6,
+                },
+                "retain_direct_visual": {},
+                "control_direct_visual": {},
+                "untargeted_direct_visual": {},
+            },
+            "pairing_validation": {},
+        }
+        summary, _ = _build_validation_gates(analysis_results, None)
+        assert summary["target_direct_visual_pre_accuracy"] == 0.8
+        assert summary["target_direct_visual_post_accuracy"] == 0.6
+
+    def test_c_untargeted_failure_causes_gate_failure(self) -> None:
+        """Test C: untargeted post_accuracy below threshold => gate False."""
+        analysis_results = {
+            "group_effects": {},
+            "preservation_report": {
+                "global_direct_visual": {},
+                "target_direct_visual": {},
+                "retain_direct_visual": {},
+                "control_direct_visual": {},
+                "untargeted_direct_visual": {"post_accuracy": 0.97},
+            },
+            "pairing_validation": {},
+        }
+        _, gates = _build_validation_gates(
+            analysis_results, None, dv_gate=0.98,
+        )
+        assert gates["untargeted_direct_visual_accuracy_gate"] is False
+
+
+class TestPairingGateNaming:
+    """Fix 3: exact_pairing (not exact_500_pairing) + expected_n."""
+
+    def test_d_smoke_pairing_semantics(self) -> None:
+        """Test D: smoke pairing expected_n=10, gate named exact_pairing."""
+        analysis_results = {
+            "group_effects": {},
+            "preservation_report": {
+                "global_direct_visual": {},
+                "target_direct_visual": {},
+                "retain_direct_visual": {},
+                "control_direct_visual": {},
+                "untargeted_direct_visual": {},
+            },
+            "pairing_validation": {
+                "pass": True,
+                "expected_n": 10,
+                "baseline_rows": 10,
+                "post_rows": 10,
+            },
+        }
+        summary, gates = _build_validation_gates(
+            analysis_results, None,
+        )
+        assert gates["exact_pairing"] is True
+        assert "exact_500_pairing" not in gates
+        assert summary["pairing_expected_n"] == 10
+        assert summary["pairing_baseline_rows"] == 10
+        assert summary["pairing_post_rows"] == 10
+
+    def test_e_full_pairing_semantics(self) -> None:
+        """Test E: full pairing expected_n=500."""
+        analysis_results = {
+            "group_effects": {},
+            "preservation_report": {
+                "global_direct_visual": {},
+                "target_direct_visual": {},
+                "retain_direct_visual": {},
+                "control_direct_visual": {},
+                "untargeted_direct_visual": {},
+            },
+            "pairing_validation": {
+                "pass": True,
+                "expected_n": 500,
+                "baseline_rows": 500,
+                "post_rows": 500,
+            },
+        }
+        summary, gates = _build_validation_gates(
+            analysis_results, None,
+        )
+        assert gates["exact_pairing"] is True
+        assert summary["pairing_expected_n"] == 500
+
+
+class TestSharedHelperEquivalence:
+    """Fix 2: class method and standalone must produce identical gates."""
+
+    def test_identical_gates_for_identical_inputs(
+        self, tmp_path: Path,
+    ) -> None:
+        """PilotRunner and standalone must agree on gate semantics."""
+        # Setup for PilotRunner
+        bl_path, rp_path = _make_synthetic_data(tmp_path)
+        cfg_path = _make_config(tmp_path, bl_path, rp_path)
+        runner = PilotRunner(cfg_path, base_dir=tmp_path)
+        runner.run_selection()
+
+        analysis_results = {
+            "group_effects": {
+                "target": {"overall_visual": {"mean": -1.5}},
+                "retain": {"overall_visual": {"mean": -0.1}},
+                "control": {"overall_visual": {"mean": 0.05}},
+            },
+            "preservation_report": {
+                "global_direct_visual": {"post_accuracy": 0.99},
+                "target_direct_visual": {
+                    "pre_accuracy": 1.0, "post_accuracy": 0.5,
+                    "pre_mean_margin": 5.0, "post_mean_margin": 3.0,
+                },
+                "retain_direct_visual": {"post_accuracy": 0.99},
+                "control_direct_visual": {"post_accuracy": 0.99},
+                "untargeted_direct_visual": {"post_accuracy": 0.99},
+            },
+            "pairing_validation": {"pass": True, "expected_n": 500},
+        }
+        post_eval_summary = {"inference_errors": 0}
+
+        # Class method
+        class_report = runner.generate_validation_report(
+            training_summary={"final_loss": 0.5},
+            post_eval_summary=post_eval_summary,
+            analysis_results=analysis_results,
+        )
+
+        # Standalone
+        sel_dir = tmp_path / "standalone_out" / "selection"
+        sel_dir.mkdir(parents=True)
+        (sel_dir / "pilot_identity_selection.json").write_text("{}")
+        standalone_report = generate_pilot_validation_report(
+            tmp_path / "standalone_out",
+            experiment_id="test",
+            training_summary={"final_loss": 0.5},
+            post_eval_summary=post_eval_summary,
+            analysis_results=analysis_results,
+        )
+
+        # Gate semantics must match
+        for key in class_report["gates"]:
+            assert class_report["gates"][key] == standalone_report["gates"][key], (
+                f"Gate mismatch for {key}: "
+                f"class={class_report['gates'][key]} vs "
+                f"standalone={standalone_report['gates'][key]}"
+            )

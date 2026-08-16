@@ -782,7 +782,9 @@ def _run_post_eval_phase(
     summary = evaluator.generate_summary()
 
     # Post-eval manifest
-    evaluator.generate_post_eval_manifest()
+    evaluator.generate_post_eval_manifest(
+        smoke_probe_ids=smoke_probe_ids,
+    )
 
     return {
         "summary": summary,

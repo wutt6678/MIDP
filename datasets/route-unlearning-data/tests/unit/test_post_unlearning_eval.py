@@ -539,3 +539,84 @@ class TestSmokeAwareValidation:
         mock_runner.validate_results.assert_called_once_with(
             smoke_probe_ids=smoke_ids,
         )
+
+
+# --------------------------------------------------------------------------- #
+# Tests – Fix 4: smoke-aware manifest (F, G)
+# --------------------------------------------------------------------------- #
+
+class TestSmokeAwareManifest:
+    """Fix 4: generate_post_eval_manifest must be smoke-aware."""
+
+    def _make_evaluator(self, tmp_path: Path, n_probes: int = 5):
+        """Helper: build a mock evaluator with *n_probes* results."""
+        baseline_results = [
+            _make_result(f"probe_{i:03d}", "direct_visual")
+            for i in range(n_probes)
+        ]
+        baseline_path = tmp_path / "baseline_results.jsonl"
+        _write_results(baseline_path, baseline_results)
+
+        output_dir = tmp_path / "post_eval"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        post_results_path = output_dir / "results.jsonl"
+        _write_results(post_results_path, baseline_results)
+
+        cfg = PostEvalConfig(
+            checkpoint_path="/fake/checkpoint",
+            checkpoint_name="step_050",
+            probe_path="/fake/probes.jsonl",
+            baseline_results_path=str(baseline_path),
+            baseline_manifest_path="/fake/manifest.json",
+            output_dir=str(output_dir),
+            code_commit="commit789",
+        )
+
+        evaluator = PostUnlearningEvaluator.__new__(PostUnlearningEvaluator)
+        evaluator.config = cfg
+        evaluator._results = []
+
+        from unittest.mock import Mock
+        mock_results = []
+        for r in baseline_results:
+            mock_r = Mock()
+            mock_r.probe_id = r["probe_id"]
+            mock_r.probe_family = r["probe_family"]
+            mock_r.error = None
+            mock_r.signed_answer_margin = r["signed_answer_margin"]
+            mock_r.correct = r["correct"]
+            mock_results.append(mock_r)
+        evaluator._results = mock_results
+
+        mock_runner = Mock()
+        mock_runner.generate_summary.return_value = {
+            "total_probes": n_probes,
+            "families": {"direct_visual": {"count": n_probes}},
+        }
+        evaluator._runner = mock_runner
+        return evaluator
+
+    def test_f_smoke_manifest_validation_scope(self, tmp_path: Path) -> None:
+        """Test F: smoke manifest forwards smoke_probe_ids and has
+        evaluation_scope mode=smoke."""
+        evaluator = self._make_evaluator(tmp_path, n_probes=10)
+        smoke_ids = {f"probe_{i:03d}" for i in range(10)}
+
+        manifest = evaluator.generate_post_eval_manifest(
+            smoke_probe_ids=smoke_ids,
+        )
+
+        assert manifest["evaluation_scope"]["mode"] == "smoke"
+        assert manifest["evaluation_scope"]["expected_probe_count"] == 10
+        assert manifest["validation"]["exact_match"] is True
+
+    def test_g_full_manifest_validation_scope(self, tmp_path: Path) -> None:
+        """Test G: full manifest has evaluation_scope mode=full,
+        expected_probe_count=500."""
+        evaluator = self._make_evaluator(tmp_path, n_probes=5)
+
+        manifest = evaluator.generate_post_eval_manifest()
+
+        assert manifest["evaluation_scope"]["mode"] == "full"
+        assert manifest["evaluation_scope"]["expected_probe_count"] == 500
+        assert manifest["validation"]["exact_match"] is True
