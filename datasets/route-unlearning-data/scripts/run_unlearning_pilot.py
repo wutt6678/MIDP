@@ -316,6 +316,7 @@ def run_pipeline(
         with StepTimer(10, "Adapter reload + preflight + post-eval + validation + pairing"):
             post_eval_results = _run_post_eval_phase(
                 runner, cfg, checkpoint_path, smoke=smoke,
+                output_dir=output_dir,
             )
             post_eval_summary = post_eval_results.get("summary", {})
             _write_step_evidence(
@@ -521,6 +522,7 @@ def _run_post_eval_phase(
     checkpoint_path: str,
     *,
     smoke: bool = False,
+    output_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Execute steps 10-14: adapter reload, preflight, post-eval, validation.
 
@@ -606,9 +608,29 @@ def _run_post_eval_phase(
     )
 
     # Step 11-12: Preflight + inference
-    limit = 10 if smoke else None
-    logger.info("Steps 11-12: Running post-eval (limit=%s) ...", limit)
-    evaluator.run_evaluation(limit=limit)
+    if smoke:
+        # P0-2: Deterministic 2×5 smoke probe selection
+        from route_data.eval.baseline_runner import select_smoke_probes
+        smoke_probes = select_smoke_probes(evaluator._runner.probes, n_identities=2)
+        logger.info(
+            "Steps 11-12: Smoke mode — %d deterministic probes selected",
+            len(smoke_probes),
+        )
+        # Write smoke selection evidence
+        if output_dir is not None:
+            selection_data = {
+                "n_probes": len(smoke_probes),
+                "probe_ids": [p.probe_id for p in smoke_probes],
+                "identity_ids": sorted({p.identity_id for p in smoke_probes}),
+                "families": sorted({p.probe_family for p in smoke_probes}),
+            }
+            _write_step_evidence(
+                output_dir, 12, "smoke_probe_selection", selection_data,
+            )
+        evaluator.run_evaluation(smoke_probes=smoke_probes)
+    else:
+        logger.info("Steps 11-12: Running post-eval (full 500 probes) ...")
+        evaluator.run_evaluation()
     results_path = evaluator.save_results()
 
     # Step 13: Strict validation

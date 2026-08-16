@@ -305,13 +305,20 @@ class PostUnlearningEvaluator:
 
         self._results: list[BaselineResult] = []
 
-    def run_evaluation(self, limit: int | None = None) -> list[BaselineResult]:
+    def run_evaluation(
+        self,
+        limit: int | None = None,
+        smoke_probes: list | None = None,
+    ) -> list[BaselineResult]:
         """Run post-unlearning evaluation on the frozen 500 probes.
 
         Parameters
         ----------
         limit:
             Optional limit on number of probes (for smoke testing).
+        smoke_probes:
+            If provided, run exactly these probes instead of all probes.
+            Used for deterministic smoke testing (P0-2).
 
         Returns
         -------
@@ -328,7 +335,14 @@ class PostUnlearningEvaluator:
         logger.info("Running research preflight...")
         self._runner.validate_research_preflight()
 
-        self._results = self._runner.run_all(limit=limit)
+        if smoke_probes is not None:
+            logger.info(
+                "Smoke mode: running %d deterministic probes via run_selected()",
+                len(smoke_probes),
+            )
+            self._results = self._runner.run_selected(smoke_probes)
+        else:
+            self._results = self._runner.run_all(limit=limit)
 
         elapsed = time.perf_counter() - start_time
         logger.info(
