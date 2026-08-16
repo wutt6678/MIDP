@@ -438,3 +438,104 @@ class TestPostEvalValidation:
 
         with pytest.raises(RuntimeError, match="P0-8"):
             evaluator.validate_results()
+
+
+# --------------------------------------------------------------------------- #
+# Tests – smoke-aware validation (P0-4, P0-5)
+# --------------------------------------------------------------------------- #
+
+class TestSmokeAwareValidation:
+    """Tests for smoke_probe_ids parameter in validation methods."""
+
+    def test_pairing_smoke_filters_baseline(self, tmp_path: Path) -> None:
+        """With smoke_probe_ids, baseline is filtered to the smoke subset."""
+        # Baseline has 20 probes
+        baseline_results = [
+            _make_result(f"probe_{i:03d}", "direct_visual")
+            for i in range(20)
+        ]
+        baseline_path = tmp_path / "baseline_results.jsonl"
+        _write_results(baseline_path, baseline_results)
+
+        # Post-eval has only 5 probes (smoke subset)
+        smoke_ids = {f"probe_{i:03d}" for i in range(5)}
+        from unittest.mock import Mock
+        mock_results = []
+        for pid in sorted(smoke_ids):
+            mock_r = Mock()
+            mock_r.probe_id = pid
+            mock_results.append(mock_r)
+
+        cfg = PostEvalConfig(
+            baseline_results_path=str(baseline_path),
+            output_dir=str(tmp_path / "post_eval"),
+        )
+        evaluator = PostUnlearningEvaluator.__new__(PostUnlearningEvaluator)
+        evaluator.config = cfg
+        evaluator._results = mock_results
+
+        # Without smoke IDs: should fail (5 vs 20)
+        validation_full = evaluator.validate_against_baseline()
+        assert validation_full["passed"] is False
+
+        # With smoke IDs: should pass (5 vs filtered 5)
+        validation_smoke = evaluator.validate_against_baseline(
+            smoke_probe_ids=smoke_ids,
+        )
+        assert validation_smoke["passed"] is True
+        assert validation_smoke["exact_match"] is True
+        assert validation_smoke["baseline_probe_count"] == 5
+        assert validation_smoke["post_probe_count"] == 5
+
+    def test_pairing_smoke_missing_probe(self, tmp_path: Path) -> None:
+        """Smoke pairing should detect missing probes within the subset."""
+        baseline_results = [
+            _make_result(f"probe_{i:03d}", "direct_visual")
+            for i in range(10)
+        ]
+        baseline_path = tmp_path / "baseline_results.jsonl"
+        _write_results(baseline_path, baseline_results)
+
+        # Post-eval missing probe_002 from the smoke subset
+        smoke_ids = {f"probe_{i:03d}" for i in range(5)}
+        from unittest.mock import Mock
+        mock_results = []
+        for pid in sorted(smoke_ids - {"probe_002"}):
+            mock_r = Mock()
+            mock_r.probe_id = pid
+            mock_results.append(mock_r)
+
+        cfg = PostEvalConfig(
+            baseline_results_path=str(baseline_path),
+            output_dir=str(tmp_path / "post_eval"),
+        )
+        evaluator = PostUnlearningEvaluator.__new__(PostUnlearningEvaluator)
+        evaluator.config = cfg
+        evaluator._results = mock_results
+
+        validation = evaluator.validate_against_baseline(
+            smoke_probe_ids=smoke_ids,
+        )
+        assert validation["passed"] is False
+        assert "probe_002" in validation["missing_probes"]
+
+    def test_validate_results_passes_smoke_ids(self) -> None:
+        """validate_results should pass smoke_probe_ids to the runner."""
+        from unittest.mock import Mock
+        cfg = PostEvalConfig()
+        evaluator = PostUnlearningEvaluator.__new__(PostUnlearningEvaluator)
+        evaluator.config = cfg
+        evaluator._results = []
+
+        mock_runner = Mock()
+        mock_runner.validate_results.return_value = {
+            "pass": True, "checks": {},
+        }
+        evaluator._runner = mock_runner
+
+        smoke_ids = {"p001", "p002", "p003"}
+        evaluator.validate_results(smoke_probe_ids=smoke_ids)
+
+        mock_runner.validate_results.assert_called_once_with(
+            smoke_probe_ids=smoke_ids,
+        )
