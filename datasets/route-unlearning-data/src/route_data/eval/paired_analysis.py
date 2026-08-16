@@ -279,10 +279,17 @@ def compute_group_effects(
 
     Groups: ``target``, ``retain``, ``control``, ``untargeted``.
 
-    For each group, reports summary statistics of ``delta_signed_margin``
-    across all binary families, plus per-family breakdowns.
+    P0-9: Visual signed-margin metrics are reported separately from
+    name-only token-overlap metrics.  The primary gating key is
+    ``overall_visual`` which averages only ``delta_signed_margin``
+    across the four visual families.  Name-only metrics are reported
+    in a dedicated ``name_only`` sub-dict.
     """
-    group_deltas: dict[str, list[float]] = defaultdict(list)
+    # Visual (signed-margin) deltas per group.
+    group_visual_deltas: dict[str, list[float]] = defaultdict(list)
+    # Name-only (token-overlap) deltas per group.
+    group_nameonly_deltas: dict[str, list[float]] = defaultdict(list)
+    # Per-family breakdowns.
     group_family: dict[str, dict[str, list[float]]] = defaultdict(
         lambda: defaultdict(list),
     )
@@ -293,16 +300,21 @@ def compute_group_effects(
 
         if fam == "name_only":
             delta = d.get("delta_token_overlap")
+            if delta is not None:
+                group_nameonly_deltas[grp].append(delta)
+                group_family[grp][fam].append(delta)
         else:
             delta = d.get("delta_signed_margin")
-
-        if delta is not None:
-            group_deltas[grp].append(delta)
-            group_family[grp][fam].append(delta)
+            if delta is not None:
+                group_visual_deltas[grp].append(delta)
+                group_family[grp][fam].append(delta)
 
     result: dict[str, dict[str, Any]] = {}
     for grp in ["target", "retain", "control", "untargeted"]:
-        overall = _summary_stats(group_deltas.get(grp, []))
+        # P0-9: overall_visual is the primary gating metric.
+        overall_visual = _summary_stats(group_visual_deltas.get(grp, []))
+        name_only_stats = _summary_stats(group_nameonly_deltas.get(grp, []))
+
         per_family: dict[str, dict[str, float]] = {}
         for fam in [
             "direct_visual",
@@ -316,7 +328,8 @@ def compute_group_effects(
                 per_family[fam] = _summary_stats(vals)
 
         result[grp] = {
-            "overall": overall,
+            "overall_visual": overall_visual,
+            "name_only": name_only_stats,
             "per_family": per_family,
         }
 
@@ -591,6 +604,10 @@ class PairedAnalysis:
 
     Loads baseline and post-eval results, joins by probe_id, and writes
     all five analysis artifacts to ``output_dir``.
+
+    P0-10: Before any delta computation the pairing is validated:
+    both files must have exactly 500 rows, 500 unique IDs, and
+    identical ID sets.  Any violation aborts analysis.
     """
 
     def __init__(self, config: PairedAnalysisConfig) -> None:
@@ -599,6 +616,7 @@ class PairedAnalysis:
         self._post_rows: list[dict[str, Any]] | None = None
         self._identity_groups: dict[str, str] = {}
         self._probe_deltas: list[dict[str, Any]] | None = None
+        self._pairing_validation: dict[str, Any] | None = None
 
     # -- loading ---------------------------------------------------------- #
 
@@ -629,10 +647,85 @@ class PairedAnalysis:
         assert self._post_rows is not None, "Call load_data() first"
         return self._post_rows
 
+    # -- P0-10: pairing validation ---------------------------------------- #
+
+    def validate_pairing(self) -> dict[str, Any]:
+        """Validate exact 500↔500 probe pairing (P0-10).
+
+        Raises ``RuntimeError`` if any check fails.  Returns the
+        validation report dict on success.
+        """
+        bl = self.baseline_rows
+        po = self.post_rows
+
+        bl_ids = [r["probe_id"] for r in bl]
+        po_ids = [r["probe_id"] for r in po]
+        bl_unique = set(bl_ids)
+        po_unique = set(po_ids)
+
+        bl_dupes = [pid for pid in bl_ids if bl_ids.count(pid) > 1]
+        po_dupes = [pid for pid in po_ids if po_ids.count(pid) > 1]
+
+        missing = sorted(bl_unique - po_unique)
+        extra = sorted(po_unique - bl_unique)
+
+        passed = (
+            len(bl) == 500
+            and len(po) == 500
+            and len(bl_unique) == 500
+            and len(po_unique) == 500
+            and bl_unique == po_unique
+        )
+
+        report: dict[str, Any] = {
+            "pass": passed,
+            "baseline_rows": len(bl),
+            "post_rows": len(po),
+            "baseline_unique_ids": len(bl_unique),
+            "post_unique_ids": len(po_unique),
+            "missing": missing,
+            "extra": extra,
+            "duplicates_baseline": sorted(set(bl_dupes)),
+            "duplicates_post": sorted(set(po_dupes)),
+        }
+        self._pairing_validation = report
+
+        if not passed:
+            reasons: list[str] = []
+            if len(bl) != 500:
+                reasons.append(f"baseline has {len(bl)} rows, expected 500")
+            if len(po) != 500:
+                reasons.append(f"post has {len(po)} rows, expected 500")
+            if len(bl_unique) != 500:
+                reasons.append(
+                    f"baseline has {len(bl_unique)} unique IDs, expected 500"
+                )
+            if len(po_unique) != 500:
+                reasons.append(
+                    f"post has {len(po_unique)} unique IDs, expected 500"
+                )
+            if bl_unique != po_unique:
+                if missing:
+                    reasons.append(f"{len(missing)} missing probe IDs")
+                if extra:
+                    reasons.append(f"{len(extra)} extra probe IDs")
+            raise RuntimeError(
+                "P0-10: Paired analysis aborted — exact 500↔500 "
+                "pairing failed: " + "; ".join(reasons)
+            )
+
+        return report
+
     # -- analysis --------------------------------------------------------- #
 
     def run_probe_deltas(self) -> list[dict[str, Any]]:
-        """Compute and cache probe-level deltas."""
+        """Compute and cache probe-level deltas.
+
+        P0-10: Validates exact 500↔500 pairing before computing
+        any deltas.  Raises ``RuntimeError`` on pairing failure.
+        """
+        # P0-10: Hard-fail unless exact pairing is confirmed.
+        self.validate_pairing()
         self._probe_deltas = compute_probe_deltas(
             self.baseline_rows, self.post_rows, self._identity_groups,
         )
@@ -677,6 +770,10 @@ class PairedAnalysis:
             "group_effects": group_effects,
             "preservation_report": preservation,
             "route_effects": route_effects,
+            # P0-10: Include pairing validation in results so
+            # downstream consumers (e.g. validation report) can
+            # access it.
+            "pairing_validation": self._pairing_validation or {},
         }
 
     # -- writing ---------------------------------------------------------- #
@@ -693,6 +790,14 @@ class PairedAnalysis:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         paths: dict[str, Path] = {}
+
+        # 0) P0-10: pairing_validation.json
+        if self._pairing_validation is not None:
+            p = output_dir / "pairing_validation.json"
+            with p.open("w", encoding="utf-8") as fh:
+                json.dump(self._pairing_validation, fh, indent=2, ensure_ascii=False)
+                fh.write("\n")
+            paths["pairing_validation"] = p
 
         # 1) paired_probe_deltas.jsonl
         p = output_dir / "paired_probe_deltas.jsonl"

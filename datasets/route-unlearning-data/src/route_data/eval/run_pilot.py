@@ -32,7 +32,10 @@ import yaml
 from .paired_analysis import PairedAnalysis, PairedAnalysisConfig
 from .pilot_selection import (
     build_identity_stats,
+    generate_intervention_manifest,
+    run_leakage_detection,
     select_pilot_identities,
+    validate_pilot_frozen_inputs,
     write_selection_manifest,
 )
 
@@ -69,6 +72,18 @@ def _sha256_file(path: str | Path) -> str:
         for chunk in iter(lambda: fh.read(1 << 16), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _git_dirty() -> bool:
+    """Return True if the git working tree is dirty."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, check=False,
+        )
+        return bool(result.stdout.strip()) if result.returncode == 0 else False
+    except FileNotFoundError:
+        return False
 
 
 # --------------------------------------------------------------------------- #
@@ -117,19 +132,44 @@ class PilotRunner:
     # -- Stage 1: Selection ----------------------------------------------- #
 
     def run_selection(self) -> dict[str, Any]:
-        """Run identity selection and write the manifest.
+        """Run identity selection with preflight, leakage detection, and manifest.
 
         Returns the selection manifest as a dict.
         """
         cfg = self.config
         sel_dir = self.output_dir / "selection"
+        evidence_dir = self.output_dir / "evidence"
         sel_dir.mkdir(parents=True, exist_ok=True)
+        evidence_dir.mkdir(parents=True, exist_ok=True)
 
+        baseline_manifest = self._resolve(cfg["baseline"]["manifest_path"])
         baseline_results = self._resolve(cfg["baseline"]["results_path"])
         route_probe = self._resolve(cfg["dataset"]["route_probe_path"])
         processed_ds_str = cfg["dataset"].get("processed_dataset_path", "")
         processed_ds = self._resolve(processed_ds_str) if processed_ds_str else None
 
+        # -- P0-5: Frozen SHA preflight --------------------------------- #
+        actual_manifest_sha = _sha256_file(baseline_manifest)
+        actual_results_sha = _sha256_file(baseline_results)
+        actual_route_sha = _sha256_file(route_probe)
+        actual_processed_sha = (
+            _sha256_file(processed_ds) if processed_ds is not None else ""
+        )
+
+        logger.info("Running frozen SHA preflight...")
+        validate_pilot_frozen_inputs(
+            baseline_manifest_path=baseline_manifest,
+            baseline_results_path=baseline_results,
+            route_probe_path=route_probe,
+            processed_dataset_path=processed_ds,
+            expected_manifest_sha=cfg["baseline"].get("manifest_sha256", ""),
+            expected_results_sha=cfg["baseline"].get("results_sha256", ""),
+            expected_route_probe_sha=cfg["dataset"].get("route_probe_sha256", ""),
+            expected_processed_ds_sha=cfg["dataset"].get("processed_dataset_sha256", ""),
+            output_path=evidence_dir / "pilot_preflight_report.json",
+        )
+
+        # -- Build stats and select identities -------------------------- #
         logger.info("Building identity stats from baseline...")
         stats = build_identity_stats(baseline_results, route_probe, processed_ds)
 
@@ -144,14 +184,15 @@ class PilotRunner:
             preferred_role=sel_cfg.get("preferred_role", "train"),
         )
 
+        # Write manifest with actual computed SHAs
         manifest_path = sel_dir / "pilot_identity_selection.json"
         write_selection_manifest(
             selection,
             manifest_path,
-            baseline_manifest_sha256=cfg["baseline"].get("manifest_sha256", ""),
-            baseline_results_sha256=cfg["baseline"].get("results_sha256", ""),
-            route_probe_sha256=cfg["dataset"].get("route_probe_sha256", ""),
-            processed_dataset_sha256=cfg["dataset"].get("processed_dataset_sha256", ""),
+            baseline_manifest_sha256=actual_manifest_sha,
+            baseline_results_sha256=actual_results_sha,
+            route_probe_sha256=actual_route_sha,
+            processed_dataset_sha256=actual_processed_sha,
             code_commit=_git_commit(),
         )
 
@@ -161,6 +202,37 @@ class PilotRunner:
             selection.retain_identities,
             selection.control_identities,
         )
+
+        # -- P0-3: Leakage detection ------------------------------------ #
+        if processed_ds is not None:
+            logger.info("Running leakage detection...")
+            run_leakage_detection(
+                processed_dataset_path=processed_ds,
+                route_probe_path=route_probe,
+                target_identity_ids=selection.target_identities,
+                retain_identity_ids=selection.retain_identities,
+                output_path=sel_dir / "leakage_report.json",
+            )
+            leakage_sha = _sha256_file(sel_dir / "leakage_report.json")
+        else:
+            leakage_sha = ""
+
+        # -- P0-4: Intervention dataset manifest ------------------------ #
+        if processed_ds is not None:
+            sel_manifest_sha = _sha256_file(manifest_path)
+            logger.info("Generating intervention dataset manifest...")
+            generate_intervention_manifest(
+                processed_dataset_path=processed_ds,
+                target_identity_ids=selection.target_identities,
+                retain_identity_ids=selection.retain_identities,
+                selection_manifest_sha256=sel_manifest_sha,
+                leakage_report_sha256=leakage_sha,
+                experiment_config=cfg,
+                output_path=sel_dir / "intervention_dataset_manifest.json",
+                seed=sel_cfg.get("seed", 17),
+                code_commit=_git_commit(),
+            )
+
         return json.loads(manifest_path.read_text())
 
     # -- Stage 2: Training (requires GPU) --------------------------------- #
@@ -181,7 +253,7 @@ class PilotRunner:
             "lora_rank": method_cfg["lora_rank"],
             "lora_alpha": method_cfg["lora_alpha"],
             "learning_rate": method_cfg["learning_rate"],
-            "num_steps": method_cfg["num_steps"],
+            "num_optimizer_steps": method_cfg.get("num_optimizer_steps", method_cfg.get("num_steps", 50)),
             "retain_weight": method_cfg["retain_weight"],
             "batch_size": method_cfg["train_batch_size"],
             "gradient_accumulation_steps": method_cfg["gradient_accumulation_steps"],
@@ -212,6 +284,11 @@ class PilotRunner:
         Returns a dict suitable for constructing ``PostEvalConfig``.
         """
         cfg = self.config
+        # P0-7: Resolve all frozen provenance paths.
+        processed_ds_str = cfg["dataset"].get("processed_dataset_path", "")
+        model_cfg_str = cfg["base_model"].get("model_config_path", "")
+        freeze_verif_str = cfg["baseline"].get("freeze_verification_path", "")
+
         return {
             "model_id": cfg["base_model"]["model_id"],
             "model_revision": cfg["base_model"]["revision"],
@@ -226,11 +303,26 @@ class PilotRunner:
             "baseline_manifest_path": str(
                 self._resolve(cfg["baseline"]["manifest_path"])
             ),
+            # P0-11: output_dir is the base; PostUnlearningEvaluator
+            # appends checkpoint_name for checkpoint-specific subdirs.
             "output_dir": str(self.output_dir / "post_eval"),
             "selection_manifest_sha256": _sha256_file(
                 self.output_dir / "selection" / "pilot_identity_selection.json"
             ),
             "code_commit": _git_commit(),
+            # P0-7: Full frozen evaluation contract.
+            "dataset_manifest_path": str(
+                self._resolve(cfg["baseline"]["manifest_path"])
+            ),
+            "freeze_verification_path": str(
+                self._resolve(freeze_verif_str)
+            ) if freeze_verif_str else "",
+            "processed_dataset_path": str(
+                self._resolve(processed_ds_str)
+            ) if processed_ds_str else "",
+            "model_config_path": str(
+                self._resolve(model_cfg_str)
+            ) if model_cfg_str else "",
         }
 
     # -- Stage 4: Paired analysis ----------------------------------------- #
@@ -279,8 +371,10 @@ class PilotRunner:
     ) -> dict[str, Any]:
         """Generate the pilot validation report (Section 53).
 
-        This report summarizes whether all pipeline stages completed
-        successfully and provides the GO/NO-GO decision inputs.
+        P0-14: Gates use visual-only signed-margin metrics and enforce
+        target effect magnitude > retain/control drift + tolerance.
+        Also requires 0 post-eval inference errors and exact 500↔500
+        pairing.
         """
         evidence_dir = self.output_dir / "evidence"
         evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -305,39 +399,104 @@ class PilotRunner:
         if analysis_results is not None:
             ge = analysis_results.get("group_effects", {})
             pr = analysis_results.get("preservation_report", {})
-            target_mean = ge.get("target", {}).get("overall", {}).get("mean")
-            retain_mean = ge.get("retain", {}).get("overall", {}).get("mean")
-            control_mean = ge.get("control", {}).get("overall", {}).get("mean")
+            pv = analysis_results.get("pairing_validation", {})
 
+            # P0-9/P0-14: Use overall_visual (visual-only signed-margin).
+            target_vis = ge.get("target", {}).get("overall_visual", {})
+            retain_vis = ge.get("retain", {}).get("overall_visual", {})
+            control_vis = ge.get("control", {}).get("overall_visual", {})
+            untargeted_vis = ge.get("untargeted", {}).get("overall_visual", {})
+
+            target_mean = target_vis.get("mean")
+            retain_mean = retain_vis.get("mean")
+            control_mean = control_vis.get("mean")
+            untargeted_mean = untargeted_vis.get("mean")
+
+            # Direct-visual accuracy per group (preserve / retain / control).
             dv_post = pr.get("global_direct_visual", {}).get("post_accuracy")
+            retain_post_acc = pr.get("retain_group", {}).get("post_accuracy")
+            control_post_acc = pr.get("control_group", {}).get("post_accuracy")
+
+            # Target direct-visual reporting (always separate).
+            target_dv_pre = pr.get("global_direct_visual", {}).get("pre_accuracy")
+            target_dv_post = pr.get("global_direct_visual", {}).get("post_accuracy")
+            target_margin_pre = pr.get("global_direct_visual", {}).get("pre_mean_margin")
+            target_margin_post = pr.get("global_direct_visual", {}).get("post_mean_margin")
+
+            # Post-eval inference errors.
+            post_eval_errors = 0
+            if post_eval_summary is not None:
+                post_eval_errors = post_eval_summary.get("inference_errors", 0)
+
+            # P0-10: Pairing validation.
+            pairing_pass = pv.get("pass", False)
 
             report["analysis_summary"] = {
-                "target_mean_delta": target_mean,
-                "retain_mean_delta": retain_mean,
-                "control_mean_delta": control_mean,
+                "target_visual_delta_mean": target_mean,
+                "retain_visual_delta_mean": retain_mean,
+                "control_visual_delta_mean": control_mean,
+                "untargeted_visual_delta_mean": untargeted_mean,
                 "post_direct_visual_accuracy": dv_post,
+                "retain_direct_visual_post_accuracy": retain_post_acc,
+                "control_direct_visual_post_accuracy": control_post_acc,
+                "target_direct_visual_pre_accuracy": target_dv_pre,
+                "target_direct_visual_post_accuracy": target_dv_post,
+                "target_direct_visual_pre_margin": target_margin_pre,
+                "target_direct_visual_post_margin": target_margin_post,
+                "post_eval_inference_errors": post_eval_errors,
+                "pairing_exact_match": pairing_pass,
             }
 
-            # GO/NO-GO gates
-            dv_gate = self.config.get("evaluation", {}).get(
-                "direct_visual_accuracy_gate", 0.98
+            # P0-14: Strengthened GO/NO-GO gates.
+            tolerance = self.config.get("evaluation", {}).get(
+                "gate_tolerance", 0.1,
             )
-            report["gates"] = {
-                "direct_visual_accuracy_gate": dv_gate,
-                "direct_visual_pass": (
+            dv_gate = self.config.get("evaluation", {}).get(
+                "direct_visual_accuracy_gate", 0.98,
+            )
+
+            # Target effect magnitude.
+            target_mag = abs(target_mean) if target_mean is not None else 0.0
+            retain_drift = abs(retain_mean) if retain_mean is not None else 0.0
+            control_drift = abs(control_mean) if control_mean is not None else 0.0
+
+            gates: dict[str, Any] = {
+                # Primary selectivity gates.
+                "target_exceeds_retain_plus_tolerance": (
+                    target_mag > retain_drift + tolerance
+                    if target_mean is not None and retain_mean is not None
+                    else None
+                ),
+                "target_exceeds_control_plus_tolerance": (
+                    target_mag > control_drift + tolerance
+                    if target_mean is not None and control_mean is not None
+                    else None
+                ),
+                # Preservation gates.
+                "retain_direct_visual_accuracy_gate": (
+                    retain_post_acc is not None and retain_post_acc >= dv_gate
+                    if retain_post_acc is not None
+                    else None
+                ),
+                "control_direct_visual_accuracy_gate": (
+                    control_post_acc is not None and control_post_acc >= dv_gate
+                    if control_post_acc is not None
+                    else None
+                ),
+                # Global visual accuracy gate.
+                "global_direct_visual_accuracy_gate": (
                     dv_post is not None and dv_post >= dv_gate
                     if dv_post is not None
                     else None
                 ),
-                "target_effect_visible": (
-                    target_mean is not None and target_mean < 0
-                ),
-                "retain_preserved": (
-                    retain_mean is not None and abs(retain_mean) < abs(target_mean or 0)
-                    if target_mean is not None and retain_mean is not None
-                    else None
-                ),
+                # Quality gates.
+                "zero_post_eval_inference_errors": post_eval_errors == 0,
+                "exact_500_pairing": pairing_pass,
+                # Configuration.
+                "_gate_tolerance": tolerance,
+                "_direct_visual_accuracy_gate": dv_gate,
             }
+            report["gates"] = gates
 
         report_path = evidence_dir / "pilot_validation_report.json"
         report_path.write_text(json.dumps(report, indent=2) + "\n")
@@ -361,6 +520,8 @@ def generate_pilot_validation_report(
 
     This is a convenience function for generating the report without
     instantiating the full ``PilotRunner``.
+
+    P0-14: Uses visual-only metrics and strengthened gates.
     """
     evidence_dir = Path(output_dir) / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -384,13 +545,66 @@ def generate_pilot_validation_report(
     if analysis_results is not None:
         ge = analysis_results.get("group_effects", {})
         pr = analysis_results.get("preservation_report", {})
+        pv = analysis_results.get("pairing_validation", {})
+
+        # P0-9/P0-14: Use overall_visual.
+        target_vis = ge.get("target", {}).get("overall_visual", {})
+        retain_vis = ge.get("retain", {}).get("overall_visual", {})
+        control_vis = ge.get("control", {}).get("overall_visual", {})
+
+        target_mean = target_vis.get("mean")
+        retain_mean = retain_vis.get("mean")
+        control_mean = control_vis.get("mean")
+
+        dv_post = pr.get("global_direct_visual", {}).get("post_accuracy")
+        retain_post_acc = pr.get("retain_group", {}).get("post_accuracy")
+        control_post_acc = pr.get("control_group", {}).get("post_accuracy")
+
+        post_eval_errors = 0
+        if post_eval_summary is not None:
+            post_eval_errors = post_eval_summary.get("inference_errors", 0)
+
+        pairing_pass = pv.get("pass", False)
+        target_mag = abs(target_mean) if target_mean is not None else 0.0
+        retain_drift = abs(retain_mean) if retain_mean is not None else 0.0
+        control_drift = abs(control_mean) if control_mean is not None else 0.0
+        tolerance = 0.1
+        dv_gate = 0.98
+
         report["analysis_summary"] = {
-            "target_mean_delta": ge.get("target", {}).get("overall", {}).get("mean"),
-            "retain_mean_delta": ge.get("retain", {}).get("overall", {}).get("mean"),
-            "control_mean_delta": ge.get("control", {}).get("overall", {}).get("mean"),
-            "post_direct_visual_accuracy": pr.get(
-                "global_direct_visual", {}
-            ).get("post_accuracy"),
+            "target_visual_delta_mean": target_mean,
+            "retain_visual_delta_mean": retain_mean,
+            "control_visual_delta_mean": control_mean,
+            "post_direct_visual_accuracy": dv_post,
+            "retain_direct_visual_post_accuracy": retain_post_acc,
+            "control_direct_visual_post_accuracy": control_post_acc,
+            "post_eval_inference_errors": post_eval_errors,
+            "pairing_exact_match": pairing_pass,
+        }
+
+        report["gates"] = {
+            "target_exceeds_retain_plus_tolerance": (
+                target_mag > retain_drift + tolerance
+                if target_mean is not None and retain_mean is not None
+                else None
+            ),
+            "target_exceeds_control_plus_tolerance": (
+                target_mag > control_drift + tolerance
+                if target_mean is not None and control_mean is not None
+                else None
+            ),
+            "retain_direct_visual_accuracy_gate": (
+                retain_post_acc is not None and retain_post_acc >= dv_gate
+                if retain_post_acc is not None
+                else None
+            ),
+            "control_direct_visual_accuracy_gate": (
+                control_post_acc is not None and control_post_acc >= dv_gate
+                if control_post_acc is not None
+                else None
+            ),
+            "zero_post_eval_inference_errors": post_eval_errors == 0,
+            "exact_500_pairing": pairing_pass,
         }
 
     report_path = evidence_dir / "pilot_validation_report.json"
