@@ -538,14 +538,43 @@ def _run_post_eval_phase(
         dtype=post_cfg_dict["dtype"],
     )
 
-    # Build a minimal model_config for BaselineRunner
-    model_config = {
+    # Build a minimal model_config for BaselineRunner.
+    # BaselineRunner accesses model_config via attributes (e.g. .revision),
+    # so wrap the dict in a SimpleNamespace.
+    import hashlib
+    import types
+    _chat_template = getattr(processor, "chat_template", "") or ""
+    _mc_dict = {
         "model_id": post_cfg_dict["model_id"],
         "revision": post_cfg_dict["model_revision"],
         "dtype": post_cfg_dict["dtype"],
+        "backend": "qwen_lora_pilot",
         "fingerprint_id": cfg.get("base_model", {}).get("fingerprint_id", ""),
+        # P0-5: fingerprint fields required by validate_fingerprint()
+        "processor_class": processor.__class__.__name__,
+        "tokenizer_class": processor.tokenizer.__class__.__name__,
+        "chat_template_hash": hashlib.sha256(_chat_template.encode()).hexdigest(),
         **adapter_metadata,
     }
+    model_config = types.SimpleNamespace(**_mc_dict)
+
+    # Wrap model to provide the fingerprint() interface expected by
+    # BaselineRunner.
+    class _ModelBackend:
+        """Thin wrapper exposing model metadata via fingerprint()."""
+
+        def __init__(self, model_obj, meta):
+            self._model = model_obj
+            self._meta = meta
+
+        def fingerprint(self):
+            return vars(self._meta)
+
+        # Delegate everything else to the underlying model
+        def __getattr__(self, name):
+            return getattr(self._model, name)
+
+    backend = _ModelBackend(model, model_config)
 
     # Steps 11-14: Post-eval
     pe_config = PostEvalConfig(
@@ -568,7 +597,7 @@ def _run_post_eval_phase(
     )
 
     evaluator = PostUnlearningEvaluator(
-        config=pe_config, backend=model, model_config=model_config,
+        config=pe_config, backend=backend, model_config=model_config,
     )
 
     # Step 11-12: Preflight + inference

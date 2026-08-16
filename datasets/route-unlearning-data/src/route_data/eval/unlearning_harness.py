@@ -109,7 +109,7 @@ class ForgetDataset(Dataset):
         self,
         samples: list[dict[str, Any]],
         processor: Any,
-        max_length: int = 512,
+        max_length: int = 8192,
     ):
         self.samples = samples
         self.processor = processor
@@ -161,10 +161,15 @@ class ForgetDataset(Dataset):
             )
 
         # -- Preserve ALL processor tensor outputs (P0-2) --------------- #
+        # image_grid_thw / image_sizes / pixel_values have dim 0 = num_images
+        # or num_tiles, not batch, so they must NOT be squeezed.
+        _IMAGE_INDEXED_KEYS = {"image_grid_thw", "image_sizes", "pixel_values"}
         result: dict[str, Any] = {}
         for key, value in prefix.items():
-            if torch.is_tensor(value):
+            if torch.is_tensor(value) and key not in _IMAGE_INDEXED_KEYS:
                 result[key] = value.squeeze(0)
+            elif torch.is_tensor(value):
+                result[key] = value
 
         # Hard-fail if required multimodal tensors are missing (P0-2)
         if "pixel_values" not in result:
@@ -185,10 +190,10 @@ class ForgetDataset(Dataset):
         result["_yes_token_ids"] = self._get_answer_token_ids("Yes")
         result["_no_token_ids"] = self._get_answer_token_ids("No")
 
-        # -- Build labels for retain loss (KL divergence) ---------------- #
-        # For forget loss, we use the shared scorer on the prefix only.
-        # For retain loss, we need labels with prompt masking.
-        # Build full conversation for retain loss computation.
+        # -- Build full conversation for labels and final tensors -------- #
+        # For forget loss, we use the shared scorer on the prefix only
+        # (sliced via _prefix_len). For retain loss / collate, input_ids
+        # and labels must have the same length.
         messages = [
             {
                 "role": "user",
@@ -215,34 +220,29 @@ class ForgetDataset(Dataset):
                 add_generation_prompt=False,
             )
 
-        # Tokenize user prompt to find assistant start for label masking
-        user_prompt_text = self.processor.apply_chat_template(
-            user_messages,
-            add_generation_prompt=True,
-            enable_thinking=False,
-        ) if isinstance(user_messages, list) else user_messages
-        try:
-            user_tokens = self.processor.tokenizer(
-                user_prompt_text, return_tensors="pt", truncation=False,
-            )
-        except Exception:
-            # Fallback: use prefix length
-            user_tokens = {"input_ids": torch.tensor([result["input_ids"][:result["_prefix_len"]]])}
-        assistant_start = user_tokens["input_ids"].shape[1]
-
-        # Tokenize full conversation for labels
+        # Tokenize full conversation with processor (includes image).
         full_tokens = self.processor(
             text=full_prompt,
             images=image,
             return_tensors="pt",
-            truncation=True,
-            max_length=self.max_length,
+            truncation=False,
             padding=False,
         )
 
-        # Build labels with prompt masking
-        labels = full_tokens["input_ids"].squeeze(0).clone()
-        labels[:assistant_start] = -100
+        # -- Replace prefix tensors with full-conversation tensors -------- #
+        # input_ids and labels must have the same length for qwen_collate_fn.
+        # _prefix_len (stored above) is used by compute_forget_loss to slice
+        # the prefix for scoring.
+        _IMAGE_INDEXED_KEYS = {"image_grid_thw", "image_sizes", "pixel_values"}
+        for key, value in full_tokens.items():
+            if torch.is_tensor(value) and key not in _IMAGE_INDEXED_KEYS:
+                result[key] = value.squeeze(0)
+            elif torch.is_tensor(value):
+                result[key] = value
+
+        # Build labels with prompt masking using _prefix_len as assistant_start
+        labels = result["input_ids"].clone()
+        labels[:result["_prefix_len"]] = -100
         result["labels"] = labels
 
         return result
@@ -276,7 +276,7 @@ class RetainDataset(Dataset):
         self,
         samples: list[dict[str, Any]],
         processor: Any,
-        max_length: int = 512,
+        max_length: int = 8192,
     ):
         self.samples = samples
         self.processor = processor
@@ -292,40 +292,48 @@ class RetainDataset(Dataset):
         answer_label = sample["answer_label"]
         answer_text = "Yes" if answer_label else "No"
 
-        # -- Build user-only prompt for assistant start position -------- #
+        # Load image
+        from PIL import Image
+        image = Image.open(image_uri).convert("RGB")
+
+        # -- Build EXACT multimodal assistant prefix (P0-2) -------------- #
         user_messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image"},
+                    {"type": "image", "image": image},
                     {"type": "text", "text": question},
                 ],
             }
         ]
 
         try:
-            user_prompt = self.processor.apply_chat_template(
+            prefix = self.processor.apply_chat_template(
                 user_messages,
                 add_generation_prompt=True,
                 enable_thinking=False,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
             )
         except TypeError:
-            user_prompt = self.processor.apply_chat_template(
+            prefix = self.processor.apply_chat_template(
                 user_messages,
                 add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
             )
 
-        user_tokens = self.processor.tokenizer(
-            user_prompt, return_tensors="pt", truncation=False,
-        )
-        assistant_start = user_tokens["input_ids"].shape[1]
+        # Find assistant start from prefix length
+        assistant_start = prefix["input_ids"].shape[1]
 
         # -- Full conversation with assistant answer -------------------- #
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image"},
+                    {"type": "image", "image": image},
                     {"type": "text", "text": question},
                 ],
             },
@@ -347,23 +355,23 @@ class RetainDataset(Dataset):
                 add_generation_prompt=False,
             )
 
-        from PIL import Image
-        image = Image.open(image_uri).convert("RGB")
-
+        # Use max_length large enough for multimodal tokens (image ~1024).
         inputs = self.processor(
             text=full_prompt,
             images=image,
             return_tensors="pt",
-            truncation=True,
-            max_length=self.max_length,
+            truncation=False,
             padding=False,
         )
 
         # -- Preserve ALL processor tensor outputs (P0-2) --------------- #
+        _IMAGE_INDEXED_KEYS = {"image_grid_thw", "image_sizes", "pixel_values"}
         result: dict[str, Any] = {}
         for key, value in inputs.items():
-            if torch.is_tensor(value):
+            if torch.is_tensor(value) and key not in _IMAGE_INDEXED_KEYS:
                 result[key] = value.squeeze(0)
+            elif torch.is_tensor(value):
+                result[key] = value
 
         if "pixel_values" not in result:
             raise RuntimeError(
@@ -502,6 +510,9 @@ def load_base_model(
     )
 
     model.eval()
+    # Enable gradient checkpointing to reduce activation memory for long
+    # multimodal sequences (~1024 image tokens + text).
+    model.gradient_checkpointing_enable()
     logger.info(f"Loaded base model {model_id} revision {revision}")
     return model, processor
 
@@ -709,12 +720,20 @@ def compute_forget_loss(
         }
 
         # Add multimodal tensors
+        # Sequence-indexed tensors (mm_token_type_ids) must be sliced to
+        # prefix_len to match input_ids/attention_mask. Visual tensors
+        # (pixel_values, image_grid_thw, image_sizes) are indexed by image
+        # and passed as-is.
+        _SEQ_KEYS = {"mm_token_type_ids"}
         for key in ("pixel_values", "image_grid_thw", "mm_token_type_ids", "image_sizes"):
             if key in batch:
                 val = batch[key]
                 if torch.is_tensor(val):
-                    # For visual tensors, index by batch item
-                    if val.shape[0] > i:
+                    if key in _SEQ_KEYS:
+                        # Sequence-indexed: slice to prefix_len
+                        prefix[key] = val[i:i+1, :prefix_len]
+                    else:
+                        # Image-indexed: pass full (model handles alignment)
                         prefix[key] = val[i:i+1] if val.dim() > 1 else val[i:i+1]
                 elif isinstance(val, list) and len(val) > i:
                     prefix[key] = val[i]
