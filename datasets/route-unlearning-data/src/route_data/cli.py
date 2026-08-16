@@ -4202,12 +4202,18 @@ def cmd_experiment_baseline(args) -> int:
                 "Use --smoke or --limit for development runs."
             )
             return 1
+        # P0-1: require --processed-dataset for full research runs.
+        if not processed_dataset:
+            log.error(
+                "Full research baseline requires --processed-dataset "
+                "for frozen protocol-role population. "
+                "Use --smoke or --limit for development runs."
+            )
+            return 1
         try:
-            runner.validate_freeze_verification()
-            runner.validate_dataset_manifest()
-            runner.validate_cross_file()
+            runner.validate_research_preflight()
         except RuntimeError as exc:
-            log.error("Freeze/validation failed: %s", exc)
+            log.error("Preflight validation failed: %s", exc)
             return 1
 
     # Determine whether to run smoke or full baseline.

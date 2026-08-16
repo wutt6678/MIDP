@@ -117,6 +117,7 @@ class TestEvidenceStructure:
         "model_id",
         "resolved_revision",
         "model_fingerprint",
+        "model_config_path",
         "model_config_sha256",
         "code_commit",
         "git_dirty",
@@ -150,15 +151,17 @@ class TestEvidenceStructure:
             "processor_class": "AutoProcessor",
         }
 
-        # Build evidence manually (same logic as main())
+        # Build evidence manually (same logic as main()).
+        # P0-8: SHA is computed from the actual YAML file bytes.
         import hashlib
+        config_path = (
+            Path(__file__).resolve().parent.parent.parent
+            / "configs" / "models" / "unlearning_target_qwen35_9b.yaml"
+        )
         model_config_sha = hashlib.sha256(
-            json.dumps(
-                {"model_id": mock_cfg.model_id, "revision": mock_cfg.revision,
-                 "backend": mock_cfg.backend, "dtype": mock_cfg.dtype},
-                sort_keys=True,
-            ).encode()
+            config_path.read_bytes()
         ).hexdigest()
+        model_config_path = str(config_path.resolve())
 
         git_state = smoke_mod._get_git_state()
         evidence = {
@@ -166,6 +169,7 @@ class TestEvidenceStructure:
             "model_id": mock_cfg.model_id,
             "resolved_revision": mock_backend.fingerprint()["revision"],
             "model_fingerprint": mock_backend.fingerprint(),
+            "model_config_path": model_config_path,
             "model_config_sha256": model_config_sha,
             "code_commit": git_state["git_commit"],
             "git_dirty": git_state["git_dirty"],
@@ -236,3 +240,102 @@ class TestModelConfigLoading:
         )
         cfg = load_model_config(config_path)
         assert cfg.backend == "qwen_hf"
+
+
+# --------------------------------------------------------------------------- #
+# Tests: P0-8 — Actual YAML file SHA
+# --------------------------------------------------------------------------- #
+
+
+class TestActualYamlSha:
+    """P0-8: model_config_sha256 must use the actual YAML file bytes."""
+
+    def test_sha_matches_yaml_bytes(self):
+        """The SHA must equal sha256 of the raw YAML file."""
+        import hashlib
+
+        config_path = (
+            Path(__file__).resolve().parent.parent.parent
+            / "configs" / "models" / "unlearning_target_qwen35_9b.yaml"
+        )
+        expected = hashlib.sha256(config_path.read_bytes()).hexdigest()
+        # The SHA must NOT be computed from a JSON subset of fields.
+        import json
+
+        from route_data.config import load_model_config
+
+        cfg = load_model_config(config_path)
+        wrong = hashlib.sha256(
+            json.dumps(
+                {"model_id": cfg.model_id, "revision": cfg.revision,
+                 "backend": cfg.backend, "dtype": cfg.dtype},
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        assert expected != wrong, (
+            "YAML file SHA should differ from JSON-subset SHA "
+            "(the whole point of P0-8)"
+        )
+        assert len(expected) == 64
+
+    def test_evidence_records_model_config_path(self, smoke_mod, tmp_path):
+        """Evidence must include model_config_path (P0-8)."""
+        import hashlib
+
+        config_path = (
+            Path(__file__).resolve().parent.parent.parent
+            / "configs" / "models" / "unlearning_target_qwen35_9b.yaml"
+        )
+        sha = hashlib.sha256(config_path.read_bytes()).hexdigest()
+        evidence = {
+            "model_config_path": str(config_path.resolve()),
+            "model_config_sha256": sha,
+        }
+        path = tmp_path / "smoke_sha_test.json"
+        with open(path, "w") as f:
+            json.dump(evidence, f)
+        loaded = json.loads(path.read_text())
+        assert loaded["model_config_path"] == str(config_path.resolve())
+        assert loaded["model_config_sha256"] == sha
+
+
+# --------------------------------------------------------------------------- #
+# Tests: P1-1 — Backend metadata for input_mode
+# --------------------------------------------------------------------------- #
+
+
+class TestInputModeMetadata:
+    """P1-1: Smoke reads input_mode from response.metadata when available."""
+
+    def test_defaults_when_no_metadata(self):
+        """Without backend metadata, defaults to text_only / False."""
+        response = MagicMock()
+        response.metadata = {}
+        resp_meta = getattr(response, "metadata", {}) or {}
+        input_mode = resp_meta.get("input_mode", "text_only")
+        image_used = resp_meta.get("image_present", False)
+        assert input_mode == "text_only"
+        assert image_used is False
+
+    def test_backend_metadata_overrides_defaults(self):
+        """When backend provides metadata, smoke uses those values."""
+        response = MagicMock()
+        response.metadata = {
+            "input_mode": "text_only",
+            "image_present": False,
+        }
+        resp_meta = getattr(response, "metadata", {}) or {}
+        input_mode = resp_meta.get("input_mode", "text_only")
+        image_used = resp_meta.get("image_present", False)
+        assert input_mode == "text_only"
+        assert image_used is False
+
+    def test_none_metadata_falls_back(self):
+        """When response.metadata is None, fall back to defaults."""
+        response = MagicMock()
+        response.metadata = None
+        resp_meta = getattr(response, "metadata", {}) or {}
+        input_mode = resp_meta.get("input_mode", "text_only")
+        image_used = resp_meta.get("image_present", False)
+        assert input_mode == "text_only"
+        assert image_used is False

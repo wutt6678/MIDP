@@ -277,17 +277,90 @@ def stub_backend(stub_model_config: ModelConfig):
     return create_backend(stub_model_config)
 
 
+# Protocol config for the basic runner fixture (Commit A: P0-3).
+_RUNNER_PROTO: dict = {
+    "forget_bucket": "forget10",
+    "train_bucket": "retain15",
+    "eval_bucket": None,
+    "eval_fraction": 0.2,
+    "eval_seed": 17,
+}
+
+
+@pytest.fixture()
+def processed_jsonl_for_runner(tmp_path: Path) -> Path:
+    """Processed JSONL with probe identities for the basic runner fixture."""
+    path = tmp_path / "runner_processed.jsonl"
+    rows = [
+        {"identity_id": "aaaa", "source_metadata": {
+            "source_subject_id": "S001",
+            "official_memberships": ["forget10"],
+        }},
+        {"identity_id": "bbbb", "source_metadata": {
+            "source_subject_id": "S002",
+            "official_memberships": ["retain15"],
+        }},
+    ]
+    with open(path, "w") as f:
+        f.writelines(json.dumps(row) + "\n" for row in rows)
+    return path
+
+
+@pytest.fixture()
+def manifest_for_runner(
+    tmp_path: Path,
+    probe_jsonl: Path,
+    processed_jsonl_for_runner: Path,
+) -> Path:
+    """Manifest with protocol config and correct SHAs for the runner fixture."""
+    from route_data.eval.baseline_runner import _sha256_file
+
+    path = tmp_path / "runner_manifest.json"
+    data = {
+        "protocol": {"canonical_protocol": dict(_RUNNER_PROTO)},
+        "dataset_artifacts": {
+            "route_probes": {"sha256": _sha256_file(probe_jsonl)},
+            "processed_dataset": {
+                "sha256": _sha256_file(processed_jsonl_for_runner),
+            },
+        },
+    }
+    path.write_text(json.dumps(data))
+    return path
+
+
 @pytest.fixture()
 def runner(
     stub_backend,
     probe_jsonl: Path,
     tmp_path: Path,
     stub_model_config: ModelConfig,
+    processed_jsonl_for_runner: Path,
+    manifest_for_runner: Path,
 ) -> BaselineRunner:
     return BaselineRunner(
         backend=stub_backend,
         probe_path=probe_jsonl,
         output_dir=tmp_path / "output",
+        model_config=stub_model_config,
+        resume=False,
+        dataset_manifest_path=manifest_for_runner,
+        processed_dataset_path=processed_jsonl_for_runner,
+    )
+
+
+@pytest.fixture()
+def runner_no_map(
+    stub_backend,
+    probe_jsonl: Path,
+    tmp_path: Path,
+    stub_model_config: ModelConfig,
+) -> BaselineRunner:
+    """Runner without processed dataset or manifest (for negative tests)."""
+    return BaselineRunner(
+        backend=stub_backend,
+        probe_path=probe_jsonl,
+        output_dir=tmp_path / "output_no_map",
         model_config=stub_model_config,
         resume=False,
     )
@@ -485,6 +558,8 @@ class TestBaselineRunnerPersistence:
             output_dir=runner.output_dir,
             model_config=runner.model_config,
             resume=True,
+            dataset_manifest_path=runner.dataset_manifest_path,
+            processed_dataset_path=runner.processed_dataset_path,
         )
         assert len(runner2._results) == 10  # loaded from cache
         new_results = runner2.run_all()
@@ -601,7 +676,7 @@ class TestSignedMarginSemantics:
         probe = BaselineProbe(
             probe_id="sm_pos",
             sample_id="s1",
-            identity_id="i1",
+            identity_id="aaaa",
             benchmark="fiubench",
             probe_family="direct_visual",
             modality="image_only",
@@ -625,7 +700,7 @@ class TestSignedMarginSemantics:
         probe = BaselineProbe(
             probe_id="sm_neg",
             sample_id="s1",
-            identity_id="i1",
+            identity_id="aaaa",
             benchmark="fiubench",
             probe_family="direct_visual",
             modality="image_only",
@@ -648,7 +723,7 @@ class TestSignedMarginSemantics:
         probe = BaselineProbe(
             probe_id="sm_ctr",
             sample_id="s1",
-            identity_id="i1",
+            identity_id="aaaa",
             benchmark="fiubench",
             probe_family="direct_visual",
             modality="image_only",
@@ -677,7 +752,7 @@ class TestMetadataCarryThrough:
         probe = BaselineProbe(
             probe_id="meta1",
             sample_id="s1",
-            identity_id="i1",
+            identity_id="aaaa",
             benchmark="fiubench",
             probe_family="wrong_name",
             modality="image_text",
@@ -699,7 +774,7 @@ class TestMetadataCarryThrough:
         )
         result = runner.run_probe(probe)
         assert result.probe_id == "meta1"
-        assert result.identity_id == "i1"
+        assert result.identity_id == "aaaa"
         assert result.probe_family == "wrong_name"
         assert result.registry_hash == "reg_hash"
         assert result.paired_sample_id == "pair1"
@@ -759,9 +834,9 @@ class TestModelConfigSha:
 class TestManifestDrivenVerification:
     """Verify manifest-driven SHA verification (Commit B)."""
 
-    def test_no_manifest_raises(self, runner: BaselineRunner):
+    def test_no_manifest_raises(self, runner_no_map: BaselineRunner):
         with pytest.raises(RuntimeError, match="No dataset manifest"):
-            runner.verify_input_hashes_from_manifest()
+            runner_no_map.verify_input_hashes_from_manifest()
 
     def test_manifest_missing_field_raises(
         self, stub_backend, probe_jsonl, tmp_path, stub_model_config
@@ -900,6 +975,8 @@ class TestValidateResults:
         "run_provenance_consistent",
         "zero_inference_errors",
         "protocol_role_complete",
+        "processed_dataset_sha_match",
+        "route_identity_role_counts",
     ]
 
     def test_validate_passes_with_complete_results(self, runner: BaselineRunner):
@@ -1177,7 +1254,7 @@ class TestSpyCallPaths:
         probe = BaselineProbe(
             probe_id="spy_img",
             sample_id="s1",
-            identity_id="i1",
+            identity_id="aaaa",
             benchmark="fiubench",
             probe_family="direct_visual",
             modality="image_only",
@@ -1204,7 +1281,7 @@ class TestSpyCallPaths:
         probe = BaselineProbe(
             probe_id="spy_txt",
             sample_id="s1",
-            identity_id="i1",
+            identity_id="aaaa",
             benchmark="fiubench",
             probe_family="name_only",
             modality="text_only",
@@ -1313,10 +1390,10 @@ class TestCommit5MetadataEnrichment:
         assert "candidate_protocol_version" in sc
         assert "decision_rule" in sc
 
-    def test_validate_dataset_manifest_requires_manifest(self, runner: BaselineRunner):
+    def test_validate_dataset_manifest_requires_manifest(self, runner_no_map: BaselineRunner):
         """P0-1: validate_dataset_manifest raises without manifest."""
         with pytest.raises(RuntimeError, match="requires --dataset-manifest"):
-            runner.validate_dataset_manifest()
+            runner_no_map.validate_dataset_manifest()
 
     def test_validate_dataset_manifest_with_valid_manifest(
         self, stub_backend, tmp_path, stub_model_config
@@ -1652,16 +1729,6 @@ class TestProtocolRolePopulation:
         probe_file = tmp_path / "probes.jsonl"
         probe_file.write_text("\n".join(json.dumps(p) for p in probes))
 
-        # Manifest with correct probe SHA.
-        manifest_data = {
-            "protocol": {"canonical_protocol": dict(self._PROTO)},
-            "dataset_artifacts": {
-                "route_probes": {"sha256": _sha256_file(probe_file)},
-            },
-        }
-        manifest_file = tmp_path / "manifest.json"
-        manifest_file.write_text(json.dumps(manifest_data))
-
         # Processed JSONL (shared across fixtures via tmp_path).
         train_id = self._find_holdout_id("train")
         processed_file = tmp_path / "processed.jsonl"
@@ -1682,6 +1749,19 @@ class TestProtocolRolePopulation:
         processed_file.write_text(
             "\n".join(json.dumps(r) for r in rows) + "\n"
         )
+
+        # Manifest with correct probe SHA and processed dataset SHA.
+        manifest_data = {
+            "protocol": {"canonical_protocol": dict(self._PROTO)},
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(probe_file)},
+                "processed_dataset": {
+                    "sha256": _sha256_file(processed_file),
+                },
+            },
+        }
+        manifest_file = tmp_path / "manifest.json"
+        manifest_file.write_text(json.dumps(manifest_data))
 
         return BaselineRunner(
             backend=stub_backend,
@@ -1704,9 +1784,9 @@ class TestProtocolRolePopulation:
         assert proto["eval_fraction"] == pytest.approx(0.2)
         assert proto["eval_seed"] == 17
 
-    def test_extract_protocol_returns_none_without_manifest(self, runner):
-        """runner has no manifest → _extract_protocol returns None."""
-        assert runner._extract_protocol() is None
+    def test_extract_protocol_returns_none_without_manifest(self, runner_no_map):
+        """runner_no_map has no manifest → _extract_protocol returns None."""
+        assert runner_no_map._extract_protocol() is None
 
     # -- _build_identity_role_map ----------------------------------------- #
 
@@ -1719,8 +1799,8 @@ class TestProtocolRolePopulation:
     def test_build_map_out_of_protocol_role(self, runner_with_roles):
         assert runner_with_roles.identity_role_map["id_c"] == "out_of_protocol"
 
-    def test_build_map_empty_without_processed_path(self, runner):
-        assert runner.identity_role_map == {}
+    def test_build_map_empty_without_processed_path(self, runner_no_map):
+        assert runner_no_map.identity_role_map == {}
 
     def test_build_map_missing_file_raises(
         self, stub_backend, probe_jsonl, tmp_path, stub_model_config, manifest_jsonl
@@ -1812,10 +1892,10 @@ class TestProtocolRolePopulation:
         with pytest.raises(RuntimeError, match="invalid role"):
             runner.run_probe(runner.probes[0])
 
-    def test_run_probe_no_map_gives_empty_role(self, runner):
+    def test_run_probe_no_map_gives_empty_role(self, runner_no_map):
         """Without identity_role_map, protocol_role is empty string."""
-        probe = runner.probes[0]
-        result = runner.run_probe(probe)
+        probe = runner_no_map.probes[0]
+        result = runner_no_map.run_probe(probe)
         assert result.protocol_role == ""
 
     # -- validate_results protocol_role_complete (P0-8) ------------------- #
@@ -1853,13 +1933,13 @@ class TestProtocolRolePopulation:
         with pytest.raises(RuntimeError, match="protocol_role_complete"):
             runner_full_overlap.validate_results()
 
-    def test_validate_skipped_without_map(self, runner):
-        """Without identity_role_map the check passes with skipped=True."""
+    def test_validate_raises_without_identity_role_map(self, runner):
+        """Without identity_role_map the runner raises RuntimeError (P0-3)."""
         runner.run_all()
-        report = runner.validate_results()
-        check = report["checks"]["protocol_role_complete"]
-        assert check["pass"] is True
-        assert check.get("skipped") is True
+        # Clear the identity_role_map to simulate a missing processed dataset.
+        runner.identity_role_map = {}
+        with pytest.raises(RuntimeError, match="populated protocol roles"):
+            runner.validate_results()
 
     # -- generate_summary per_protocol_role (P0-9) ------------------------ #
 
@@ -1881,10 +1961,10 @@ class TestProtocolRolePopulation:
         assert ppr["train"]["n"] == 2
         assert ppr["eval"]["n"] == 0
 
-    def test_summary_per_protocol_role_without_map(self, runner):
+    def test_summary_per_protocol_role_without_map(self, runner_no_map):
         """Summary includes per_protocol_role even without map (all zero)."""
-        runner.run_all()
-        summary = runner.generate_summary()
+        runner_no_map.run_all()
+        summary = runner_no_map.generate_summary()
         assert "per_protocol_role" in summary
         ppr = summary["per_protocol_role"]
         assert ppr["exclude"]["n"] == 0
@@ -2050,13 +2130,15 @@ class TestFreezeProvenanceInManifest:
 
 
 class TestValidateFingerprint:
-    """P1-9: validate_fingerprint() before inference."""
+    """P0-4/P0-5: validate_fingerprint() before inference."""
 
     def test_valid_fingerprint_passes(self, runner):
         runner._fingerprint = {
             "fingerprint_id": "test-model-v1",
-            "model_revision": "abc123",
-            "processor_hash": "abc123",
+            "revision": "abc123",
+            "processor_class": "AutoProcessor",
+            "tokenizer_class": "AutoTokenizer",
+            "chat_template_hash": "ct" + "a" * 62,
         }
         runner._fingerprint_id = "test-model-v1"
         runner._model_config_sha = "x" * 64
@@ -2065,12 +2147,15 @@ class TestValidateFingerprint:
         assert checks["fingerprint_non_empty"] is True
         assert checks["model_config_sha_non_empty"] is True
         assert checks["processor_tokenizer_available"] is True
+        assert checks["missing_fingerprint_fields"] == []
 
     def test_revision_mismatch_raises(self, runner):
         runner._fingerprint = {
             "fingerprint_id": "test-model-v1",
-            "model_revision": "rev999",
-            "processor_hash": "abc123",
+            "revision": "rev999",
+            "processor_class": "AutoProcessor",
+            "tokenizer_class": "AutoTokenizer",
+            "chat_template_hash": "ct" + "a" * 62,
         }
         runner._fingerprint_id = "test-model-v1"
         runner._model_config_sha = "x" * 64
@@ -2079,7 +2164,12 @@ class TestValidateFingerprint:
             runner.validate_fingerprint()
 
     def test_unknown_fingerprint_raises(self, runner):
-        runner._fingerprint = {"processor_hash": "abc123"}
+        runner._fingerprint = {
+            "revision": "abc123",
+            "processor_class": "AutoProcessor",
+            "tokenizer_class": "AutoTokenizer",
+            "chat_template_hash": "ct" + "a" * 62,
+        }
         runner._fingerprint_id = "unknown"
         runner._model_config_sha = "x" * 64
         with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
@@ -2088,7 +2178,10 @@ class TestValidateFingerprint:
     def test_empty_model_config_sha_raises(self, runner):
         runner._fingerprint = {
             "fingerprint_id": "test-model-v1",
-            "processor_hash": "abc123",
+            "revision": "abc123",
+            "processor_class": "AutoProcessor",
+            "tokenizer_class": "AutoTokenizer",
+            "chat_template_hash": "ct" + "a" * 62,
         }
         runner._fingerprint_id = "test-model-v1"
         runner._model_config_sha = ""
@@ -2096,8 +2189,335 @@ class TestValidateFingerprint:
             runner.validate_fingerprint()
 
     def test_no_processor_tokenizer_raises(self, runner):
-        runner._fingerprint = {"fingerprint_id": "test-model-v1"}
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "revision": "abc123",
+        }
         runner._fingerprint_id = "test-model-v1"
         runner._model_config_sha = "x" * 64
         with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
             runner.validate_fingerprint()
+
+    def test_missing_processor_class_raises(self, runner):
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "revision": "abc123",
+            "tokenizer_class": "AutoTokenizer",
+            "chat_template_hash": "ct" + "a" * 62,
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()
+
+    def test_missing_tokenizer_class_raises(self, runner):
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "revision": "abc123",
+            "processor_class": "AutoProcessor",
+            "chat_template_hash": "ct" + "a" * 62,
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()
+
+    def test_missing_chat_template_hash_raises(self, runner):
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "revision": "abc123",
+            "processor_class": "AutoProcessor",
+            "tokenizer_class": "AutoTokenizer",
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()
+
+    def test_empty_backend_revision_raises(self, runner):
+        """P0-4: empty backend revision must fail when config revision is set."""
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "revision": "",
+            "processor_class": "AutoProcessor",
+            "tokenizer_class": "AutoTokenizer",
+            "chat_template_hash": "ct" + "a" * 62,
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+        # model_config.revision is "abc123" — backend revision empty → fail
+        with pytest.raises(RuntimeError, match="Fingerprint validation failed"):
+            runner.validate_fingerprint()
+
+
+class TestProcessedDatasetShaBinding:
+    """P1-6: Real-schema tests for processed dataset SHA binding.
+
+    Verifies that ``validate_processed_dataset()`` correctly binds the
+    processed dataset file to the frozen SHA in the research manifest.
+    Uses the actual manifest schema
+    (``dataset_artifacts.processed_dataset.sha256``).
+    """
+
+    def test_correct_sha_passes(self, runner: BaselineRunner):
+        """When the processed dataset SHA matches the manifest, validation passes."""
+        checks = runner.validate_processed_dataset()
+        assert checks["processed_dataset_exists"] is True
+        assert checks["processed_dataset_sha_match"] is True
+        assert len(checks["processed_dataset_sha_actual"]) == 64
+        assert checks["processed_dataset_sha_expected"] == checks["processed_dataset_sha_actual"]
+
+    def test_wrong_sha_raises(self, runner: BaselineRunner, tmp_path: Path):
+        """When the manifest records a different SHA, validation hard-fails."""
+        from route_data.eval.baseline_runner import _sha256_file
+
+        # Rewrite the manifest with an incorrect processed-dataset SHA.
+        bad_manifest_path = tmp_path / "bad_manifest.json"
+        bad_data = {
+            "protocol": {"canonical_protocol": dict(_RUNNER_PROTO)},
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(runner.probe_path)},
+                "processed_dataset": {"sha256": "0" * 64},
+            },
+        }
+        bad_manifest_path.write_text(json.dumps(bad_data))
+
+        # Build a runner that uses the corrupted manifest.
+        bad_runner = BaselineRunner(
+            backend=runner.backend,
+            probe_path=runner.probe_path,
+            output_dir=tmp_path / "output_bad_sha",
+            model_config=runner.model_config,
+            resume=False,
+            dataset_manifest_path=bad_manifest_path,
+            processed_dataset_path=runner.processed_dataset_path,
+        )
+        with pytest.raises(RuntimeError, match="Processed dataset validation failed"):
+            bad_runner.validate_processed_dataset()
+
+    def test_missing_file_raises(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config
+    ):
+        """When the processed dataset file does not exist, construction fails."""
+        from route_data.eval.baseline_runner import _sha256_file
+
+        processed_path = tmp_path / "nonexistent.jsonl"
+        manifest_path = tmp_path / "manifest_missing.json"
+        manifest_data = {
+            "protocol": {"canonical_protocol": dict(_RUNNER_PROTO)},
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(probe_jsonl)},
+                "processed_dataset": {"sha256": "0" * 64},
+            },
+        }
+        manifest_path.write_text(json.dumps(manifest_data))
+
+        with pytest.raises(FileNotFoundError, match="Processed dataset not found"):
+            BaselineRunner(
+                backend=stub_backend,
+                probe_path=probe_jsonl,
+                output_dir=tmp_path / "output_missing",
+                model_config=stub_model_config,
+                resume=False,
+                dataset_manifest_path=manifest_path,
+                processed_dataset_path=processed_path,
+            )
+
+    def test_no_processed_dataset_path_raises(self, runner_no_map: BaselineRunner):
+        """When no processed dataset path was provided, validation fails."""
+        with pytest.raises(RuntimeError, match="requires --processed-dataset"):
+            runner_no_map.validate_processed_dataset()
+
+    def test_no_manifest_raises(
+        self, stub_backend, probe_jsonl, tmp_path, stub_model_config
+    ):
+        """When no protocol config in manifest, construction fails."""
+        from route_data.eval.baseline_runner import _sha256_file
+
+        processed_path = tmp_path / "proc.jsonl"
+        processed_path.write_text('{"identity_id": "x"}\n')
+        manifest_path = tmp_path / "manifest_no_proto.json"
+        manifest_data = {
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(probe_jsonl)},
+                "processed_dataset": {"sha256": _sha256_file(processed_path)},
+            },
+        }
+        manifest_path.write_text(json.dumps(manifest_data))
+
+        with pytest.raises(RuntimeError, match="no protocol configuration"):
+            BaselineRunner(
+                backend=stub_backend,
+                probe_path=probe_jsonl,
+                output_dir=tmp_path / "output_no_manifest",
+                model_config=stub_model_config,
+                resume=False,
+                dataset_manifest_path=manifest_path,
+                processed_dataset_path=processed_path,
+            )
+
+
+class TestResearchPreflight:
+    """P1-7/P1-8/P1-9: validate_research_preflight() integration tests."""
+
+    def _prepare_runner_for_preflight(
+        self, runner: BaselineRunner,
+    ) -> patch:
+        """Configure runner state so gates 1-4 pass.
+
+        Sets a valid fingerprint, patches the manifest with fields needed
+        by ``validate_dataset_manifest`` / ``validate_cross_file``, loads
+        a passing freeze-verification dict, and mocks ``_read_jsonl`` to
+        return 500 rows.
+
+        Returns the ``_read_jsonl`` patcher — the caller **must** call
+        ``patcher.stop()`` after all assertions are complete.
+        """
+        from route_data.eval.baseline_runner import _sha256_file
+
+        # -- valid fingerprint (gates 5) ------------------------------------
+        runner._fingerprint = {
+            "fingerprint_id": "test-model-v1",
+            "revision": "abc123",
+            "processor_class": "AutoProcessor",
+            "tokenizer_class": "AutoTokenizer",
+            "chat_template_hash": "ct" + "a" * 62,
+        }
+        runner._fingerprint_id = "test-model-v1"
+        runner._model_config_sha = "x" * 64
+
+        # -- patch manifest with fields needed by gates 2 & 3 ---------------
+        runner._dataset_manifest["dataset_artifacts"]["route_probes"][
+            "total_probes"
+        ] = 500
+        runner._dataset_manifest["dataset_artifacts"]["route_probes"][
+            "families"
+        ] = {
+            "direct_visual": 100,
+            "image_plus_name": 100,
+            "wrong_name": 100,
+            "visual_text_conflict": 100,
+            "name_only": 100,
+        }
+
+        # -- freeze verification with correct SHAs (gates 1 & 3) -----------
+        manifest_sha = _sha256_file(runner.dataset_manifest_path)
+        probe_sha = _sha256_file(runner.probe_path)
+        runner._freeze_verification = {
+            "dataset_version": "fiubench-route-v1",
+            "ready_for_experiments": True,
+            "bundle_verifier_pass": True,
+            "strict_final_verify_pass": True,
+            "manual_audit_pass": True,
+            "exact_ci_pass": True,
+            "hard_stop_conditions": {
+                "manual_audit_matches_current_route_artifact": True,
+                "manual_audit_route_count_matches": True,
+                "all_artifact_hashes_verified": True,
+                "all_commits_reachable": True,
+                "git_dirty_false": True,
+            },
+            "dataset_manifest_sha256": manifest_sha,
+            "route_probe_sha256": probe_sha,
+        }
+
+        # -- mock _read_jsonl to return 500 rows (gate 2) -------------------
+        patcher = patch(
+            "route_data.eval.baseline_runner._read_jsonl",
+            return_value=[{}] * 500,
+        )
+        patcher.start()
+        return patcher
+
+    def test_preflight_passes_writes_report(
+        self, runner: BaselineRunner, tmp_path: Path,
+    ):
+        """All gates pass → report has pass=true and is written to disk."""
+        read_patcher = self._prepare_runner_for_preflight(runner)
+        try:
+            with patch(
+                "route_data.eval.baseline_runner.BaselineRunner._get_git_state",
+                staticmethod(lambda: {"git_commit": "a" * 40, "git_dirty": False}),
+            ):
+                report = runner.validate_research_preflight()
+            assert report["pass"] is True
+            assert "freeze" in report["gates"]
+            assert "dataset" in report["gates"]
+            assert "cross_file" in report["gates"]
+            assert "processed_dataset" in report["gates"]
+            assert "fingerprint" in report["gates"]
+            assert "git" in report["gates"]
+            # Report written to disk.
+            report_path = runner.output_dir / "preflight_report.json"
+            assert report_path.is_file()
+            with open(report_path) as f:
+                data = json.load(f)
+            assert data["pass"] is True
+        finally:
+            read_patcher.stop()
+
+    def test_preflight_dirty_git_raises(
+        self, runner: BaselineRunner,
+    ):
+        """Dirty Git tree → preflight fails at the git gate."""
+        read_patcher = self._prepare_runner_for_preflight(runner)
+        try:
+            with (
+                patch(
+                    "route_data.eval.baseline_runner.BaselineRunner._get_git_state",
+                    staticmethod(lambda: {"git_commit": "a" * 40, "git_dirty": True}),
+                ),
+                pytest.raises(RuntimeError, match="Git tree is dirty"),
+            ):
+                runner.validate_research_preflight()
+            # Report still written (with pass=false).
+            report_path = runner.output_dir / "preflight_report.json"
+            assert report_path.is_file()
+            with open(report_path) as f:
+                data = json.load(f)
+            assert data["pass"] is False
+        finally:
+            read_patcher.stop()
+
+    def test_preflight_fingerprint_mismatch_raises(
+        self, runner: BaselineRunner,
+    ):
+        """Fingerprint revision mismatch → preflight fails at fingerprint gate."""
+        read_patcher = self._prepare_runner_for_preflight(runner)
+        try:
+            # Override revision to a wrong value (gate 5).
+            runner._fingerprint["revision"] = "WRONG_REV"
+            with (
+                patch(
+                    "route_data.eval.baseline_runner.BaselineRunner._get_git_state",
+                    staticmethod(lambda: {"git_commit": "a" * 40, "git_dirty": False}),
+                ),
+                pytest.raises(
+                    RuntimeError, match="Fingerprint validation failed"
+                ),
+            ):
+                runner.validate_research_preflight()
+            # Report still written.
+            report_path = runner.output_dir / "preflight_report.json"
+            assert report_path.is_file()
+        finally:
+            read_patcher.stop()
+
+    def test_preflight_no_git_commit_raises(
+        self, runner: BaselineRunner,
+    ):
+        """Missing Git commit → preflight fails at git gate."""
+        read_patcher = self._prepare_runner_for_preflight(runner)
+        try:
+            with (
+                patch(
+                    "route_data.eval.baseline_runner.BaselineRunner._get_git_state",
+                    staticmethod(lambda: {"git_commit": "", "git_dirty": False}),
+                ),
+                pytest.raises(
+                    RuntimeError, match="Cannot determine Git commit"
+                ),
+            ):
+                runner.validate_research_preflight()
+        finally:
+            read_patcher.stop()

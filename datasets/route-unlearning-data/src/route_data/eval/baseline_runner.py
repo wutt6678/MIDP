@@ -597,6 +597,80 @@ class BaselineRunner:
         return checks
 
     # ------------------------------------------------------------------ #
+    # Processed-dataset validation (P0-2)
+    # ------------------------------------------------------------------ #
+
+    def validate_processed_dataset(self) -> dict[str, Any]:
+        """Validate the processed dataset against the frozen manifest (P0-2).
+
+        Computes SHA-256 of the processed dataset file and compares it
+        against ``dataset_artifacts.processed_dataset.sha256`` from the
+        research dataset manifest.
+
+        Returns
+        -------
+        dict
+            Validation details including SHA match status.
+
+        Raises
+        ------
+        RuntimeError
+            If the processed dataset is not provided, not found, or its
+            SHA-256 does not match the frozen evidence.
+        """
+        if not self.processed_dataset_path:
+            raise RuntimeError(
+                "Processed dataset validation requires --processed-dataset."
+            )
+        if not self.processed_dataset_path.is_file():
+            raise RuntimeError(
+                f"Processed dataset not found: {self.processed_dataset_path}"
+            )
+        if self._dataset_manifest is None:
+            raise RuntimeError(
+                "Processed dataset validation requires --dataset-manifest."
+            )
+
+        checks: dict[str, Any] = {}
+        passed = True
+
+        # -- file existence -----------------------------------------------
+        checks["processed_dataset_exists"] = True
+
+        # -- SHA-256 match ------------------------------------------------
+        actual_sha = _sha256_file(self.processed_dataset_path)
+        expected_sha = (
+            self._dataset_manifest
+            .get("dataset_artifacts", {})
+            .get("processed_dataset", {})
+            .get("sha256", "")
+        )
+        sha_match = actual_sha == expected_sha
+        checks["processed_dataset_sha_match"] = sha_match
+        checks["processed_dataset_sha_expected"] = expected_sha
+        checks["processed_dataset_sha_actual"] = actual_sha
+        if not sha_match:
+            passed = False
+
+        # -- secondary counts (advisory) ----------------------------------
+        proc_section = (
+            self._dataset_manifest
+            .get("dataset_artifacts", {})
+            .get("processed_dataset", {})
+        )
+        for count_key in ("canonical_samples", "unique_images", "unique_identities"):
+            expected_count = proc_section.get(count_key)
+            if expected_count is not None:
+                checks[f"processed_dataset_{count_key}"] = expected_count
+
+        if not passed:
+            raise RuntimeError(
+                f"Processed dataset validation failed: {checks}"
+            )
+        log.info("Processed dataset validation passed: SHA match confirmed")
+        return checks
+
+    # ------------------------------------------------------------------ #
     # Identity → protocol-role mapping (P0-5 / P0-6)
     # ------------------------------------------------------------------ #
 
@@ -805,14 +879,16 @@ class BaselineRunner:
     # ------------------------------------------------------------------ #
 
     def validate_fingerprint(self) -> dict[str, Any]:
-        """Validate the model fingerprint before inference (P1-9).
+        """Validate the model fingerprint before inference (P0-4, P0-5).
 
         Requires:
 
-        - Model revision matches the config revision.
+        - Model revision matches the config revision (P0-4: uses ``revision``
+          field, not ``model_revision``).
         - Fingerprint is non-empty.
         - Model-config SHA is non-empty.
-        - Processor / tokenizer fingerprint fields are available.
+        - Processor / tokenizer / chat-template fields are present (P0-5:
+          ``processor_class``, ``tokenizer_class``, ``chat_template_hash``).
 
         Returns
         -------
@@ -827,14 +903,16 @@ class BaselineRunner:
         checks: dict[str, Any] = {}
         passed = True
 
-        # -- revision match ----------------------------------------------
-        backend_rev = self._fingerprint.get("model_revision", "")
+        # -- revision match (P0-4) ---------------------------------------
+        backend_rev = self._fingerprint.get("revision", "")
         config_rev = self.model_config.revision or ""
-        rev_match = (
-            backend_rev == config_rev
-            if backend_rev and config_rev
-            else True  # backend may not report revision
-        )
+        # Require both non-empty and equal for production Qwen baseline.
+        if config_rev and not backend_rev:
+            rev_match = False
+        elif backend_rev and config_rev:
+            rev_match = backend_rev == config_rev
+        else:
+            rev_match = False
         checks["revision_match"] = rev_match
         checks["backend_revision"] = backend_rev
         checks["config_revision"] = config_rev
@@ -854,12 +932,18 @@ class BaselineRunner:
         if not sha_ok:
             passed = False
 
-        # -- processor / tokenizer fields --------------------------------
-        has_processor = any(
-            k in self._fingerprint
-            for k in ("processor_hash", "tokenizer_hash", "tokenizer_name")
+        # -- processor / tokenizer / chat-template fields (P0-5) ---------
+        required_fp_fields = (
+            "processor_class",
+            "tokenizer_class",
+            "chat_template_hash",
         )
+        missing_fp_fields = [
+            k for k in required_fp_fields if not self._fingerprint.get(k)
+        ]
+        has_processor = len(missing_fp_fields) == 0
         checks["processor_tokenizer_available"] = has_processor
+        checks["missing_fingerprint_fields"] = missing_fp_fields
         if not has_processor:
             passed = False
 
@@ -869,6 +953,110 @@ class BaselineRunner:
             )
         log.info("Fingerprint validation passed: %s", self._fingerprint_id)
         return checks
+
+    # ------------------------------------------------------------------ #
+    # Research preflight (P1-8 / P1-9)
+    # ------------------------------------------------------------------ #
+
+    def validate_research_preflight(self) -> dict[str, Any]:
+        """Run all pre-inference validation gates in order (P1-8).
+
+        Sequence:
+        1. ``validate_freeze_verification()``
+        2. ``validate_dataset_manifest()``
+        3. ``validate_cross_file()``
+        4. ``validate_processed_dataset()``
+        5. ``validate_fingerprint()``
+        6. ``require_clean_git()``
+
+        Writes ``preflight_report.json`` to the output directory (P1-9).
+
+        Returns
+        -------
+        dict
+            Combined report with per-gate results.
+
+        Raises
+        ------
+        RuntimeError
+            If any gate fails.  No probes will have been evaluated.
+        """
+        report: dict[str, Any] = {"pass": False}
+        gates: list[tuple[str, Any]] = []
+
+        # 1. Freeze verification
+        try:
+            freeze_result = self.validate_freeze_verification()
+            gates.append(("freeze", freeze_result))
+        except RuntimeError as exc:
+            gates.append(("freeze", {"error": str(exc)}))
+            report["gates"] = dict(gates)
+            self._write_preflight_report(report)
+            raise
+
+        # 2. Dataset manifest
+        try:
+            manifest_result = self.validate_dataset_manifest()
+            gates.append(("dataset", manifest_result))
+        except RuntimeError as exc:
+            gates.append(("dataset", {"error": str(exc)}))
+            report["gates"] = dict(gates)
+            self._write_preflight_report(report)
+            raise
+
+        # 3. Cross-file
+        try:
+            cross_result = self.validate_cross_file()
+            gates.append(("cross_file", cross_result))
+        except RuntimeError as exc:
+            gates.append(("cross_file", {"error": str(exc)}))
+            report["gates"] = dict(gates)
+            self._write_preflight_report(report)
+            raise
+
+        # 4. Processed dataset
+        try:
+            proc_result = self.validate_processed_dataset()
+            gates.append(("processed_dataset", proc_result))
+        except RuntimeError as exc:
+            gates.append(("processed_dataset", {"error": str(exc)}))
+            report["gates"] = dict(gates)
+            self._write_preflight_report(report)
+            raise
+
+        # 5. Fingerprint
+        try:
+            fp_result = self.validate_fingerprint()
+            gates.append(("fingerprint", fp_result))
+        except RuntimeError as exc:
+            gates.append(("fingerprint", {"error": str(exc)}))
+            report["gates"] = dict(gates)
+            self._write_preflight_report(report)
+            raise
+
+        # 6. Clean Git
+        try:
+            git_result = self.require_clean_git()
+            gates.append(("git", git_result))
+        except RuntimeError as exc:
+            gates.append(("git", {"error": str(exc)}))
+            report["gates"] = dict(gates)
+            self._write_preflight_report(report)
+            raise
+
+        report["gates"] = dict(gates)
+        report["pass"] = True
+        self._write_preflight_report(report)
+        log.info("Research preflight passed: all 6 gates cleared.")
+        return report
+
+    def _write_preflight_report(self, report: dict[str, Any]) -> None:
+        """Write ``preflight_report.json`` to the output directory (P1-9)."""
+        report_path = self.output_dir / "preflight_report.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2, default=str)
+        log.info("Preflight report written: %s", report_path)
 
     # ------------------------------------------------------------------ #
     # Cache / resume
@@ -1313,12 +1501,21 @@ class BaselineRunner:
             role: {"n": count} for role, count in sorted(role_counts.items())
         }
 
+        # Route identity role counts (P1-5): count identities per role.
+        route_identity_role_counts: dict[str, int] = {
+            "train": 0, "eval": 0, "exclude": 0,
+        }
+        for role in self.identity_role_map.values():
+            if role in route_identity_role_counts:
+                route_identity_role_counts[role] += 1
+
         summary: dict[str, Any] = {
             "total_probes": total,
             "total_correct": total_correct,
             "mixed_task_overall_accuracy": total_correct / total if total else None,
             "per_family": per_family,
             "per_protocol_role": per_protocol_role,
+            "route_identity_role_counts": route_identity_role_counts,
             "model_fingerprint": self._fingerprint_id,
             "model_revision": self.model_config.revision,
             "scoring_version": SCORING_VERSION,
@@ -1542,7 +1739,7 @@ class BaselineRunner:
             errors=errors[:10],
         )
 
-        # -- 4.8  Protocol-role completeness (P0-8) -----------------------
+        # -- 4.8  Protocol-role completeness (P0-3 / P0-8) -----------------
         _VALID_ROLES = {"train", "eval", "exclude"}
         role_issues: list[dict[str, Any]] = []
         identity_roles: dict[str, set[str]] = {}
@@ -1564,27 +1761,56 @@ class BaselineRunner:
                     "identity_id": iid,
                     "roles": sorted(roles),
                 })
-        # Only enforce when the identity-role map was populated (i.e.
-        # processed_dataset_path was provided).  Without the map, roles
-        # are empty strings and the check is not applicable.
-        if self.identity_role_map:
-            _record(
-                "protocol_role_complete",
-                len(role_issues) == 0 and len(inconsistent_identities) == 0,
-                invalid_role_count=len(role_issues),
-                inconsistent_identity_count=len(inconsistent_identities),
-                invalid_roles=role_issues[:10],
-                inconsistent_identities=inconsistent_identities[:10],
-            )
-        else:
-            _record(
-                "protocol_role_complete",
-                True,
-                skipped=True,
-                reason="identity_role_map not populated",
+        # P0-3: For full research runs protocol_role_complete is mandatory.
+        # The identity_role_map must be populated (processed dataset provided)
+        # and every result must carry a valid role.
+        role_complete_ok = (
+            len(role_issues) == 0
+            and len(inconsistent_identities) == 0
+            and bool(self.identity_role_map)
+        )
+        _record(
+            "protocol_role_complete",
+            role_complete_ok,
+            invalid_role_count=len(role_issues),
+            inconsistent_identity_count=len(inconsistent_identities),
+            identity_role_map_populated=bool(self.identity_role_map),
+            invalid_roles=role_issues[:10],
+            inconsistent_identities=inconsistent_identities[:10],
+        )
+        if not self.identity_role_map:
+            raise RuntimeError(
+                "Research baseline requires populated protocol roles.  "
+                "Pass --processed-dataset for frozen protocol-role population."
             )
 
-        # -- 4.9  Write validation report --------------------------------
+        # -- 4.9  Processed-dataset provenance (P1-2) ----------------------
+        processed_sha_match = False
+        if self.processed_dataset_path and self._dataset_manifest:
+            try:
+                proc_checks = self.validate_processed_dataset()
+                processed_sha_match = proc_checks.get(
+                    "processed_dataset_sha_match", False
+                )
+            except RuntimeError:
+                pass
+        checks["processed_dataset_sha_match"] = {
+            "pass": processed_sha_match,
+        }
+        if not processed_sha_match:
+            passed = False
+
+        # -- 4.10  Route identity role counts (P1-5) -----------------------
+        route_role_counts: dict[str, int] = {"train": 0, "eval": 0, "exclude": 0}
+        for r in results:
+            if r.protocol_role in route_role_counts:
+                route_role_counts[r.protocol_role] += 1
+        checks["route_identity_role_counts"] = {
+            "pass": True,
+            **route_role_counts,
+        }
+
+        # -- 4.11  Write validation report ---------------------------------
         report = {"pass": passed, "checks": checks}
         self.output_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.output_dir / "validation_report.json"
@@ -1690,6 +1916,36 @@ class BaselineRunner:
             if route_probe_sha == "none":
                 route_probe_sha = ""
 
+        # Processed-dataset provenance (P1-3).
+        processed_dataset_sha = ""
+        if self.processed_dataset_path and self.processed_dataset_path.is_file():
+            processed_dataset_sha = _sha256_file(self.processed_dataset_path)
+        processed_dataset_manifest_sha = ""
+        if self._dataset_manifest:
+            processed_dataset_manifest_sha = (
+                self._dataset_manifest
+                .get("dataset_artifacts", {})
+                .get("processed_dataset", {})
+                .get("sha256", "")
+            )
+
+        # Protocol SHA from frozen manifest (P1-4).
+        protocol_sha256 = ""
+        if self._dataset_manifest:
+            protocol_sha256 = (
+                self._dataset_manifest
+                .get("protocol", {})
+                .get("protocol_sha256", "")
+            )
+
+        # Route identity role counts (P1-5).
+        route_identity_role_counts: dict[str, int] = {
+            "train": 0, "eval": 0, "exclude": 0,
+        }
+        for r in self._results:
+            if r.protocol_role in route_identity_role_counts:
+                route_identity_role_counts[r.protocol_role] += 1
+
         # Runtime library versions (P1-3).
         torch_version = ""
         transformers_version = ""
@@ -1749,7 +2005,14 @@ class BaselineRunner:
                 "freeze_verification_sha256": freeze_verification_sha,
                 "route_probe_sha256": route_probe_sha,
                 "route_probe_count": route_probe_count,
+                "processed_dataset_path": (
+                    str(self.processed_dataset_path)
+                    if self.processed_dataset_path else None
+                ),
+                "processed_dataset_sha256": processed_dataset_sha,
+                "processed_dataset_manifest_sha256": processed_dataset_manifest_sha,
             },
+            "protocol_sha256": protocol_sha256,
             "model_identity": {
                 "model_id": self.model_config.model_id,
                 "model_revision": self.model_config.revision,

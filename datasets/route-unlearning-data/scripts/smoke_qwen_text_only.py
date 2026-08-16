@@ -187,9 +187,11 @@ def main() -> int:
     if not no_think_ok:
         passed = False
 
-    # Input mode = text_only, image_used = false
-    input_mode = "text_only"
-    image_used = False
+    # Input mode = text_only, image_used = false.
+    # Prefer backend debug metadata when available (P1-1).
+    resp_meta = getattr(response, "metadata", {}) or {}
+    input_mode = resp_meta.get("input_mode", "text_only")
+    image_used = resp_meta.get("image_present", False)
 
     # ── Git state ───────────────────────────────────────────────────────
     print("\n[5/6] Checking Git state ...")
@@ -200,21 +202,19 @@ def main() -> int:
     # ── Write evidence (P1-7) ───────────────────────────────────────────
     print("\n[6/6] Writing evidence ...")
 
-    # Compute model config SHA
+    # Compute model config SHA from the actual YAML file bytes (P0-8).
     import hashlib
     model_config_sha = hashlib.sha256(
-        json.dumps(
-            {"model_id": cfg.model_id, "revision": cfg.revision,
-             "backend": cfg.backend, "dtype": cfg.dtype},
-            sort_keys=True,
-        ).encode()
+        args.model_config.read_bytes()
     ).hexdigest()
+    model_config_path = str(args.model_config.resolve())
 
     evidence = {
         "pass": passed,
         "model_id": cfg.model_id,
         "resolved_revision": resolved_rev,
         "model_fingerprint": fingerprint,
+        "model_config_path": model_config_path,
         "model_config_sha256": model_config_sha,
         "code_commit": git_state["git_commit"],
         "git_dirty": git_state["git_dirty"],
