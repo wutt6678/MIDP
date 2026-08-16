@@ -605,11 +605,25 @@ def _run_post_eval_phase(
 
     # Step 13: Strict validation
     logger.info("Step 13: Running strict validation ...")
-    validation_report = evaluator.validate_results()
+    try:
+        validation_report = evaluator.validate_results()
+    except RuntimeError as exc:
+        if smoke:
+            logger.warning("Step 13: Validation failed (expected in smoke mode): %s", exc)
+            validation_report = {"pass": False, "smoke_mode": True, "error": str(exc)}
+        else:
+            raise
 
     # Step 14: Exact pairing
     logger.info("Step 14: Validating exact probe matching ...")
-    pairing = evaluator.validate_against_baseline()
+    try:
+        pairing = evaluator.validate_against_baseline()
+    except RuntimeError as exc:
+        if smoke:
+            logger.warning("Step 14: Pairing validation failed (expected in smoke mode): %s", exc)
+            pairing = {"pass": False, "smoke_mode": True, "error": str(exc)}
+        else:
+            raise
 
     # Summary
     summary = evaluator.generate_summary()
