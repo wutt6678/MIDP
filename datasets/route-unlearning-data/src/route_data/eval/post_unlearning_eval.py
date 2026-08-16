@@ -324,6 +324,10 @@ class PostUnlearningEvaluator:
         )
         start_time = time.perf_counter()
 
+        # P0-8: Run research preflight before any inference.
+        logger.info("Running research preflight...")
+        self._runner.validate_research_preflight()
+
         self._results = self._runner.run_all(limit=limit)
 
         elapsed = time.perf_counter() - start_time
