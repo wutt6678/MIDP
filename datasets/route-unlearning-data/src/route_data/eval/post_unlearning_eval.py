@@ -65,6 +65,12 @@ class PostEvalConfig:
     unlearning_run_manifest_sha256: str = ""
     code_commit: str = ""
 
+    # P0-7: Full frozen evaluation contract
+    dataset_manifest_path: str = ""
+    freeze_verification_path: str = ""
+    processed_dataset_path: str = ""
+    model_config_path: str = ""
+
     @property
     def experiment_id(self) -> str:
         return "fiubench_unlearning_pilot_v1"
@@ -80,7 +86,7 @@ def load_lora_checkpoint(
     checkpoint_path: str | Path,
     dtype: str = "bfloat16",
     device: str = "cuda:0",
-) -> tuple[Any, Any]:
+) -> tuple[Any, Any, dict[str, str]]:
     """Load a LoRA adapter checkpoint on top of the frozen base model.
 
     Parameters
@@ -102,6 +108,8 @@ def load_lora_checkpoint(
         The model with LoRA adapters loaded.
     processor : AutoProcessor
         The processor for tokenization and image processing.
+    adapter_metadata : dict[str, str]
+        Adapter provenance for the adapter-aware fingerprint (P0-6).
     """
     import torch
     from huggingface_hub import snapshot_download
@@ -127,6 +135,7 @@ def load_lora_checkpoint(
     )
 
     # Load LoRA adapter
+    checkpoint_path = Path(checkpoint_path)
     model = PeftModel.from_pretrained(
         base_model,
         checkpoint_path,
@@ -134,11 +143,66 @@ def load_lora_checkpoint(
     )
     model.eval()
 
+    # Build adapter metadata for the adapter-aware fingerprint (P0-6).
+    adapter_metadata = _build_adapter_metadata(checkpoint_path)
+
     logger.info(
         f"Loaded LoRA checkpoint from {checkpoint_path} "
         f"on base {base_model_id} revision {base_revision}"
     )
-    return model, processor
+    return model, processor, adapter_metadata
+
+
+def _build_adapter_metadata(checkpoint_path: Path) -> dict[str, str]:
+    """Compute adapter provenance for the adapter-aware fingerprint (P0-6).
+
+    Reads the LoRA adapter config and computes SHA-256 of the checkpoint
+    artifacts so that different adapter checkpoints produce different
+    cache keys.
+    """
+    metadata: dict[str, str] = {
+        "adapter_checkpoint_path": str(checkpoint_path),
+    }
+
+    # SHA-256 of adapter_model.safetensors (or adapter_model.bin).
+    for fname in ("adapter_model.safetensors", "adapter_model.bin"):
+        fpath = checkpoint_path / fname
+        if fpath.is_file():
+            metadata["adapter_checkpoint_sha"] = _sha256_file(fpath)
+            break
+
+    # SHA-256 of adapter_config.json + extract LoRA hyperparameters.
+    config_path = checkpoint_path / "adapter_config.json"
+    if config_path.is_file():
+        metadata["adapter_config_sha"] = _sha256_file(config_path)
+        try:
+            with open(config_path) as f:
+                lora_cfg = json.load(f)
+            peft_cfg = lora_cfg.get("peft_type", {})
+            # LoRA hyperparameters.
+            if "r" in lora_cfg:
+                metadata["lora_rank"] = str(lora_cfg["r"])
+            if "lora_alpha" in lora_cfg:
+                metadata["lora_alpha"] = str(lora_cfg["lora_alpha"])
+            if "target_modules" in lora_cfg:
+                targets = lora_cfg["target_modules"]
+                if isinstance(targets, list):
+                    metadata["lora_target_modules"] = ",".join(sorted(targets))
+                else:
+                    metadata["lora_target_modules"] = str(targets)
+        except Exception:
+            pass
+
+    # Derive checkpoint name and step from the directory name.
+    metadata["checkpoint_name"] = checkpoint_path.name
+    # Try to extract step number from directory name (e.g., "step_050").
+    name = checkpoint_path.name
+    import re
+    step_match = re.search(r"(?:step_?|optimizer_step_?)(\d+)", name, re.IGNORECASE)
+    if step_match:
+        metadata["checkpoint_step"] = step_match.group(1)
+
+    return metadata
 
 
 # --------------------------------------------------------------------------- #
@@ -206,6 +270,8 @@ class PostUnlearningEvaluator:
         Post-evaluation configuration.
     backend:
         VisionLanguageModel backend (with LoRA adapters loaded).
+    model_config:
+        Model configuration for the BaselineRunner.
     """
 
     def __init__(
@@ -218,15 +284,24 @@ class PostUnlearningEvaluator:
         self.backend = backend
         self.model_config = model_config
 
-        # Create the baseline runner for post-eval
+        # P0-11: Use checkpoint-specific output directory to prevent
+        # cache reuse across different adapter checkpoints.
+        output_dir = Path(config.output_dir)
+        if config.checkpoint_name:
+            output_dir = output_dir / config.checkpoint_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # P0-7: Pass full frozen evaluation contract to BaselineRunner.
         self._runner = BaselineRunner(
             backend=backend,
             probe_path=config.probe_path,
-            output_dir=config.output_dir,
+            output_dir=str(output_dir),
             model_config=model_config,
             resume=True,
-            dataset_manifest_path=None,
-            model_config_path=None,
+            dataset_manifest_path=config.dataset_manifest_path or None,
+            model_config_path=config.model_config_path or None,
+            freeze_verification_path=config.freeze_verification_path or None,
+            processed_dataset_path=config.processed_dataset_path or None,
         )
 
         self._results: list[BaselineResult] = []
@@ -262,9 +337,12 @@ class PostUnlearningEvaluator:
         """Write post-eval results to ``results.jsonl``."""
         from dataclasses import asdict
 
-        self.config.output_dir = Path(self.config.output_dir)
-        self.config.output_dir.mkdir(parents=True, exist_ok=True)
-        path = self.config.output_dir / "results.jsonl"
+        # P0-11: Use the same checkpoint-specific directory as the runner.
+        output_dir = Path(self.config.output_dir)
+        if self.config.checkpoint_name:
+            output_dir = output_dir / self.config.checkpoint_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / "results.jsonl"
 
         rows = [asdict(r) for r in self._results]
         with open(path, "w") as f:
@@ -305,7 +383,10 @@ class PostUnlearningEvaluator:
         manifest : dict
             The post-eval manifest with SHA-256 bindings.
         """
+        # P0-11: Use the same checkpoint-specific directory as the runner.
         output_dir = Path(self.config.output_dir)
+        if self.config.checkpoint_name:
+            output_dir = output_dir / self.config.checkpoint_name
 
         # Compute result file SHA
         results_path = output_dir / "results.jsonl"
@@ -388,60 +469,36 @@ class PostUnlearningEvaluator:
         return manifest
 
     def validate_results(self) -> dict[str, Any]:
-        """Run validation checks on post-eval results.
+        """Strict post-eval validation matching baseline standards (P0-8).
+
+        Delegates to the BaselineRunner's ``validate_results()`` which
+        performs the full set of research-grade checks:
+
+        1. Exact probe-ID set equality
+        2. Family counts match
+        3. Binary score completeness (finite logp, p_yes, margins)
+        4. Name-only generation/metric completeness
+        5. Source metadata consistency
+        6. Run provenance consistency
+        7. Zero inference errors
+        8. Protocol-role completeness
+        9. Processed-dataset SHA match
+
+        The only allowed difference from baseline is the model fingerprint
+        (which differs due to the adapter).
 
         Returns
         -------
         report : dict
-            Validation report with pass/fail status.
+            Validation report with ``pass`` (bool) and ``checks`` (dict).
+
+        Raises
+        ------
+        RuntimeError
+            If any check fails.
         """
-        results = self._results
-        n_total = len(results)
-        n_errors = sum(1 for r in results if r.error is not None)
-
-        # Check all probe families present
-        families = {r.probe_family for r in results}
-        expected_families = {
-            "direct_visual",
-            "image_plus_name",
-            "wrong_name",
-            "visual_text_conflict",
-            "name_only",
-        }
-        families_complete = families == expected_families
-
-        # Check no duplicate probe IDs
-        probe_ids = [r.probe_id for r in results]
-        no_duplicates = len(probe_ids) == len(set(probe_ids))
-
-        # Check finite scores
-        finite_scores = True
-        for r in results:
-            if (
-                r.signed_answer_margin is not None
-                and r.signed_answer_margin != r.signed_answer_margin  # NaN check
-            ):
-                finite_scores = False
-                break
-
-        passed = (
-            n_errors == 0
-            and families_complete
-            and no_duplicates
-            and finite_scores
-            and n_total == 500
-        )
-
-        return {
-            "passed": passed,
-            "total_results": n_total,
-            "errors": n_errors,
-            "families_complete": families_complete,
-            "families_present": sorted(families),
-            "no_duplicate_probes": no_duplicates,
-            "all_scores_finite": finite_scores,
-            "expected_probe_count": n_total == 500,
-        }
+        # Delegate to the BaselineRunner's strict validation.
+        return self._runner.validate_results()
 
 
 # --------------------------------------------------------------------------- #
