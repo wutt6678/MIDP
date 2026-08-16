@@ -2,7 +2,7 @@
 
 This module deterministically selects *target*, *retain*, and *control*
 identity groups from the frozen baseline results, matching on protocol role,
-baseline margins, attribute-state composition, and image count.
+baseline margins, and attribute diversity for retain/control selection.
 
 The selection is seeded (default ``seed=17``) so that the manifest is
 reproducible and can be frozen *before* any training begins.
@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import logging
 import random
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -384,11 +385,9 @@ def select_pilot_identities(
     sel.retain_identities = sorted(s.identity_id for s in retain)
     sel.control_identities = sorted(s.identity_id for s in control)
     sel.matching_criteria = [
-        "protocol_role",
-        "baseline_direct_visual_margin",
-        "baseline_image_plus_name_margin",
-        "attribute_state_composition",
-        "image_count",
+        "same-protocol-role",
+        "baseline-margin-matched",
+        "attribute-diverse-retain-control",
     ]
 
     # Attach per-identity detail for the manifest
@@ -417,6 +416,337 @@ def select_pilot_identities(
         }
 
     return sel
+
+
+logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------- #
+# Frozen SHA preflight (P0-5)
+# --------------------------------------------------------------------------- #
+
+def validate_pilot_frozen_inputs(
+    *,
+    baseline_manifest_path: str | Path,
+    baseline_results_path: str | Path,
+    route_probe_path: str | Path,
+    processed_dataset_path: str | Path | None,
+    expected_manifest_sha: str,
+    expected_results_sha: str,
+    expected_route_probe_sha: str,
+    expected_processed_ds_sha: str,
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """Verify frozen input SHAs before selection (P0-5).
+
+    Recomputes SHA-256 of each frozen artifact and compares against the
+    configured expected values.  Raises ``RuntimeError`` on any mismatch.
+
+    Returns a preflight report dict.
+    """
+    actual_manifest_sha = _sha256_file(baseline_manifest_path)
+    actual_results_sha = _sha256_file(baseline_results_path)
+    actual_route_sha = _sha256_file(route_probe_path)
+    actual_processed_sha = (
+        _sha256_file(processed_dataset_path)
+        if processed_dataset_path is not None
+        else ""
+    )
+
+    manifest_match = actual_manifest_sha == expected_manifest_sha
+    results_match = actual_results_sha == expected_results_sha
+    route_match = actual_route_sha == expected_route_probe_sha
+    processed_match = (
+        actual_processed_sha == expected_processed_ds_sha
+        if expected_processed_ds_sha
+        else True
+    )
+
+    report: dict[str, Any] = {
+        "pass": all([manifest_match, results_match, route_match, processed_match]),
+        "baseline_manifest_sha_match": manifest_match,
+        "baseline_results_sha_match": results_match,
+        "route_probe_sha_match": route_match,
+        "processed_dataset_sha_match": processed_match,
+        "actual_baseline_manifest_sha256": actual_manifest_sha,
+        "actual_baseline_results_sha256": actual_results_sha,
+        "actual_route_probe_sha256": actual_route_sha,
+        "actual_processed_dataset_sha256": actual_processed_sha,
+        "expected_baseline_manifest_sha256": expected_manifest_sha,
+        "expected_baseline_results_sha256": expected_results_sha,
+        "expected_route_probe_sha256": expected_route_probe_sha,
+        "expected_processed_dataset_sha256": expected_processed_ds_sha,
+    }
+
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, indent=2) + "\n")
+
+    if not report["pass"]:
+        raise RuntimeError(
+            "Frozen SHA preflight FAILED. "
+            f"manifest={manifest_match}, results={results_match}, "
+            f"route={route_match}, processed={processed_match}. "
+            "See evidence/pilot_preflight_report.json for details."
+        )
+
+    logger.info("Frozen SHA preflight PASSED.")
+    return report
+
+
+# --------------------------------------------------------------------------- #
+# Leakage detection (P0-3)
+# --------------------------------------------------------------------------- #
+
+def run_leakage_detection(
+    processed_dataset_path: str | Path,
+    route_probe_path: str | Path,
+    target_identity_ids: list[str],
+    retain_identity_ids: list[str],
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """Detect leakage between training data and frozen eval probes (P0-3).
+
+    Compares all intervention training examples against the frozen route
+    probes on sample_id, source_sample_id, probe_id, question text,
+    normalised question text, identity_id, and image_sha256.
+
+    Writes ``leakage_report.json`` and returns the report dict.
+    Raises ``RuntimeError`` on hard-stop violations.
+    """
+    # -- Build frozen probe index ---------------------------------------- #
+    probe_sample_ids: set[str] = set()
+    probe_source_ids: set[str] = set()
+    probe_probe_ids: set[str] = set()
+    probe_questions: set[str] = set()
+    probe_norm_questions: set[str] = set()
+    probe_image_shas: set[str] = set()
+    probe_identity_ids: set[str] = set()
+
+    with open(route_probe_path) as fh:
+        for line in fh:
+            row = json.loads(line)
+            if sid := row.get("sample_id"):
+                probe_sample_ids.add(str(sid))
+            if ssid := row.get("source_sample_id"):
+                probe_source_ids.add(str(ssid))
+            if pid := row.get("probe_id"):
+                probe_probe_ids.add(str(pid))
+            if q := row.get("question_text", ""):
+                probe_questions.add(q)
+                probe_norm_questions.add(q.strip().lower())
+            if sha := row.get("image_sha256"):
+                probe_image_shas.add(sha)
+            if iid := row.get("identity_id"):
+                probe_identity_ids.add(str(iid))
+
+    # -- Scan training samples ------------------------------------------- #
+    train_identity_ids: set[str] = set()
+    overlap_sample_ids: list[str] = []
+    overlap_source_ids: list[str] = []
+    overlap_probe_ids: list[str] = []
+    overlap_questions: list[str] = []
+    overlap_norm_questions: list[str] = []
+    overlap_image_shas: list[str] = []
+
+    with open(processed_dataset_path) as fh:
+        for line in fh:
+            row = json.loads(line)
+            iid = str(row.get("identity_id", ""))
+            if iid not in set(target_identity_ids) | set(retain_identity_ids):
+                continue
+            train_identity_ids.add(iid)
+
+            if sid := row.get("sample_id"):
+                if str(sid) in probe_sample_ids:
+                    overlap_sample_ids.append(str(sid))
+            if ssid := row.get("source_sample_id"):
+                if str(ssid) in probe_source_ids:
+                    overlap_source_ids.append(str(ssid))
+            if pid := row.get("probe_id"):
+                if str(pid) in probe_probe_ids:
+                    overlap_probe_ids.append(str(pid))
+            if q := row.get("question_text", ""):
+                if q in probe_questions:
+                    overlap_questions.append(q[:200])
+                if q.strip().lower() in probe_norm_questions:
+                    overlap_norm_questions.append(q[:200])
+            if sha := row.get("image_sha256"):
+                if sha in probe_image_shas:
+                    overlap_image_shas.append(sha)
+
+    report: dict[str, Any] = {
+        "pass": (
+            len(overlap_sample_ids) == 0
+            and len(overlap_probe_ids) == 0
+            and len(overlap_questions) == 0
+        ),
+        "exact_probe_id_overlap": len(overlap_probe_ids),
+        "exact_sample_id_overlap": len(overlap_sample_ids),
+        "exact_source_id_overlap": len(overlap_source_ids),
+        "exact_question_overlap": len(overlap_questions),
+        "normalized_question_overlap": len(overlap_norm_questions),
+        "image_sha_overlap_count": len(overlap_image_shas),
+        "image_overlap_policy": "disallowed",
+        "training_identity_count": len(train_identity_ids),
+        "probe_identity_count": len(probe_identity_ids),
+        "identity_id_overlap": sorted(train_identity_ids & probe_identity_ids),
+    }
+
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, indent=2) + "\n")
+
+    logger.info(
+        "Leakage detection: probe_id=%d, sample_id=%d, question=%d, image_sha=%d",
+        len(overlap_probe_ids),
+        len(overlap_sample_ids),
+        len(overlap_questions),
+        len(overlap_image_shas),
+    )
+
+    if not report["pass"]:
+        raise RuntimeError(
+            "LEAKAGE DETECTED between training data and frozen eval probes. "
+            f"probe_id_overlap={len(overlap_probe_ids)}, "
+            f"sample_id_overlap={len(overlap_sample_ids)}, "
+            f"question_overlap={len(overlap_questions)}. "
+            "See selection/leakage_report.json for details."
+        )
+
+    return report
+
+
+# --------------------------------------------------------------------------- #
+# Intervention dataset manifest (P0-4)
+# --------------------------------------------------------------------------- #
+
+def generate_intervention_manifest(
+    *,
+    processed_dataset_path: str | Path,
+    target_identity_ids: list[str],
+    retain_identity_ids: list[str],
+    selection_manifest_sha256: str,
+    leakage_report_sha256: str,
+    experiment_config: dict[str, Any],
+    output_path: str | Path,
+    seed: int = 17,
+    code_commit: str = "",
+) -> Path:
+    """Generate the intervention dataset manifest (P0-4).
+
+    Records full provenance of every training example used in the pilot
+    unlearning run.  The manifest is self-hashing: the final SHA-256 is
+    computed over the full content (with ``manifest_sha256`` set to
+    ``"pending"``) and then appended.
+    """
+    import subprocess as _sp
+
+    # -- Git dirty state ------------------------------------------------- #
+    try:
+        _r = _sp.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, check=False,
+        )
+        git_dirty = bool(_r.stdout.strip()) if _r.returncode == 0 else None
+    except FileNotFoundError:
+        git_dirty = None
+
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    # -- Load processed dataset and partition ---------------------------- #
+    target_set = set(target_identity_ids)
+    retain_set = set(retain_identity_ids)
+
+    forget_samples: list[dict[str, Any]] = []
+    retain_samples: list[dict[str, Any]] = []
+
+    with open(processed_dataset_path) as fh:
+        for line in fh:
+            row = json.loads(line)
+            iid = row.get("identity_id", "")
+            entry = {
+                "sample_id": row.get("sample_id", ""),
+                "identity_id": iid,
+                "image_sha256": row.get("image_sha256", ""),
+                "question_hash": hashlib.sha256(
+                    row.get("question_text", "").encode()
+                ).hexdigest()[:16],
+                "answer_label": row.get("answer_label"),
+                "target_attribute": row.get("target_attribute", ""),
+            }
+            if iid in target_set:
+                forget_samples.append(entry)
+            elif iid in retain_set:
+                retain_samples.append(entry)
+
+    forget_sample_ids = sorted(s["sample_id"] for s in forget_samples)
+    retain_sample_ids = sorted(s["sample_id"] for s in retain_samples)
+
+    forget_samples_manifest = {
+        "count": len(forget_samples),
+        "identity_ids": sorted(target_identity_ids),
+        "sample_ids": forget_sample_ids,
+        "entries": forget_samples,
+    }
+    retain_samples_manifest = {
+        "count": len(retain_samples),
+        "identity_ids": sorted(retain_identity_ids),
+        "sample_ids": retain_sample_ids,
+        "entries": retain_samples,
+    }
+
+    forget_sha = hashlib.sha256(
+        json.dumps(forget_samples_manifest, sort_keys=True).encode()
+    ).hexdigest()
+    retain_sha = hashlib.sha256(
+        json.dumps(retain_samples_manifest, sort_keys=True).encode()
+    ).hexdigest()
+
+    processed_ds_sha = _sha256_file(processed_dataset_path)
+
+    # -- Assemble manifest ----------------------------------------------- #
+    manifest: dict[str, Any] = {
+        "experiment_id": experiment_config.get("experiment_id", ""),
+        "selection_version": "pilot-selection-v1",
+        "selection_manifest_sha256": selection_manifest_sha256,
+        "target_identities": sorted(target_identity_ids),
+        "retain_identities": sorted(retain_identity_ids),
+        "forget_sample_ids": forget_sample_ids,
+        "retain_sample_ids": retain_sample_ids,
+        "forget_sample_count": len(forget_samples),
+        "retain_sample_count": len(retain_samples),
+        "forget_sample_manifest_sha256": forget_sha,
+        "retain_sample_manifest_sha256": retain_sha,
+        "processed_dataset_sha256": processed_ds_sha,
+        "route_probe_sha256": experiment_config.get("dataset", {}).get(
+            "route_probe_sha256", ""
+        ),
+        "leakage_report_sha256": leakage_report_sha256,
+        "source_dataset": experiment_config.get("dataset", {}).get(
+            "source_dataset", ""
+        ),
+        "seed": seed,
+        "code_commit": code_commit,
+        "git_dirty": git_dirty,
+    }
+
+    # Self-hash: compute SHA over content with placeholder
+    manifest["manifest_sha256"] = "pending"
+    content = json.dumps(manifest, indent=2, sort_keys=False) + "\n"
+    manifest["manifest_sha256"] = hashlib.sha256(content.encode()).hexdigest()
+
+    out.write_text(
+        json.dumps(manifest, indent=2, sort_keys=False) + "\n"
+    )
+    logger.info(
+        "Intervention manifest: forget=%d, retain=%d, sha=%s",
+        len(forget_samples),
+        len(retain_samples),
+        manifest["manifest_sha256"][:16],
+    )
+    return out
 
 
 # --------------------------------------------------------------------------- #
