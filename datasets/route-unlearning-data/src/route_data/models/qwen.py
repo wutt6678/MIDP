@@ -261,13 +261,20 @@ class QwenHFBackend(VisionLanguageModel):
             )
         latency_ms = (time.perf_counter() - started) * 1000.0
         tokenizer = self.processor.tokenizer
+        is_text_only = all(image is None for image in images)
         responses = []
         for row in output:
             text = tokenizer.decode(row[input_len:], skip_special_tokens=True)
             responses.append(
                 VisionResponse(
                     text=text,
-                    metadata={"latency_ms": latency_ms / max(1, len(items))},
+                    metadata={
+                        "latency_ms": latency_ms / max(1, len(items)),
+                        "input_mode": (
+                            "text_only" if is_text_only else "multimodal"
+                        ),
+                        "image_present": not is_text_only,
+                    },
                 )
             )
         return responses

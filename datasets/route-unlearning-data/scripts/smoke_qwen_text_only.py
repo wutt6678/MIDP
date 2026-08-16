@@ -199,6 +199,12 @@ def main() -> int:
     print(f"  git_commit: {str(git_state['git_commit'])[:12]}...")
     print(f"  git_dirty:  {git_state['git_dirty']}")
 
+    # A3: dirty git invalidates research-grade evidence.
+    git_clean_ok = not git_state["git_dirty"]
+    print(f"  Git clean:       {'OK' if git_clean_ok else 'FAIL'}")
+    if not git_clean_ok:
+        passed = False
+
     # ── Write evidence (P1-7) ───────────────────────────────────────────
     print("\n[6/6] Writing evidence ...")
 
@@ -211,6 +217,7 @@ def main() -> int:
 
     evidence = {
         "pass": passed,
+        "research_valid": passed and git_clean_ok,
         "model_id": cfg.model_id,
         "resolved_revision": resolved_rev,
         "model_fingerprint": fingerprint,

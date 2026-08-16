@@ -1973,6 +1973,223 @@ class TestProtocolRolePopulation:
 
 
 # --------------------------------------------------------------------------- #
+# A1 — route_identity_role_counts semantics (unique frozen identities)
+# --------------------------------------------------------------------------- #
+
+
+class TestRouteIdentityRoleCounts:
+    """A1: route_identity_role_counts counts UNIQUE frozen route identities.
+
+    The field must reflect the number of distinct identity_ids represented
+    in ``self.probes``, grouped by protocol role — NOT the processed-dataset
+    population and NOT the probe row count.
+    """
+
+    @staticmethod
+    def _make_runner_with_probes(
+        tmp_path: Path,
+        stub_backend,
+        stub_model_config: ModelConfig,
+        identity_ids_per_family: dict[str, list[str]],
+        identity_roles: dict[str, str],
+    ) -> BaselineRunner:
+        """Build a runner with custom probes and identity_role_map.
+
+        Parameters
+        ----------
+        identity_ids_per_family:
+            ``{family: [id1, id2, …]}`` — each identity gets one probe per
+            family it appears in.
+        identity_roles:
+            ``{identity_id: role}`` — directly sets the identity_role_map.
+        """
+        from route_data.eval.baseline_runner import BaselineProbe
+
+        probes: list[BaselineProbe] = []
+        for fam, ids in identity_ids_per_family.items():
+            for iid in ids:
+                base = dict(_PROBES_RAW[0] if fam != "name_only"
+                            else _PROBES_RAW[4])
+                base["probe_id"] = f"p_{iid}_{fam}"
+                base["identity_id"] = iid
+                base["probe_family"] = fam
+                base["sample_id"] = f"s_{iid}_{fam}"
+                if fam != "name_only":
+                    base["image_uri"] = f"/fake/{iid}_{fam}.jpg"
+                else:
+                    base["image_uri"] = None
+                probes.append(BaselineProbe.from_dict(base))
+
+        probe_file = tmp_path / "probes.jsonl"
+        probe_file.write_text(
+            "\n".join(
+                json.dumps({f.name: getattr(p, f.name)
+                            for f in BaselineProbe.__dataclass_fields__.values()})
+                for p in probes
+            )
+        )
+
+        # Minimal processed JSONL (must contain all identity_ids).
+        processed_file = tmp_path / "processed.jsonl"
+        rows = [
+            {"identity_id": iid, "source_metadata": {
+                "source_subject_id": f"S_{iid}",
+                "official_memberships": [],
+            }}
+            for iid in identity_roles
+        ]
+        processed_file.write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n"
+        )
+
+        # Minimal manifest.
+        from route_data.eval.baseline_runner import _sha256_file
+        manifest_data = {
+            "protocol": {"canonical_protocol": {
+                "forget_bucket": "forget10",
+                "train_bucket": "retain15",
+                "eval_bucket": None,
+                "eval_fraction": 0.2,
+                "eval_seed": 17,
+            }},
+            "dataset_artifacts": {
+                "route_probes": {"sha256": _sha256_file(probe_file)},
+                "processed_dataset": {
+                    "sha256": _sha256_file(processed_file),
+                },
+            },
+        }
+        manifest_file = tmp_path / "manifest.json"
+        manifest_file.write_text(json.dumps(manifest_data))
+
+        runner = BaselineRunner(
+            backend=stub_backend,
+            probe_path=probe_file,
+            output_dir=tmp_path / "output",
+            model_config=stub_model_config,
+            resume=False,
+            dataset_manifest_path=manifest_file,
+            processed_dataset_path=processed_file,
+        )
+        # Override the auto-built map with the explicit roles.
+        runner.identity_role_map = dict(identity_roles)
+        return runner
+
+    def test_unique_identity_count_not_probe_count(
+        self, tmp_path, stub_backend, stub_model_config,
+    ):
+        """2 identities × 5 families = 10 probes → sum == 2 (not 10)."""
+        families = [
+            "direct_visual", "image_plus_name", "wrong_name",
+            "visual_text_conflict", "name_only",
+        ]
+        id_per_fam = {fam: ["id_x", "id_y"] for fam in families}
+        roles = {"id_x": "eval", "id_y": "train"}
+
+        runner = self._make_runner_with_probes(
+            tmp_path, stub_backend, stub_model_config, id_per_fam, roles,
+        )
+        counts = runner._route_identity_role_counts()
+
+        assert len(runner.probes) == 10  # 2 ids × 5 families
+        assert sum(counts.values()) == 2  # 2 UNIQUE identities
+        assert counts["eval"] == 1
+        assert counts["train"] == 1
+        assert counts["exclude"] == 0
+
+    def test_processed_population_excluded(
+        self, tmp_path, stub_backend, stub_model_config,
+    ):
+        """100 identities in map but only 2 in probes → total == 2."""
+        # Only 2 identities appear in probes.
+        id_per_fam = {
+            "direct_visual": ["id_a"],
+            "name_only": ["id_b"],
+        }
+        # But the map contains 100 identities (simulating processed dataset).
+        roles = {f"id_{i:03d}": "train" for i in range(100)}
+        roles["id_a"] = "eval"
+        roles["id_b"] = "exclude"
+
+        runner = self._make_runner_with_probes(
+            tmp_path, stub_backend, stub_model_config, id_per_fam, roles,
+        )
+        counts = runner._route_identity_role_counts()
+
+        assert len(runner.identity_role_map) == 102  # 100 + id_a + id_b
+        assert sum(counts.values()) == 2  # only id_a and id_b in probes
+        assert counts["eval"] == 1
+        assert counts["exclude"] == 1
+        assert counts["train"] == 0
+
+    def test_consistency_across_all_outputs(
+        self, tmp_path, stub_backend, stub_model_config,
+    ):
+        """summary, validation_report, and manifest share the same counts."""
+        families = [
+            "direct_visual", "image_plus_name", "wrong_name",
+            "visual_text_conflict", "name_only",
+        ]
+        id_per_fam = {fam: ["id_a", "id_b"] for fam in families}
+        roles = {"id_a": "eval", "id_b": "train"}
+
+        runner = self._make_runner_with_probes(
+            tmp_path, stub_backend, stub_model_config, id_per_fam, roles,
+        )
+        # Run all probes to populate results.
+        runner.run_all()
+
+        expected_counts = runner._route_identity_role_counts()
+
+        # 1. baseline_summary.json
+        summary = runner.generate_summary()
+        assert summary["route_identity_role_counts"] == expected_counts
+
+        # 2. validation_report.json
+        report = runner.validate_results()
+        report_counts = {
+            k: v for k, v in report["checks"]["route_identity_role_counts"].items()
+            if k != "pass"
+        }
+        assert report_counts == expected_counts
+
+        # 3. baseline_manifest.json (requires clean git tree).
+        with patch.object(
+            BaselineRunner,
+            "_get_git_state",
+            staticmethod(lambda: {"git_commit": "a" * 40, "git_dirty": False}),
+        ):
+            manifest = runner.generate_baseline_manifest()
+        assert manifest["route_identity_role_counts"] == expected_counts
+
+    def test_invalid_role_raises(
+        self, tmp_path, stub_backend, stub_model_config,
+    ):
+        """An identity with out_of_protocol role raises RuntimeError."""
+        id_per_fam = {"direct_visual": ["id_bad"]}
+        roles = {"id_bad": "out_of_protocol"}
+
+        runner = self._make_runner_with_probes(
+            tmp_path, stub_backend, stub_model_config, id_per_fam, roles,
+        )
+        with pytest.raises(RuntimeError, match="invalid or missing role"):
+            runner._route_identity_role_counts()
+
+    def test_missing_role_raises(
+        self, tmp_path, stub_backend, stub_model_config,
+    ):
+        """An identity absent from identity_role_map raises RuntimeError."""
+        id_per_fam = {"direct_visual": ["id_ghost"]}
+        roles: dict[str, str] = {}  # empty map
+
+        runner = self._make_runner_with_probes(
+            tmp_path, stub_backend, stub_model_config, id_per_fam, roles,
+        )
+        with pytest.raises(RuntimeError, match="invalid or missing role"):
+            runner._route_identity_role_counts()
+
+
+# --------------------------------------------------------------------------- #
 # Commit C — Research freeze hardening tests
 # --------------------------------------------------------------------------- #
 

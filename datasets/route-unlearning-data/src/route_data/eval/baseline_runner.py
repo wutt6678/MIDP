@@ -777,6 +777,48 @@ class BaselineRunner:
             "eval_seed": canonical.get("eval_seed", 0),
         }
 
+    def _route_identity_role_counts(self) -> dict[str, int]:
+        """Count unique frozen route identities by protocol role.
+
+        The count is derived from ``self.probes`` (the frozen route-evaluation
+        artifact), *not* from the processed-dataset population.  Each unique
+        ``identity_id`` appearing in the probes is looked up in
+        ``self.identity_role_map`` and tallied under its protocol role.
+
+        Returns
+        -------
+        dict[str, int]
+            ``{"train": n_train, "eval": n_eval, "exclude": n_exclude}``
+
+        Raises
+        ------
+        RuntimeError
+            If any probe identity has a missing or out-of-protocol role.
+        """
+        route_identity_ids = {
+            probe.identity_id
+            for probe in self.probes
+        }
+
+        counts: dict[str, int] = {
+            "train": 0,
+            "eval": 0,
+            "exclude": 0,
+        }
+
+        for identity_id in route_identity_ids:
+            role = self.identity_role_map.get(identity_id)
+
+            if role not in counts:
+                raise RuntimeError(
+                    f"Route identity {identity_id} has invalid or "
+                    f"missing role: {role}"
+                )
+
+            counts[role] += 1
+
+        return counts
+
     # ------------------------------------------------------------------ #
     # Manifest / config helpers
     # ------------------------------------------------------------------ #
@@ -1501,13 +1543,13 @@ class BaselineRunner:
             role: {"n": count} for role, count in sorted(role_counts.items())
         }
 
-        # Route identity role counts (P1-5): count identities per role.
-        route_identity_role_counts: dict[str, int] = {
-            "train": 0, "eval": 0, "exclude": 0,
-        }
-        for role in self.identity_role_map.values():
-            if role in route_identity_role_counts:
-                route_identity_role_counts[role] += 1
+        # Route identity role counts (P1-5): unique frozen route identities.
+        # Gracefully degrade when role mapping is incomplete; the strict
+        # check lives in validate_results().
+        try:
+            route_identity_role_counts = self._route_identity_role_counts()
+        except RuntimeError:
+            route_identity_role_counts = None
 
         summary: dict[str, Any] = {
             "total_probes": total,
@@ -1801,10 +1843,7 @@ class BaselineRunner:
             passed = False
 
         # -- 4.10  Route identity role counts (P1-5) -----------------------
-        route_role_counts: dict[str, int] = {"train": 0, "eval": 0, "exclude": 0}
-        for r in results:
-            if r.protocol_role in route_role_counts:
-                route_role_counts[r.protocol_role] += 1
+        route_role_counts = self._route_identity_role_counts()
         checks["route_identity_role_counts"] = {
             "pass": True,
             **route_role_counts,
@@ -1938,13 +1977,8 @@ class BaselineRunner:
                 .get("protocol_sha256", "")
             )
 
-        # Route identity role counts (P1-5).
-        route_identity_role_counts: dict[str, int] = {
-            "train": 0, "eval": 0, "exclude": 0,
-        }
-        for r in self._results:
-            if r.protocol_role in route_identity_role_counts:
-                route_identity_role_counts[r.protocol_role] += 1
+        # Route identity role counts (P1-5): unique frozen route identities.
+        route_identity_role_counts = self._route_identity_role_counts()
 
         # Runtime library versions (P1-3).
         torch_version = ""
@@ -2046,6 +2080,7 @@ class BaselineRunner:
                 "total_results": len(self._results),
                 "summary": summary_data,
             },
+            "route_identity_role_counts": route_identity_role_counts,
             "code_provenance": {
                 "git_commit": git_commit,
                 "git_dirty": git_dirty,
