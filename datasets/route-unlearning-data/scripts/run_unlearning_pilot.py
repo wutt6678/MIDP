@@ -538,43 +538,40 @@ def _run_post_eval_phase(
         dtype=post_cfg_dict["dtype"],
     )
 
-    # Build a minimal model_config for BaselineRunner.
-    # BaselineRunner accesses model_config via attributes (e.g. .revision),
-    # so wrap the dict in a SimpleNamespace.
-    import hashlib
+    # Build a QwenHFBackend wrapping the pre-loaded model + processor.
+    # This provides score_candidates() and generate() for BaselineRunner,
+    # and fingerprint() with all required P0-5 fields.
+    from route_data.config import GenerationConfig, ModelConfig
+    from route_data.models.qwen import QwenHFBackend
+
+    qwen_config = ModelConfig(
+        backend="qwen_hf",
+        model_id=post_cfg_dict["model_id"],
+        revision=post_cfg_dict["model_revision"],
+        dtype=post_cfg_dict["dtype"],
+        generation=GenerationConfig(do_sample=False),
+    )
+    backend = QwenHFBackend.from_loaded_model(
+        config=qwen_config,
+        model=model,
+        processor=processor,
+        adapter_metadata=adapter_metadata,
+        resolved_revision=post_cfg_dict["model_revision"],
+    )
+
+    # Build model_config for BaselineRunner attribute access (e.g. .revision).
+    # model_config_path is set in the config, so _compute_model_config_sha
+    # hashes the YAML file directly (no asdict() fallback needed).
     import types
-    _chat_template = getattr(processor, "chat_template", "") or ""
-    _mc_dict = {
-        "model_id": post_cfg_dict["model_id"],
-        "revision": post_cfg_dict["model_revision"],
-        "dtype": post_cfg_dict["dtype"],
-        "backend": "qwen_lora_pilot",
-        "fingerprint_id": cfg.get("base_model", {}).get("fingerprint_id", ""),
-        # P0-5: fingerprint fields required by validate_fingerprint()
-        "processor_class": processor.__class__.__name__,
-        "tokenizer_class": processor.tokenizer.__class__.__name__,
-        "chat_template_hash": hashlib.sha256(_chat_template.encode()).hexdigest(),
+    _fp = backend.fingerprint()
+    model_config = types.SimpleNamespace(
+        model_id=post_cfg_dict["model_id"],
+        revision=post_cfg_dict["model_revision"],
+        dtype=post_cfg_dict["dtype"],
+        backend="qwen_lora_pilot",
+        fingerprint_id=_fp.get("fingerprint_id", ""),
         **adapter_metadata,
-    }
-    model_config = types.SimpleNamespace(**_mc_dict)
-
-    # Wrap model to provide the fingerprint() interface expected by
-    # BaselineRunner.
-    class _ModelBackend:
-        """Thin wrapper exposing model metadata via fingerprint()."""
-
-        def __init__(self, model_obj, meta):
-            self._model = model_obj
-            self._meta = meta
-
-        def fingerprint(self):
-            return vars(self._meta)
-
-        # Delegate everything else to the underlying model
-        def __getattr__(self, name):
-            return getattr(self._model, name)
-
-    backend = _ModelBackend(model, model_config)
+    )
 
     # Steps 11-14: Post-eval
     pe_config = PostEvalConfig(
