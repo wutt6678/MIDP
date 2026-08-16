@@ -42,6 +42,10 @@ class PairedAnalysisConfig:
     # Provenance
     code_commit: str = ""
 
+    # P0-6: Optional smoke-mode probe IDs. When provided, baseline rows
+    # are filtered to this subset and pairing validates N↔N instead of 500↔500.
+    smoke_probe_ids: set[str] | None = None
+
 
 # --------------------------------------------------------------------------- #
 # Data loading
@@ -651,9 +655,20 @@ class PairedAnalysis:
     # -- loading ---------------------------------------------------------- #
 
     def load_data(self) -> None:
-        """Load baseline, post-eval, and selection manifest."""
+        """Load baseline, post-eval, and selection manifest.
+
+        P0-6: When ``smoke_probe_ids`` is set, baseline rows are filtered
+        to the smoke subset so that paired analysis runs on exactly N probes.
+        """
         self._baseline_rows = load_results_jsonl(self.config.baseline_results_path)
         self._post_rows = load_results_jsonl(self.config.post_results_path)
+
+        # P0-6: Filter baseline to smoke subset if provided
+        if self.config.smoke_probe_ids is not None:
+            smoke_ids = self.config.smoke_probe_ids
+            self._baseline_rows = [
+                r for r in self._baseline_rows if r["probe_id"] in smoke_ids
+            ]
 
         # Load selection manifest to build identity → group mapping
         manifest_path = Path(self.config.selection_manifest_path)
@@ -680,7 +695,10 @@ class PairedAnalysis:
     # -- P0-10: pairing validation ---------------------------------------- #
 
     def validate_pairing(self) -> dict[str, Any]:
-        """Validate exact 500↔500 probe pairing (P0-10).
+        """Validate exact N↔N probe pairing (P0-10).
+
+        In smoke mode (``smoke_probe_ids`` set), validates N↔N where
+        N = len(smoke_probe_ids). Otherwise validates 500↔500.
 
         Raises ``RuntimeError`` if any check fails.  Returns the
         validation report dict on success.
@@ -699,16 +717,24 @@ class PairedAnalysis:
         missing = sorted(bl_unique - po_unique)
         extra = sorted(po_unique - bl_unique)
 
+        # P0-6: Dynamic expected N
+        expected_n = (
+            len(self.config.smoke_probe_ids)
+            if self.config.smoke_probe_ids is not None
+            else 500
+        )
+
         passed = (
-            len(bl) == 500
-            and len(po) == 500
-            and len(bl_unique) == 500
-            and len(po_unique) == 500
+            len(bl) == expected_n
+            and len(po) == expected_n
+            and len(bl_unique) == expected_n
+            and len(po_unique) == expected_n
             and bl_unique == po_unique
         )
 
         report: dict[str, Any] = {
             "pass": passed,
+            "expected_n": expected_n,
             "baseline_rows": len(bl),
             "post_rows": len(po),
             "baseline_unique_ids": len(bl_unique),
@@ -722,17 +748,17 @@ class PairedAnalysis:
 
         if not passed:
             reasons: list[str] = []
-            if len(bl) != 500:
-                reasons.append(f"baseline has {len(bl)} rows, expected 500")
-            if len(po) != 500:
-                reasons.append(f"post has {len(po)} rows, expected 500")
-            if len(bl_unique) != 500:
+            if len(bl) != expected_n:
+                reasons.append(f"baseline has {len(bl)} rows, expected {expected_n}")
+            if len(po) != expected_n:
+                reasons.append(f"post has {len(po)} rows, expected {expected_n}")
+            if len(bl_unique) != expected_n:
                 reasons.append(
-                    f"baseline has {len(bl_unique)} unique IDs, expected 500"
+                    f"baseline has {len(bl_unique)} unique IDs, expected {expected_n}"
                 )
-            if len(po_unique) != 500:
+            if len(po_unique) != expected_n:
                 reasons.append(
-                    f"post has {len(po_unique)} unique IDs, expected 500"
+                    f"post has {len(po_unique)} unique IDs, expected {expected_n}"
                 )
             if bl_unique != po_unique:
                 if missing:
@@ -740,7 +766,7 @@ class PairedAnalysis:
                 if extra:
                     reasons.append(f"{len(extra)} extra probe IDs")
             raise RuntimeError(
-                "P0-10: Paired analysis aborted — exact 500↔500 "
+                f"P0-10: Paired analysis aborted — exact {expected_n}↔{expected_n} "
                 "pairing failed: " + "; ".join(reasons)
             )
 

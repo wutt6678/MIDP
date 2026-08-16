@@ -384,6 +384,7 @@ class PilotRunner:
     def run_paired_analysis(
         self,
         post_results_path: str | Path,
+        smoke_probe_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         """Run paired analysis after post-evaluation.
 
@@ -391,6 +392,9 @@ class PilotRunner:
         ----------
         post_results_path:
             Path to the post-eval ``post_results.jsonl``.
+        smoke_probe_ids:
+            If provided, filter baseline to this subset and validate
+            N↔N pairing instead of 500↔500 (P0-6).
         """
         cfg = self.config
         analysis_dir = self.output_dir / "analysis"
@@ -405,6 +409,7 @@ class PilotRunner:
             ),
             output_dir=str(analysis_dir),
             code_commit=_git_commit(),
+            smoke_probe_ids=smoke_probe_ids,
         )
 
         pa = PairedAnalysis(pa_config)
