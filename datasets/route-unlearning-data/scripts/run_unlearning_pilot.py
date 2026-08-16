@@ -149,7 +149,133 @@ def apply_smoke_overrides(cfg: dict[str, Any]) -> dict[str, Any]:
     cfg["method"]["hyperparameters"]["gradient_accumulation_steps"] = 1
     # Mark as smoke for downstream consumers.
     cfg.setdefault("runtime", {})["smoke_mode"] = True
+    # F4-isolation: redirect output to smoke_v1/ so smoke artifacts
+    # never mix with production pilot_v1/ artifacts.
+    runtime = cfg.setdefault("runtime", {})
+    out = runtime.get("output_dir", "")
+    if out:
+        if "pilot_v1" in out:
+            runtime["output_dir"] = out.replace("pilot_v1", "smoke_v1")
+        else:
+            runtime["output_dir"] = str(Path(out).parent / "smoke_v1")
+    else:
+        runtime["output_dir"] = "smoke_v1"
     return cfg
+
+
+# --------------------------------------------------------------------------- #
+# Pre-pilot readiness check
+# --------------------------------------------------------------------------- #
+
+def check_readiness(
+    config_path: str,
+    *,
+    smoke: bool = False,
+) -> dict[str, Any]:
+    """Verify all prerequisites before launching the pilot pipeline.
+
+    Returns a readiness report dict with ``ready`` (bool) and ``checks``
+    (list of individual check results).
+    """
+    from route_data.eval.run_pilot import (
+        load_experiment_config,
+        validate_experiment_config,
+    )
+
+    checks: list[dict[str, Any]] = []
+
+    def _check(name: str, passed: bool, detail: str = "") -> None:
+        checks.append({"name": name, "pass": passed, "detail": detail})
+
+    # 1. Config loads
+    try:
+        cfg = load_experiment_config(config_path)
+        _check("config_loads", True)
+    except Exception as exc:
+        _check("config_loads", False, str(exc))
+        return {"ready": False, "checks": checks}
+
+    # 2. Config validates
+    try:
+        validate_experiment_config(cfg)
+        _check("config_validates", True)
+    except Exception as exc:
+        _check("config_validates", False, str(exc))
+
+    # 3. Apply smoke overrides for downstream path checks
+    if smoke:
+        apply_smoke_overrides(cfg)
+
+    base_dir = Path(config_path).resolve().parent.parent.parent
+
+    # 4. Baseline files exist
+    bl_cfg = cfg.get("baseline", {})
+    for key in ("manifest_path", "results_path"):
+        fpath = base_dir / bl_cfg[key]
+        _check(
+            f"baseline_{key}_exists",
+            fpath.exists(),
+            str(fpath),
+        )
+
+    # 5. Baseline SHA256 match (only if file exists)
+    for key, sha_field in [
+        ("manifest_path", "manifest_sha256"),
+        ("results_path", "results_sha256"),
+    ]:
+        expected = bl_cfg.get(sha_field, "")
+        fpath = base_dir / bl_cfg[key]
+        if expected and fpath.exists():
+            actual = _sha256_file(fpath)
+            _check(
+                f"baseline_{sha_field}",
+                actual == expected,
+                f"expected={expected[:16]}\u2026 actual={actual[:16]}\u2026",
+            )
+
+    # 6. Dataset files exist
+    ds_cfg = cfg.get("dataset", {})
+    for key in ("route_probe_path", "research_manifest_path",
+                "freeze_verification_path"):
+        fpath_str = ds_cfg.get(key, "")
+        if fpath_str:
+            fpath = base_dir / fpath_str
+            _check(f"dataset_{key}_exists", fpath.exists(), str(fpath))
+
+    # 7. Processed dataset (optional)
+    proc_str = ds_cfg.get("processed_dataset_path", "")
+    if proc_str:
+        _check(
+            "dataset_processed_exists",
+            (base_dir / proc_str).exists(),
+            proc_str,
+        )
+
+    # 8. Model config exists
+    bm_cfg = cfg.get("base_model", {})
+    mcp = bm_cfg.get("model_config_path", "")
+    if mcp:
+        _check(
+            "model_config_exists",
+            (base_dir / mcp).exists(),
+            mcp,
+        )
+
+    # 9. Git cleanliness
+    dirty = _git_dirty()
+    _check("git_clean", not dirty, "dirty" if dirty else "clean")
+
+    # 10. Output directory writable
+    out_str = cfg.get("runtime", {}).get("output_dir", "")
+    out_path = base_dir / out_str if out_str else base_dir / "pilot_v1"
+    try:
+        out_path.mkdir(parents=True, exist_ok=True)
+        _check("output_dir_writable", True, str(out_path))
+    except Exception as exc:
+        _check("output_dir_writable", False, str(exc))
+
+    all_pass = all(c["pass"] for c in checks)
+    return {"ready": all_pass, "checks": checks}
 
 
 # --------------------------------------------------------------------------- #
@@ -187,6 +313,20 @@ def run_pipeline(
     # -- Load & validate config ----------------------------------------- #
     cfg = load_experiment_config(config_path)
     validate_experiment_config(cfg)
+
+    # -- Pre-pilot readiness gate ---------------------------------------- #
+    readiness = check_readiness(config_path, smoke=smoke)
+    if not readiness["ready"]:
+        failed = [c for c in readiness["checks"] if not c["pass"]]
+        msg = "Pre-pilot readiness check failed:\n" + "\n".join(
+            f"  FAIL: {c['name']} — {c['detail']}" for c in failed
+        )
+        raise RuntimeError(msg)
+    logger.info(
+        "Pre-pilot readiness: %d/%d checks passed",
+        sum(1 for c in readiness["checks"] if c["pass"]),
+        len(readiness["checks"]),
+    )
 
     if smoke:
         logger.info("SMOKE MODE: overriding to 1 optimizer step, 10 probes")

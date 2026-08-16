@@ -239,6 +239,24 @@ class TestSmokeOverrides:
         assert cfg["method"]["hyperparameters"]["num_optimizer_steps"] == 1
         assert cfg["runtime"]["smoke_mode"] is True
 
+    def test_output_dir_redirected_to_smoke_v1(self) -> None:
+        """Smoke mode must redirect output_dir from pilot_v1 to smoke_v1."""
+        cfg: dict = {"runtime": {"output_dir": "/data/pilot_v1"}}
+        run_unlearning_pilot.apply_smoke_overrides(cfg)
+        assert cfg["runtime"]["output_dir"] == "/data/smoke_v1"
+
+    def test_output_dir_no_pilot_v1_suffix(self) -> None:
+        """Smoke mode uses smoke_v1 sibling when path has no pilot_v1."""
+        cfg: dict = {"runtime": {"output_dir": "/data/experiment_v2"}}
+        run_unlearning_pilot.apply_smoke_overrides(cfg)
+        assert cfg["runtime"]["output_dir"].endswith("smoke_v1")
+
+    def test_output_dir_empty_becomes_smoke_v1(self) -> None:
+        """Smoke mode defaults to smoke_v1 when output_dir is empty."""
+        cfg: dict = {"runtime": {}}
+        run_unlearning_pilot.apply_smoke_overrides(cfg)
+        assert cfg["runtime"]["output_dir"] == "smoke_v1"
+
     def test_preserves_other_hyperparameters(self) -> None:
         """Smoke overrides must not alter other hyperparameters."""
         cfg: dict = {
@@ -384,7 +402,10 @@ class TestRunPipeline:
         }
 
         _mod = run_unlearning_pilot
+        _readiness = {"ready": True, "checks": []}
         with patch.object(
+            _mod, "check_readiness", return_value=_readiness,
+        ), patch.object(
             _mod, "_run_training_phase", return_value=mock_training,
         ), patch.object(
             _mod, "_run_post_eval_phase", return_value=mock_post_eval,
@@ -418,7 +439,10 @@ class TestRunPipeline:
         }
 
         _mod = run_unlearning_pilot
+        _readiness = {"ready": True, "checks": []}
         with patch.object(
+            _mod, "check_readiness", return_value=_readiness,
+        ), patch.object(
             _mod, "_run_training_phase", side_effect=_capture_training,
         ), patch.object(
             _mod, "_run_post_eval_phase", return_value=mock_post_eval,
@@ -446,7 +470,10 @@ class TestRunPipeline:
         }
 
         _mod = run_unlearning_pilot
+        _readiness = {"ready": True, "checks": []}
         with patch.object(
+            _mod, "check_readiness", return_value=_readiness,
+        ), patch.object(
             _mod, "_run_training_phase", return_value=mock_training,
         ), patch.object(
             _mod, "_run_post_eval_phase", return_value=mock_post_eval,
@@ -456,8 +483,8 @@ class TestRunPipeline:
         ):
             _mod.run_pipeline(str(cfg_path), smoke=True)
 
-        # Check provenance file exists
-        output_dir = tmp_path / "pilot_v1"
+        # Check provenance file exists (smoke mode → smoke_v1 output dir)
+        output_dir = tmp_path / "smoke_v1"
         provenance = output_dir / "evidence" / "pipeline_provenance.json"
         assert provenance.exists()
 
@@ -471,8 +498,8 @@ class TestRunPipeline:
         """Resume mode should skip selection if evidence exists."""
         cfg_path = self._setup(tmp_path)
 
-        # Pre-create selection evidence
-        output_dir = tmp_path / "pilot_v1"
+        # Pre-create selection evidence (smoke mode → smoke_v1 output dir)
+        output_dir = tmp_path / "smoke_v1"
         evidence_dir = output_dir / "evidence"
         evidence_dir.mkdir(parents=True, exist_ok=True)
         (evidence_dir / "step_01_selection.json").write_text("{}")
@@ -509,7 +536,10 @@ class TestRunPipeline:
             return original_run_selection(self_runner)
 
         _mod = run_unlearning_pilot
+        _readiness = {"ready": True, "checks": []}
         with patch.object(
+            _mod, "check_readiness", return_value=_readiness,
+        ), patch.object(
             PilotRunner, "run_selection", _track_selection,
         ), patch.object(
             _mod, "_run_training_phase", return_value=mock_training,
@@ -553,7 +583,10 @@ class TestMainCLI:
         }
 
         _mod = run_unlearning_pilot
+        _readiness = {"ready": True, "checks": []}
         with patch.object(
+            _mod, "check_readiness", return_value=_readiness,
+        ), patch.object(
             _mod, "_run_training_phase", return_value=mock_training,
         ), patch.object(
             _mod, "_run_post_eval_phase", return_value=mock_post_eval,
@@ -590,3 +623,165 @@ class TestHelpers:
         """_git_dirty should return a bool."""
         result = run_unlearning_pilot._git_dirty()
         assert isinstance(result, bool)
+
+
+# --------------------------------------------------------------------------- #
+# Tests: check_readiness
+# --------------------------------------------------------------------------- #
+
+class TestCheckReadiness:
+    """F4: Pre-pilot readiness check."""
+
+    def test_all_pass_with_valid_config(self, tmp_path: Path) -> None:
+        """Readiness should pass when all files exist and SHAs match."""
+        bl_path, rp_path = _make_synthetic_data(tmp_path)
+        cfg_path = _make_config(tmp_path, bl_path, rp_path)
+
+        # Create additional required files
+        (tmp_path / "research_manifest.json").write_text("{}")
+        (tmp_path / "freeze_verification.json").write_text("{}")
+        (tmp_path / "model_config.yaml").write_text("backend: qwen_hf")
+
+        with patch.object(
+            run_unlearning_pilot, "_git_dirty", return_value=False,
+        ):
+            report = run_unlearning_pilot.check_readiness(str(cfg_path))
+        assert report["ready"] is True
+        assert all(c["pass"] for c in report["checks"])
+
+    def test_fails_with_missing_baseline(self, tmp_path: Path) -> None:
+        """Readiness should fail if baseline results file is missing."""
+        bl_path, rp_path = _make_synthetic_data(tmp_path)
+        cfg_path = _make_config(tmp_path, bl_path, rp_path)
+        # Delete the baseline results to simulate missing file
+        bl_path.unlink()
+
+        with patch.object(
+            run_unlearning_pilot, "_git_dirty", return_value=False,
+        ):
+            report = run_unlearning_pilot.check_readiness(str(cfg_path))
+        assert report["ready"] is False
+        failed_names = {c["name"] for c in report["checks"] if not c["pass"]}
+        assert "baseline_results_path_exists" in failed_names
+
+    def test_fails_with_bad_sha(self, tmp_path: Path) -> None:
+        """Readiness should fail if SHA256 doesn't match."""
+        bl_path, rp_path = _make_synthetic_data(tmp_path)
+        cfg_path = _make_config(tmp_path, bl_path, rp_path)
+        (tmp_path / "research_manifest.json").write_text("{}")
+        (tmp_path / "freeze_verification.json").write_text("{}")
+        (tmp_path / "model_config.yaml").write_text("backend: qwen_hf")
+
+        # Corrupt the baseline file so SHA won't match
+        bl_path.write_text("corrupted content")
+
+        with patch.object(
+            run_unlearning_pilot, "_git_dirty", return_value=False,
+        ):
+            report = run_unlearning_pilot.check_readiness(str(cfg_path))
+        assert report["ready"] is False
+        failed_names = {c["name"] for c in report["checks"] if not c["pass"]}
+        assert "baseline_results_sha256" in failed_names
+
+    def test_smoke_mode_uses_smoke_v1_dir(self, tmp_path: Path) -> None:
+        """Smoke mode readiness should check smoke_v1 output dir."""
+        bl_path, rp_path = _make_synthetic_data(tmp_path)
+        cfg_path = _make_config(tmp_path, bl_path, rp_path)
+        (tmp_path / "research_manifest.json").write_text("{}")
+        (tmp_path / "freeze_verification.json").write_text("{}")
+        (tmp_path / "model_config.yaml").write_text("backend: qwen_hf")
+
+        with patch.object(
+            run_unlearning_pilot, "_git_dirty", return_value=False,
+        ):
+            report = run_unlearning_pilot.check_readiness(
+                str(cfg_path), smoke=True,
+            )
+        # The output_dir check should reference smoke_v1
+        out_checks = [
+            c for c in report["checks"] if c["name"] == "output_dir_writable"
+        ]
+        assert len(out_checks) == 1
+        assert "smoke_v1" in out_checks[0]["detail"]
+
+
+# --------------------------------------------------------------------------- #
+# Tests: cache-resume in smoke mode
+# --------------------------------------------------------------------------- #
+
+class TestSmokeCacheResume:
+    """F4: Smoke mode cache-resume produces zero new calls."""
+
+    def test_resume_reuses_smoke_cache(self, tmp_path: Path) -> None:
+        """Second smoke run should reuse cached results (0 new model calls)."""
+        cfg_path = _make_config(
+            tmp_path,
+            *_make_synthetic_data(tmp_path),
+        )
+        (tmp_path / "research_manifest.json").write_text("{}")
+        (tmp_path / "freeze_verification.json").write_text("{}")
+        (tmp_path / "model_config.yaml").write_text("backend: qwen_hf")
+
+        # First run: mock training + post-eval
+        mock_training = {
+            "num_optimizer_steps": 1,
+            "final_checkpoint_path": "",
+            "elapsed_seconds": 0.1,
+        }
+        mock_post_eval = {
+            "summary": {"n_probes": 10, "inference_errors": 0},
+            "validation": {"pass": True},
+            "pairing": {"pass": True},
+            "results_path": str(tmp_path / "post_results.jsonl"),
+            "smoke_probe_ids": {"probe_0000", "probe_0005"},
+        }
+
+        _mod = run_unlearning_pilot
+        _readiness = {"ready": True, "checks": []}
+
+        # First run
+        with patch.object(
+            _mod, "check_readiness", return_value=_readiness,
+        ), patch.object(
+            _mod, "_run_training_phase", return_value=mock_training,
+        ), patch.object(
+            _mod, "_run_post_eval_phase", return_value=mock_post_eval,
+        ), patch(
+            "route_data.eval.run_pilot.PilotRunner.run_paired_analysis",
+            return_value={"probe_deltas": {}, "group_effects": {},
+                          "preservation_report": {},
+                          "pairing_validation": {"pass": True}},
+        ):
+            _mod.run_pipeline(str(cfg_path), smoke=True)
+
+        # Verify evidence exists for selection and training steps
+        smoke_dir = tmp_path / "smoke_v1"
+        evidence_dir = smoke_dir / "evidence"
+        assert evidence_dir.exists()
+
+        # Second run with resume=True: training should be skipped
+        training_called = False
+
+        def _track_training(runner, cfg, manifest, *, smoke=False):
+            nonlocal training_called
+            training_called = True
+            return mock_training
+
+        with patch.object(
+            _mod, "check_readiness", return_value=_readiness,
+        ), patch.object(
+            _mod, "_run_training_phase", side_effect=_track_training,
+        ), patch.object(
+            _mod, "_run_post_eval_phase", return_value=mock_post_eval,
+        ), patch(
+            "route_data.eval.run_pilot.PilotRunner.run_paired_analysis",
+            return_value={"probe_deltas": {}, "group_effects": {},
+                          "preservation_report": {},
+                          "pairing_validation": {"pass": True}},
+        ):
+            _mod.run_pipeline(str(cfg_path), smoke=True, resume=True)
+
+        # Training should be skipped because evidence already exists
+        assert not training_called, (
+            "Training should be skipped on resume when evidence exists"
+        )
