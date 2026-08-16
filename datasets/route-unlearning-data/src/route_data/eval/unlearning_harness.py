@@ -125,40 +125,75 @@ class ForgetDataset(Dataset):
         answer_label = sample["answer_label"]  # bool: True=Yes, False=No
         answer_text = "Yes" if answer_label else "No"
 
-        # -- Build user-only prompt to find assistant start position ------ #
+        # Load image
+        from PIL import Image
+        image = Image.open(image_uri).convert("RGB")
+
+        # -- Build EXACT multimodal assistant prefix (P0-2) -------------- #
+        # Use processor.apply_chat_template with the actual image object
+        # to build the exact assistant prefix. Do NOT build full conversation.
         user_messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image"},
+                    {"type": "image", "image": image},
                     {"type": "text", "text": question},
                 ],
             }
         ]
 
         try:
-            user_prompt = self.processor.apply_chat_template(
+            prefix = self.processor.apply_chat_template(
                 user_messages,
                 add_generation_prompt=True,
                 enable_thinking=False,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
             )
         except TypeError:
-            user_prompt = self.processor.apply_chat_template(
+            prefix = self.processor.apply_chat_template(
                 user_messages,
                 add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
             )
 
-        user_tokens = self.processor.tokenizer(
-            user_prompt, return_tensors="pt", truncation=False,
-        )
-        assistant_start = user_tokens["input_ids"].shape[1]
+        # -- Preserve ALL processor tensor outputs (P0-2) --------------- #
+        result: dict[str, Any] = {}
+        for key, value in prefix.items():
+            if torch.is_tensor(value):
+                result[key] = value.squeeze(0)
 
-        # -- Build full conversation with assistant answer ---------------- #
+        # Hard-fail if required multimodal tensors are missing (P0-2)
+        if "pixel_values" not in result:
+            raise RuntimeError(
+                f"Required multimodal tensor 'pixel_values' missing from "
+                f"processor output for sample idx={idx}. "
+                f"Available keys: {sorted(result.keys())}"
+            )
+
+        # -- Metadata for shared candidate scorer (P0-1) ---------------- #
+        # Store prefix_len (not assistant_start) for alignment
+        result["_prefix_len"] = result["input_ids"].shape[0]
+        result["_correct_answer_token_ids"] = self._get_answer_token_ids(
+            answer_text
+        )
+        result["_answer_label"] = answer_label
+        # Dynamic Yes/No token IDs (P0-1: no hard-coded IDs)
+        result["_yes_token_ids"] = self._get_answer_token_ids("Yes")
+        result["_no_token_ids"] = self._get_answer_token_ids("No")
+
+        # -- Build labels for retain loss (KL divergence) ---------------- #
+        # For forget loss, we use the shared scorer on the prefix only.
+        # For retain loss, we need labels with prompt masking.
+        # Build full conversation for retain loss computation.
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image"},
+                    {"type": "image", "image": image},
                     {"type": "text", "text": question},
                 ],
             },
@@ -180,11 +215,23 @@ class ForgetDataset(Dataset):
                 add_generation_prompt=False,
             )
 
-        # Load image
-        from PIL import Image
-        image = Image.open(image_uri).convert("RGB")
+        # Tokenize user prompt to find assistant start for label masking
+        user_prompt_text = self.processor.apply_chat_template(
+            user_messages,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        ) if isinstance(user_messages, list) else user_messages
+        try:
+            user_tokens = self.processor.tokenizer(
+                user_prompt_text, return_tensors="pt", truncation=False,
+            )
+        except Exception:
+            # Fallback: use prefix length
+            user_tokens = {"input_ids": torch.tensor([result["input_ids"][:result["_prefix_len"]]])}
+        assistant_start = user_tokens["input_ids"].shape[1]
 
-        inputs = self.processor(
+        # Tokenize full conversation for labels
+        full_tokens = self.processor(
             text=full_prompt,
             images=image,
             return_tensors="pt",
@@ -193,31 +240,10 @@ class ForgetDataset(Dataset):
             padding=False,
         )
 
-        # -- Preserve ALL processor tensor outputs (P0-2) --------------- #
-        result: dict[str, Any] = {}
-        for key, value in inputs.items():
-            if torch.is_tensor(value):
-                result[key] = value.squeeze(0)
-
-        # Hard-fail if required multimodal tensors are missing (P0-2)
-        if "pixel_values" not in result:
-            raise RuntimeError(
-                f"Required multimodal tensor 'pixel_values' missing from "
-                f"processor output for sample idx={idx}. "
-                f"Available keys: {sorted(inputs.keys())}"
-            )
-
-        # -- Build labels with prompt masking (P0-1) -------------------- #
-        labels = result["input_ids"].clone()
+        # Build labels with prompt masking
+        labels = full_tokens["input_ids"].squeeze(0).clone()
         labels[:assistant_start] = -100
         result["labels"] = labels
-
-        # -- Metadata for candidate-margin forget loss ------------------ #
-        result["_answer_position"] = assistant_start
-        result["_correct_answer_token_ids"] = self._get_answer_token_ids(
-            answer_text
-        )
-        result["_answer_label"] = answer_label
 
         return result
 
@@ -534,13 +560,28 @@ def apply_lora(
 def qwen_collate_fn(
     batch: list[dict[str, Any]],
 ) -> dict[str, torch.Tensor]:
-    """Collate function for Qwen multimodal training batches.
+    """Collate function for Qwen multimodal training batches (P0-3).
 
-    Pads ``input_ids`` and ``labels`` with appropriate pad/ignore tokens,
-    stacks all other tensor fields, and preserves metadata keys prefixed
-    with ``_``.
+    Text-aligned tensors (``input_ids``, ``attention_mask``, ``labels``,
+    ``mm_token_type_ids``) are right-padded to the longest sequence in the
+    batch and stacked.  Visual tensors (``pixel_values``, ``image_grid_thw``,
+    ``image_sizes``) follow official Qwen processor batching semantics.
+
+    Hard-fails if required multimodal fields are missing from any sample.
+    Never synthesises dummy visual tensors.
     """
     pad_token_id = 0  # Qwen default pad token
+    batch_size = len(batch)
+
+    # -- Hard-fail: required keys present in every sample ---------------- #
+    required_keys = {"input_ids", "attention_mask", "labels", "pixel_values"}
+    for i, item in enumerate(batch):
+        missing = required_keys - set(item.keys())
+        if missing:
+            raise RuntimeError(
+                f"Sample {i} missing required keys: {sorted(missing)}. "
+                f"Available: {sorted(item.keys())}"
+            )
 
     # -- Determine max sequence length --------------------------------- #
     max_len = max(item["input_ids"].shape[0] for item in batch)
@@ -548,6 +589,8 @@ def qwen_collate_fn(
     padded_input_ids: list[torch.Tensor] = []
     padded_attention_mask: list[torch.Tensor] = []
     padded_labels: list[torch.Tensor] = []
+    padded_mm_token_type_ids: list[torch.Tensor] = []
+    has_mm_token_type_ids = "mm_token_type_ids" in batch[0]
 
     for item in batch:
         seq_len = item["input_ids"].shape[0]
@@ -562,31 +605,63 @@ def qwen_collate_fn(
         padded_labels.append(
             torch.cat([item["labels"], torch.full((pad_len,), -100, dtype=torch.long)])
         )
+        if has_mm_token_type_ids:
+            padded_mm_token_type_ids.append(
+                torch.cat([item["mm_token_type_ids"], torch.zeros(pad_len, dtype=torch.long)])
+            )
 
     result: dict[str, torch.Tensor] = {
         "input_ids": torch.stack(padded_input_ids),
         "attention_mask": torch.stack(padded_attention_mask),
         "labels": torch.stack(padded_labels),
     }
+    if has_mm_token_type_ids:
+        result["mm_token_type_ids"] = torch.stack(padded_mm_token_type_ids)
 
-    # -- Stack other tensor fields (pixel_values, image_grid_thw, …) --- #
-    all_keys = set()
-    for item in batch:
-        all_keys.update(item.keys())
+    # -- Visual tensors: follow official Qwen processor batching -------- #
+    # pixel_values: images may have different tile counts → cat along dim 0
+    pixel_values_list = [item["pixel_values"] for item in batch]
+    if all(torch.is_tensor(pv) for pv in pixel_values_list):
+        # Qwen processor returns pixel_values as [num_tiles, C, H, W]
+        # For a batch, concatenate along the tile dimension
+        result["pixel_values"] = torch.cat(pixel_values_list, dim=0)
 
-    for key in all_keys:
-        if key in ("input_ids", "attention_mask", "labels") or key.startswith("_"):
-            continue
-        tensors = [item[key] for key in [key] for item in batch if key in item]
-        if len(tensors) == len(batch) and torch.is_tensor(tensors[0]):
-            try:
-                result[key] = torch.stack(tensors)
-            except RuntimeError:
-                # Variable-length non-padded tensors — keep as list
-                result[key] = tensors
+    # image_grid_thw: one row per image → stack
+    image_grid_thw_list = [item["image_grid_thw"] for item in batch
+                           if "image_grid_thw" in item]
+    if len(image_grid_thw_list) == batch_size:
+        result["image_grid_thw"] = torch.cat(image_grid_thw_list, dim=0)
+
+    # image_sizes: optional, one row per image → stack
+    image_sizes_list = [item["image_sizes"] for item in batch
+                        if "image_sizes" in item]
+    if len(image_sizes_list) == batch_size:
+        result["image_sizes"] = torch.cat(image_sizes_list, dim=0)
+
+    # -- Shape assertions (P0-3) ---------------------------------------- #
+    seq_len = result["input_ids"].shape[1]
+    assert result["input_ids"].shape == (batch_size, seq_len), (
+        f"input_ids shape mismatch: {result['input_ids'].shape}"
+    )
+    assert result["attention_mask"].shape == (batch_size, seq_len), (
+        f"attention_mask shape mismatch: {result['attention_mask'].shape}"
+    )
+    assert result["labels"].shape == (batch_size, seq_len), (
+        f"labels shape mismatch: {result['labels'].shape}"
+    )
+    if "mm_token_type_ids" in result:
+        assert result["mm_token_type_ids"].shape == (batch_size, seq_len), (
+            f"mm_token_type_ids shape mismatch: {result['mm_token_type_ids'].shape}"
+        )
+    if "image_grid_thw" in result:
+        assert result["image_grid_thw"].dim() == 2, (
+            f"image_grid_thw should be 2D [num_images, 3], got shape "
+            f"{result['image_grid_thw'].shape}"
+        )
 
     # -- Preserve metadata for candidate-margin loss ------------------- #
-    for key in ("_answer_position", "_correct_answer_token_ids", "_answer_label"):
+    for key in ("_prefix_len", "_correct_answer_token_ids", "_answer_label",
+                 "_yes_token_ids", "_no_token_ids"):
         if key in batch[0]:
             result[key] = [item[key] for item in batch]
 
@@ -601,57 +676,64 @@ def compute_forget_loss(
     model: Any,
     batch: dict[str, torch.Tensor],
 ) -> torch.Tensor:
-    """Candidate-margin forget loss (P0-1).
+    """Candidate-margin forget loss using shared scorer (P0-1).
 
-    Computes ``M = logP(correct_answer) − logP(wrong_answer)`` at the
-    assistant answer position and returns ``M`` so that minimising the
-    loss *reduces* the candidate margin.
+    Computes ``M = logP(correct_answer) − logP(wrong_answer)`` using the
+    exact multimodal assistant prefix and the shared differentiable scorer.
+    Returns ``M`` so that minimising the loss *reduces* the candidate margin.
+
+    Uses the shared ``score_candidate_sequence_tensor`` from scoring.py to
+    ensure training and evaluation use identical scoring logic.
     """
-    # Forward with labels so the model computes CE loss (unused here, but
-    # ensures correct graph if needed).
-    model_kwargs: dict[str, Any] = {
-        "input_ids": batch["input_ids"],
-        "attention_mask": batch["attention_mask"],
-    }
-    # Pass all multimodal tensors
-    for key, value in batch.items():
-        if (
-            key not in ("input_ids", "attention_mask", "labels")
-            and not key.startswith("_")
-            and (torch.is_tensor(value) or (isinstance(value, list) and len(value) > 0))
-        ):
-            model_kwargs[key] = value
+    from ..models.scoring import score_candidate_sequence_tensor
 
-    outputs = model(**model_kwargs)
-    logits = outputs.logits  # (B, T, V)
+    batch_size = batch["input_ids"].shape[0]
+    prefix_lens = batch["_prefix_len"]
+    answer_labels = batch["_answer_label"]
 
-    answer_positions = batch["_answer_position"]
-    correct_token_ids_list = batch["_correct_answer_token_ids"]
+    # Resolve Yes/No token IDs dynamically from batch metadata (P0-1)
+    yes_token_ids = batch["_yes_token_ids"][0]
+    no_token_ids = batch["_no_token_ids"][0]
 
-    yes_id = model_kwargs.get("_yes_token_id")
-    if yes_id is None:
-        # Resolve from the first sample's metadata
-        yes_id = correct_token_ids_list[0][0] if correct_token_ids_list[0][0] != 16484 else 16484
+    total_margin = torch.tensor(0.0, device=batch["input_ids"].device, dtype=batch["input_ids"].dtype)
 
-    total_margin = torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
+    # Process each sample in the batch
+    for i in range(batch_size):
+        prefix_len = prefix_lens[i]
+        expected_answer = answer_labels[i]
 
-    for i in range(logits.shape[0]):
-        pos = answer_positions[i]
-        correct_ids = correct_token_ids_list[i]
-        # Use first token of the answer for margin computation
-        correct_id = correct_ids[0] if isinstance(correct_ids, list) else correct_ids
-        wrong_id = 16484 if correct_id != 16484 else 7681  # Yes=16484, No=7681
+        # Build prefix dict for this sample (up to prefix_len, not padded)
+        prefix: dict[str, torch.Tensor] = {
+            "input_ids": batch["input_ids"][i:i+1, :prefix_len],
+            "attention_mask": batch["attention_mask"][i:i+1, :prefix_len],
+        }
 
-        log_probs = torch.log_softmax(logits[i, pos, :], dim=-1)
-        log_p_correct = log_probs[correct_id]
-        log_p_wrong = log_probs[wrong_id]
+        # Add multimodal tensors
+        for key in ("pixel_values", "image_grid_thw", "mm_token_type_ids", "image_sizes"):
+            if key in batch:
+                val = batch[key]
+                if torch.is_tensor(val):
+                    # For visual tensors, index by batch item
+                    if val.shape[0] > i:
+                        prefix[key] = val[i:i+1] if val.dim() > 1 else val[i:i+1]
+                elif isinstance(val, list) and len(val) > i:
+                    prefix[key] = val[i]
 
-        # M = logP(correct) - logP(wrong)
-        margin = log_p_correct - log_p_wrong
+        # Compute margin using shared scorer
+        log_p_yes = score_candidate_sequence_tensor(model, prefix, yes_token_ids)
+        log_p_no = score_candidate_sequence_tensor(model, prefix, no_token_ids)
+
+        if expected_answer:
+            # Expected Yes: margin = logP(Yes) - logP(No)
+            margin = log_p_yes - log_p_no
+        else:
+            # Expected No: margin = logP(No) - logP(Yes)
+            margin = log_p_no - log_p_yes
+
         total_margin = total_margin + margin
 
     # L_forget = mean(M) — minimising reduces the margin
-    return total_margin / logits.shape[0]
+    return total_margin / batch_size
 
 
 def compute_retain_loss(
@@ -798,6 +880,11 @@ class UnlearningTrainer:
         # Move model to device
         self.device = torch.device(config.device)
 
+        # -- P1-5: Base-parameter integrity check ---------------------- #
+        check_base_parameter_integrity(
+            model, output_dir=config.output_dir,
+        )
+
     def _move_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
         """Move batch tensors to the training device.
 
@@ -873,6 +960,32 @@ class UnlearningTrainer:
 
                 total_loss = forget_loss + self.config.retain_weight * retain_loss
 
+                # -- P0-10: Numerical safety BEFORE backward ----------- #
+                if not torch.isfinite(forget_loss):
+                    self._write_failure_metadata(
+                        opt_step, micro_idx, "non_finite_forget_loss"
+                    )
+                    raise RuntimeError(
+                        f"Non-finite forget loss at step {opt_step}, "
+                        f"micro {micro_idx}: {forget_loss.item()}"
+                    )
+                if not torch.isfinite(retain_loss):
+                    self._write_failure_metadata(
+                        opt_step, micro_idx, "non_finite_retain_loss"
+                    )
+                    raise RuntimeError(
+                        f"Non-finite retain loss at step {opt_step}, "
+                        f"micro {micro_idx}: {retain_loss.item()}"
+                    )
+                if not torch.isfinite(total_loss):
+                    self._write_failure_metadata(
+                        opt_step, micro_idx, "non_finite_total_loss"
+                    )
+                    raise RuntimeError(
+                        f"Non-finite total loss at step {opt_step}, "
+                        f"micro {micro_idx}: {total_loss.item()}"
+                    )
+
                 # Scale loss for gradient accumulation
                 scaled_loss = total_loss / grad_accum
                 scaled_loss.backward()
@@ -881,11 +994,18 @@ class UnlearningTrainer:
                 accum_retain += retain_loss.item()
                 accum_total += total_loss.item()
 
-            # -- Optimizer step ---------------------------------------- #
-            torch.nn.utils.clip_grad_norm_(
+            # -- P0-10: Gradient norm check BEFORE optimizer step ------ #
+            grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
                 self.config.max_grad_norm,
             )
+            if not torch.isfinite(grad_norm):
+                self._write_failure_metadata(
+                    opt_step, None, "non_finite_gradient_norm"
+                )
+                raise RuntimeError(
+                    f"Non-finite gradient norm at step {opt_step}: {grad_norm}"
+                )
             self.optimizer.step()
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -915,8 +1035,11 @@ class UnlearningTrainer:
                 f"retain={avg_retain:.4f}"
             )
 
-            # Safety checks
+            # Post-step safety check (defence in depth)
             if not math.isfinite(avg_total):
+                self._write_failure_metadata(
+                    opt_step, None, "non_finite_avg_loss_post_step"
+                )
                 raise RuntimeError(
                     f"Non-finite loss at optimizer step {opt_step}"
                 )
@@ -965,6 +1088,28 @@ class UnlearningTrainer:
         logger.info(f"Saved checkpoint: {ckpt_dir}")
         return ckpt_dir
 
+    def _write_failure_metadata(
+        self, opt_step: int, micro_idx: int | None, reason: str,
+    ) -> None:
+        """Write failure metadata on numerical failure (P0-10).
+
+        Records the failure reason, step, and timestamp so that post-mortem
+        analysis can determine exactly when and why training aborted.
+        """
+        output_dir = Path(self.config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        failure = {
+            "reason": reason,
+            "optimizer_step": opt_step,
+            "micro_idx": micro_idx,
+            "timestamp": time.time(),
+            "training_log_entries": len(self.training_log),
+        }
+        path = output_dir / "failure_metadata.json"
+        with open(path, "w") as f:
+            json.dump(failure, f, indent=2)
+        logger.error(f"Training aborted: {reason} at step {opt_step}")
+
 
 # --------------------------------------------------------------------------- #
 # Provenance and reporting
@@ -996,6 +1141,53 @@ def generate_trainable_parameter_report(model: Any) -> dict[str, Any]:
         "trainable_module_count": len(trainable_modules),
         "trainable_modules": sorted(trainable_modules)[:50],  # Cap at 50 for readability
     }
+
+
+def check_base_parameter_integrity(
+    model: Any,
+    *,
+    output_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """P1-5: Verify that only LoRA parameters are trainable.
+
+    Hard-fails if any non-LoRA base-model parameters have
+    ``requires_grad=True``.  Writes
+    ``evidence/base_parameter_integrity.json`` when *output_dir* is
+    provided.
+
+    Returns
+    -------
+    report : dict
+        ``{"pass": True, "non_lora_trainable_parameter_count": 0,
+          "unexpected_trainable_parameters": []}``
+    """
+    unexpected: list[str] = []
+    for name, param in model.named_parameters():
+        if param.requires_grad and "lora" not in name.lower():
+            unexpected.append(name)
+
+    report: dict[str, Any] = {
+        "pass": len(unexpected) == 0,
+        "non_lora_trainable_parameter_count": len(unexpected),
+        "unexpected_trainable_parameters": sorted(unexpected),
+    }
+
+    if output_dir is not None:
+        evidence_dir = Path(output_dir) / "evidence"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_path = evidence_dir / "base_parameter_integrity.json"
+        with open(evidence_path, "w") as f:
+            json.dump(report, f, indent=2)
+            f.write("\n")
+
+    if not report["pass"]:
+        raise RuntimeError(
+            f"Base-parameter integrity check FAILED: "
+            f"{len(unexpected)} non-LoRA parameter(s) are trainable: "
+            f"{unexpected[:5]}{'...' if len(unexpected) > 5 else ''}"
+        )
+
+    return report
 
 
 def generate_run_manifest(

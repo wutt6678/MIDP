@@ -31,7 +31,7 @@ from pathlib import Path
 from ..config import ModelConfig
 from .base import CandidateScore, VisionLanguageModel, VisionResponse
 from .registry import register_backend
-from .scoring import gather_sequence_log_probs
+from .scoring import gather_sequence_log_probs, score_candidate_sequence_tensor
 
 # Frozen binary candidate protocol.
 # The Qwen3.5 chat template ends the assistant prefix after the empty
@@ -285,6 +285,11 @@ class QwenHFBackend(VisionLanguageModel):
     def score_candidates(
         self, image, prompt: str, candidates: list[str]
     ) -> VisionResponse:
+        """Score candidates using the shared differentiable scorer (P0-1).
+
+        Uses ``score_candidate_sequence_tensor`` from scoring.py to ensure
+        training and evaluation use identical scoring logic.
+        """
         if not candidates:
             raise ValueError("candidates must be non-empty")
 
@@ -310,8 +315,7 @@ class QwenHFBackend(VisionLanguageModel):
 
         # ── Build multimodal prefix ONCE ────────────────────────────────
         prefix = self._build_prefix(image, prompt)
-        prefix_input_ids = prefix["input_ids"]
-        prefix_len = prefix_input_ids.shape[1]
+        prefix_len = prefix["input_ids"].shape[1]
         assert prefix_len > 0, "prefix length must be > 0"
 
         scores: list[CandidateScore] = []
@@ -319,70 +323,13 @@ class QwenHFBackend(VisionLanguageModel):
 
         for candidate in candidates:
             cand_ids_list = cand_token_map[candidate]
-            cand_ids_tensor = torch.tensor(
-                [cand_ids_list], dtype=prefix_input_ids.dtype,
-                device=prefix_input_ids.device,
-            )
 
-            # ── Explicitly append candidate IDs to prefix ───────────────
-            full_input_ids = torch.cat(
-                [prefix_input_ids, cand_ids_tensor], dim=1
-            )
-            full_attention_mask = torch.cat(
-                [
-                    prefix["attention_mask"],
-                    torch.ones_like(cand_ids_tensor),
-                ],
-                dim=1,
-            )
-            # Extend mm_token_type_ids for candidate tokens (text-only, type 0).
-            full_mm_token_type_ids = None
-            if "mm_token_type_ids" in prefix:
-                prefix_mm_ids = prefix["mm_token_type_ids"]
-                cand_mm_ids = torch.zeros_like(
-                    cand_ids_tensor, dtype=prefix_mm_ids.dtype
-                )
-                full_mm_token_type_ids = torch.cat(
-                    [prefix_mm_ids, cand_mm_ids], dim=1
-                )
-            full_len = full_input_ids.shape[1]
-            m = len(cand_ids_list)
-
-            # ── Alignment assertions ────────────────────────────────────
-            assert full_len == prefix_len + m, (
-                f"full length {full_len} != prefix {prefix_len} + "
-                f"candidate {m}"
-            )
-            target_slice = full_input_ids[0, prefix_len:]
-            assert target_slice.tolist() == cand_ids_list, (
-                f"target candidate IDs {target_slice.tolist()} do not "
-                f"match appended IDs {cand_ids_list}"
-            )
-
-            forward_kwargs = {
-                "input_ids": full_input_ids,
-                "attention_mask": full_attention_mask,
-            }
-            # Forward multimodal tensors from prefix if present.
-            # Qwen3.5 requires mm_token_type_ids for M-RoPE computation.
-            for key in ("pixel_values", "image_sizes", "image_grid_thw"):
-                if key in prefix:
-                    forward_kwargs[key] = prefix[key]
-            # Use extended mm_token_type_ids (prefix + text-only candidate).
-            if full_mm_token_type_ids is not None:
-                forward_kwargs["mm_token_type_ids"] = full_mm_token_type_ids
-
+            # ── Use shared scorer for identical train/eval logic ──────────
             with torch.inference_mode():
-                outputs = self.model(**forward_kwargs)
-
-            # Score candidate positions: logit at prefix_len-1 predicts
-            # the first candidate token, logit at prefix_len predicts the
-            # second, etc.
-            pred_rows = outputs.logits[0, prefix_len - 1: prefix_len - 1 + m, :]
-            target_ids = full_input_ids[0, prefix_len: prefix_len + m]
-            log_prob = gather_sequence_log_probs(
-                pred_rows, target_ids.to(pred_rows.device)
-            )
+                log_prob_tensor = score_candidate_sequence_tensor(
+                    self.model, prefix, cand_ids_list
+                )
+            log_prob = log_prob_tensor.item()
 
             assert math.isfinite(log_prob), (
                 f"non-finite log probability for {candidate!r}: {log_prob}"
@@ -399,10 +346,9 @@ class QwenHFBackend(VisionLanguageModel):
                 "candidate_token_ids": cand_ids_list,
                 "candidate_decoded": tokenizer.decode(cand_ids_list),
                 "prefix_length": prefix_len,
-                "full_length": full_len,
-                "scored_positions": list(
-                    range(prefix_len - 1, prefix_len - 1 + m)
-                ),
+                "full_length": prefix_len + len(cand_ids_list),
+                "scored_positions": list(range(prefix_len - 1, prefix_len - 1 + len(cand_ids_list))),
+                "scorer": "score_candidate_sequence_tensor",
             })
 
         # Cross-candidate sanity: log probs should not be accidentally

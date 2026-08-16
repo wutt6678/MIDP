@@ -75,3 +75,144 @@ def binary_probability(score_positive: float, score_negative: float) -> float:
     return normalize_binary_scores({"positive": score_positive, "negative": score_negative})[
         "positive"
     ]
+
+
+def score_candidate_sequence_tensor(
+    model: torch.nn.Module,
+    prefix: dict[str, torch.Tensor],
+    candidate_token_ids: list[int],
+) -> torch.Tensor:
+    """Differentiable candidate sequence scorer for training and evaluation.
+
+    Computes ``sum_j log P(candidate_j | prefix, candidate_<j)`` using the
+    exact multimodal assistant prefix and candidate token IDs.
+
+    Parameters
+    ----------
+    model:
+        The language model (typically Qwen3.5-9B or similar).
+    prefix:
+        Dict containing the multimodal prefix tensors:
+        - ``input_ids``: [1, prefix_len]
+        - ``attention_mask``: [1, prefix_len]
+        - ``pixel_values``, ``image_grid_thw``, ``mm_token_type_ids``, etc.
+    candidate_token_ids:
+        List of token IDs for the candidate sequence (e.g., [16484] for "Yes").
+
+    Returns
+    -------
+    log_prob : torch.Tensor
+        Differentiable scalar: ``sum_j log P(candidate_j | prefix, candidate_<j)``.
+
+    Alignment
+    ---------
+    - ``full_input_ids = prefix_input_ids + candidate_ids``
+    - Prediction row for candidate token 1: ``prefix_len - 1``
+    - Prediction row for candidate token j: ``prefix_len - 1 + j``
+    """
+    if not candidate_token_ids:
+        raise ValueError("candidate_token_ids must be non-empty")
+
+    prefix_input_ids = prefix["input_ids"]
+    prefix_len = prefix_input_ids.shape[1]
+    if prefix_len == 0:
+        raise ValueError("prefix length must be > 0")
+
+    # Convert candidate IDs to tensor
+    cand_ids = torch.tensor(
+        [candidate_token_ids],
+        dtype=prefix_input_ids.dtype,
+        device=prefix_input_ids.device,
+    )
+    m = len(candidate_token_ids)
+
+    # Build full input: prefix + candidate
+    full_input_ids = torch.cat([prefix_input_ids, cand_ids], dim=1)
+    full_attention_mask = torch.cat(
+        [prefix["attention_mask"], torch.ones_like(cand_ids)],
+        dim=1,
+    )
+
+    # Extend mm_token_type_ids for candidate tokens (text-only, type 0)
+    full_mm_token_type_ids = None
+    if "mm_token_type_ids" in prefix:
+        prefix_mm = prefix["mm_token_type_ids"]
+        cand_mm = torch.zeros_like(cand_ids, dtype=prefix_mm.dtype)
+        full_mm_token_type_ids = torch.cat([prefix_mm, cand_mm], dim=1)
+
+    # Build forward kwargs with all multimodal tensors
+    forward_kwargs: dict[str, torch.Tensor] = {
+        "input_ids": full_input_ids,
+        "attention_mask": full_attention_mask,
+    }
+    # Forward visual tensors from prefix
+    for key in ("pixel_values", "image_sizes", "image_grid_thw"):
+        if key in prefix:
+            forward_kwargs[key] = prefix[key]
+    # Use extended mm_token_type_ids
+    if full_mm_token_type_ids is not None:
+        forward_kwargs["mm_token_type_ids"] = full_mm_token_type_ids
+
+    # Forward pass (no inference_mode — must support gradients for training)
+    outputs = model(**forward_kwargs)
+    logits = outputs.logits  # [1, full_len, vocab]
+
+    # Extract prediction rows for candidate tokens
+    # Row prefix_len - 1 predicts token prefix_len (first candidate token)
+    # Row prefix_len - 1 + j predicts token prefix_len + j
+    pred_rows = logits[0, prefix_len - 1: prefix_len - 1 + m, :]
+    target_ids = full_input_ids[0, prefix_len: prefix_len + m]
+
+    # Compute log probabilities
+    log_probs = torch.log_softmax(pred_rows.float(), dim=-1)
+    gathered = log_probs.gather(-1, target_ids.to(log_probs.device).unsqueeze(-1)).squeeze(-1)
+    log_prob = gathered.sum()
+
+    return log_prob
+
+
+def compute_candidate_margin(
+    model: torch.nn.Module,
+    prefix: dict[str, torch.Tensor],
+    yes_token_ids: list[int],
+    no_token_ids: list[int],
+    expected_answer: bool,
+) -> torch.Tensor:
+    """Compute the candidate margin for forget loss.
+
+    Parameters
+    ----------
+    model:
+        The language model.
+    prefix:
+        Multimodal prefix tensors.
+    yes_token_ids:
+        Token IDs for "Yes" (dynamically resolved, not hard-coded).
+    no_token_ids:
+        Token IDs for "No" (dynamically resolved, not hard-coded).
+    expected_answer:
+        True if the expected answer is "Yes", False if "No".
+
+    Returns
+    -------
+    margin : torch.Tensor
+        Differentiable scalar: ``M = logP(correct) - logP(wrong)``.
+        Minimizing this reduces the candidate margin.
+
+    Forget objective
+    ----------------
+    - Expected Yes: ``M = logP(Yes) - logP(No)``
+    - Expected No:  ``M = logP(No) - logP(Yes)``
+    - ``L_forget = mean(M)``
+    """
+    log_p_yes = score_candidate_sequence_tensor(model, prefix, yes_token_ids)
+    log_p_no = score_candidate_sequence_tensor(model, prefix, no_token_ids)
+
+    if expected_answer:
+        # Expected Yes: margin = logP(Yes) - logP(No)
+        margin = log_p_yes - log_p_no
+    else:
+        # Expected No: margin = logP(No) - logP(Yes)
+        margin = log_p_no - log_p_yes
+
+    return margin
