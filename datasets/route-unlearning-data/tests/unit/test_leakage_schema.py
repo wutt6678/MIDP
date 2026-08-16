@@ -13,14 +13,13 @@ Verifies:
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from route_data.eval.pilot_selection import (
-    run_leakage_detection,
     generate_intervention_manifest,
+    run_leakage_detection,
 )
 
 
@@ -171,9 +170,9 @@ class TestInterventionManifest:
 
         manifest = json.loads(manifest_path.read_text())
         # Check that entries have question_sha256 (not question_hash)
-        forget_entries = json.loads(
+        json.loads(
             Path(output).read_text()
-        )  # re-read from file
+        )  # re-read from file (verify parseable)
         # The manifest is self-hashing, so we need to check the structure
         assert "forget_sample_manifest_sha256" in manifest
 

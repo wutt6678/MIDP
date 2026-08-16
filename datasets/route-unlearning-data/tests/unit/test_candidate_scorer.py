@@ -15,8 +15,8 @@ import pytest
 import torch
 
 from route_data.models.scoring import (
-    score_candidate_sequence_tensor,
     compute_candidate_margin,
+    score_candidate_sequence_tensor,
 )
 
 

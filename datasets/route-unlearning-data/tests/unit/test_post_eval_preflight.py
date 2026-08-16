@@ -8,7 +8,6 @@ Verifies:
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -18,7 +17,6 @@ from route_data.eval.post_unlearning_eval import (
     PostUnlearningEvaluator,
 )
 from route_data.eval.run_pilot import validate_experiment_config
-
 
 # --------------------------------------------------------------------------- #
 # Helpers

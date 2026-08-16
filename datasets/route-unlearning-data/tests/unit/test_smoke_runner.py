@@ -17,7 +17,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -36,10 +36,7 @@ _spec.loader.exec_module(run_unlearning_pilot)
 
 from route_data.eval.run_pilot import (
     PilotRunner,
-    load_experiment_config,
-    validate_experiment_config,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -386,7 +383,7 @@ class TestRunPipeline:
             "results_path": str(tmp_path / "post_results.jsonl"),
         }
 
-        _mod = run_unlearning_pilot  # noqa: F841  (alias for brevity)
+        _mod = run_unlearning_pilot
         with patch.object(
             _mod, "_run_training_phase", return_value=mock_training,
         ), patch.object(
@@ -457,7 +454,7 @@ class TestRunPipeline:
             "route_data.eval.run_pilot.PilotRunner.run_paired_analysis",
             return_value={"probe_deltas": {}, "group_effects": {}, "preservation_report": {}, "pairing_validation": {"pass": True}},
         ):
-            report = _mod.run_pipeline(str(cfg_path), smoke=True)
+            _mod.run_pipeline(str(cfg_path), smoke=True)
 
         # Check provenance file exists
         output_dir = tmp_path / "pilot_v1"

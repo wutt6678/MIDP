@@ -22,7 +22,6 @@ import pytest
 from route_data.eval.paired_analysis import compute_preservation_report
 from route_data.eval.unlearning_harness import check_base_parameter_integrity
 
-
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
@@ -68,7 +67,7 @@ class TestGroupDirectVisualPreservation:
         pid = 0
 
         # For each group, create direct_visual and image_plus_name probes
-        for iid, grp in groups.items():
+        for iid in groups:
             # 2 direct_visual probes per group
             for j in range(2):
                 p = f"p{pid:03d}"

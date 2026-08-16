@@ -54,6 +54,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from typing_extensions import Self
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -110,12 +112,12 @@ class StepTimer:
         self.name = name
         self._t0: float = 0.0
 
-    def __enter__(self) -> "StepTimer":
+    def __enter__(self) -> Self:
         logger.info("Step %d/17: %s ...", self.step_num, self.name)
         self._t0 = time.perf_counter()
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         elapsed = time.perf_counter() - self._t0
         logger.info(
             "Step %d/17: %s done (%.1fs)", self.step_num, self.name, elapsed,
@@ -178,10 +180,8 @@ def run_pipeline(
     """
     from route_data.eval.run_pilot import (
         PilotRunner,
-        validate_experiment_config,
         load_experiment_config,
-        _sha256_file as _rp_sha256,
-        _git_commit as _rp_git,
+        validate_experiment_config,
     )
 
     # -- Load & validate config ----------------------------------------- #

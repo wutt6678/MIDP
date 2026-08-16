@@ -734,7 +734,7 @@ def compute_forget_loss(
                         prefix[key] = val[i:i+1, :prefix_len]
                     else:
                         # Image-indexed: pass full (model handles alignment)
-                        prefix[key] = val[i:i+1] if val.dim() > 1 else val[i:i+1]
+                        prefix[key] = val[i:i+1]
                 elif isinstance(val, list) and len(val) > i:
                     prefix[key] = val[i]
 

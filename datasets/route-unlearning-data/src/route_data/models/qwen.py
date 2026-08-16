@@ -31,7 +31,7 @@ from pathlib import Path
 from ..config import ModelConfig
 from .base import CandidateScore, VisionLanguageModel, VisionResponse
 from .registry import register_backend
-from .scoring import gather_sequence_log_probs, score_candidate_sequence_tensor
+from .scoring import score_candidate_sequence_tensor
 
 # Frozen binary candidate protocol.
 # The Qwen3.5 chat template ends the assistant prefix after the empty
