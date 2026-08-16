@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from route_data.eval.run_pilot import (
     PilotRunner,
@@ -30,8 +32,17 @@ ATTRIBUTES = [
 ]
 
 
+def _sha256_file(path: Path) -> str:
+    """Compute SHA-256 of a file (test helper)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def _make_synthetic_data(tmp_path: Path, n_identities: int = 12) -> tuple[Path, Path]:
-    """Create synthetic baseline results and route probes."""
+    """Create synthetic baseline results, route probes, and baseline manifest."""
     bl_path = tmp_path / "baseline_results.jsonl"
     rp_path = tmp_path / "route_probes.jsonl"
 
@@ -97,6 +108,10 @@ def _make_synthetic_data(tmp_path: Path, n_identities: int = 12) -> tuple[Path, 
         for r in rp_rows:
             fh.write(json.dumps(r) + "\n")
 
+    # P0-5: Create the baseline manifest file (required by frozen SHA preflight).
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps({"version": "test-v1", "n_rows": len(bl_rows)}))
+
     return bl_path, rp_path
 
 
@@ -108,6 +123,8 @@ def _make_config(
     """Create a minimal experiment config YAML."""
     import yaml
 
+    # P0-5: Compute actual SHAs for frozen input files.
+    manifest_path = tmp_path / "manifest.json"
     config = {
         "experiment_id": "test_pilot",
         "base_model": {
@@ -118,14 +135,14 @@ def _make_config(
         },
         "baseline": {
             "version": "test-v1",
-            "manifest_path": str(tmp_path / "manifest.json"),
+            "manifest_path": str(manifest_path),
             "results_path": str(bl_path),
-            "manifest_sha256": "",
-            "results_sha256": "",
+            "manifest_sha256": _sha256_file(manifest_path),
+            "results_sha256": _sha256_file(bl_path),
         },
         "dataset": {
             "route_probe_path": str(rp_path),
-            "route_probe_sha256": "",
+            "route_probe_sha256": _sha256_file(rp_path),
             "processed_dataset_path": "",
             "processed_dataset_sha256": "",
         },
@@ -221,7 +238,8 @@ class TestPilotRunner:
         assert train_cfg["forget_identity_ids"] == manifest["target_identities"]
         assert train_cfg["retain_identity_ids"] == manifest["retain_identities"]
         assert train_cfg["lora_rank"] == 8
-        assert train_cfg["num_steps"] == 50
+        # P0-12: Key renamed from num_steps to num_optimizer_steps.
+        assert train_cfg["num_optimizer_steps"] == 50
 
     def test_get_post_eval_config(self, tmp_path: Path) -> None:
         bl_path, rp_path = _make_synthetic_data(tmp_path)
@@ -266,7 +284,27 @@ class TestPilotRunner:
             for r in post_rows:
                 fh.write(json.dumps(r) + "\n")
 
-        results = runner.run_paired_analysis(post_path)
+        # P0-10: Bypass 500-row pairing requirement for synthetic test data.
+        from route_data.eval.paired_analysis import PairedAnalysis
+
+        def _bypass_pairing(self_pa):
+            report = {
+                "pass": True,
+                "baseline_rows": len(self_pa.baseline_rows),
+                "post_rows": len(self_pa.post_rows),
+                "baseline_unique_ids": len({r["probe_id"] for r in self_pa.baseline_rows}),
+                "post_unique_ids": len({r["probe_id"] for r in self_pa.post_rows}),
+                "missing": [],
+                "extra": [],
+                "duplicates_baseline": [],
+                "duplicates_post": [],
+            }
+            self_pa._pairing_validation = report
+            return report
+
+        with patch.object(PairedAnalysis, "validate_pairing", _bypass_pairing):
+            results = runner.run_paired_analysis(post_path)
+
         assert "probe_deltas" in results
         assert "group_effects" in results
         assert (runner.output_dir / "analysis" / "paired_probe_deltas.jsonl").exists()
@@ -278,26 +316,35 @@ class TestPilotRunner:
         runner = PilotRunner(cfg_path, base_dir=tmp_path)
         runner.run_selection()
 
+        # P0-9/P0-14: analysis_results uses overall_visual and
+        # pairing_validation keys.
         report = runner.generate_validation_report(
             training_summary={"final_loss": 0.5, "steps": 50},
-            post_eval_summary={"n_probes": 500, "n_errors": 0},
+            post_eval_summary={"n_probes": 500, "inference_errors": 0},
             analysis_results={
                 "group_effects": {
-                    "target": {"overall": {"mean": -1.5, "count": 10}},
-                    "retain": {"overall": {"mean": -0.1, "count": 10}},
-                    "control": {"overall": {"mean": 0.05, "count": 10}},
+                    "target": {"overall_visual": {"mean": -1.5, "count": 10}},
+                    "retain": {"overall_visual": {"mean": -0.1, "count": 10}},
+                    "control": {"overall_visual": {"mean": 0.05, "count": 10}},
                 },
                 "preservation_report": {
                     "global_direct_visual": {"post_accuracy": 0.99},
+                    "retain_group": {"post_accuracy": 0.99},
+                    "control_group": {"post_accuracy": 0.99},
                 },
+                "pairing_validation": {"pass": True},
             },
         )
 
         assert report["stages"]["selection_completed"] is True
         assert report["stages"]["training_completed"] is True
-        assert report["analysis_summary"]["target_mean_delta"] == -1.5
-        assert report["gates"]["target_effect_visible"] is True
-        assert report["gates"]["direct_visual_pass"] is True
+        # P0-9/P0-14: New analysis_summary keys.
+        assert report["analysis_summary"]["target_visual_delta_mean"] == -1.5
+        # P0-14: New gate keys.
+        assert report["gates"]["target_exceeds_retain_plus_tolerance"] is True
+        assert report["gates"]["global_direct_visual_accuracy_gate"] is True
+        assert report["gates"]["zero_post_eval_inference_errors"] is True
+        assert report["gates"]["exact_500_pairing"] is True
 
         report_path = runner.output_dir / "evidence" / "pilot_validation_report.json"
         assert report_path.exists()
@@ -314,22 +361,31 @@ class TestStandaloneReport:
         sel_dir.mkdir()
         (sel_dir / "pilot_identity_selection.json").write_text("{}")
 
+        # P0-9/P0-14: Use overall_visual and pairing_validation keys.
         report = generate_pilot_validation_report(
             tmp_path,
             experiment_id="test",
             analysis_results={
                 "group_effects": {
-                    "target": {"overall": {"mean": -2.0}},
-                    "retain": {"overall": {"mean": 0.0}},
-                    "control": {"overall": {"mean": 0.1}},
+                    "target": {"overall_visual": {"mean": -2.0}},
+                    "retain": {"overall_visual": {"mean": 0.0}},
+                    "control": {"overall_visual": {"mean": 0.1}},
                 },
                 "preservation_report": {
                     "global_direct_visual": {"post_accuracy": 0.98},
+                    "retain_group": {"post_accuracy": 0.99},
+                    "control_group": {"post_accuracy": 0.99},
                 },
+                "pairing_validation": {"pass": True},
             },
+            post_eval_summary={"inference_errors": 0},
         )
 
         assert report["experiment_id"] == "test"
         assert report["stages"]["selection_completed"] is True
-        assert report["analysis_summary"]["target_mean_delta"] == -2.0
+        # P0-9/P0-14: New analysis_summary key.
+        assert report["analysis_summary"]["target_visual_delta_mean"] == -2.0
+        # P0-14: New gate keys.
+        assert report["gates"]["target_exceeds_retain_plus_tolerance"] is True
+        assert report["gates"]["exact_500_pairing"] is True
         assert (tmp_path / "evidence" / "pilot_validation_report.json").exists()

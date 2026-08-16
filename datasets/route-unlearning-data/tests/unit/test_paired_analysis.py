@@ -206,17 +206,18 @@ class TestComputeGroupEffects:
             {"group": "target", "family": "direct_visual", "delta_signed_margin": -4.0},
         ]
         ge = compute_group_effects(deltas)
-        assert ge["target"]["overall"]["mean"] == pytest.approx(-3.0)
-        assert ge["target"]["overall"]["count"] == 2
-        assert ge["target"]["overall"]["median"] == pytest.approx(-3.0)
+        # P0-9: primary visual metric is overall_visual.
+        assert ge["target"]["overall_visual"]["mean"] == pytest.approx(-3.0)
+        assert ge["target"]["overall_visual"]["count"] == 2
+        assert ge["target"]["overall_visual"]["median"] == pytest.approx(-3.0)
 
     def test_empty_group(self) -> None:
         deltas = [
             {"group": "target", "family": "direct_visual", "delta_signed_margin": 1.0},
         ]
         ge = compute_group_effects(deltas)
-        assert ge["retain"]["overall"]["count"] == 0
-        assert ge["retain"]["overall"]["mean"] is None
+        assert ge["retain"]["overall_visual"]["count"] == 0
+        assert ge["retain"]["overall_visual"]["mean"] is None
 
     def test_per_family(self) -> None:
         deltas = [
@@ -227,18 +228,21 @@ class TestComputeGroupEffects:
         assert ge["retain"]["per_family"]["wrong_name"]["mean"] == pytest.approx(1.0)
 
     def test_name_only_uses_token_overlap(self) -> None:
+        # P0-9: name_only metrics are in a separate key.
         deltas = [
             {"group": "control", "family": "name_only", "delta_token_overlap": -0.1},
         ]
         ge = compute_group_effects(deltas)
-        assert ge["control"]["overall"]["count"] == 1
+        assert ge["control"]["name_only"]["count"] == 1
+        # Visual overall should be empty for name_only data.
+        assert ge["control"]["overall_visual"]["count"] == 0
 
     def test_std_single_value(self) -> None:
         deltas = [
             {"group": "target", "family": "direct_visual", "delta_signed_margin": 5.0},
         ]
         ge = compute_group_effects(deltas)
-        assert ge["target"]["overall"]["std"] == 0.0
+        assert ge["target"]["overall_visual"]["std"] == 0.0
 
 
 # --------------------------------------------------------------------------- #
@@ -389,7 +393,27 @@ class TestPairedAnalysis:
             for r in rows:
                 fh.write(json.dumps(r) + "\n")
 
-    def test_full_pipeline(self, tmp_path: Path) -> None:
+    @staticmethod
+    def _bypass_pairing(self_pa: PairedAnalysis) -> dict:
+        """Bypass P0-10 500-row pairing check for small unit-test data."""
+        report = {
+            "pass": True,
+            "baseline_rows": len(self_pa.baseline_rows),
+            "post_rows": len(self_pa.post_rows),
+            "baseline_unique_ids": len({r["probe_id"] for r in self_pa.baseline_rows}),
+            "post_unique_ids": len({r["probe_id"] for r in self_pa.post_rows}),
+            "missing": [],
+            "extra": [],
+            "duplicates_baseline": [],
+            "duplicates_post": [],
+        }
+        self_pa._pairing_validation = report
+        return report
+
+    def test_full_pipeline(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # P0-10: bypass 500-row requirement for small test data.
+        monkeypatch.setattr(PairedAnalysis, "validate_pairing", self._bypass_pairing)
+
         bl_path = tmp_path / "baseline.jsonl"
         po_path = tmp_path / "post.jsonl"
         sel_path = tmp_path / "selection.json"
@@ -437,6 +461,8 @@ class TestPairedAnalysis:
         assert "target" in results["group_effects"]
         assert "global_direct_visual" in results["preservation_report"]
         assert "target" in results["route_effects"]
+        # P0-10: pairing_validation included in results.
+        assert "pairing_validation" in results
 
         # Write artifacts
         pa.write_artifacts(results)
@@ -445,8 +471,13 @@ class TestPairedAnalysis:
         assert (out_dir / "group_effects.json").exists()
         assert (out_dir / "preservation_report.json").exists()
         assert (out_dir / "route_effects_post.json").exists()
+        # P0-10: pairing_validation.json artifact.
+        assert (out_dir / "pairing_validation.json").exists()
 
-    def test_load_data_no_manifest(self, tmp_path: Path) -> None:
+    def test_load_data_no_manifest(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # P0-10: bypass 500-row requirement for small test data.
+        monkeypatch.setattr(PairedAnalysis, "validate_pairing", self._bypass_pairing)
+
         bl_path = tmp_path / "baseline.jsonl"
         po_path = tmp_path / "post.jsonl"
         out_dir = tmp_path / "analysis"

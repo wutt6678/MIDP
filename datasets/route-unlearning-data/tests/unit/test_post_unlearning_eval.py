@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from route_data.eval.post_unlearning_eval import (
     PostEvalConfig,
     PostUnlearningEvaluator,
@@ -315,7 +317,10 @@ class TestPostEvalManifest:
 
         output_dir = tmp_path / "post_eval"
         output_dir.mkdir(parents=True, exist_ok=True)
-        post_results_path = output_dir / "results.jsonl"
+        # P0-11: Results and manifest live in checkpoint-specific subdir.
+        checkpoint_dir = output_dir / "step_050"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        post_results_path = checkpoint_dir / "results.jsonl"
         _write_results(post_results_path, baseline_results)
 
         cfg = PostEvalConfig(
@@ -347,7 +352,8 @@ class TestPostEvalManifest:
 
         evaluator.generate_post_eval_manifest()
 
-        manifest_path = output_dir / "manifest.json"
+        # P0-11: Manifest is in checkpoint-specific directory.
+        manifest_path = checkpoint_dir / "manifest.json"
         assert manifest_path.exists()
 
         loaded = json.loads(manifest_path.read_text())
@@ -359,81 +365,76 @@ class TestPostEvalManifest:
 # --------------------------------------------------------------------------- #
 
 class TestPostEvalValidation:
-    """Tests for post-eval result validation."""
+    """Tests for post-eval result validation.
 
-    def test_validation_passes_with_valid_results(self) -> None:
-        """Validation should pass with 500 valid results."""
+    P0-8: ``validate_results()`` delegates to
+    ``self._runner.validate_results()`` (BaselineRunner strict
+    validation).  These tests verify the delegation behaviour.
+    """
+
+    def test_validation_delegates_to_runner(self) -> None:
+        """validate_results() should delegate to _runner.validate_results()."""
         cfg = PostEvalConfig(output_dir="/fake")
 
         evaluator = PostUnlearningEvaluator.__new__(PostUnlearningEvaluator)
         evaluator.config = cfg
+        evaluator._results = []
 
         from unittest.mock import Mock
-        mock_results = []
-        families = ["direct_visual", "image_plus_name", "wrong_name",
-                    "visual_text_conflict", "name_only"]
-        for i in range(500):
-            mock_r = Mock()
-            mock_r.probe_id = f"probe_{i:03d}"
-            mock_r.probe_family = families[i % 5]
-            mock_r.error = None
-            mock_r.signed_answer_margin = 1.0
-            mock_results.append(mock_r)
-        evaluator._results = mock_results
+        mock_runner = Mock()
+        mock_runner.validate_results.return_value = {
+            "pass": True,
+            "checks": {
+                "total_results": 500,
+                "errors": 0,
+                "families_complete": True,
+                "no_duplicate_probes": True,
+                "all_scores_finite": True,
+            },
+        }
+        evaluator._runner = mock_runner
 
         report = evaluator.validate_results()
 
-        assert report["passed"] is True
-        assert report["total_results"] == 500
-        assert report["errors"] == 0
-        assert report["families_complete"] is True
-        assert report["no_duplicate_probes"] is True
-        assert report["all_scores_finite"] is True
+        mock_runner.validate_results.assert_called_once()
+        assert report["pass"] is True
+        assert report["checks"]["total_results"] == 500
 
-    def test_validation_fails_with_errors(self) -> None:
-        """Validation should fail if any results have errors."""
+    def test_validation_propagates_runner_failure(self) -> None:
+        """validate_results() should propagate runner validation failure."""
         cfg = PostEvalConfig(output_dir="/fake")
 
         evaluator = PostUnlearningEvaluator.__new__(PostUnlearningEvaluator)
         evaluator.config = cfg
+        evaluator._results = []
 
         from unittest.mock import Mock
-        mock_results = []
-        families = ["direct_visual", "image_plus_name", "wrong_name",
-                    "visual_text_conflict", "name_only"]
-        for i in range(500):
-            mock_r = Mock()
-            mock_r.probe_id = f"probe_{i:03d}"
-            mock_r.probe_family = families[i % 5]
-            mock_r.error = "some error" if i == 0 else None
-            mock_r.signed_answer_margin = 1.0
-            mock_results.append(mock_r)
-        evaluator._results = mock_results
+        mock_runner = Mock()
+        mock_runner.validate_results.return_value = {
+            "pass": False,
+            "checks": {"errors": 3},
+        }
+        evaluator._runner = mock_runner
 
         report = evaluator.validate_results()
 
-        assert report["passed"] is False
-        assert report["errors"] == 1
+        assert report["pass"] is False
+        assert report["checks"]["errors"] == 3
 
-    def test_validation_fails_with_wrong_count(self) -> None:
-        """Validation should fail if not exactly 500 results."""
+    def test_validation_propagates_runtime_error(self) -> None:
+        """validate_results() should propagate RuntimeError from runner."""
         cfg = PostEvalConfig(output_dir="/fake")
 
         evaluator = PostUnlearningEvaluator.__new__(PostUnlearningEvaluator)
         evaluator.config = cfg
+        evaluator._results = []
 
         from unittest.mock import Mock
-        mock_results = []
-        for i in range(499):  # One short
-            mock_r = Mock()
-            mock_r.probe_id = f"probe_{i:03d}"
-            mock_r.probe_family = "direct_visual"
-            mock_r.error = None
-            mock_r.signed_answer_margin = 1.0
-            mock_results.append(mock_r)
-        evaluator._results = mock_results
+        mock_runner = Mock()
+        mock_runner.validate_results.side_effect = RuntimeError(
+            "P0-8: validation failed: 3 errors found"
+        )
+        evaluator._runner = mock_runner
 
-        report = evaluator.validate_results()
-
-        assert report["passed"] is False
-        assert report["expected_probe_count"] is False
+        with pytest.raises(RuntimeError, match="P0-8"):
+            evaluator.validate_results()
