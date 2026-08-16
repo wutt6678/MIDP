@@ -505,11 +505,14 @@ def run_leakage_detection(
     retain_identity_ids: list[str],
     output_path: str | Path,
 ) -> dict[str, Any]:
-    """Detect leakage between training data and frozen eval probes (P0-3).
+    """Detect leakage between training data and frozen eval probes (P0-4).
 
     Compares all intervention training examples against the frozen route
     probes on sample_id, source_sample_id, probe_id, question text,
     normalised question text, identity_id, and image_sha256.
+
+    Uses fail-closed access: ``row["question"]`` (not ``row.get("question_text")``).
+    Normalisation: ``" ".join(text.strip().lower().split())``.
 
     Writes ``leakage_report.json`` and returns the report dict.
     Raises ``RuntimeError`` on hard-stop violations.
@@ -532,9 +535,14 @@ def run_leakage_detection(
                 probe_source_ids.add(str(ssid))
             if pid := row.get("probe_id"):
                 probe_probe_ids.add(str(pid))
-            if q := row.get("question_text", ""):
+            # P0-4: use fail-closed access to "question" field
+            try:
+                q = row["question"]
+            except KeyError:
+                q = ""
+            if q:
                 probe_questions.add(q)
-                probe_norm_questions.add(q.strip().lower())
+                probe_norm_questions.add(" ".join(q.strip().lower().split()))
             if sha := row.get("image_sha256"):
                 probe_image_shas.add(sha)
             if iid := row.get("identity_id"):
@@ -563,10 +571,15 @@ def run_leakage_detection(
                 overlap_source_ids.append(str(ssid))
             if (pid := row.get("probe_id")) and str(pid) in probe_probe_ids:
                 overlap_probe_ids.append(str(pid))
-            if q := row.get("question_text", ""):
+            # P0-4: use fail-closed access to "question" field
+            try:
+                q = row["question"]
+            except KeyError:
+                q = ""
+            if q:
                 if q in probe_questions:
                     overlap_questions.append(q[:200])
-                if q.strip().lower() in probe_norm_questions:
+                if " ".join(q.strip().lower().split()) in probe_norm_questions:
                     overlap_norm_questions.append(q[:200])
             if (sha := row.get("image_sha256")) and sha in probe_image_shas:
                 overlap_image_shas.append(sha)
@@ -576,6 +589,7 @@ def run_leakage_detection(
             len(overlap_sample_ids) == 0
             and len(overlap_probe_ids) == 0
             and len(overlap_questions) == 0
+            and len(overlap_norm_questions) == 0
         ),
         "exact_probe_id_overlap": len(overlap_probe_ids),
         "exact_sample_id_overlap": len(overlap_sample_ids),
@@ -662,13 +676,19 @@ def generate_intervention_manifest(
         for line in fh:
             row = json.loads(line)
             iid = row.get("identity_id", "")
+            # P0-5: hash the actual question field (not question_text)
+            try:
+                question_text = row["question"]
+            except KeyError:
+                question_text = ""
             entry = {
                 "sample_id": row.get("sample_id", ""),
+                "source_sample_id": row.get("source_sample_id", ""),
                 "identity_id": iid,
                 "image_sha256": row.get("image_sha256", ""),
-                "question_hash": hashlib.sha256(
-                    row.get("question_text", "").encode()
-                ).hexdigest()[:16],
+                "question_sha256": hashlib.sha256(
+                    question_text.encode()
+                ).hexdigest(),
                 "answer_label": row.get("answer_label"),
                 "target_attribute": row.get("target_attribute", ""),
             }
