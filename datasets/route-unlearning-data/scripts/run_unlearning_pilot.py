@@ -332,11 +332,19 @@ def run_pipeline(
         with StepTimer(15, "Paired analysis + preservation report"):
             post_results_path = post_eval_results.get("results_path", "")
             if post_results_path:
-                analysis_results = runner.run_paired_analysis(post_results_path)
-                _write_step_evidence(
-                    output_dir, 15, "paired_analysis",
-                    {"analysis_keys": sorted(analysis_results.keys())},
-                )
+                try:
+                    analysis_results = runner.run_paired_analysis(post_results_path)
+                except RuntimeError as exc:
+                    if smoke:
+                        logger.warning("Step 15: Paired analysis failed (expected in smoke mode): %s", exc)
+                        analysis_results = {"smoke_mode": True, "error": str(exc)}
+                    else:
+                        raise
+                else:
+                    _write_step_evidence(
+                        output_dir, 15, "paired_analysis",
+                        {"analysis_keys": sorted(analysis_results.keys())},
+                    )
         pipeline_state["steps_completed"].append("paired_analysis")
     else:
         logger.info("Steps 10-16: post-eval already complete (resume)")
