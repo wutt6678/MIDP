@@ -614,12 +614,13 @@ def compute_forget_loss(
         "attention_mask": batch["attention_mask"],
     }
     # Pass all multimodal tensors
-    for key in batch:
-        if key not in ("input_ids", "attention_mask", "labels") and not key.startswith("_"):
-            if torch.is_tensor(batch[key]) or (
-                isinstance(batch[key], list) and len(batch[key]) > 0
-            ):
-                model_kwargs[key] = batch[key]
+    for key, value in batch.items():
+        if (
+            key not in ("input_ids", "attention_mask", "labels")
+            and not key.startswith("_")
+            and (torch.is_tensor(value) or (isinstance(value, list) and len(value) > 0))
+        ):
+            model_kwargs[key] = value
 
     outputs = model(**model_kwargs)
     logits = outputs.logits  # (B, T, V)
@@ -628,14 +629,9 @@ def compute_forget_loss(
     correct_token_ids_list = batch["_correct_answer_token_ids"]
 
     yes_id = model_kwargs.get("_yes_token_id")
-    no_id = model_kwargs.get("_no_token_id")
     if yes_id is None:
         # Resolve from the first sample's metadata
         yes_id = correct_token_ids_list[0][0] if correct_token_ids_list[0][0] != 16484 else 16484
-        # Fallback: find Yes/No token ids from the batch metadata
-        tokenizer = None
-        if hasattr(model, "config") and hasattr(model.config, "_name_or_path"):
-            pass  # We'll use the stored token ids directly
 
     total_margin = torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
 
@@ -673,12 +669,13 @@ def compute_retain_loss(
         "input_ids": batch["input_ids"],
         "attention_mask": batch["attention_mask"],
     }
-    for key in batch:
-        if key not in ("input_ids", "attention_mask", "labels") and not key.startswith("_"):
-            if torch.is_tensor(batch[key]) or (
-                isinstance(batch[key], list) and len(batch[key]) > 0
-            ):
-                model_kwargs[key] = batch[key]
+    for key, value in batch.items():
+        if (
+            key not in ("input_ids", "attention_mask", "labels")
+            and not key.startswith("_")
+            and (torch.is_tensor(value) or (isinstance(value, list) and len(value) > 0))
+        ):
+            model_kwargs[key] = value
 
     if reference_model is not None:
         # KL divergence to frozen reference

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import logging
+import math
 import random
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -557,23 +557,19 @@ def run_leakage_detection(
                 continue
             train_identity_ids.add(iid)
 
-            if sid := row.get("sample_id"):
-                if str(sid) in probe_sample_ids:
-                    overlap_sample_ids.append(str(sid))
-            if ssid := row.get("source_sample_id"):
-                if str(ssid) in probe_source_ids:
-                    overlap_source_ids.append(str(ssid))
-            if pid := row.get("probe_id"):
-                if str(pid) in probe_probe_ids:
-                    overlap_probe_ids.append(str(pid))
+            if (sid := row.get("sample_id")) and str(sid) in probe_sample_ids:
+                overlap_sample_ids.append(str(sid))
+            if (ssid := row.get("source_sample_id")) and str(ssid) in probe_source_ids:
+                overlap_source_ids.append(str(ssid))
+            if (pid := row.get("probe_id")) and str(pid) in probe_probe_ids:
+                overlap_probe_ids.append(str(pid))
             if q := row.get("question_text", ""):
                 if q in probe_questions:
                     overlap_questions.append(q[:200])
                 if q.strip().lower() in probe_norm_questions:
                     overlap_norm_questions.append(q[:200])
-            if sha := row.get("image_sha256"):
-                if sha in probe_image_shas:
-                    overlap_image_shas.append(sha)
+            if (sha := row.get("image_sha256")) and sha in probe_image_shas:
+                overlap_image_shas.append(sha)
 
     report: dict[str, Any] = {
         "pass": (

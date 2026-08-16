@@ -178,7 +178,6 @@ def _build_adapter_metadata(checkpoint_path: Path) -> dict[str, str]:
         try:
             with open(config_path) as f:
                 lora_cfg = json.load(f)
-            peft_cfg = lora_cfg.get("peft_type", {})
             # LoRA hyperparameters.
             if "r" in lora_cfg:
                 metadata["lora_rank"] = str(lora_cfg["r"])
