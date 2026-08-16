@@ -53,6 +53,59 @@ def load_experiment_config(path: str | Path) -> dict[str, Any]:
         return yaml.safe_load(fh)
 
 
+def validate_experiment_config(cfg: dict[str, Any]) -> None:
+    """Validate the experiment config (P0-7).
+
+    Rejects legacy field names and missing required paths.
+
+    Raises
+    ------
+    ValueError
+        If any required field is missing or a legacy field is detected.
+    """
+    errors: list[str] = []
+
+    # -- Method name ---------------------------------------------------- #
+    method_name = cfg.get("method", {}).get("name", "")
+    if method_name == "lora_targeted_update":
+        errors.append(
+            "method.name 'lora_targeted_update' is legacy; "
+            "use 'lora_targeted_candidate_margin'"
+        )
+    elif method_name != "lora_targeted_candidate_margin":
+        errors.append(
+            f"method.name must be 'lora_targeted_candidate_margin', "
+            f"got '{method_name}'"
+        )
+
+    # -- num_steps vs num_optimizer_steps -------------------------------- #
+    hp = cfg.get("method", {}).get("hyperparameters", {})
+    if "num_steps" in hp and "num_optimizer_steps" not in hp:
+        errors.append(
+            "hyperparameters.num_steps is legacy; "
+            "use 'num_optimizer_steps'"
+        )
+
+    # -- Required paths -------------------------------------------------- #
+    dataset_cfg = cfg.get("dataset", {})
+    if not dataset_cfg.get("research_manifest_path"):
+        errors.append("dataset.research_manifest_path is required")
+    if not dataset_cfg.get("freeze_verification_path"):
+        errors.append("dataset.freeze_verification_path is required")
+
+    base_model_cfg = cfg.get("base_model", {})
+    if not base_model_cfg.get("model_config_path"):
+        errors.append("base_model.model_config_path is required")
+    if not base_model_cfg.get("revision"):
+        errors.append("base_model.revision is required")
+
+    if errors:
+        raise ValueError(
+            "Experiment config validation failed:\n"
+            + "\n".join(f"  - {e}" for e in errors)
+        )
+
+
 def _git_commit() -> str:
     """Return the current git commit SHA."""
     try:
@@ -253,7 +306,7 @@ class PilotRunner:
             "lora_rank": method_cfg["lora_rank"],
             "lora_alpha": method_cfg["lora_alpha"],
             "learning_rate": method_cfg["learning_rate"],
-            "num_optimizer_steps": method_cfg.get("num_optimizer_steps", method_cfg.get("num_steps", 50)),
+            "num_optimizer_steps": method_cfg["num_optimizer_steps"],
             "retain_weight": method_cfg["retain_weight"],
             "batch_size": method_cfg["train_batch_size"],
             "gradient_accumulation_steps": method_cfg["gradient_accumulation_steps"],
@@ -287,7 +340,7 @@ class PilotRunner:
         # P0-7: Resolve all frozen provenance paths.
         processed_ds_str = cfg["dataset"].get("processed_dataset_path", "")
         model_cfg_str = cfg["base_model"].get("model_config_path", "")
-        freeze_verif_str = cfg["baseline"].get("freeze_verification_path", "")
+        freeze_verif_str = cfg["dataset"].get("freeze_verification_path", "")
 
         return {
             "model_id": cfg["base_model"]["model_id"],
@@ -310,9 +363,10 @@ class PilotRunner:
                 self.output_dir / "selection" / "pilot_identity_selection.json"
             ),
             "code_commit": _git_commit(),
-            # P0-7: Full frozen evaluation contract.
+            # P0-6: Use research_manifest_path from dataset section,
+            # NOT baseline.manifest_path.
             "dataset_manifest_path": str(
-                self._resolve(cfg["baseline"]["manifest_path"])
+                self._resolve(cfg["dataset"]["research_manifest_path"])
             ),
             "freeze_verification_path": str(
                 self._resolve(freeze_verif_str)

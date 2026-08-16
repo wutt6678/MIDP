@@ -132,6 +132,7 @@ def _make_config(
             "revision": "abc123",
             "dtype": "float32",
             "fingerprint_id": "test_fp",
+            "model_config_path": str(tmp_path / "model_config.yaml"),
         },
         "baseline": {
             "version": "test-v1",
@@ -145,6 +146,8 @@ def _make_config(
             "route_probe_sha256": _sha256_file(rp_path),
             "processed_dataset_path": "",
             "processed_dataset_sha256": "",
+            "research_manifest_path": str(tmp_path / "research_manifest.json"),
+            "freeze_verification_path": str(tmp_path / "freeze_verification.json"),
         },
         "selection": {
             "target_identity_count": 2,
@@ -155,12 +158,12 @@ def _make_config(
             "preferred_role": "train",
         },
         "method": {
-            "name": "lora_targeted_update",
+            "name": "lora_targeted_candidate_margin",
             "hyperparameters": {
                 "lora_rank": 8,
                 "lora_alpha": 16,
                 "learning_rate": 1e-4,
-                "num_steps": 50,
+                "num_optimizer_steps": 50,
                 "retain_weight": 0.1,
                 "train_batch_size": 1,
                 "gradient_accumulation_steps": 4,

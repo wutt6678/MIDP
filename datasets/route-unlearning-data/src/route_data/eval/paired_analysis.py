@@ -363,6 +363,14 @@ def compute_preservation_report(
     dv_bl_acc, dv_po_acc = [], []
     dv_bl_margin, dv_po_margin = [], []
 
+    # -- P0-9: group-specific direct_visual --
+    grp_dv: dict[str, dict[str, list]] = {
+        "target": {"bl_acc": [], "po_acc": [], "bl_margin": [], "po_margin": []},
+        "retain": {"bl_acc": [], "po_acc": [], "bl_margin": [], "po_margin": []},
+        "control": {"bl_acc": [], "po_acc": [], "bl_margin": [], "po_margin": []},
+        "untargeted": {"bl_acc": [], "po_acc": [], "bl_margin": [], "po_margin": []},
+    }
+
     # -- per-attribute --
     attr_bl: dict[str, list[tuple[bool | None, float | None]]] = defaultdict(list)
     attr_po: dict[str, list[tuple[bool | None, float | None]]] = defaultdict(list)
@@ -395,6 +403,15 @@ def compute_preservation_report(
             if po_correct is not None:
                 dv_po_acc.append(po_correct)
                 dv_po_margin.append(po.get("signed_answer_margin"))
+
+            # P0-9: accumulate group-specific direct_visual metrics
+            g = grp_dv.get(grp, grp_dv["untargeted"])
+            if bl_correct is not None:
+                g["bl_acc"].append(bl_correct)
+                g["bl_margin"].append(bl.get("signed_answer_margin"))
+            if po_correct is not None:
+                g["po_acc"].append(po_correct)
+                g["po_margin"].append(po.get("signed_answer_margin"))
 
         # per-attribute (binary families only)
         if fam != "name_only" and attr is not None:
@@ -446,6 +463,18 @@ def compute_preservation_report(
             "post_count": len(po_corrects),
         }
 
+    # P0-9: group-specific direct_visual metrics
+    group_dv_metrics: dict[str, dict[str, Any]] = {}
+    for grp_name in ["target", "retain", "control", "untargeted"]:
+        g = grp_dv[grp_name]
+        group_dv_metrics[f"{grp_name}_direct_visual"] = {
+            "pre_accuracy": _acc(g["bl_acc"]),
+            "post_accuracy": _acc(g["po_acc"]),
+            "pre_mean_margin": _mean_margin(g["bl_margin"]),
+            "post_mean_margin": _mean_margin(g["po_margin"]),
+            "count": len(g["bl_acc"]),
+        }
+
     report: dict[str, Any] = {
         "global_direct_visual": {
             "pre_accuracy": _acc(dv_bl_acc),
@@ -454,6 +483,7 @@ def compute_preservation_report(
             "post_mean_margin": _mean_margin(dv_po_margin),
             "count": len(dv_bl_acc),
         },
+        **group_dv_metrics,
         "per_attribute": per_attr,
         "positive_state": {
             "pre_accuracy": _acc(pos_bl_acc),
