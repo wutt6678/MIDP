@@ -372,8 +372,18 @@ class PostUnlearningEvaluator:
         """Generate post-eval summary with per-family metrics."""
         return self._runner.generate_summary()
 
-    def validate_against_baseline(self) -> dict[str, Any]:
+    def validate_against_baseline(
+        self,
+        smoke_probe_ids: set[str] | None = None,
+    ) -> dict[str, Any]:
         """Validate post-eval probe IDs match the frozen baseline.
+
+        Parameters
+        ----------
+        smoke_probe_ids:
+            If provided, validate that post-eval IDs match exactly this
+            subset (which must also be a subset of baseline IDs). Used
+            for deterministic smoke testing (P0-4).
 
         Returns
         -------
@@ -389,6 +399,12 @@ class PostUnlearningEvaluator:
 
         # Extract probe IDs from post results (works with dataclass or mock)
         post_results = [{"probe_id": r.probe_id} for r in self._results]
+
+        if smoke_probe_ids is not None:
+            # In smoke mode, compare against the smoke subset of baseline
+            baseline_results = [
+                r for r in baseline_results if r["probe_id"] in smoke_probe_ids
+            ]
 
         return validate_exact_probe_matching(baseline_results, post_results)
 
@@ -485,7 +501,10 @@ class PostUnlearningEvaluator:
         logger.info(f"Wrote post-eval manifest to {manifest_path}")
         return manifest
 
-    def validate_results(self) -> dict[str, Any]:
+    def validate_results(
+        self,
+        smoke_probe_ids: set[str] | None = None,
+    ) -> dict[str, Any]:
         """Strict post-eval validation matching baseline standards (P0-8).
 
         Delegates to the BaselineRunner's ``validate_results()`` which
@@ -504,6 +523,12 @@ class PostUnlearningEvaluator:
         The only allowed difference from baseline is the model fingerprint
         (which differs due to the adapter).
 
+        Parameters
+        ----------
+        smoke_probe_ids:
+            If provided, validate against this subset of probe IDs instead
+            of all probes. Used for deterministic smoke testing (P0-4).
+
         Returns
         -------
         report : dict
@@ -515,7 +540,7 @@ class PostUnlearningEvaluator:
             If any check fails.
         """
         # Delegate to the BaselineRunner's strict validation.
-        return self._runner.validate_results()
+        return self._runner.validate_results(smoke_probe_ids=smoke_probe_ids)
 
 
 # --------------------------------------------------------------------------- #

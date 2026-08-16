@@ -1574,13 +1574,14 @@ class BaselineRunner:
     # Validation & manifest generation
     # ------------------------------------------------------------------ #
 
-    def validate_results(self) -> dict[str, Any]:
+    def validate_results(self, smoke_probe_ids: set[str] | None = None) -> dict[str, Any]:
         """Strict P0-4 baseline validation for research-grade results.
 
         Performs the following checks:
 
         1. **exact_probe_id_set** — result probe IDs match source probes
            exactly (no duplicates, no missing, no unexpected).
+           When *smoke_probe_ids* is provided, checks against that subset.
         2. **family_counts_match** — per-family result counts match the
            source probe artifact exactly.
         3. **binary_scores_complete** — every image-family result has finite
@@ -1598,6 +1599,12 @@ class BaselineRunner:
         8. **protocol_role_complete** — every result has a valid protocol
            role in {train, eval, exclude} and all probes for one identity
            share the same role.
+
+        Parameters
+        ----------
+        smoke_probe_ids:
+            If provided, validate against this subset of probe IDs instead
+            of all probes. Used for deterministic smoke testing (P0-4).
 
         Returns
         -------
@@ -1623,7 +1630,10 @@ class BaselineRunner:
                 passed = False
 
         # -- 4.1  Exact probe-ID equality --------------------------------
-        expected_ids = {p.probe_id for p in self.probes}
+        if smoke_probe_ids is not None:
+            expected_ids = smoke_probe_ids
+        else:
+            expected_ids = {p.probe_id for p in self.probes}
         actual_ids = [r.probe_id for r in results]
         actual_id_set = set(actual_ids)
         no_dupes = len(actual_ids) == len(actual_id_set)
@@ -1640,7 +1650,12 @@ class BaselineRunner:
         )
 
         # -- 4.2  Exact family counts ------------------------------------
-        expected_family_counts = dict(Counter(p.probe_family for p in self.probes))
+        if smoke_probe_ids is not None:
+            expected_family_counts = dict(Counter(
+                p.probe_family for p in self.probes if p.probe_id in smoke_probe_ids
+            ))
+        else:
+            expected_family_counts = dict(Counter(p.probe_family for p in self.probes))
         actual_family_counts = dict(Counter(r.probe_family for r in results))
         family_ok = expected_family_counts == actual_family_counts
         _record(

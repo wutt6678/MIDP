@@ -608,10 +608,12 @@ def _run_post_eval_phase(
     )
 
     # Step 11-12: Preflight + inference
+    smoke_probe_ids: set[str] | None = None
     if smoke:
         # P0-2: Deterministic 2×5 smoke probe selection
         from route_data.eval.baseline_runner import select_smoke_probes
         smoke_probes = select_smoke_probes(evaluator._runner.probes, n_identities=2)
+        smoke_probe_ids = {p.probe_id for p in smoke_probes}
         logger.info(
             "Steps 11-12: Smoke mode — %d deterministic probes selected",
             len(smoke_probes),
@@ -635,25 +637,11 @@ def _run_post_eval_phase(
 
     # Step 13: Strict validation
     logger.info("Step 13: Running strict validation ...")
-    try:
-        validation_report = evaluator.validate_results()
-    except RuntimeError as exc:
-        if smoke:
-            logger.warning("Step 13: Validation failed (expected in smoke mode): %s", exc)
-            validation_report = {"pass": False, "smoke_mode": True, "error": str(exc)}
-        else:
-            raise
+    validation_report = evaluator.validate_results(smoke_probe_ids=smoke_probe_ids)
 
     # Step 14: Exact pairing
     logger.info("Step 14: Validating exact probe matching ...")
-    try:
-        pairing = evaluator.validate_against_baseline()
-    except RuntimeError as exc:
-        if smoke:
-            logger.warning("Step 14: Pairing validation failed (expected in smoke mode): %s", exc)
-            pairing = {"pass": False, "smoke_mode": True, "error": str(exc)}
-        else:
-            raise
+    pairing = evaluator.validate_against_baseline(smoke_probe_ids=smoke_probe_ids)
 
     # Summary
     summary = evaluator.generate_summary()
