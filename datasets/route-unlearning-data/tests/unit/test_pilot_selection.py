@@ -16,7 +16,6 @@ import pytest
 
 from route_data.eval.pilot_selection import (
     IdentityStats,
-    PilotSelection,
     build_identity_attribute_map,
     build_identity_stats,
     load_selection_manifest,
@@ -24,7 +23,6 @@ from route_data.eval.pilot_selection import (
     selection_manifest_sha256,
     write_selection_manifest,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Helpers – synthetic data generators
@@ -314,7 +312,7 @@ class TestSelectPilotIdentities:
         """All selected identities should have the preferred protocol role."""
         stats = _build_synthetic_stats(n_per_group=8)
         sel = select_pilot_identities(stats, seed=17, preferred_role="train")
-        for iid, detail in sel.identity_details.items():
+        for detail in sel.identity_details.values():
             assert detail["protocol_role"] == "train"
 
     def test_insufficient_identities_raises(self) -> None:

@@ -23,9 +23,9 @@ import json
 import math
 import random
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 # --------------------------------------------------------------------------- #
 # Data classes
@@ -292,7 +292,7 @@ def select_pilot_identities(
     def _group_sort_key(
         item: tuple[tuple[str, bool], list[IdentityStats]],
     ) -> tuple[float, str]:
-        key, members = item
+        _key, members = item
         mean_margin = sum(s.mean_overall_margin for s in members) / len(members)
         sorted_ids = sorted(s.identity_id for s in members)
         return (-mean_margin, sorted_ids[0])
@@ -349,19 +349,17 @@ def select_pilot_identities(
 
         # Prefer attribute diversity: if retain already has this attr,
         # skip for retain (but allow for control if needed).
-        if len(retain) < retain_count:
-            if cand.attr_key not in retain_attrs:
-                retain.append(cand)
-                used_ids.add(cand.identity_id)
-                retain_attrs.add(cand.attr_key)
-                continue
+        if len(retain) < retain_count and cand.attr_key not in retain_attrs:
+            retain.append(cand)
+            used_ids.add(cand.identity_id)
+            retain_attrs.add(cand.attr_key)
+            continue
 
-        if len(control) < control_count:
-            if cand.attr_key not in control_attrs:
-                control.append(cand)
-                used_ids.add(cand.identity_id)
-                control_attrs.add(cand.attr_key)
-                continue
+        if len(control) < control_count and cand.attr_key not in control_attrs:
+            control.append(cand)
+            used_ids.add(cand.identity_id)
+            control_attrs.add(cand.attr_key)
+            continue
 
         # Fallback: allow same-attribute if necessary
         if len(retain) < retain_count:

@@ -8,15 +8,10 @@ invariants of the training pipeline before any real intervention.
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from route_data.eval.unlearning_harness import (
-    ForgetDataset,
-    RetainDataset,
     UnlearningConfig,
     build_forget_dataset,
     build_retain_dataset,
@@ -24,7 +19,6 @@ from route_data.eval.unlearning_harness import (
     generate_trainable_parameter_report,
     sha256_file,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Helpers – synthetic data

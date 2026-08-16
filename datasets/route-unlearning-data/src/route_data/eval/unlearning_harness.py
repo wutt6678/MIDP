@@ -23,7 +23,7 @@ import random
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -317,7 +317,7 @@ def load_base_model(
     from transformers import AutoModelForImageTextToText, AutoProcessor
 
     torch_dtype = getattr(torch, dtype)
-    local_dir = snapshot_download(model_id, revision=revision)
+    snapshot_download(model_id, revision=revision)
 
     model = AutoModelForImageTextToText.from_pretrained(
         model_id,
