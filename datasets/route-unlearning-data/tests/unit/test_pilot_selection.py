@@ -348,8 +348,8 @@ class TestSelectPilotIdentities:
     def test_matching_criteria_populated(self) -> None:
         stats = _build_synthetic_stats(n_per_group=8)
         sel = select_pilot_identities(stats, seed=17)
-        assert "protocol_role" in sel.matching_criteria
-        assert "baseline_direct_visual_margin" in sel.matching_criteria
+        assert "same-protocol-role" in sel.matching_criteria
+        assert "baseline-margin-matched" in sel.matching_criteria
 
     def test_identity_details_complete(self) -> None:
         """Every selected identity should have full detail in the manifest."""

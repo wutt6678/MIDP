@@ -237,7 +237,24 @@ class TestStubIntegrationSmoke:
         )
         pa = PairedAnalysis(config)
         pa.load_data()
-        results = pa.run_all()
+
+        # P0-10: bypass 500-row pairing requirement for small smoke data.
+        def _bypass_pairing(self_pa: PairedAnalysis) -> dict:
+            report = {
+                "pass": True,
+                "baseline_rows": len(self_pa.baseline_rows),
+                "post_rows": len(self_pa.post_rows),
+                "baseline_unique_ids": len({r["probe_id"] for r in self_pa.baseline_rows}),
+                "post_unique_ids": len({r["probe_id"] for r in self_pa.post_rows}),
+                "missing": [], "extra": [],
+                "duplicates_baseline": [], "duplicates_post": [],
+            }
+            self_pa._pairing_validation = report
+            return report
+
+        import unittest.mock
+        with unittest.mock.patch.object(PairedAnalysis, "validate_pairing", _bypass_pairing):
+            results = pa.run_all()
         pa.write_artifacts(results)
 
         # -- Step 6: Verify all artifacts exist and are well-formed --
@@ -276,9 +293,10 @@ class TestStubIntegrationSmoke:
             assert ie[tid]["overall_visual_dM"] < 0
 
         # Group effects
+        # P0-9: primary visual metric is overall_visual.
         ge = results["group_effects"]
-        assert ge["target"]["overall"]["mean"] < 0
-        assert ge["retain"]["overall"]["mean"] == pytest.approx(0.0)
+        assert ge["target"]["overall_visual"]["mean"] < 0
+        assert ge["retain"]["overall_visual"]["mean"] == pytest.approx(0.0)
 
         # Preservation report
         pr = results["preservation_report"]

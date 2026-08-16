@@ -91,7 +91,7 @@ class TestUnlearningConfig:
         assert cfg.lora_rank == 8
         assert cfg.lora_alpha == 16
         assert cfg.learning_rate == 1e-4
-        assert cfg.num_steps == 50
+        assert cfg.num_optimizer_steps == 50
         assert cfg.retain_weight == 0.1
         assert cfg.seed == 17
 
@@ -304,7 +304,7 @@ class TestRunManifest:
 
         assert manifest["experiment_id"] == "fiubench_unlearning_pilot_v1"
         assert manifest["base_model"]["model_id"] == "Qwen/Qwen3.5-9B"
-        assert manifest["method"]["name"] == "lora_targeted_update"
+        assert manifest["method"]["name"] == "lora_targeted_candidate_margin"
         assert manifest["method"]["hyperparameters"]["lora_rank"] == 8
         assert manifest["seed"] == 17
         assert manifest["forget_identities"] == ["t1", "t2"]
@@ -322,7 +322,7 @@ class TestRunManifest:
         assert "lora_rank" in hp
         assert "lora_alpha" in hp
         assert "learning_rate" in hp
-        assert "num_steps" in hp
+        assert "num_optimizer_steps" in hp
         assert "retain_weight" in hp
 
 
