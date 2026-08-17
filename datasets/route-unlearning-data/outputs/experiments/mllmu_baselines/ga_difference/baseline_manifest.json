@@ -1,0 +1,45 @@
+{
+  "method": "mllmu_ga_difference",
+  "base_model": {
+    "model_id": "Qwen/Qwen3.5-9B",
+    "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "dtype": "bfloat16"
+  },
+  "lora": {
+    "rank": 8,
+    "alpha": 16,
+    "dropout": 0.0,
+    "target_modules": [
+      "q_proj",
+      "v_proj",
+      "k_proj",
+      "o_proj"
+    ]
+  },
+  "training": {
+    "seed": 17,
+    "learning_rate": 2e-05,
+    "num_optimizer_steps": 125,
+    "batch_size": 1,
+    "gradient_accumulation_steps": 4,
+    "max_grad_norm": 1.0
+  },
+  "method_hyperparameters": {
+    "retain_weight": 1.0
+  },
+  "selection_manifest_sha256": "",
+  "code_commit": "e60f277f44e4a827266afbf64a68076fc919025f",
+  "elapsed_seconds": 2298.749926805496,
+  "checkpoint_steps": [
+    1,
+    5,
+    10,
+    25,
+    50,
+    60,
+    75,
+    90,
+    125
+  ],
+  "output_dir": "outputs/experiments/mllmu_baselines/ga_difference"
+}

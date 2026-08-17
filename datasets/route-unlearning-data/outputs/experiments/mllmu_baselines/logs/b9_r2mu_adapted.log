@@ -1,0 +1,71 @@
+2026-08-17 17:33:08,711 [INFO] run_mllmu_baseline: Method: r2mu_adapted
+2026-08-17 17:33:08,711 [INFO] run_mllmu_baseline: Config: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/configs/experiments/mllmu_baselines/r2mu_adapted.yaml
+2026-08-17 17:33:08,711 [INFO] run_mllmu_baseline: Preflight: PASSED
+2026-08-17 17:33:10,545 [INFO] run_mllmu_baseline: Loading base model Qwen/Qwen3.5-9B ...
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 1525.13it/s]
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
+Loading weights:   0%|          | 0/760 [00:00<?, ?it/s]Loading weights:   0%|          | 2/760 [00:00<02:05,  6.03it/s]Loading weights:   4%|▎         | 27/760 [00:00<00:09, 77.18it/s]Loading weights:   6%|▌         | 46/760 [00:00<00:06, 107.06it/s]Loading weights:   9%|▉         | 67/760 [00:00<00:05, 125.23it/s]Loading weights:  11%|█         | 85/760 [00:00<00:04, 139.63it/s]Loading weights:  13%|█▎        | 102/760 [00:00<00:05, 124.29it/s]Loading weights:  16%|█▌        | 121/760 [00:01<00:04, 137.22it/s]Loading weights:  18%|█▊        | 140/760 [00:01<00:04, 148.63it/s]Loading weights:  21%|██        | 157/760 [00:01<00:04, 140.94it/s]Loading weights:  23%|██▎       | 174/760 [00:01<00:04, 146.28it/s]Loading weights:  26%|██▋       | 200/760 [00:01<00:03, 173.10it/s]Loading weights:  29%|██▉       | 221/760 [00:01<00:03, 177.02it/s]Loading weights:  32%|███▏      | 240/760 [00:01<00:02, 179.91it/s]Loading weights:  34%|███▍      | 259/760 [00:01<00:03, 160.15it/s]Loading weights:  37%|███▋      | 279/760 [00:01<00:02, 166.61it/s]Loading weights:  39%|███▉      | 297/760 [00:02<00:02, 167.28it/s]Loading weights:  41%|████▏     | 315/760 [00:02<00:02, 152.15it/s]Loading weights:  44%|████▎     | 332/760 [00:02<00:02, 151.56it/s]Loading weights:  46%|████▌     | 348/760 [00:02<00:02, 145.38it/s]Loading weights:  48%|████▊     | 363/760 [00:02<00:02, 143.26it/s]Loading weights:  51%|█████     | 384/760 [00:02<00:02, 155.23it/s]Loading weights:  53%|█████▎    | 400/760 [00:02<00:02, 148.03it/s]Loading weights:  55%|█████▍    | 417/760 [00:02<00:02, 147.62it/s]Loading weights:  61%|██████    | 461/760 [00:03<00:01, 225.34it/s]Loading weights:  77%|███████▋  | 585/760 [00:03<00:00, 498.15it/s]Loading weights:  96%|█████████▌| 729/760 [00:03<00:00, 760.89it/s]Loading weights: 100%|██████████| 760/760 [00:03<00:00, 230.94it/s]
+2026-08-17 17:33:17,911 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:18,156 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:18,397 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:18,644 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:18,891 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:19,130 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:19,370 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:19,622 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:19,858 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:20,134 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:20,396 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:20,640 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-17 17:33:21,673 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B "HTTP/1.1 200 OK"
+2026-08-17 17:33:21,909 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:22,164 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:22,174 [INFO] route_data.eval.unlearning_harness: Loaded base model Qwen/Qwen3.5-9B revision c202236235762e1c871ad0ccb60c8ee5ba337b9a
+2026-08-17 17:33:22,174 [INFO] run_mllmu_baseline: Applying LoRA ...
+2026-08-17 17:33:22,432 [INFO] route_data.eval.unlearning_harness: Applied LoRA: r=8, alpha=16, targets=['q_proj', 'v_proj', 'k_proj', 'o_proj']
+2026-08-17 17:33:22,434 [INFO] run_mllmu_baseline: Building forget dataset ...
+2026-08-17 17:33:26,043 [INFO] route_data.eval.unlearning_harness: Forget dataset: 280 samples from 2 identities
+2026-08-17 17:33:26,043 [INFO] run_mllmu_baseline: Building retain dataset ...
+2026-08-17 17:33:29,700 [INFO] route_data.eval.unlearning_harness: Retain dataset: 280 samples from 2 identities
+2026-08-17 17:33:29,702 [INFO] run_mllmu_baseline: Loading frozen reference model for R²MU-adapted ...
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 1272.37it/s]
+Loading weights:   0%|          | 0/760 [00:00<?, ?it/s]Loading weights:   0%|          | 1/760 [00:00<01:17,  9.76it/s]Loading weights:   0%|          | 2/760 [00:00<02:10,  5.81it/s]Loading weights:   4%|▎         | 27/760 [00:00<00:08, 85.06it/s]Loading weights:   6%|▌         | 42/760 [00:00<00:06, 105.19it/s]Loading weights:   8%|▊         | 61/760 [00:00<00:05, 130.89it/s]Loading weights:  10%|█         | 76/760 [00:00<00:05, 132.36it/s]Loading weights:  12%|█▏        | 91/760 [00:00<00:04, 133.99it/s]Loading weights:  14%|█▍        | 106/760 [00:00<00:05, 122.99it/s]Loading weights:  17%|█▋        | 129/760 [00:01<00:04, 147.52it/s]Loading weights:  19%|█▉        | 147/760 [00:01<00:04, 152.64it/s]Loading weights:  21%|██▏       | 163/760 [00:01<00:04, 142.22it/s]Loading weights:  24%|██▍       | 182/760 [00:01<00:03, 151.23it/s]Loading weights:  26%|██▌       | 198/760 [00:01<00:03, 152.12it/s]Loading weights:  28%|██▊       | 214/760 [00:01<00:04, 129.92it/s]Loading weights:  31%|███       | 235/760 [00:01<00:03, 148.97it/s]Loading weights:  33%|███▎      | 252/760 [00:01<00:03, 154.26it/s]Loading weights:  35%|███▌      | 269/760 [00:02<00:03, 138.35it/s]Loading weights:  38%|███▊      | 286/760 [00:02<00:03, 145.52it/s]Loading weights:  40%|████      | 305/760 [00:02<00:02, 154.99it/s]Loading weights:  42%|████▏     | 322/760 [00:02<00:03, 136.44it/s]Loading weights:  44%|████▍     | 337/760 [00:02<00:03, 131.08it/s]Loading weights:  47%|████▋     | 356/760 [00:02<00:02, 145.00it/s]Loading weights:  49%|████▉     | 372/760 [00:02<00:02, 135.30it/s]Loading weights:  51%|█████     | 387/760 [00:02<00:02, 135.76it/s]Loading weights:  53%|█████▎    | 401/760 [00:03<00:02, 130.70it/s]Loading weights:  55%|█████▍    | 415/760 [00:03<00:02, 131.65it/s]Loading weights:  57%|█████▋    | 430/760 [00:03<00:02, 136.31it/s]Loading weights:  70%|███████   | 532/760 [00:03<00:00, 382.39it/s]Loading weights:  84%|████████▎ | 635/760 [00:03<00:00, 565.85it/s]Loading weights:  96%|█████████▋| 732/760 [00:03<00:00, 681.22it/s]Loading weights: 100%|██████████| 760/760 [00:03<00:00, 211.45it/s]
+2026-08-17 17:33:34,011 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:34,256 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:34,494 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:34,729 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:34,978 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:35,218 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:35,462 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:35,711 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:35,943 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:36,187 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:36,470 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:36,723 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-17 17:33:37,819 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B "HTTP/1.1 200 OK"
+2026-08-17 17:33:38,062 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:38,299 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 17:33:38,312 [INFO] route_data.unlearning.reference_models: Loaded frozen reference model Qwen/Qwen3.5-9B revision c202236235762e1c871ad0ccb60c8ee5ba337b9a (9409813744 params, all frozen)
+2026-08-17 17:33:38,334 [INFO] route_data.unlearning.r2mu_adapted: Step 1: Generating random target vector ...
+2026-08-17 17:33:38,336 [INFO] route_data.unlearning.r2mu_adapted: Target vector SHA-256: 262e1bd76050b64d43e4c98da0640fcd0c3637e6e7d2fc0f10c2c4a3ae284222
+2026-08-17 17:33:38,336 [INFO] route_data.unlearning.r2mu_adapted: Step 2: Selecting unlearning layers ...
+2026-08-17 17:34:23,159 [WARNING] route_data.unlearning.r2mu_adapted: Layer 32 not found (only 32 layers)
+2026-08-17 17:34:23,160 [WARNING] route_data.unlearning.r2mu_adapted: Layer 32 not found (only 32 layers)
+2026-08-17 17:34:23,160 [INFO] route_data.unlearning.r2mu_adapted: Layer separability: {8: 2.09375, 16: 2.484375, 24: 6.875, 32: 0.0}
+2026-08-17 17:34:23,160 [INFO] route_data.unlearning.r2mu_adapted: Selected layers: [24, 16]
+2026-08-17 17:34:23,160 [INFO] route_data.unlearning.r2mu_adapted: Selected layers: [16, 24]
+2026-08-17 17:34:23,160 [INFO] route_data.unlearning.r2mu_adapted: Step 3: Training with representation objectives ...
+[transformers] `use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`.
+Traceback (most recent call last):
+  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/scripts/run_mllmu_baseline.py", line 445, in <module>
+    main()
+  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/scripts/run_mllmu_baseline.py", line 416, in main
+    summary = runner.run(model, frozen_model, forget_loader, retain_loader, device=str(training_config.device))
+  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/src/route_data/unlearning/r2mu_adapted.py", line 419, in run
+    training_results = self._train(
+  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/src/route_data/unlearning/r2mu_adapted.py", line 499, in _train
+    f_loss = f_loss + forget_representation_loss(layer_repr, target)
+  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/src/route_data/unlearning/r2mu_adapted.py", line 306, in forget_representation_loss
+    target_expanded = target.unsqueeze(0).expand_as(current_repr)
+RuntimeError: The expanded size of the tensor (4096) must match the existing size (1152) at non-singleton dimension 1.  Target sizes: [1, 4096].  Tensor sizes: [1, 1152]

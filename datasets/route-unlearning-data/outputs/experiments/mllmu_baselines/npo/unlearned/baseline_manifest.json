@@ -1,0 +1,48 @@
+{
+  "method": "mllmu_npo",
+  "base_model": {
+    "model_id": "Qwen/Qwen3.5-9B",
+    "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "dtype": "bfloat16"
+  },
+  "lora": {
+    "rank": 8,
+    "alpha": 16,
+    "dropout": 0.0,
+    "target_modules": [
+      "q_proj",
+      "v_proj",
+      "k_proj",
+      "o_proj"
+    ]
+  },
+  "training": {
+    "seed": 17,
+    "learning_rate": 2e-05,
+    "num_optimizer_steps": 125,
+    "batch_size": 1,
+    "gradient_accumulation_steps": 4,
+    "max_grad_norm": 1.0
+  },
+  "method_hyperparameters": {
+    "beta": 0.9,
+    "upstream_paper_beta": 0.9,
+    "upstream_repo_default_beta": 0.4,
+    "chosen_beta": 0.9
+  },
+  "selection_manifest_sha256": "",
+  "code_commit": "2bceb07ab9a3f3766e93d4022cdcb863065bd090",
+  "elapsed_seconds": 1288.802493572235,
+  "checkpoint_steps": [
+    1,
+    5,
+    10,
+    25,
+    50,
+    60,
+    75,
+    90,
+    125
+  ],
+  "output_dir": "outputs/experiments/mllmu_baselines/npo/unlearned"
+}
