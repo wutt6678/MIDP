@@ -601,6 +601,7 @@ def _run_training_phase(
         output_dir=train_cfg_dict["output_dir"],
         selection_manifest_sha256=train_cfg_dict["selection_manifest_sha256"],
         code_commit=train_cfg_dict["code_commit"],
+        checkpoint_steps=train_cfg_dict.get("checkpoint_steps", [0, 10, 25, 50]),
     )
 
     # Build datasets

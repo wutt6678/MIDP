@@ -237,6 +237,12 @@ def main():
         required=True,
         help="Path to experiment config",
     )
+    parser.add_argument(
+        "--checkpoints",
+        type=str,
+        default=None,
+        help="Comma-separated list of checkpoint steps to evaluate (e.g., '0,1,5,10,15,20,25,35,50'). If not provided, evaluates all checkpoints found in the directory.",
+    )
     args = parser.parse_args()
     
     # Load config
@@ -271,7 +277,16 @@ def main():
         logger.error("No checkpoints found")
         sys.exit(1)
     
-    logger.info(f"Found {len(checkpoint_dirs)} checkpoints: {[d.name for d in checkpoint_dirs]}")
+    # Filter to requested checkpoints if specified
+    if args.checkpoints:
+        requested_steps = {int(s.strip()) for s in args.checkpoints.split(",")}
+        checkpoint_dirs = [
+            d for d in checkpoint_dirs
+            if int(d.name.split("_")[-1]) in requested_steps
+        ]
+        logger.info(f"Filtered to {len(checkpoint_dirs)} requested checkpoints: {[d.name for d in checkpoint_dirs]}")
+    else:
+        logger.info(f"Found {len(checkpoint_dirs)} checkpoints: {[d.name for d in checkpoint_dirs]}")
     
     # Evaluate each checkpoint
     trajectory = []

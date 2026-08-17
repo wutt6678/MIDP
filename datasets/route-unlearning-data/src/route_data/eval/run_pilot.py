@@ -457,6 +457,9 @@ class PilotRunner:
                 self.output_dir / "selection" / "pilot_identity_selection.json"
             ),
             "code_commit": _git_commit(),
+            "checkpoint_steps": method_cfg.get(
+                "checkpoint_steps", [0, 10, 25, 50]
+            ),
         }
 
     # -- Stage 3: Post-evaluation (requires GPU) -------------------------- #
