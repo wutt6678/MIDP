@@ -17,8 +17,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import torch
-
 logger = logging.getLogger(__name__)
 
 # Verbatim MLLMU-Bench privacy-prevention system prompt.

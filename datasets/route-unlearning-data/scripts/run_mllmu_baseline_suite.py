@@ -147,7 +147,7 @@ def _run_single_method(
 
     # Write merged config (with injected runtime values) to temp YAML
     # so the subprocess can read the complete config from disk
-    tmp_config = tempfile.NamedTemporaryFile(
+    tmp_config = tempfile.NamedTemporaryFile(  # noqa: SIM115
         mode="w", suffix=f"_{method}.yaml", delete=False,
     )
     yaml.dump(config, tmp_config, default_flow_style=False)
@@ -167,7 +167,7 @@ def _run_single_method(
 
     t0 = time.time()
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             cwd=PROJECT_ROOT,
             capture_output=False,
@@ -329,15 +329,14 @@ def main() -> None:
         results.append(result)
 
         # Update suite state based on completed method
-        if result["status"] == "success":
-            if method_key == "npo_oracle":
-                # Store oracle adapter path for NPO
-                oracle_dir = Path(result["output_dir"])
-                # Find the last checkpoint
-                ckpts = sorted((oracle_dir / "checkpoints").glob("optimizer_step_*"))
-                if ckpts:
-                    suite_state["oracle_adapter_path"] = str(ckpts[-1])
-                    logger.info(f"Oracle adapter: {suite_state['oracle_adapter_path']}")
+        if result["status"] == "success" and method_key == "npo_oracle":
+            # Store oracle adapter path for NPO
+            oracle_dir = Path(result["output_dir"])
+            # Find the last checkpoint
+            ckpts = sorted((oracle_dir / "checkpoints").glob("optimizer_step_*"))
+            if ckpts:
+                suite_state["oracle_adapter_path"] = str(ckpts[-1])
+                logger.info(f"Oracle adapter: {suite_state['oracle_adapter_path']}")
 
     suite_elapsed = time.time() - suite_start
 

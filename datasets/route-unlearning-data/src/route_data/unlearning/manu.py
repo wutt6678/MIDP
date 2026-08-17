@@ -23,12 +23,12 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 logger = logging.getLogger(__name__)
 
@@ -281,8 +281,7 @@ def estimate_modality_importance(
 
     # Compute importance: forget - retain (high = prune candidate)
     importance: dict[str, torch.Tensor] = {}
-    for layer_path in forget_activations:
-        forget_score = forget_activations[layer_path]
+    for layer_path, forget_score in forget_activations.items():
         retain_score = retain_activations.get(layer_path, torch.zeros_like(forget_score))
         importance[layer_path] = forget_score - retain_score
 
@@ -327,8 +326,8 @@ def _accumulate_activations(
 
     # Normalize
     if count > 0:
-        for name in activation_buffer:
-            result_dict[name] = activation_buffer[name] / count
+        for name, value in activation_buffer.items():
+            result_dict[name] = value / count
 
 
 # --------------------------------------------------------------------------- #

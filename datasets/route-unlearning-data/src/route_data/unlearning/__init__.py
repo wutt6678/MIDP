@@ -51,27 +51,27 @@ from .r2mu_adapted import (
 )
 
 __all__ = [
-    # Objectives (B1–B5)
-    "UnlearningObjective",
+    "MANU",
+    "BaselineTrainer",
+    # Training infrastructure
+    "BaselineTrainingConfig",
+    # Comparison framework (Phase 4)
+    "ComparisonFramework",
     "GradientAscent",
     "GradientDifference",
     "KLMinimization",
-    "RetainOnlyCE",
-    "NegativePreferenceOptimization",
-    # Training infrastructure
-    "BaselineTrainingConfig",
-    "BaselineTrainer",
-    "build_objective",
-    "load_config_from_yaml",
+    "MANUConfig",
     # Structural baselines (B7–B8)
     "MMUnlearner",
     "MMUnlearnerConfig",
-    "MANU",
-    "MANUConfig",
+    "MethodResult",
+    "NegativePreferenceOptimization",
     # Representation baseline (B9)
     "R2MUAdapted",
     "R2MUAdaptedConfig",
-    # Comparison framework (Phase 4)
-    "ComparisonFramework",
-    "MethodResult",
+    "RetainOnlyCE",
+    # Objectives (B1–B5)
+    "UnlearningObjective",
+    "build_objective",
+    "load_config_from_yaml",
 ]

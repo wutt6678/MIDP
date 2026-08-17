@@ -222,7 +222,6 @@ def main() -> None:
     # Dispatch to appropriate handler
     from route_data.unlearning import (
         BaselineTrainer,
-        BaselineTrainingConfig,
         build_objective,
         load_config_from_yaml,
     )
@@ -321,8 +320,8 @@ def main() -> None:
 
     if method_name == "mllmu_kl_min":
         from route_data.unlearning.reference_models import load_frozen_reference_model
-        ref_path = config.get("runtime", {}).get("reference_model_path", "")
-        logger.info(f"Loading frozen reference model ...")
+        config.get("runtime", {}).get("reference_model_path", "")
+        logger.info("Loading frozen reference model ...")
         reference_model, _ = load_frozen_reference_model(
             model_id=training_config.model_id,
             revision=training_config.model_revision,
@@ -348,6 +347,7 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     if method_name in ("mmunlearner", "manu", "r2mu_adapted"):
         from torch.utils.data import DataLoader
+
         from route_data.eval.unlearning_harness import qwen_collate_fn
 
         batch_size = config.get("training", {}).get("batch_size", 1)
@@ -391,8 +391,8 @@ def main() -> None:
         elif method_name == "r2mu_adapted":
             from route_data.unlearning import R2MUAdapted, R2MUAdaptedConfig
             from route_data.unlearning.reference_models import load_frozen_reference_model
-            ref_path = config.get("runtime", {}).get("reference_model_path", "")
-            logger.info(f"Loading frozen reference model for R²MU-adapted ...")
+            config.get("runtime", {}).get("reference_model_path", "")
+            logger.info("Loading frozen reference model for R²MU-adapted ...")
             frozen_model, _ = load_frozen_reference_model(
                 model_id=training_config.model_id,
                 revision=training_config.model_revision,

@@ -21,15 +21,14 @@ Tests from plan Section 1.6:
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from route_data.unlearning.objectives import (
     GradientAscent,
@@ -38,7 +37,6 @@ from route_data.unlearning.objectives import (
     NegativePreferenceOptimization,
     answer_only_cross_entropy,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures — tiny model and synthetic batches
@@ -354,7 +352,7 @@ class TestNegativePreferenceOptimization:
 
     def test_npo_reference_frozen(self) -> None:
         """Oracle model should have requires_grad=False."""
-        model = TinyLogitModel()
+        _ = TinyLogitModel()
         oracle = TinyLogitModel()
 
         for param in oracle.parameters():
@@ -463,6 +461,7 @@ class TestPromptingBaseline:
     def test_prompting_manifest(self) -> None:
         """Prompting baseline should write a valid manifest."""
         import tempfile
+
         from route_data.unlearning.baseline_methods import PromptingBaseline
 
         baseline = PromptingBaseline()

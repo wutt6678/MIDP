@@ -25,22 +25,24 @@ from unittest.mock import MagicMock
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
-from route_data.unlearning.mmunlearner import (
-    MMUnlearnerConfig,
-    PARAMETER_CATEGORIES,
-    apply_mask_to_gradients,
-    build_parameter_inventory,
-    estimate_saliency,
-    generate_saliency_mask,
-    save_parameter_inventory,
+from route_data.unlearning.comparison_framework import (
+    ComparisonFramework,
+    MethodResult,
 )
 from route_data.unlearning.manu import (
     MANUConfig,
     build_neuron_inventory,
     prune_neurons,
     select_neurons_to_prune,
+)
+from route_data.unlearning.mmunlearner import (
+    MMUnlearnerConfig,
+    apply_mask_to_gradients,
+    build_parameter_inventory,
+    generate_saliency_mask,
+    save_parameter_inventory,
 )
 from route_data.unlearning.r2mu_adapted import (
     R2MUAdaptedConfig,
@@ -49,11 +51,6 @@ from route_data.unlearning.r2mu_adapted import (
     retain_representation_loss,
     target_sha256,
 )
-from route_data.unlearning.comparison_framework import (
-    ComparisonFramework,
-    MethodResult,
-)
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures — tiny model with MLP structure
@@ -269,9 +266,8 @@ class TestMMUnlearnerMask:
 
         # Check that masked-out params have zero gradient
         for i, (name, param) in enumerate(model.named_parameters()):
-            if param.grad is not None:
-                if i % 2 != 0:
-                    assert param.grad.abs().sum() == 0.0
+            if param.grad is not None and i % 2 != 0:
+                assert param.grad.abs().sum() == 0.0
 
     def test_selected_entries_get_gradient(self) -> None:
         """Parameters inside mask should have non-zero gradients."""
@@ -346,7 +342,7 @@ class TestMANUNeuronInventory:
         inventory = build_neuron_inventory(model)
 
         assert len(inventory["layers"]) > 0
-        for layer_path, info in inventory["layers"].items():
+        for info in inventory["layers"].values():
             assert info["n_neurons"] > 0
             assert "modules" in info
 
@@ -361,7 +357,7 @@ class TestMANUPruning:
             "layer_1": torch.tensor([0.5, -1.0, 2.0]),
         }
 
-        for layer, scores in importance.items():
+        for scores in importance.values():
             assert torch.isfinite(scores).all()
 
     def test_exact_prune_fraction(self) -> None:

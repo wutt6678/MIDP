@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 logger = logging.getLogger(__name__)
 
@@ -230,8 +230,7 @@ def _collect_representations(
 
     handle = target_layer.register_forward_hook(hook_fn)
 
-    count = 0
-    for batch in loader:
+    for count, batch in enumerate(loader):
         if count >= n_samples:
             break
 
@@ -273,8 +272,6 @@ def _collect_representations(
             else:
                 repr_pooled = h
             representations.append(repr_pooled.cpu())
-
-        count += 1
 
     handle.remove()
 
@@ -609,7 +606,7 @@ class R2MUAdapted:
                     and (torch.is_tensor(value) or (isinstance(value, list) and len(value) > 0))):
                 model_kwargs[key] = value
 
-        outputs = model(**model_kwargs)
+        _ = model(**model_kwargs)
 
         # Remove hooks
         for h in handles:

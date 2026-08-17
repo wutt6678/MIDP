@@ -82,12 +82,13 @@ def evaluate_checkpoint(
 ) -> dict[str, Any]:
     """Evaluate a single checkpoint on the diagnostic subset."""
     import types
+
+    from route_data.config import GenerationConfig, ModelConfig
     from route_data.eval.post_unlearning_eval import (
         PostEvalConfig,
         PostUnlearningEvaluator,
         load_lora_checkpoint,
     )
-    from route_data.config import GenerationConfig, ModelConfig
     from route_data.models.qwen import QwenHFBackend
     
     model_id = config["base_model"]["model_id"]

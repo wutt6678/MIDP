@@ -23,12 +23,12 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 logger = logging.getLogger(__name__)
 
@@ -267,8 +267,7 @@ def estimate_saliency(
     # Compute combined saliency score:
     # High forget, low retain, low text → high score
     saliency: dict[str, torch.Tensor] = {}
-    for name in forget_importance:
-        forget_score = forget_importance[name]
+    for name, forget_score in forget_importance.items():
         retain_score = retain_importance.get(name, 0.0)
         text_score = text_importance.get(name, 0.0)
 

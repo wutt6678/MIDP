@@ -13,7 +13,6 @@ Public API
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import math
@@ -28,13 +27,6 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..eval.unlearning_harness import (
-    ForgetDataset,
-    RetainDataset,
-    apply_lora,
-    build_forget_dataset,
-    build_retain_dataset,
-    check_base_parameter_integrity,
-    load_base_model,
     qwen_collate_fn,
 )
 from .objectives import (
@@ -283,150 +275,145 @@ class BaselineTrainer:
         start_time = time.time()
 
         # Open trace file
-        trace_fh = open(self.trace_path, "w")
+        with open(self.trace_path, "w") as trace_fh:
+            for opt_step in range(1, num_opt_steps + 1):
+                self.optimizer.zero_grad()
+                accum_total = 0.0
+                accum_forget = 0.0
+                accum_retain = 0.0
+                accum_kl = 0.0
+                accum_npo = 0.0
 
-        for opt_step in range(1, num_opt_steps + 1):
-            self.optimizer.zero_grad()
-            accum_total = 0.0
-            accum_forget = 0.0
-            accum_retain = 0.0
-            accum_kl = 0.0
-            accum_npo = 0.0
-
-            for micro_idx in range(grad_accum):
-                # Get forget batch
-                try:
-                    forget_batch = next(forget_iter)
-                except StopIteration:
-                    forget_iter = iter(self.forget_loader)
-                    forget_batch = next(forget_iter)
-                forget_batch = self._move_batch(forget_batch)
-
-                # Get retain batch if needed
-                retain_batch = None
-                if retain_iter is not None:
+                for micro_idx in range(grad_accum):
+                    # Get forget batch
                     try:
-                        retain_batch = next(retain_iter)
+                        forget_batch = next(forget_iter)
                     except StopIteration:
-                        retain_iter = iter(self.retain_loader)
-                        retain_batch = next(retain_iter)
-                    retain_batch = self._move_batch(retain_batch)
+                        forget_iter = iter(self.forget_loader)
+                        forget_batch = next(forget_iter)
+                    forget_batch = self._move_batch(forget_batch)
 
-                # Compute loss via objective
-                loss_dict = self.objective.compute_loss(
-                    model=self.model,
-                    forget_batch=forget_batch,
-                    retain_batch=retain_batch,
-                    reference_model=self.reference_model,
-                    oracle_model=self.oracle_model,
+                    # Get retain batch if needed
+                    retain_batch = None
+                    if retain_iter is not None:
+                        try:
+                            retain_batch = next(retain_iter)
+                        except StopIteration:
+                            retain_iter = iter(self.retain_loader)
+                            retain_batch = next(retain_iter)
+                        retain_batch = self._move_batch(retain_batch)
+
+                    # Compute loss via objective
+                    loss_dict = self.objective.compute_loss(
+                        model=self.model,
+                        forget_batch=forget_batch,
+                        retain_batch=retain_batch,
+                        reference_model=self.reference_model,
+                        oracle_model=self.oracle_model,
+                    )
+
+                    total_loss = loss_dict["total_loss"]
+
+                    # Numerical safety checks BEFORE backward
+                    if not torch.isfinite(total_loss):
+                        self._write_failure_metadata(
+                            opt_step, micro_idx, "non_finite_total_loss"
+                        )
+                        raise RuntimeError(
+                            f"Non-finite total loss at step {opt_step}, "
+                            f"micro {micro_idx}: {total_loss.item()}"
+                        )
+
+                    # Scale for gradient accumulation
+                    scaled_loss = total_loss / grad_accum
+                    scaled_loss.backward()
+
+                    accum_total += total_loss.item()
+                    if loss_dict.get("forget_loss") is not None:
+                        accum_forget += loss_dict["forget_loss"].item()
+                    if loss_dict.get("retain_loss") is not None:
+                        accum_retain += loss_dict["retain_loss"].item()
+                    if loss_dict.get("kl_loss") is not None:
+                        accum_kl += loss_dict["kl_loss"].item()
+                    if loss_dict.get("npo_loss") is not None:
+                        accum_npo += loss_dict["npo_loss"].item()
+
+                # Gradient norm check BEFORE optimizer step
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(),
+                    self.config.max_grad_norm,
                 )
-
-                total_loss = loss_dict["total_loss"]
-
-                # Numerical safety checks BEFORE backward
-                if not torch.isfinite(total_loss):
+                if not torch.isfinite(grad_norm):
                     self._write_failure_metadata(
-                        opt_step, micro_idx, "non_finite_total_loss"
+                        opt_step, None, "non_finite_gradient_norm"
                     )
-                    trace_fh.close()
                     raise RuntimeError(
-                        f"Non-finite total loss at step {opt_step}, "
-                        f"micro {micro_idx}: {total_loss.item()}"
+                        f"Non-finite gradient norm at step {opt_step}: {grad_norm}"
                     )
 
-                # Scale for gradient accumulation
-                scaled_loss = total_loss / grad_accum
-                scaled_loss.backward()
+                self.optimizer.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
+                self.optimizer.zero_grad()
+                self.global_step = opt_step
 
-                accum_total += total_loss.item()
-                if loss_dict.get("forget_loss") is not None:
-                    accum_forget += loss_dict["forget_loss"].item()
-                if loss_dict.get("retain_loss") is not None:
-                    accum_retain += loss_dict["retain_loss"].item()
-                if loss_dict.get("kl_loss") is not None:
-                    accum_kl += loss_dict["kl_loss"].item()
-                if loss_dict.get("npo_loss") is not None:
-                    accum_npo += loss_dict["npo_loss"].item()
+                # Average losses
+                avg_total = accum_total / grad_accum
+                avg_forget = accum_forget / grad_accum
+                avg_retain = accum_retain / grad_accum
+                avg_kl = accum_kl / grad_accum
+                avg_npo = accum_npo / grad_accum
 
-            # Gradient norm check BEFORE optimizer step
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.model.parameters(),
-                self.config.max_grad_norm,
-            )
-            if not torch.isfinite(grad_norm):
-                self._write_failure_metadata(
-                    opt_step, None, "non_finite_gradient_norm"
-                )
-                trace_fh.close()
-                raise RuntimeError(
-                    f"Non-finite gradient norm at step {opt_step}: {grad_norm}"
-                )
+                elapsed = time.time() - start_time
 
-            self.optimizer.step()
-            if self.scheduler is not None:
-                self.scheduler.step()
-            self.optimizer.zero_grad()
-            self.global_step = opt_step
+                # Log entry
+                log_entry = {
+                    "method": self.config.method_name,
+                    "optimizer_step": opt_step,
+                    "learning_rate": self.optimizer.param_groups[0]["lr"],
+                    "total_loss": avg_total,
+                    "forget_ce": avg_forget,
+                    "retain_ce": avg_retain,
+                    "kl_loss": avg_kl,
+                    "npo_loss": avg_npo,
+                    "gradient_norm": float(grad_norm.item()),
+                    "finite": True,
+                    "elapsed_seconds": elapsed,
+                }
+                self.training_log.append(log_entry)
 
-            # Average losses
-            avg_total = accum_total / grad_accum
-            avg_forget = accum_forget / grad_accum
-            avg_retain = accum_retain / grad_accum
-            avg_kl = accum_kl / grad_accum
-            avg_npo = accum_npo / grad_accum
+                # Write trace row
+                trace_fh.write(json.dumps(log_entry) + "\n")
+                trace_fh.flush()
 
-            elapsed = time.time() - start_time
-
-            # Log entry
-            log_entry = {
-                "method": self.config.method_name,
-                "optimizer_step": opt_step,
-                "learning_rate": self.optimizer.param_groups[0]["lr"],
-                "total_loss": avg_total,
-                "forget_ce": avg_forget,
-                "retain_ce": avg_retain,
-                "kl_loss": avg_kl,
-                "npo_loss": avg_npo,
-                "gradient_norm": float(grad_norm.item()),
-                "finite": True,
-                "elapsed_seconds": elapsed,
-            }
-            self.training_log.append(log_entry)
-
-            # Write trace row
-            trace_fh.write(json.dumps(log_entry) + "\n")
-            trace_fh.flush()
-
-            logger.info(
-                f"Step {opt_step}/{num_opt_steps} | "
-                f"loss={avg_total:.4f} "
-                f"forget={avg_forget:.4f} "
-                f"retain={avg_retain:.4f} "
-                f"kl={avg_kl:.4f} "
-                f"npo={avg_npo:.4f} "
-                f"grad_norm={grad_norm:.4f}"
-            )
-
-            # Post-step safety check
-            if not math.isfinite(avg_total):
-                self._write_failure_metadata(
-                    opt_step, None, "non_finite_avg_loss_post_step"
-                )
-                trace_fh.close()
-                raise RuntimeError(
-                    f"Non-finite loss at optimizer step {opt_step}"
+                logger.info(
+                    f"Step {opt_step}/{num_opt_steps} | "
+                    f"loss={avg_total:.4f} "
+                    f"forget={avg_forget:.4f} "
+                    f"retain={avg_retain:.4f} "
+                    f"kl={avg_kl:.4f} "
+                    f"npo={avg_npo:.4f} "
+                    f"grad_norm={grad_norm:.4f}"
                 )
 
-            # Checkpoint
-            if opt_step in checkpoint_steps:
-                ckpt_name = f"optimizer_step_{opt_step:03d}"
-                self._save_checkpoint(ckpt_name)
+                # Post-step safety check
+                if not math.isfinite(avg_total):
+                    self._write_failure_metadata(
+                        opt_step, None, "non_finite_avg_loss_post_step"
+                    )
+                    raise RuntimeError(
+                        f"Non-finite loss at optimizer step {opt_step}"
+                    )
 
-        # Save final checkpoint if not already saved
-        if num_opt_steps not in checkpoint_steps:
-            self._save_checkpoint(f"optimizer_step_{num_opt_steps:03d}_final")
+                # Checkpoint
+                if opt_step in checkpoint_steps:
+                    ckpt_name = f"optimizer_step_{opt_step:03d}"
+                    self._save_checkpoint(ckpt_name)
 
-        trace_fh.close()
+            # Save final checkpoint if not already saved
+            if num_opt_steps not in checkpoint_steps:
+                self._save_checkpoint(f"optimizer_step_{num_opt_steps:03d}_final")
+
         elapsed = time.time() - start_time
         logger.info(f"Training complete in {elapsed:.1f}s")
 
@@ -597,7 +584,6 @@ def load_config_from_yaml(path: str | Path) -> BaselineTrainingConfig:
     base_model = raw.get("base_model", {})
     training = raw.get("training", {})
     lora = raw.get("lora", {})
-    data = raw.get("data", {})
     runtime = raw.get("runtime", {})
 
     config = BaselineTrainingConfig(
