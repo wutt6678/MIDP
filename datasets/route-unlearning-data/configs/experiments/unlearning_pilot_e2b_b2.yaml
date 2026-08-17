@@ -1,0 +1,81 @@
+# Stage 3 — E2B-B2: Stronger Retention Weight
+#
+# E2B-B1b result (lr=2e-5, retain_weight=0.1): Same global collapse,
+# delayed to steps 60-90. LR controls rate, not selectivity.
+# Three experiments confirm route-family coupling persists at every LR.
+#
+# E2B-B2 hypothesis: retain_weight=1.0 (10× increase) may produce
+# qualitatively different behavior:
+#   A. Everything preserved (retain term dominates, targets survive too)
+#   B. Everything still moves together, just more slowly
+#
+# Changes from E2B-B1b:
+#   - retain_weight: 0.1 → 1.0
+#   - checkpoint_steps: focused around previously observed transition
+#     [0, 25, 50, 60, 75, 90, 125]
+#
+# Everything else fixed: lr=2e-5, seed 17, rank 8, alpha 16,
+# 2/2/2 identities, 125 steps
+
+experiment_id: fiubench_unlearning_pilot_e2b_b2
+
+base_model:
+  model_id: Qwen/Qwen3.5-9B
+  revision: "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+  backend: qwen_hf
+  dtype: bfloat16
+  fingerprint_id: d8a618064188e981
+  model_config_path: configs/models/unlearning_target_qwen35_9b.yaml
+
+baseline:
+  version: fiubench-qwen35-9b-preunlearn-v1
+  manifest_path: outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_manifest.json
+  results_path: outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_results.jsonl
+  manifest_sha256: d3366acb45851e5107ce91f408b51767e5f548f385a1269ffb61fbdab6413908
+  results_sha256: b3d497877fcfe1f4020cf7e751bbd4c0991064d2a67b0fd622090f487311cd50
+
+dataset:
+  route_probe_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl
+  route_probe_sha256: aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864
+  processed_dataset_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl
+  processed_dataset_sha256: 7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1
+  research_manifest_path: outputs/full_fiubench/evidence/research_dataset_manifest.json
+  freeze_verification_path: outputs/full_fiubench/evidence/final_freeze_verification.json
+
+selection:
+  # Reuse E1 selection (same seed 17, same 2/2/2 identities)
+  target_identity_count: 2
+  retain_identity_count: 2
+  control_identity_count: 2
+  seed: 17
+  matching_criteria:
+    - same-protocol-role
+    - baseline-margin-matched
+    - attribute-diverse-retain-control
+  preferred_role: train
+
+method:
+  name: lora_targeted_candidate_margin
+  hyperparameters:
+    lora_rank: 8
+    lora_alpha: 16
+    learning_rate: 2.0e-5
+    num_optimizer_steps: 125
+    retain_weight: 1.0  # Changed from 0.1 — 10× stronger retention
+    train_batch_size: 1
+    gradient_accumulation_steps: 4
+    # Checkpoints focused around previously observed transition window
+    checkpoint_steps: [0, 25, 50, 60, 75, 90, 125]
+
+evaluation:
+  reuse_frozen_500_probes: true
+  primary_metric: signed_answer_margin
+  preserve_visual_capability: true
+  direct_visual_accuracy_gate: 0.98
+
+runtime:
+  seed: 17
+  output_dir: outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_e2b_b2
+
+# code_provenance is recorded at runtime in pipeline_provenance.json.
+# Do not hard-code a git_commit here; it becomes stale immediately.
