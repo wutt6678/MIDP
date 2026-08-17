@@ -1,0 +1,137 @@
+{
+  "experiment_id": "fiubench_unlearning_pilot_e2b_b1b",
+  "timestamp": "2026-08-17T03:23:49Z",
+  "code_commit": "f99d421ade8adcf099a61cc5265bdecdfa5d5a47",
+  "stages": {
+    "selection_completed": true,
+    "training_completed": true,
+    "post_eval_completed": true,
+    "analysis_completed": true
+  },
+  "training_summary": {
+    "num_optimizer_steps": 125,
+    "gradient_accumulation_steps": 4,
+    "total_microsteps": 500,
+    "final_loss": -74.13852882385254,
+    "elapsed_seconds": 2866.592002391815,
+    "checkpoints_saved": 15,
+    "final_checkpoint_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_e2b_b1b/checkpoints/optimizer_step_125"
+  },
+  "post_eval_summary": {
+    "total_probes": 500,
+    "total_correct": 100,
+    "mixed_task_overall_accuracy": 0.2,
+    "per_family": {
+      "direct_visual": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -4.640000088333327,
+        "median_signed_answer_margin": -13.812500189087586,
+        "mean_p_yes": 0.9999979323090664,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "image_plus_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -6.783437453910974,
+        "median_signed_answer_margin": -16.499999535502866,
+        "mean_p_yes": 0.9999998886720516,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "name_only": {
+        "count": 100,
+        "errors": 0,
+        "correct": 0,
+        "normalized_exact_match_rate": 0.0,
+        "mean_token_overlap": 0.1872509516627163,
+        "answer_non_empty_rate": 1.0
+      },
+      "visual_text_conflict": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -9.332187435584638,
+        "median_signed_answer_margin": -20.531250059604645,
+        "mean_p_yes": 0.999999998198506,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "wrong_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -6.765624988167983,
+        "median_signed_answer_margin": -16.56250024982728,
+        "mean_p_yes": 0.9999996989777568,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      }
+    },
+    "per_protocol_role": {
+      "eval": {
+        "n": 50
+      },
+      "exclude": {
+        "n": 200
+      },
+      "train": {
+        "n": 250
+      }
+    },
+    "route_identity_role_counts": {
+      "train": 50,
+      "eval": 10,
+      "exclude": 40
+    },
+    "model_fingerprint": "d541c7fe3dd7e4fe",
+    "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "scoring_version": "2"
+  },
+  "analysis_summary": {
+    "target_visual_delta_mean": -22.86718770675361,
+    "retain_visual_delta_mean": -23.484374688676326,
+    "control_visual_delta_mean": -26.359375026571797,
+    "untargeted_visual_delta_mean": -11.992519938401708,
+    "global_direct_visual_post_accuracy": 0.25,
+    "target_direct_visual_pre_accuracy": 1,
+    "target_direct_visual_post_accuracy": 0,
+    "target_direct_visual_pre_margin": 8.562499910593033,
+    "target_direct_visual_post_margin": -13.562500052154064,
+    "retain_direct_visual_post_accuracy": 0,
+    "control_direct_visual_post_accuracy": 0,
+    "untargeted_direct_visual_post_accuracy": 0.26595744680851063,
+    "post_eval_inference_errors": 0,
+    "pairing_exact_match": true,
+    "pairing_expected_n": 500,
+    "pairing_baseline_rows": 500,
+    "pairing_post_rows": 500
+  },
+  "gates": {
+    "target_exceeds_retain_plus_tolerance": false,
+    "target_exceeds_control_plus_tolerance": false,
+    "retain_direct_visual_accuracy_gate": false,
+    "control_direct_visual_accuracy_gate": false,
+    "untargeted_direct_visual_accuracy_gate": false,
+    "global_direct_visual_accuracy_gate": false,
+    "zero_post_eval_inference_errors": true,
+    "exact_pairing": true,
+    "_gate_tolerance": 0.1,
+    "_direct_visual_accuracy_gate": 0.98
+  }
+}

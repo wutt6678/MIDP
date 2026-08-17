@@ -1,0 +1,65 @@
+{
+  "pass": true,
+  "gates": {
+    "freeze": {
+      "bundle_verifier_pass": true,
+      "strict_final_verify_pass": true,
+      "manual_audit_pass": true,
+      "exact_ci_pass": true,
+      "ready_for_experiments": true,
+      "dataset_version": "fiubench-route-v1",
+      "hard_stop.manual_audit_matches_current_route_artifact": true,
+      "hard_stop.manual_audit_route_count_matches": true,
+      "hard_stop.all_artifact_hashes_verified": true,
+      "hard_stop.all_commits_reachable": true,
+      "hard_stop.git_dirty_false": true
+    },
+    "dataset": {
+      "ready_for_experiments": true,
+      "dataset_version": "fiubench-route-v1",
+      "route_sha_match": true,
+      "route_probe_count": 500,
+      "jsonl_row_count": 500,
+      "family_counts": {
+        "direct_visual": 100,
+        "image_plus_name": 100,
+        "name_only": 100,
+        "visual_text_conflict": 100,
+        "wrong_name": 100
+      }
+    },
+    "cross_file": {
+      "dataset_manifest_sha_match": true,
+      "dataset_manifest_sha_expected": "172eb141bf1e80b463bf433a7c1795c560be03facd72d27bcd05bfd5a75256ec",
+      "dataset_manifest_sha_actual": "172eb141bf1e80b463bf433a7c1795c560be03facd72d27bcd05bfd5a75256ec",
+      "route_sha_three_way": true,
+      "route_sha_freeze": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+      "route_sha_manifest": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+      "route_sha_actual": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+      "route_probe_count": 500
+    },
+    "processed_dataset": {
+      "processed_dataset_exists": true,
+      "processed_dataset_sha_match": true,
+      "processed_dataset_sha_expected": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1",
+      "processed_dataset_sha_actual": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1",
+      "processed_dataset_canonical_samples": 30660,
+      "processed_dataset_unique_images": 573,
+      "processed_dataset_unique_identities": 573
+    },
+    "fingerprint": {
+      "revision_match": true,
+      "backend_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "config_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "fingerprint_non_empty": true,
+      "fingerprint_id": "7bace02364d9e476",
+      "model_config_sha_non_empty": true,
+      "processor_tokenizer_available": true,
+      "missing_fingerprint_fields": []
+    },
+    "git": {
+      "git_commit": "f99d421ade8adcf099a61cc5265bdecdfa5d5a47",
+      "git_dirty": false
+    }
+  }
+}

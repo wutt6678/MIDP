@@ -1,0 +1,56 @@
+{
+  "dataset": "fiubench",
+  "splits": [
+    {
+      "name": "identity_forget",
+      "forget_scope": "identity",
+      "forget_identity_ids": [
+        "03dddcc30c937b13"
+      ],
+      "forget_fact_ids": [],
+      "attribute": null,
+      "counts": {
+        "forget": 140,
+        "retain_train": 11018,
+        "retain_eval": 2842,
+        "unassigned": 0
+      },
+      "forget_retain_ratio": 0.010101010101010102,
+      "invariant_issues": [
+        "split 'forget' is missing positive or negative visual cases: {'positive': 0, 'negative': 1540}"
+      ]
+    },
+    {
+      "name": "identity_fact_forget",
+      "forget_scope": "identity_fact",
+      "forget_identity_ids": [],
+      "forget_fact_ids": [
+        "fiubench_caption"
+      ],
+      "attribute": null,
+      "counts": {
+        "forget": 0,
+        "retain_train": 11146,
+        "retain_eval": 2854,
+        "unassigned": 0
+      },
+      "forget_retain_ratio": 0.0,
+      "invariant_issues": []
+    },
+    {
+      "name": "attribute_forget",
+      "forget_scope": "global_attribute",
+      "forget_identity_ids": [],
+      "forget_fact_ids": [],
+      "attribute": "Bald",
+      "counts": {
+        "forget": 13580,
+        "retain_train": 338,
+        "retain_eval": 82,
+        "unassigned": 0
+      },
+      "forget_retain_ratio": 32.333333333333336,
+      "invariant_issues": []
+    }
+  ]
+}

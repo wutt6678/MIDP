@@ -1,0 +1,117 @@
+{
+  "experiment_id": "fiubench_unlearning_pilot_v1",
+  "base_model": {
+    "model_id": "Qwen/Qwen3.5-9B",
+    "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "dtype": "bfloat16"
+  },
+  "selection_manifest_sha256": "d0d3f7203a439f774fdebee4a130f3cd21190422ff428e5acc5dde733356a888",
+  "method": {
+    "name": "lora_targeted_candidate_margin",
+    "hyperparameters": {
+      "lora_rank": 8,
+      "lora_alpha": 16,
+      "lora_dropout": 0.05,
+      "lora_target_modules": [
+        "q_proj",
+        "v_proj",
+        "k_proj",
+        "o_proj"
+      ],
+      "learning_rate": 2e-05,
+      "num_optimizer_steps": 125,
+      "retain_weight": 1.0,
+      "batch_size": 1,
+      "gradient_accumulation_steps": 4,
+      "warmup_steps": 5
+    }
+  },
+  "seed": 17,
+  "determinism": {
+    "random_seed": 17,
+    "numpy_seed": 17,
+    "torch_manual_seed": 17,
+    "torch_cuda_manual_seed_all": 17,
+    "dataloader_generator_seed": 17
+  },
+  "forget_identities": [
+    "2c1fad4cae23251c",
+    "a3fce824eb38f618"
+  ],
+  "retain_identities": [
+    "4a7c949dbe59693d",
+    "cbb9f0b7b65140bd"
+  ],
+  "training_summary": {
+    "num_optimizer_steps": 125,
+    "gradient_accumulation_steps": 4,
+    "total_microsteps": 500,
+    "final_loss": -66.82470703125,
+    "elapsed_seconds": 2486.654487133026,
+    "checkpoints_saved": 8,
+    "final_checkpoint_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_e2b_b2/checkpoints/optimizer_step_125"
+  },
+  "trainable_parameters": {
+    "total_parameters": 9411779824,
+    "trainable_parameters": 1966080,
+    "trainable_percentage": 0.02088956644508942,
+    "trainable_module_count": 64,
+    "trainable_modules": [
+      "base_model.model.model.language_model.layers.11.self_attn.k_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.11.self_attn.k_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.11.self_attn.o_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.11.self_attn.o_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.11.self_attn.q_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.11.self_attn.q_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.11.self_attn.v_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.11.self_attn.v_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.15.self_attn.k_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.15.self_attn.k_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.15.self_attn.o_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.15.self_attn.o_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.15.self_attn.q_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.15.self_attn.q_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.15.self_attn.v_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.15.self_attn.v_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.19.self_attn.k_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.19.self_attn.k_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.19.self_attn.o_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.19.self_attn.o_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.19.self_attn.q_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.19.self_attn.q_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.19.self_attn.v_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.19.self_attn.v_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.23.self_attn.k_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.23.self_attn.k_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.23.self_attn.o_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.23.self_attn.o_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.23.self_attn.q_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.23.self_attn.q_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.23.self_attn.v_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.23.self_attn.v_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.27.self_attn.k_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.27.self_attn.k_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.27.self_attn.o_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.27.self_attn.o_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.27.self_attn.q_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.27.self_attn.q_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.27.self_attn.v_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.27.self_attn.v_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.3.self_attn.k_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.3.self_attn.k_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.3.self_attn.o_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.3.self_attn.o_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.3.self_attn.q_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.3.self_attn.q_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.3.self_attn.v_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.3.self_attn.v_proj.lora_B.default",
+      "base_model.model.model.language_model.layers.31.self_attn.k_proj.lora_A.default",
+      "base_model.model.model.language_model.layers.31.self_attn.k_proj.lora_B.default"
+    ]
+  },
+  "code_provenance": {
+    "git_commit": "2bceb07ab9a3f3766e93d4022cdcb863065bd090",
+    "git_dirty": false
+  },
+  "output_dir": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_e2b_b2"
+}

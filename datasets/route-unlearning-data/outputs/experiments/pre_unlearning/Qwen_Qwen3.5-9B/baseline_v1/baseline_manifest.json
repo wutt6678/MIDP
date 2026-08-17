@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.2",
+  "metric_schema_version": "baseline-metrics-v1",
+  "generated_at": "2026-08-16T04:26:03Z",
+  "dataset_provenance": {
+    "probe_file": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
+    "probe_file_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+    "probe_count": 500,
+    "dataset_manifest": "outputs/full_fiubench/evidence/research_dataset_manifest.json",
+    "dataset_version": "fiubench-route-v1",
+    "dataset_manifest_sha256": "172eb141bf1e80b463bf433a7c1795c560be03facd72d27bcd05bfd5a75256ec",
+    "freeze_verification": "outputs/full_fiubench/evidence/final_freeze_verification.json",
+    "freeze_verification_sha256": "ade4c13faef460fdb698f6577a2a07f8d79385dd7013cd88dc3ad6d3180fdae1",
+    "route_probe_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+    "route_probe_count": 500,
+    "processed_dataset_path": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl",
+    "processed_dataset_sha256": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1",
+    "processed_dataset_manifest_sha256": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1"
+  },
+  "protocol_sha256": "b08795380a310c86bfab34d916988431472a028d0abe6aa487e42df43351e924",
+  "model_identity": {
+    "model_id": "Qwen/Qwen3.5-9B",
+    "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "backend": "qwen_hf",
+    "fingerprint_id": "d8a618064188e981",
+    "fingerprint_payload": {
+      "backend": "qwen_hf",
+      "model_id": "Qwen/Qwen3.5-9B",
+      "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "dtype": "bfloat16",
+      "quantization": "none",
+      "attn": "sdpa",
+      "thinking": "disabled",
+      "transformers": "5.14.1",
+      "torch": "2.5.1+cu121",
+      "processor_class": "Qwen3VLProcessor",
+      "tokenizer_class": "Qwen2Tokenizer",
+      "chat_template_hash": "a4aee8afcf2e0711",
+      "accelerate": "1.14.0",
+      "fingerprint_id": "d8a618064188e981"
+    },
+    "model_config_sha256": "2575860701ea1d4f38e526d559e74e53e958e182c7ac6eae9e4844d572a31ed6"
+  },
+  "scoring_config": {
+    "scoring_version": "2",
+    "candidates": [
+      "Yes",
+      "No"
+    ],
+    "candidate_protocol": "binary_yes_no",
+    "candidate_protocol_version": "1",
+    "thinking_mode": "disabled",
+    "decision_rule": "p_yes_geq_0.5",
+    "raw_log_margin_definition": "logp_yes_minus_logp_no",
+    "signed_answer_margin_definition": "raw_log_margin_if_target_yes_else_negated_raw_log_margin",
+    "signed_answer_margin_interpretation": "higher_is_better"
+  },
+  "runtime_environment": {
+    "python_version": "3.10.20",
+    "platform": "Linux-6.17.0-1011-oracle-x86_64-with-glibc2.39",
+    "cwd": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data",
+    "torch_version": "2.5.1+cu121",
+    "transformers_version": "5.14.1",
+    "accelerate_version": "1.14.0"
+  },
+  "results": {
+    "results_file": "outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_results.jsonl",
+    "results_sha256": "b3d497877fcfe1f4020cf7e751bbd4c0991064d2a67b0fd622090f487311cd50",
+    "summary_file": "outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_summary.json",
+    "summary_sha256": "55593e0fad18f71db346fbd499c35ea4638cf10328ef55722c9ad428451849b3",
+    "validation_report_file": "outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/validation_report.json",
+    "validation_report_sha256": "a82b703415dcc0ed02177341930b0e8ac5f98ea935837eec2b30bed6b4be0fb6",
+    "smoke_manifest_file": "outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/smoke_manifest.json",
+    "smoke_manifest_sha256": "",
+    "total_results": 500,
+    "summary": {
+      "total_probes": 500,
+      "total_correct": 399,
+      "mixed_task_overall_accuracy": 0.798,
+      "per_family": {
+        "direct_visual": {
+          "count": 100,
+          "errors": 0,
+          "correct": 100,
+          "accuracy": 1.0,
+          "mean_signed_answer_margin": 6.701250017704442,
+          "median_signed_answer_margin": 6.937499985215254,
+          "mean_p_yes": 0.2466739624861219,
+          "positive_target_accuracy": 1.0,
+          "negative_target_accuracy": 1.0,
+          "positive_count": 25,
+          "negative_count": 75
+        },
+        "image_plus_name": {
+          "count": 100,
+          "errors": 0,
+          "correct": 100,
+          "accuracy": 1.0,
+          "mean_signed_answer_margin": 5.84062497144565,
+          "median_signed_answer_margin": 6.249999813735485,
+          "mean_p_yes": 0.23667665088610373,
+          "positive_target_accuracy": 1.0,
+          "negative_target_accuracy": 1.0,
+          "positive_count": 25,
+          "negative_count": 75
+        },
+        "name_only": {
+          "count": 100,
+          "errors": 0,
+          "correct": 0,
+          "normalized_exact_match_rate": 0.0,
+          "mean_token_overlap": 0.3154970080502049,
+          "answer_non_empty_rate": 1.0
+        },
+        "visual_text_conflict": {
+          "count": 100,
+          "errors": 0,
+          "correct": 100,
+          "accuracy": 1.0,
+          "mean_signed_answer_margin": 4.974999988377094,
+          "median_signed_answer_margin": 5.2500001192092896,
+          "mean_p_yes": 0.2294453271675235,
+          "positive_target_accuracy": 1.0,
+          "negative_target_accuracy": 1.0,
+          "positive_count": 25,
+          "negative_count": 75
+        },
+        "wrong_name": {
+          "count": 100,
+          "errors": 0,
+          "correct": 99,
+          "accuracy": 0.99,
+          "mean_signed_answer_margin": 5.870625018626452,
+          "median_signed_answer_margin": 6.374999862164259,
+          "mean_p_yes": 0.2323390411184388,
+          "positive_target_accuracy": 0.96,
+          "negative_target_accuracy": 1.0,
+          "positive_count": 25,
+          "negative_count": 75
+        }
+      },
+      "per_protocol_role": {
+        "eval": {
+          "n": 50
+        },
+        "exclude": {
+          "n": 200
+        },
+        "train": {
+          "n": 250
+        }
+      },
+      "route_identity_role_counts": {
+        "train": 50,
+        "eval": 10,
+        "exclude": 40
+      },
+      "model_fingerprint": "d8a618064188e981",
+      "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "scoring_version": "2"
+    }
+  },
+  "route_identity_role_counts": {
+    "train": 50,
+    "eval": 10,
+    "exclude": 40
+  },
+  "code_provenance": {
+    "git_commit": "b5ecc8a98d9c5acb5ed2979a66a4b95831fb6835",
+    "git_dirty": false
+  }
+}

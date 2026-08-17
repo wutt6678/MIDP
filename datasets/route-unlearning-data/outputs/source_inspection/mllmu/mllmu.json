@@ -1,0 +1,40 @@
+{
+  "dataset": "mllmu",
+  "adapter_version": "mllmu-v2",
+  "source_revision": "mllmu-bench-1.0",
+  "fields": [
+    "Classification_Task",
+    "Directory",
+    "Generation_Task",
+    "ID",
+    "Mask_Task",
+    "answer",
+    "biography",
+    "image",
+    "question"
+  ],
+  "field_types": {
+    "ID": "string",
+    "image": "string",
+    "Directory": "string",
+    "biography": "string",
+    "question": "string",
+    "answer": "string",
+    "Classification_Task": "object",
+    "Generation_Task": "array",
+    "Mask_Task": "array"
+  },
+  "task_types": [
+    "classification_qa",
+    "generation_qa",
+    "mask_qa"
+  ],
+  "modalities": [
+    "image_text",
+    "text_only"
+  ],
+  "image_fields": [
+    "Directory",
+    "image"
+  ]
+}

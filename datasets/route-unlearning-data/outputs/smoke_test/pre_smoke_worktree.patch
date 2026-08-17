@@ -1,0 +1,62 @@
+diff --git a/datasets/route-unlearning-data/src/route_data/cli.py b/datasets/route-unlearning-data/src/route_data/cli.py
+index 47c942d..80a1423 100644
+--- a/datasets/route-unlearning-data/src/route_data/cli.py
++++ b/datasets/route-unlearning-data/src/route_data/cli.py
+@@ -60,10 +60,18 @@ def _benchmark_of(dataset: str) -> str:
+ def _default_build_dir(run_cfg: RunConfig) -> Path:
+     return Path(run_cfg.build.output_dir)
+ 
++def _model_output_name(model_id: str) -> str:
++    return (
++        model_id
++        .replace("/", "_")
++        .replace(":", "_")
++        .replace("\\", "_")
++    )
+ 
+ def _dataset_dir(args, run_cfg: RunConfig, dataset: str) -> Path:
+     base = Path(args.output_dir) if args.output_dir else _default_build_dir(run_cfg)
+-    return base / dataset
++    model_dir = _model_output_name(run_cfg.model.model_id)
++    return base / model_dir / dataset
+ 
+ 
+ def _data_config_for(dataset: str, run_cfg: RunConfig):
+diff --git a/datasets/route-unlearning-data/src/route_data/config.py b/datasets/route-unlearning-data/src/route_data/config.py
+index 1201439..f01cce8 100644
+--- a/datasets/route-unlearning-data/src/route_data/config.py
++++ b/datasets/route-unlearning-data/src/route_data/config.py
+@@ -29,7 +29,12 @@ class ConfigError(ValueError):
+ # Model configuration
+ # --------------------------------------------------------------------------- #
+ 
+-VALID_BACKENDS = {"mllama_hf", "example_vlm", "stub"}
++VALID_BACKENDS = {
++    "mllama_hf",
++    "qwen_hf",
++    "example_vlm",
++    "stub",
++}
+ VALID_DTYPES = {"float16", "bfloat16", "float32"}
+ VALID_QUANT_MODES = {"nf4", "fp4", "int8"}
+ VALID_MODEL_ROLES = {"evaluator", "annotator", "unlearning_target"}
+diff --git a/datasets/route-unlearning-data/src/route_data/models/registry.py b/datasets/route-unlearning-data/src/route_data/models/registry.py
+index 639bcb6..e3cc54e 100644
+--- a/datasets/route-unlearning-data/src/route_data/models/registry.py
++++ b/datasets/route-unlearning-data/src/route_data/models/registry.py
+@@ -30,11 +30,14 @@ def available_backends() -> list[str]:
+ 
+ 
+ def ensure_backends_loaded() -> list[str]:
+-    """Trigger lazy backend imports and return the registered names."""
+     try:
+         from . import mllama  # noqa: F401
+     except ImportError:
+         pass
++    try:
++        from . import qwen  # noqa: F401
++    except ImportError:
++        pass
+     try:
+         from . import stub  # noqa: F401
+     except ImportError:

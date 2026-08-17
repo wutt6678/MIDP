@@ -1,0 +1,185 @@
+2026-08-17 02:51:33,013 [INFO] run_unlearning_pilot: Pre-pilot readiness: 13/13 checks passed
+2026-08-17 02:51:33,020 [INFO] run_unlearning_pilot: Step 1/17: Frozen-input preflight + selection + leakage + manifest ...
+2026-08-17 02:51:33,665 [INFO] route_data.eval.run_pilot: Running frozen SHA preflight...
+2026-08-17 02:51:34,305 [INFO] route_data.eval.pilot_selection: Frozen SHA preflight PASSED.
+2026-08-17 02:51:34,305 [INFO] route_data.eval.run_pilot: Building identity stats from baseline...
+2026-08-17 02:51:37,914 [INFO] route_data.eval.run_pilot: Selecting pilot identities...
+2026-08-17 02:51:37,919 [INFO] route_data.eval.run_pilot: Selection complete: target=['2c1fad4cae23251c', 'a3fce824eb38f618'], retain=['4a7c949dbe59693d', 'cbb9f0b7b65140bd'], control=['79e55019b5576f88', '81b95673fc82fe47']
+2026-08-17 02:51:37,919 [INFO] route_data.eval.run_pilot: Running leakage detection...
+2026-08-17 02:51:41,543 [INFO] route_data.eval.pilot_selection: Leakage detection: probe_id=0, sample_id=0, question=0, image_sha=0
+2026-08-17 02:51:41,544 [INFO] route_data.eval.run_pilot: Generating intervention dataset manifest...
+2026-08-17 02:51:44,384 [INFO] route_data.eval.pilot_selection: Intervention manifest: forget=280, retain=280, sha=956bee95c578a434
+2026-08-17 02:51:44,384 [INFO] run_unlearning_pilot: Step 1/17: Frozen-input preflight + selection + leakage + manifest done (11.4s)
+2026-08-17 02:51:44,384 [INFO] run_unlearning_pilot: Step 5/17: Model load + LoRA attach + trainable-param validation + training ...
+2026-08-17 02:51:44,389 [INFO] run_unlearning_pilot: Step 5: Loading base model Qwen/Qwen3.5-9B ...
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 1538.42it/s]
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
+Loading weights:   0%|          | 0/760 [00:00<?, ?it/s]Loading weights:   0%|          | 1/760 [00:00<02:44,  4.61it/s]Loading weights:   0%|          | 2/760 [00:00<03:12,  3.93it/s]Loading weights:   2%|▎         | 19/760 [00:00<00:16, 45.02it/s]Loading weights:   4%|▍         | 32/760 [00:00<00:10, 67.21it/s]Loading weights:   6%|▌         | 43/760 [00:00<00:09, 76.50it/s]Loading weights:   7%|▋         | 54/760 [00:00<00:08, 83.94it/s]Loading weights:   9%|▉         | 67/760 [00:01<00:07, 96.51it/s]Loading weights:  11%|█         | 81/760 [00:01<00:06, 103.87it/s]Loading weights:  12%|█▎        | 95/760 [00:01<00:05, 111.78it/s]Loading weights:  14%|█▍        | 107/760 [00:01<00:06, 104.13it/s]Loading weights:  16%|█▌        | 121/760 [00:01<00:05, 111.68it/s]Loading weights:  18%|█▊        | 135/760 [00:01<00:05, 116.68it/s]Loading weights:  20%|█▉        | 149/760 [00:01<00:05, 120.57it/s]Loading weights:  22%|██▏       | 166/760 [00:01<00:04, 128.24it/s]Loading weights:  24%|██▍       | 181/760 [00:01<00:04, 129.05it/s]Loading weights:  26%|██▌       | 195/760 [00:02<00:04, 127.60it/s]Loading weights:  27%|██▋       | 208/760 [00:02<00:05, 106.90it/s]Loading weights:  30%|██▉       | 226/760 [00:02<00:04, 121.49it/s]Loading weights:  32%|███▏      | 240/760 [00:02<00:04, 123.59it/s]Loading weights:  33%|███▎      | 254/760 [00:02<00:04, 124.61it/s]Loading weights:  35%|███▌      | 267/760 [00:02<00:04, 118.88it/s]Loading weights:  37%|███▋      | 280/760 [00:02<00:03, 120.02it/s]Loading weights:  39%|███▊      | 294/760 [00:02<00:03, 120.53it/s]Loading weights:  41%|████      | 308/760 [00:03<00:03, 119.32it/s]Loading weights:  42%|████▏     | 321/760 [00:03<00:03, 120.13it/s]Loading weights:  44%|████▍     | 334/760 [00:03<00:03, 116.35it/s]Loading weights:  46%|████▌     | 347/760 [00:03<00:03, 119.34it/s]Loading weights:  48%|████▊     | 361/760 [00:03<00:03, 120.06it/s]Loading weights:  50%|████▉     | 378/760 [00:03<00:03, 125.21it/s]Loading weights:  52%|█████▏    | 394/760 [00:03<00:02, 128.99it/s]Loading weights:  54%|█████▎    | 407/760 [00:03<00:02, 127.31it/s]Loading weights:  55%|█████▌    | 420/760 [00:03<00:03, 107.53it/s]Loading weights:  64%|██████▍   | 488/760 [00:04<00:01, 249.07it/s]Loading weights:  75%|███████▌  | 572/760 [00:04<00:00, 403.30it/s]Loading weights:  87%|████████▋ | 660/760 [00:04<00:00, 529.63it/s]Loading weights:  99%|█████████▉| 751/760 [00:04<00:00, 617.88it/s]Loading weights: 100%|██████████| 760/760 [00:04<00:00, 172.80it/s]
+2026-08-17 02:51:51,451 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:51,698 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:51,945 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:52,176 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:52,431 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:52,667 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:52,902 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:53,152 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:53,399 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:53,679 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:53,960 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:54,204 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-17 02:51:55,204 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B "HTTP/1.1 200 OK"
+2026-08-17 02:51:55,457 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:55,708 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 02:51:55,717 [INFO] route_data.eval.unlearning_harness: Loaded base model Qwen/Qwen3.5-9B revision c202236235762e1c871ad0ccb60c8ee5ba337b9a
+2026-08-17 02:51:55,717 [INFO] run_unlearning_pilot: Step 6: Attaching LoRA adapters ...
+2026-08-17 02:51:55,962 [INFO] route_data.eval.unlearning_harness: Applied LoRA: r=8, alpha=16, targets=['q_proj', 'v_proj', 'k_proj', 'o_proj']
+2026-08-17 02:51:55,962 [INFO] run_unlearning_pilot: Step 7: Validating trainable parameters ...
+2026-08-17 02:51:55,968 [INFO] run_unlearning_pilot:   Trainable: 1966080 / 9411779824 (0.02%)
+2026-08-17 02:51:55,968 [INFO] run_unlearning_pilot: Step 8: Starting training ...
+2026-08-17 02:51:59,497 [INFO] route_data.eval.unlearning_harness: Forget dataset: 280 samples from 2 identities
+2026-08-17 02:52:01,429 [INFO] route_data.eval.unlearning_harness: Retain dataset: 280 samples from 2 identities
+2026-08-17 02:52:01,702 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-17 02:52:01,709 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-17 02:52:01,716 [INFO] route_data.eval.unlearning_harness: Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/checkpoints/optimizer_step_000
+2026-08-17 02:52:01,716 [INFO] route_data.eval.unlearning_harness: Starting training for 50 optimizer steps (200 microbatches, grad_accum=4)
+[transformers] `use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`.
+2026-08-17 02:52:25,155 [INFO] route_data.eval.unlearning_harness: Optimizer step 1/50 | loss=6.1679 forget=5.6562 retain=5.1169
+2026-08-17 02:52:47,452 [INFO] route_data.eval.unlearning_harness: Optimizer step 2/50 | loss=6.4397 forget=5.9265 retain=5.1317
+2026-08-17 02:53:09,344 [INFO] route_data.eval.unlearning_harness: Optimizer step 3/50 | loss=6.6225 forget=6.1627 retain=4.5982
+2026-08-17 02:53:31,643 [INFO] route_data.eval.unlearning_harness: Optimizer step 4/50 | loss=5.8793 forget=5.3943 retain=4.8503
+2026-08-17 02:53:54,023 [INFO] route_data.eval.unlearning_harness: Optimizer step 5/50 | loss=5.3790 forget=4.8876 retain=4.9140
+2026-08-17 02:54:15,855 [INFO] route_data.eval.unlearning_harness: Optimizer step 6/50 | loss=4.5082 forget=4.0063 retain=5.0183
+2026-08-17 02:54:36,561 [INFO] route_data.eval.unlearning_harness: Optimizer step 7/50 | loss=3.0557 forget=2.4952 retain=5.6044
+2026-08-17 02:54:54,562 [INFO] route_data.eval.unlearning_harness: Optimizer step 8/50 | loss=0.5686 forget=0.0278 retain=5.4083
+2026-08-17 02:55:12,231 [INFO] route_data.eval.unlearning_harness: Optimizer step 9/50 | loss=-1.2433 forget=-1.7280 retain=4.8469
+2026-08-17 02:55:29,957 [INFO] route_data.eval.unlearning_harness: Optimizer step 10/50 | loss=-2.4572 forget=-3.0744 retain=6.1720
+2026-08-17 02:55:30,230 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-17 02:55:30,235 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-17 02:55:30,268 [INFO] route_data.eval.unlearning_harness: Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/checkpoints/optimizer_step_010
+2026-08-17 02:55:49,019 [INFO] route_data.eval.unlearning_harness: Optimizer step 11/50 | loss=-5.0917 forget=-5.7405 retain=6.4880
+2026-08-17 02:56:11,039 [INFO] route_data.eval.unlearning_harness: Optimizer step 12/50 | loss=-6.8635 forget=-7.5186 retain=6.5511
+2026-08-17 02:56:31,594 [INFO] route_data.eval.unlearning_harness: Optimizer step 13/50 | loss=-8.8197 forget=-9.4575 retain=6.3783
+2026-08-17 02:56:51,494 [INFO] route_data.eval.unlearning_harness: Optimizer step 14/50 | loss=-10.8930 forget=-11.5743 retain=6.8130
+2026-08-17 02:57:12,662 [INFO] route_data.eval.unlearning_harness: Optimizer step 15/50 | loss=-13.0252 forget=-13.6381 retain=6.1285
+2026-08-17 02:57:32,598 [INFO] route_data.eval.unlearning_harness: Optimizer step 16/50 | loss=-15.8632 forget=-16.6092 retain=7.4599
+2026-08-17 02:57:52,571 [INFO] route_data.eval.unlearning_harness: Optimizer step 17/50 | loss=-18.5634 forget=-19.3778 retain=8.1445
+2026-08-17 02:58:11,611 [INFO] route_data.eval.unlearning_harness: Optimizer step 18/50 | loss=-21.0853 forget=-21.9657 retain=8.8045
+2026-08-17 02:58:29,491 [INFO] route_data.eval.unlearning_harness: Optimizer step 19/50 | loss=-24.0812 forget=-24.9545 retain=8.7330
+2026-08-17 02:58:47,458 [INFO] route_data.eval.unlearning_harness: Optimizer step 20/50 | loss=-28.8379 forget=-29.7428 retain=9.0489
+2026-08-17 02:59:11,319 [INFO] route_data.eval.unlearning_harness: Optimizer step 21/50 | loss=-30.9923 forget=-31.9377 retain=9.4539
+2026-08-17 02:59:36,559 [INFO] route_data.eval.unlearning_harness: Optimizer step 22/50 | loss=-32.8043 forget=-33.7883 retain=9.8399
+2026-08-17 03:00:01,363 [INFO] route_data.eval.unlearning_harness: Optimizer step 23/50 | loss=-36.7617 forget=-37.8362 retain=10.7448
+2026-08-17 03:00:26,296 [INFO] route_data.eval.unlearning_harness: Optimizer step 24/50 | loss=-38.7861 forget=-39.8750 retain=10.8890
+2026-08-17 03:00:53,320 [INFO] route_data.eval.unlearning_harness: Optimizer step 25/50 | loss=-41.4739 forget=-42.6562 retain=11.8223
+2026-08-17 03:00:53,602 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-17 03:00:53,607 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-17 03:00:53,646 [INFO] route_data.eval.unlearning_harness: Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/checkpoints/optimizer_step_025
+2026-08-17 03:01:17,333 [INFO] route_data.eval.unlearning_harness: Optimizer step 26/50 | loss=-45.3528 forget=-46.6563 retain=13.0351
+2026-08-17 03:01:39,106 [INFO] route_data.eval.unlearning_harness: Optimizer step 27/50 | loss=-48.3310 forget=-49.5157 retain=11.8466
+2026-08-17 03:02:01,508 [INFO] route_data.eval.unlearning_harness: Optimizer step 28/50 | loss=-50.5081 forget=-51.8281 retain=13.1997
+2026-08-17 03:02:24,351 [INFO] route_data.eval.unlearning_harness: Optimizer step 29/50 | loss=-53.0914 forget=-54.4842 retain=13.9280
+2026-08-17 03:02:45,919 [INFO] route_data.eval.unlearning_harness: Optimizer step 30/50 | loss=-56.7028 forget=-58.1874 retain=14.8466
+2026-08-17 03:03:08,897 [INFO] route_data.eval.unlearning_harness: Optimizer step 31/50 | loss=-58.1887 forget=-59.8433 retain=16.5458
+2026-08-17 03:03:34,529 [INFO] route_data.eval.unlearning_harness: Optimizer step 32/50 | loss=-61.0426 forget=-62.7810 retain=17.3839
+2026-08-17 03:03:56,386 [INFO] route_data.eval.unlearning_harness: Optimizer step 33/50 | loss=-63.7435 forget=-65.5621 retain=18.1862
+2026-08-17 03:04:19,307 [INFO] route_data.eval.unlearning_harness: Optimizer step 34/50 | loss=-67.0494 forget=-68.9068 retain=18.5741
+2026-08-17 03:04:41,195 [INFO] route_data.eval.unlearning_harness: Optimizer step 35/50 | loss=-70.0794 forget=-72.1896 retain=21.1022
+2026-08-17 03:05:06,858 [INFO] route_data.eval.unlearning_harness: Optimizer step 36/50 | loss=-73.3492 forget=-75.4706 retain=21.2133
+2026-08-17 03:05:31,894 [INFO] route_data.eval.unlearning_harness: Optimizer step 37/50 | loss=-75.5024 forget=-77.7455 retain=22.4302
+2026-08-17 03:05:56,674 [INFO] route_data.eval.unlearning_harness: Optimizer step 38/50 | loss=-79.1209 forget=-81.4128 retain=22.9191
+2026-08-17 03:06:21,586 [INFO] route_data.eval.unlearning_harness: Optimizer step 39/50 | loss=-81.3107 forget=-83.7505 retain=24.3986
+2026-08-17 03:06:47,717 [INFO] route_data.eval.unlearning_harness: Optimizer step 40/50 | loss=-83.7077 forget=-86.2971 retain=25.8936
+2026-08-17 03:07:13,787 [INFO] route_data.eval.unlearning_harness: Optimizer step 41/50 | loss=-87.0856 forget=-89.7824 retain=26.9676
+2026-08-17 03:07:39,743 [INFO] route_data.eval.unlearning_harness: Optimizer step 42/50 | loss=-90.3506 forget=-93.0631 retain=27.1246
+2026-08-17 03:08:06,617 [INFO] route_data.eval.unlearning_harness: Optimizer step 43/50 | loss=-92.6877 forget=-95.5484 retain=28.6069
+2026-08-17 03:08:32,569 [INFO] route_data.eval.unlearning_harness: Optimizer step 44/50 | loss=-95.7157 forget=-98.6287 retain=29.1302
+2026-08-17 03:08:58,012 [INFO] route_data.eval.unlearning_harness: Optimizer step 45/50 | loss=-98.9267 forget=-101.8890 retain=29.6232
+2026-08-17 03:09:24,170 [INFO] route_data.eval.unlearning_harness: Optimizer step 46/50 | loss=-101.1569 forget=-104.4149 retain=32.5793
+2026-08-17 03:09:51,354 [INFO] route_data.eval.unlearning_harness: Optimizer step 47/50 | loss=-102.4206 forget=-105.7123 retain=32.9174
+2026-08-17 03:10:18,379 [INFO] route_data.eval.unlearning_harness: Optimizer step 48/50 | loss=-105.5787 forget=-108.8875 retain=33.0876
+2026-08-17 03:10:44,841 [INFO] route_data.eval.unlearning_harness: Optimizer step 49/50 | loss=-108.2321 forget=-111.5062 retain=32.7406
+2026-08-17 03:11:10,390 [INFO] route_data.eval.unlearning_harness: Optimizer step 50/50 | loss=-109.8163 forget=-113.3633 retain=35.4701
+2026-08-17 03:11:10,656 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-17 03:11:10,661 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-17 03:11:10,696 [INFO] route_data.eval.unlearning_harness: Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/checkpoints/optimizer_step_050
+2026-08-17 03:11:10,696 [INFO] route_data.eval.unlearning_harness: Training complete in 1149.0s
+2026-08-17 03:11:10,818 [INFO] run_unlearning_pilot: Run manifest written to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/unlearning_run_manifest.json
+2026-08-17 03:11:10,895 [INFO] run_unlearning_pilot: Step 5/17: Model load + LoRA attach + trainable-param validation + training done (1166.5s)
+2026-08-17 03:11:10,895 [INFO] run_unlearning_pilot: Step 9/17: Checkpoint hashing ...
+2026-08-17 03:11:10,902 [INFO] run_unlearning_pilot: Step 9/17: Checkpoint hashing done (0.0s)
+2026-08-17 03:11:10,902 [INFO] run_unlearning_pilot: Step 10/17: Adapter reload + preflight + post-eval + validation + pairing ...
+2026-08-17 03:11:10,905 [INFO] run_unlearning_pilot: Step 10: Reloading adapter from /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/checkpoints/optimizer_step_050 ...
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 1442.83it/s]
+Loading weights:   0%|          | 0/760 [00:00<?, ?it/s]Loading weights:   0%|          | 1/760 [00:00<02:04,  6.09it/s]Loading weights:   0%|          | 2/760 [00:00<02:55,  4.32it/s]Loading weights:   2%|▏         | 15/760 [00:00<00:19, 37.74it/s]Loading weights:   4%|▍         | 29/760 [00:00<00:11, 64.43it/s]Loading weights:   6%|▌         | 43/760 [00:00<00:08, 81.34it/s]Loading weights:   7%|▋         | 53/760 [00:00<00:08, 83.98it/s]Loading weights:   9%|▉         | 67/760 [00:00<00:06, 99.34it/s]Loading weights:  11%|█         | 81/760 [00:01<00:06, 100.45it/s]Loading weights:  13%|█▎        | 96/760 [00:01<00:06, 109.58it/s]Loading weights:  14%|█▍        | 108/760 [00:01<00:05, 109.55it/s]Loading weights:  16%|█▌        | 121/760 [00:01<00:05, 113.57it/s]Loading weights:  18%|█▊        | 135/760 [00:01<00:05, 119.32it/s]Loading weights:  20%|█▉        | 149/760 [00:01<00:04, 122.78it/s]Loading weights:  22%|██▏       | 165/760 [00:01<00:04, 133.09it/s]Loading weights:  24%|██▎       | 179/760 [00:01<00:04, 129.00it/s]Loading weights:  25%|██▌       | 193/760 [00:02<00:04, 118.46it/s]Loading weights:  27%|██▋       | 206/760 [00:02<00:05, 110.42it/s]Loading weights:  30%|██▉       | 225/760 [00:02<00:04, 126.00it/s]Loading weights:  31%|███▏      | 239/760 [00:02<00:04, 126.72it/s]Loading weights:  33%|███▎      | 253/760 [00:02<00:03, 128.20it/s]Loading weights:  35%|███▌      | 266/760 [00:02<00:04, 115.02it/s]Loading weights:  37%|███▋      | 280/760 [00:02<00:04, 118.96it/s]Loading weights:  39%|███▊      | 294/760 [00:02<00:03, 120.62it/s]Loading weights:  41%|████      | 308/760 [00:02<00:03, 119.69it/s]Loading weights:  42%|████▏     | 321/760 [00:03<00:03, 119.56it/s]Loading weights:  44%|████▍     | 334/760 [00:03<00:03, 116.10it/s]Loading weights:  46%|████▌     | 347/760 [00:03<00:03, 119.84it/s]Loading weights:  48%|████▊     | 361/760 [00:03<00:03, 120.54it/s]Loading weights:  50%|█████     | 380/760 [00:03<00:02, 135.50it/s]Loading weights:  52%|█████▏    | 394/760 [00:03<00:02, 130.85it/s]Loading weights:  54%|█████▎    | 408/760 [00:03<00:02, 128.46it/s]Loading weights:  55%|█████▌    | 421/760 [00:03<00:03, 107.73it/s]Loading weights:  64%|██████▍   | 485/760 [00:04<00:01, 238.10it/s]Loading weights:  75%|███████▌  | 573/760 [00:04<00:00, 404.34it/s]Loading weights:  87%|████████▋ | 661/760 [00:04<00:00, 532.15it/s]Loading weights:  98%|█████████▊| 745/760 [00:04<00:00, 616.59it/s]Loading weights: 100%|██████████| 760/760 [00:04<00:00, 174.24it/s]
+2026-08-17 03:11:15,995 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:16,231 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:16,479 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:16,716 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:16,964 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:17,204 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:17,448 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:17,697 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:17,945 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:18,193 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:18,486 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:18,732 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-17 03:11:19,473 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B "HTTP/1.1 200 OK"
+2026-08-17 03:11:19,719 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:19,950 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-17 03:11:20,078 [INFO] route_data.eval.post_unlearning_eval: Loaded LoRA checkpoint from /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/checkpoints/optimizer_step_050 on base Qwen/Qwen3.5-9B revision c202236235762e1c871ad0ccb60c8ee5ba337b9a
+2026-08-17 03:11:20,079 [INFO] route_data.eval.baseline_runner: Loaded dataset manifest from /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/full_fiubench/evidence/research_dataset_manifest.json
+2026-08-17 03:11:20,079 [INFO] route_data.eval.baseline_runner: Loaded freeze verification from /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/full_fiubench/evidence/final_freeze_verification.json
+2026-08-17 03:11:22,164 [INFO] route_data.eval.baseline_runner: Extracted 573 unique identities from processed dataset /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl
+2026-08-17 03:11:22,165 [INFO] route_data.eval.baseline_runner: Identity role distribution: {'out_of_protocol': 473, 'exclude': 40, 'train': 50, 'eval': 10}
+2026-08-17 03:11:22,170 [INFO] route_data.eval.baseline_runner: Loaded 500 probes from /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl
+2026-08-17 03:11:22,171 [INFO] run_unlearning_pilot: Steps 11-12: Running post-eval (full 500 probes) ...
+2026-08-17 03:11:22,171 [INFO] route_data.eval.post_unlearning_eval: Starting post-unlearning evaluation: checkpoint=optimizer_step_050
+2026-08-17 03:11:22,171 [INFO] route_data.eval.post_unlearning_eval: Running research preflight...
+2026-08-17 03:11:22,171 [INFO] route_data.eval.baseline_runner: Freeze verification validated: all gates pass
+2026-08-17 03:11:22,174 [INFO] route_data.eval.baseline_runner: Dataset manifest validated: {'ready_for_experiments': True, 'dataset_version': 'fiubench-route-v1', 'route_sha_match': True, 'route_probe_count': 500, 'jsonl_row_count': 500, 'family_counts': {'direct_visual': 100, 'image_plus_name': 100, 'name_only': 100, 'visual_text_conflict': 100, 'wrong_name': 100}}
+2026-08-17 03:11:22,174 [INFO] route_data.eval.baseline_runner: Cross-file validation passed: freeze ↔ manifest ↔ probe
+2026-08-17 03:11:22,547 [INFO] route_data.eval.baseline_runner: Processed dataset validation passed: SHA match confirmed
+2026-08-17 03:11:22,547 [INFO] route_data.eval.baseline_runner: Fingerprint validation passed: 468e0b103485d35f
+2026-08-17 03:11:22,555 [INFO] route_data.eval.baseline_runner: Git state clean: 8a40e3d8eccb
+2026-08-17 03:11:22,556 [INFO] route_data.eval.baseline_runner: Preflight report written: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/post_eval/optimizer_step_050/preflight_report.json
+2026-08-17 03:11:22,556 [INFO] route_data.eval.baseline_runner: Research preflight passed: all 6 gates cleared.
+2026-08-17 03:12:09,183 [INFO] route_data.eval.baseline_runner: Baseline progress: 50/500 new results
+2026-08-17 03:12:55,187 [INFO] route_data.eval.baseline_runner: Baseline progress: 100/500 new results
+2026-08-17 03:13:40,312 [INFO] route_data.eval.baseline_runner: Baseline progress: 150/500 new results
+2026-08-17 03:14:26,513 [INFO] route_data.eval.baseline_runner: Baseline progress: 200/500 new results
+2026-08-17 03:15:12,842 [INFO] route_data.eval.baseline_runner: Baseline progress: 250/500 new results
+2026-08-17 03:15:58,716 [INFO] route_data.eval.baseline_runner: Baseline progress: 300/500 new results
+2026-08-17 03:16:45,855 [INFO] route_data.eval.baseline_runner: Baseline progress: 350/500 new results
+2026-08-17 03:17:32,103 [INFO] route_data.eval.baseline_runner: Baseline progress: 400/500 new results
+2026-08-17 03:18:18,840 [INFO] route_data.eval.baseline_runner: Baseline progress: 450/500 new results
+2026-08-17 03:19:05,120 [INFO] route_data.eval.baseline_runner: Baseline progress: 500/500 new results
+2026-08-17 03:19:05,120 [INFO] route_data.eval.baseline_runner: Baseline complete: 500 new, 500 total (of 500 probes)
+2026-08-17 03:19:05,120 [INFO] route_data.eval.post_unlearning_eval: Post-eval complete: 500 results in 462.9s
+2026-08-17 03:19:05,146 [INFO] route_data.eval.post_unlearning_eval: Wrote 500 post-eval results to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/post_eval/optimizer_step_050/results.jsonl
+2026-08-17 03:19:05,146 [INFO] run_unlearning_pilot: Step 13: Running strict validation ...
+2026-08-17 03:19:05,521 [INFO] route_data.eval.baseline_runner: Processed dataset validation passed: SHA match confirmed
+2026-08-17 03:19:05,521 [INFO] route_data.eval.baseline_runner: Validation report written to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/post_eval/optimizer_step_050/validation_report.json (pass=True)
+2026-08-17 03:19:05,521 [INFO] run_unlearning_pilot: Step 14: Validating exact probe matching ...
+2026-08-17 03:19:05,528 [INFO] route_data.eval.baseline_runner: Summary written to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/post_eval/optimizer_step_050/baseline_summary.json
+2026-08-17 03:19:05,529 [INFO] route_data.eval.baseline_runner: Summary written to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/post_eval/optimizer_step_050/baseline_summary.json
+2026-08-17 03:19:05,541 [INFO] route_data.eval.post_unlearning_eval: Wrote post-eval manifest to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/post_eval/optimizer_step_050/manifest.json
+2026-08-17 03:19:05,612 [INFO] run_unlearning_pilot: Step 10/17: Adapter reload + preflight + post-eval + validation + pairing done (474.7s)
+2026-08-17 03:19:05,612 [INFO] run_unlearning_pilot: Step 15/17: Paired analysis + preservation report ...
+2026-08-17 03:19:05,642 [INFO] route_data.eval.run_pilot: Paired analysis complete. Artifacts in /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/analysis
+2026-08-17 03:19:05,644 [INFO] run_unlearning_pilot: Step 15/17: Paired analysis + preservation report done (0.0s)
+2026-08-17 03:19:05,644 [INFO] run_unlearning_pilot: Step 17/17: GO/NO-GO validation report ...
+2026-08-17 03:19:05,647 [INFO] route_data.eval.run_pilot: Validation report written to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/evidence/pilot_validation_report.json
+2026-08-17 03:19:05,647 [INFO] run_unlearning_pilot: Step 17/17: GO/NO-GO validation report done (0.0s)
+2026-08-17 03:19:05,647 [INFO] run_unlearning_pilot: Pipeline provenance written to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/evidence/pipeline_provenance.json
+2026-08-17 03:19:05,647 [INFO] run_unlearning_pilot: ============================================================
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot: PILOT VERDICT: NO-GO
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot: ============================================================
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   target_exceeds_retain_plus_tolerance               PASS
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   target_exceeds_control_plus_tolerance              PASS
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   retain_direct_visual_accuracy_gate                 FAIL
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   control_direct_visual_accuracy_gate                FAIL
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   untargeted_direct_visual_accuracy_gate             FAIL
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   global_direct_visual_accuracy_gate                 FAIL
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   zero_post_eval_inference_errors                    PASS
+2026-08-17 03:19:05,648 [INFO] run_unlearning_pilot:   exact_pairing                                      PASS

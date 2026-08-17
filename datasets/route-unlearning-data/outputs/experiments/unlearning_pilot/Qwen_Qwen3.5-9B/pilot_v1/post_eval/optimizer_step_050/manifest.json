@@ -1,0 +1,130 @@
+{
+  "experiment_id": "fiubench_unlearning_pilot_v1",
+  "evaluation_type": "post_unlearning",
+  "checkpoint": {
+    "name": "optimizer_step_050",
+    "path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/checkpoints/optimizer_step_050"
+  },
+  "base_model": {
+    "model_id": "Qwen/Qwen3.5-9B",
+    "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+  },
+  "probe_file": {
+    "path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
+    "probe_count": 500
+  },
+  "baseline_reference": {
+    "results_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_results.jsonl",
+    "manifest_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_manifest.json"
+  },
+  "provenance": {
+    "selection_manifest_sha256": "a7ff1fceb715fb30b34809d98eb6e7e25a4a21a88a8b188c024d124b49b19655",
+    "unlearning_run_manifest_sha256": "",
+    "results_sha256": "c3f6c081c5182e05ab24d69df46faa72ec6b41430feab9c307e12c52b4b1e54d"
+  },
+  "validation": {
+    "passed": true,
+    "baseline_probe_count": 500,
+    "post_probe_count": 500,
+    "missing_probes": [],
+    "extra_probes": [],
+    "duplicate_baseline": 0,
+    "duplicate_post": 0,
+    "exact_match": true
+  },
+  "summary": {
+    "total_probes": 500,
+    "total_correct": 100,
+    "mixed_task_overall_accuracy": 0.2,
+    "per_family": {
+      "direct_visual": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -40.76500026128255,
+        "median_signed_answer_margin": -81.74999844655395,
+        "mean_p_yes": 1.0,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "image_plus_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -40.98000015503727,
+        "median_signed_answer_margin": -82.00000244751573,
+        "mean_p_yes": 1.0,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "name_only": {
+        "count": 100,
+        "errors": 0,
+        "correct": 0,
+        "normalized_exact_match_rate": 0.0,
+        "mean_token_overlap": 0.1022890442890443,
+        "answer_non_empty_rate": 1.0
+      },
+      "visual_text_conflict": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -43.19000007726252,
+        "median_signed_answer_margin": -86.2500029578805,
+        "mean_p_yes": 1.0,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "wrong_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -40.857500027716156,
+        "median_signed_answer_margin": -81.99999820813537,
+        "mean_p_yes": 1.0,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      }
+    },
+    "per_protocol_role": {
+      "eval": {
+        "n": 50
+      },
+      "exclude": {
+        "n": 200
+      },
+      "train": {
+        "n": 250
+      }
+    },
+    "route_identity_role_counts": {
+      "train": 50,
+      "eval": 10,
+      "exclude": 40
+    },
+    "model_fingerprint": "468e0b103485d35f",
+    "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "scoring_version": "2"
+  },
+  "code_provenance": {
+    "git_commit": "8a40e3d8eccbc3f0b5ef7ae7d39ea9c3305aecf7",
+    "git_dirty": false
+  },
+  "seed": 17,
+  "evaluation_scope": {
+    "mode": "full",
+    "expected_probe_count": 500
+  }
+}

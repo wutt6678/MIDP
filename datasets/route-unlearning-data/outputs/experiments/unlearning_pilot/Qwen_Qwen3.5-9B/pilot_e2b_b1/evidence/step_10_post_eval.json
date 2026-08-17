@@ -1,0 +1,160 @@
+{
+  "post_eval_summary": {
+    "total_probes": 500,
+    "total_correct": 100,
+    "mixed_task_overall_accuracy": 0.2,
+    "per_family": {
+      "direct_visual": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -3.5562499750188454,
+        "median_signed_answer_margin": -11.125000083236955,
+        "mean_p_yes": 0.9999724347210214,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "image_plus_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -5.334062483925245,
+        "median_signed_answer_margin": -13.000000043830369,
+        "mean_p_yes": 0.9999973287474551,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "name_only": {
+        "count": 100,
+        "errors": 0,
+        "correct": 0,
+        "normalized_exact_match_rate": 0.0,
+        "mean_token_overlap": 0.18209943651120117,
+        "answer_non_empty_rate": 1.0
+      },
+      "visual_text_conflict": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -7.985937571290779,
+        "median_signed_answer_margin": -17.46874912083149,
+        "mean_p_yes": 0.9999999750853935,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "wrong_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 25,
+        "accuracy": 0.25,
+        "mean_signed_answer_margin": -5.18718748190704,
+        "median_signed_answer_margin": -13.000000013038516,
+        "mean_p_yes": 0.9999969807126764,
+        "positive_target_accuracy": 1.0,
+        "negative_target_accuracy": 0.0,
+        "positive_count": 25,
+        "negative_count": 75
+      }
+    },
+    "per_protocol_role": {
+      "eval": {
+        "n": 50
+      },
+      "exclude": {
+        "n": 200
+      },
+      "train": {
+        "n": 250
+      }
+    },
+    "route_identity_role_counts": {
+      "train": 50,
+      "eval": 10,
+      "exclude": 40
+    },
+    "model_fingerprint": "d3489821945f4cd2",
+    "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "scoring_version": "2"
+  },
+  "validation": {
+    "pass": true,
+    "checks": {
+      "exact_probe_id_set": {
+        "pass": true,
+        "expected_count": 500,
+        "actual_count": 500,
+        "unique_count": 500,
+        "no_duplicates": true,
+        "missing": [],
+        "unexpected": []
+      },
+      "family_counts_match": {
+        "pass": true,
+        "expected": {
+          "direct_visual": 100,
+          "name_only": 100,
+          "image_plus_name": 100,
+          "wrong_name": 100,
+          "visual_text_conflict": 100
+        },
+        "actual": {
+          "direct_visual": 100,
+          "name_only": 100,
+          "image_plus_name": 100,
+          "wrong_name": 100,
+          "visual_text_conflict": 100
+        }
+      },
+      "binary_scores_complete": {
+        "pass": true,
+        "failure_count": 0,
+        "failures": []
+      },
+      "name_only_scores_complete": {
+        "pass": true,
+        "failure_count": 0,
+        "failures": []
+      },
+      "source_metadata_match": {
+        "pass": true,
+        "mismatch_count": 0,
+        "mismatches": []
+      },
+      "run_provenance_consistent": {
+        "pass": true,
+        "issues": {}
+      },
+      "zero_inference_errors": {
+        "pass": true,
+        "error_count": 0,
+        "errors": []
+      },
+      "protocol_role_complete": {
+        "pass": true,
+        "invalid_role_count": 0,
+        "inconsistent_identity_count": 0,
+        "identity_role_map_populated": true,
+        "invalid_roles": [],
+        "inconsistent_identities": []
+      },
+      "processed_dataset_sha_match": {
+        "pass": true
+      },
+      "route_identity_role_counts": {
+        "pass": true,
+        "train": 50,
+        "eval": 10,
+        "exclude": 40
+      }
+    }
+  }
+}

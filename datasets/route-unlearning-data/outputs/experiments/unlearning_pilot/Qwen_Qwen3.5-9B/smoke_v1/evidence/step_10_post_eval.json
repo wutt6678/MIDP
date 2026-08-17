@@ -1,0 +1,156 @@
+{
+  "post_eval_summary": {
+    "total_probes": 10,
+    "total_correct": 8,
+    "mixed_task_overall_accuracy": 0.8,
+    "per_family": {
+      "direct_visual": {
+        "count": 2,
+        "errors": 0,
+        "correct": 2,
+        "accuracy": 1.0,
+        "mean_signed_answer_margin": 7.81250013760291,
+        "median_signed_answer_margin": 7.81250013760291,
+        "mean_p_yes": 0.0004116035682898968,
+        "negative_target_accuracy": 1.0,
+        "positive_count": 0,
+        "negative_count": 2
+      },
+      "image_plus_name": {
+        "count": 2,
+        "errors": 0,
+        "correct": 2,
+        "accuracy": 1.0,
+        "mean_signed_answer_margin": 6.937499925494194,
+        "median_signed_answer_margin": 6.937499925494194,
+        "mean_p_yes": 0.001126750667744794,
+        "negative_target_accuracy": 1.0,
+        "positive_count": 0,
+        "negative_count": 2
+      },
+      "name_only": {
+        "count": 2,
+        "errors": 0,
+        "correct": 0,
+        "normalized_exact_match_rate": 0.0,
+        "mean_token_overlap": 0.42657342657342656,
+        "answer_non_empty_rate": 1.0
+      },
+      "visual_text_conflict": {
+        "count": 2,
+        "errors": 0,
+        "correct": 2,
+        "accuracy": 1.0,
+        "mean_signed_answer_margin": 5.25,
+        "median_signed_answer_margin": 5.25,
+        "mean_p_yes": 0.005260320594568145,
+        "negative_target_accuracy": 1.0,
+        "positive_count": 0,
+        "negative_count": 2
+      },
+      "wrong_name": {
+        "count": 2,
+        "errors": 0,
+        "correct": 2,
+        "accuracy": 1.0,
+        "mean_signed_answer_margin": 7.000000072643161,
+        "median_signed_answer_margin": 7.000000072643161,
+        "mean_p_yes": 0.0010269803220771894,
+        "negative_target_accuracy": 1.0,
+        "positive_count": 0,
+        "negative_count": 2
+      }
+    },
+    "per_protocol_role": {
+      "eval": {
+        "n": 0
+      },
+      "exclude": {
+        "n": 0
+      },
+      "train": {
+        "n": 10
+      }
+    },
+    "route_identity_role_counts": {
+      "train": 50,
+      "eval": 10,
+      "exclude": 40
+    },
+    "model_fingerprint": "7763a96279ce7657",
+    "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "scoring_version": "2"
+  },
+  "validation": {
+    "pass": true,
+    "checks": {
+      "exact_probe_id_set": {
+        "pass": true,
+        "expected_count": 10,
+        "actual_count": 10,
+        "unique_count": 10,
+        "no_duplicates": true,
+        "missing": [],
+        "unexpected": []
+      },
+      "family_counts_match": {
+        "pass": true,
+        "expected": {
+          "direct_visual": 2,
+          "name_only": 2,
+          "image_plus_name": 2,
+          "wrong_name": 2,
+          "visual_text_conflict": 2
+        },
+        "actual": {
+          "direct_visual": 2,
+          "image_plus_name": 2,
+          "name_only": 2,
+          "visual_text_conflict": 2,
+          "wrong_name": 2
+        }
+      },
+      "binary_scores_complete": {
+        "pass": true,
+        "failure_count": 0,
+        "failures": []
+      },
+      "name_only_scores_complete": {
+        "pass": true,
+        "failure_count": 0,
+        "failures": []
+      },
+      "source_metadata_match": {
+        "pass": true,
+        "mismatch_count": 0,
+        "mismatches": []
+      },
+      "run_provenance_consistent": {
+        "pass": true,
+        "issues": {}
+      },
+      "zero_inference_errors": {
+        "pass": true,
+        "error_count": 0,
+        "errors": []
+      },
+      "protocol_role_complete": {
+        "pass": true,
+        "invalid_role_count": 0,
+        "inconsistent_identity_count": 0,
+        "identity_role_map_populated": true,
+        "invalid_roles": [],
+        "inconsistent_identities": []
+      },
+      "processed_dataset_sha_match": {
+        "pass": true
+      },
+      "route_identity_role_counts": {
+        "pass": true,
+        "train": 50,
+        "eval": 10,
+        "exclude": 40
+      }
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "benchmark": "fiubench",
+  "output_dir": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench",
+  "paths": {
+    "annotations": "fiubench_celeba40_image_annotations.parquet",
+    "qa_train": "fiubench_celeba40_visual_qa_train.jsonl",
+    "qa_eval": "fiubench_celeba40_visual_qa_eval.jsonl",
+    "route_probes": "fiubench_route_conflict_eval.jsonl",
+    "splits": "fiubench_unlearning_splits",
+    "dataset_card": "fiubench_extension_card.md",
+    "checksums": "fiubench_checksums.json",
+    "manifest": "fiubench_export_manifest.json"
+  },
+  "counts": {
+    "annotation_rows": 560000,
+    "qa_train": 77420,
+    "qa_eval": 16240,
+    "route_probes": 500,
+    "splits": 3
+  },
+  "provenance": {
+    "model_id": "Qwen/Qwen3.5-9B",
+    "model_backend": "qwen_hf",
+    "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "model_fingerprint": "de9856e1d2620d4e",
+    "prompt_registry_hash": "28481d2ebb85a6fb",
+    "candidate_set_hash": "8950b978f15f",
+    "scoring_version": "2",
+    "source_version": "fiubench-8e12cdd",
+    "scoring_method": "candidate_sequence_log_probability",
+    "source_hash": "c79b632e3a94900d7d5c5496062e7871330e1bb609b351bf19776c53e5faa752",
+    "source_provenance": {
+      "hash_strategy": "metadata_full_image_paths",
+      "metadata_file_count": 19
+    },
+    "whitelist_sha256": "4575367243999ff65f9ed552c242a930518c29a5a2770d77485a82dca3654ebc",
+    "whitelist_attributes": [
+      "Bald",
+      "Bangs",
+      "Blond_Hair",
+      "Eyeglasses",
+      "Gray_Hair",
+      "Male",
+      "Mustache",
+      "Sideburns",
+      "Smiling",
+      "Wearing_Earrings",
+      "Wearing_Hat",
+      "Wearing_Lipstick",
+      "Wearing_Necktie"
+    ],
+    "transformers_version": "5.14.1",
+    "torch_version": "2.8.0+cu128",
+    "midp_commit": "44339dd66a504ba0b6079b46be2e53c803aa5000"
+  },
+  "midp_provenance": {
+    "midp_git_commit": "44339dd66a504ba0b6079b46be2e53c803aa5000",
+    "git_dirty": true
+  }
+}

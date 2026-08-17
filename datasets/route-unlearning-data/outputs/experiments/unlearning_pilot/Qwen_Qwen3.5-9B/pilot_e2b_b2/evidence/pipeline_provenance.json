@@ -1,0 +1,153 @@
+{
+  "config_path": "configs/experiments/unlearning_pilot_e2b_b2.yaml",
+  "smoke": false,
+  "resume": false,
+  "start_time": "2026-08-17T07:44:10Z",
+  "code_commit": "e60f277f44e4a827266afbf64a68076fc919025f",
+  "git_dirty": false,
+  "steps_completed": [
+    "selection",
+    "training",
+    "checkpoint_hash",
+    "post_eval",
+    "paired_analysis"
+  ],
+  "final_report": {
+    "experiment_id": "fiubench_unlearning_pilot_e2b_b2",
+    "timestamp": "2026-08-17T08:31:37Z",
+    "code_commit": "2bceb07ab9a3f3766e93d4022cdcb863065bd090",
+    "stages": {
+      "selection_completed": true,
+      "training_completed": true,
+      "post_eval_completed": true,
+      "analysis_completed": true
+    },
+    "training_summary": {
+      "num_optimizer_steps": 125,
+      "gradient_accumulation_steps": 4,
+      "total_microsteps": 500,
+      "final_loss": -66.82470703125,
+      "elapsed_seconds": 2486.654487133026,
+      "checkpoints_saved": 8,
+      "final_checkpoint_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_e2b_b2/checkpoints/optimizer_step_125"
+    },
+    "post_eval_summary": {
+      "total_probes": 500,
+      "total_correct": 109,
+      "mixed_task_overall_accuracy": 0.218,
+      "per_family": {
+        "direct_visual": {
+          "count": 100,
+          "errors": 0,
+          "correct": 34,
+          "accuracy": 0.34,
+          "mean_signed_answer_margin": 1.5812500115372676,
+          "median_signed_answer_margin": -0.6875,
+          "mean_p_yes": 0.7940286723139028,
+          "positive_target_accuracy": 1.0,
+          "negative_target_accuracy": 0.12,
+          "positive_count": 25,
+          "negative_count": 75
+        },
+        "image_plus_name": {
+          "count": 100,
+          "errors": 0,
+          "correct": 25,
+          "accuracy": 0.25,
+          "mean_signed_answer_margin": 0.5950000156113674,
+          "median_signed_answer_margin": -2.000000089406967,
+          "mean_p_yes": 0.9241568146994891,
+          "positive_target_accuracy": 1.0,
+          "negative_target_accuracy": 0.0,
+          "positive_count": 25,
+          "negative_count": 75
+        },
+        "name_only": {
+          "count": 100,
+          "errors": 0,
+          "correct": 0,
+          "normalized_exact_match_rate": 0.0,
+          "mean_token_overlap": 0.2013834302951949,
+          "answer_non_empty_rate": 1.0
+        },
+        "visual_text_conflict": {
+          "count": 100,
+          "errors": 0,
+          "correct": 25,
+          "accuracy": 0.25,
+          "mean_signed_answer_margin": 0.32874999753810696,
+          "median_signed_answer_margin": -1.3750000223517418,
+          "mean_p_yes": 0.8686205100501152,
+          "positive_target_accuracy": 1.0,
+          "negative_target_accuracy": 0.0,
+          "positive_count": 25,
+          "negative_count": 75
+        },
+        "wrong_name": {
+          "count": 100,
+          "errors": 0,
+          "correct": 25,
+          "accuracy": 0.25,
+          "mean_signed_answer_margin": 0.5887499811754605,
+          "median_signed_answer_margin": -2.0,
+          "mean_p_yes": 0.9232858122543849,
+          "positive_target_accuracy": 1.0,
+          "negative_target_accuracy": 0.0,
+          "positive_count": 25,
+          "negative_count": 75
+        }
+      },
+      "per_protocol_role": {
+        "eval": {
+          "n": 50
+        },
+        "exclude": {
+          "n": 200
+        },
+        "train": {
+          "n": 250
+        }
+      },
+      "route_identity_role_counts": {
+        "train": 50,
+        "eval": 10,
+        "exclude": 40
+      },
+      "model_fingerprint": "4e6b41e1fa5a2790",
+      "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "scoring_version": "2"
+    },
+    "analysis_summary": {
+      "target_visual_delta_mean": -9.781250063329935,
+      "retain_visual_delta_mean": -8.734374982304871,
+      "control_visual_delta_mean": -9.015625028172508,
+      "untargeted_visual_delta_mean": -4.811502655422035,
+      "global_direct_visual_post_accuracy": 0.34,
+      "target_direct_visual_pre_accuracy": 1,
+      "target_direct_visual_post_accuracy": 0,
+      "target_direct_visual_pre_margin": 8.562499910593033,
+      "target_direct_visual_post_margin": -2.6250000707805157,
+      "retain_direct_visual_post_accuracy": 0,
+      "control_direct_visual_post_accuracy": 0,
+      "untargeted_direct_visual_post_accuracy": 0.3617021276595745,
+      "post_eval_inference_errors": 0,
+      "pairing_exact_match": true,
+      "pairing_expected_n": 500,
+      "pairing_baseline_rows": 500,
+      "pairing_post_rows": 500
+    },
+    "gates": {
+      "target_exceeds_retain_plus_tolerance": true,
+      "target_exceeds_control_plus_tolerance": true,
+      "retain_direct_visual_accuracy_gate": false,
+      "control_direct_visual_accuracy_gate": false,
+      "untargeted_direct_visual_accuracy_gate": false,
+      "global_direct_visual_accuracy_gate": false,
+      "zero_post_eval_inference_errors": true,
+      "exact_pairing": true,
+      "_gate_tolerance": 0.1,
+      "_direct_visual_accuracy_gate": 0.98
+    }
+  },
+  "end_time": "2026-08-17T08:31:37Z"
+}

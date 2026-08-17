@@ -1,0 +1,185 @@
+{
+  "model_fingerprint": {
+    "backend": "qwen_hf",
+    "model_id": "Qwen/Qwen3.5-9B",
+    "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "dtype": "bfloat16",
+    "quantization": "none",
+    "attn": "sdpa",
+    "thinking": "disabled",
+    "transformers": "5.14.1",
+    "torch": "2.8.0+cu128",
+    "fingerprint_id": "de9856e1d2620d4e"
+  },
+  "resolved_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "image_sha256": "a01089af7a7a5921554eb6cdfef48ca8abacd2b60c47f90e6336fedffabb8b09",
+  "image_path": "/scratch/wutiantong/multimodal_unlearning/MMUnlearner/data/person_60_new/person_1/A1_face_aug_01.png",
+  "smoke_results": [
+    {
+      "attribute": "Eyeglasses",
+      "prompt": "Examine only the current image. Does the person visibly wear eyeglasses? Answer exactly one word: Yes or No.",
+      "generated_text": "No\n",
+      "log_p_yes": -7.877696990966797,
+      "log_p_no": -0.12769687175750732,
+      "margin": -7.7500001192092896,
+      "p_positive": 0.0004305570300203132,
+      "predicted_label": "negative"
+    },
+    {
+      "attribute": "Smiling",
+      "prompt": "Examine only the current image. Is the person smiling in this image? Answer exactly one word: Yes or No.",
+      "generated_text": "No\n",
+      "log_p_yes": -2.2069778442382812,
+      "log_p_no": -0.5819778442382812,
+      "margin": -1.625,
+      "p_positive": 0.1645164628965632,
+      "predicted_label": "negative"
+    },
+    {
+      "attribute": "Wearing_Hat",
+      "prompt": "Examine only the current image. Is the person wearing a hat in this image? Answer exactly one word: Yes or No.",
+      "generated_text": "No\n",
+      "log_p_yes": -8.85176944732666,
+      "log_p_no": -0.22676989436149597,
+      "margin": -8.624999552965164,
+      "p_positive": 0.00017952804958764354,
+      "predicted_label": "negative"
+    }
+  ],
+  "checks": {
+    "generated_non_blank": 9,
+    "candidate_scores_present": 9,
+    "finite_scores": true,
+    "probabilities_near_half": false,
+    "margins_distinct": true
+  },
+  "n_images": 3,
+  "per_image": [
+    {
+      "image_path": "/scratch/wutiantong/multimodal_unlearning/MMUnlearner/data/person_60_new/person_1/A1_face_aug_01.png",
+      "image_sha256": "a01089af7a7a5921554eb6cdfef48ca8abacd2b60c47f90e6336fedffabb8b09",
+      "smoke_results": [
+        {
+          "attribute": "Eyeglasses",
+          "prompt": "Examine only the current image. Does the person visibly wear eyeglasses? Answer exactly one word: Yes or No.",
+          "generated_text": "No\n",
+          "log_p_yes": -7.877696990966797,
+          "log_p_no": -0.12769687175750732,
+          "margin": -7.7500001192092896,
+          "p_positive": 0.0004305570300203132,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Smiling",
+          "prompt": "Examine only the current image. Is the person smiling in this image? Answer exactly one word: Yes or No.",
+          "generated_text": "No\n",
+          "log_p_yes": -2.2069778442382812,
+          "log_p_no": -0.5819778442382812,
+          "margin": -1.625,
+          "p_positive": 0.1645164628965632,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Wearing_Hat",
+          "prompt": "Examine only the current image. Is the person wearing a hat in this image? Answer exactly one word: Yes or No.",
+          "generated_text": "No\n",
+          "log_p_yes": -8.85176944732666,
+          "log_p_no": -0.22676989436149597,
+          "margin": -8.624999552965164,
+          "p_positive": 0.00017952804958764354,
+          "predicted_label": "negative"
+        }
+      ]
+    },
+    {
+      "image_path": "/scratch/wutiantong/multimodal_unlearning/MMUnlearner/data/person_60_new/person_10/A1_face_aug_01.png",
+      "image_sha256": "a9f49fbc78b381dbcbabccea8e9d94ffe714845515c9a2c19d0b1cbd85fed53b",
+      "smoke_results": [
+        {
+          "attribute": "Eyeglasses",
+          "prompt": "Examine only the current image. Does the person visibly wear eyeglasses? Answer exactly one word: Yes or No.",
+          "generated_text": "No\n",
+          "log_p_yes": -8.032057762145996,
+          "log_p_no": -0.2820575535297394,
+          "margin": -7.750000208616257,
+          "p_positive": 0.00043055699154209085,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Smiling",
+          "prompt": "Examine only the current image. Is the person smiling in this image? Answer exactly one word: Yes or No.",
+          "generated_text": "No\n",
+          "log_p_yes": -1.121105432510376,
+          "log_p_no": -0.7461054921150208,
+          "margin": -0.3749999403953552,
+          "p_positive": 0.40733341443526055,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Wearing_Hat",
+          "prompt": "Examine only the current image. Is the person wearing a hat in this image? Answer exactly one word: Yes or No.",
+          "generated_text": "No\n",
+          "log_p_yes": -8.805591583251953,
+          "log_p_no": -0.18059156835079193,
+          "margin": -8.625000014901161,
+          "p_positive": 0.00017952796667208246,
+          "predicted_label": "negative"
+        }
+      ]
+    },
+    {
+      "image_path": "/scratch/wutiantong/multimodal_unlearning/MMUnlearner/data/person_60_new/person_20/A1_face_aug_01.png",
+      "image_sha256": "ee6c1a3c7875d039b34889f5d1020fc8683be849eef124184609acf11e594108",
+      "smoke_results": [
+        {
+          "attribute": "Eyeglasses",
+          "prompt": "Examine only the current image. Does the person visibly wear eyeglasses? Answer exactly one word: Yes or No.",
+          "generated_text": " No\n",
+          "log_p_yes": -9.663875579833984,
+          "log_p_no": -1.6013751029968262,
+          "margin": -8.062500476837158,
+          "p_positive": 0.0003150385439065453,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Smiling",
+          "prompt": "Examine only the current image. Is the person smiling in this image? Answer exactly one word: Yes or No.",
+          "generated_text": " No\n",
+          "log_p_yes": -5.899469375610352,
+          "log_p_no": -1.1494694948196411,
+          "margin": -4.7499998807907104,
+          "p_positive": 0.008577486427457372,
+          "predicted_label": "negative"
+        },
+        {
+          "attribute": "Wearing_Hat",
+          "prompt": "Examine only the current image. Is the person wearing a hat in this image? Answer exactly one word: Yes or No.",
+          "generated_text": " No\n",
+          "log_p_yes": -10.190384864807129,
+          "log_p_no": -1.5028846263885498,
+          "margin": -8.687500238418579,
+          "p_positive": 0.00016865271378598066,
+          "predicted_label": "negative"
+        }
+      ]
+    }
+  ],
+  "cross_image_variation": {
+    "Eyeglasses": {
+      "min": 0.0003150385439065453,
+      "max": 0.0004305570300203132,
+      "spread": 0.00011551848611376789
+    },
+    "Smiling": {
+      "min": 0.008577486427457372,
+      "max": 0.40733341443526055,
+      "spread": 0.3987559280078032
+    },
+    "Wearing_Hat": {
+      "min": 0.00016865271378598066,
+      "max": 0.00017952804958764354,
+      "spread": 1.0875335801662877e-05
+    }
+  },
+  "sanity_check": {}
+}
