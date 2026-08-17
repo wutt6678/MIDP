@@ -220,6 +220,126 @@ def compute_metrics(
 
 
 # --------------------------------------------------------------------------- #
+# Reporting helpers
+# --------------------------------------------------------------------------- #
+
+def _compute_delta_metrics(
+    metrics: dict[str, Any],
+    baseline: dict[str, Any],
+) -> dict[str, Any]:
+    """Compute ΔM = M_t - M_0 for all groups and families."""
+    delta = {}
+    for group in ["target", "retain", "control"]:
+        m = metrics[group]
+        b = baseline[group]
+        group_delta = {
+            "accuracy": m["accuracy"] - b["accuracy"],
+            "mean_signed_margin": m["mean_signed_margin"] - b["mean_signed_margin"],
+        }
+        fam_delta = {}
+        for fam, fm in m.get("per_family", {}).items():
+            fb = b.get("per_family", {}).get(fam, {})
+            if fb:
+                fam_delta[fam] = {
+                    "accuracy": fm["accuracy"] - fb["accuracy"],
+                    "mean_signed_margin": fm["mean_signed_margin"] - fb["mean_signed_margin"],
+                }
+        group_delta["per_family"] = fam_delta
+        delta[group] = group_delta
+    return delta
+
+
+def _print_step_summary(
+    step: int,
+    metrics: dict[str, Any],
+    delta: dict[str, Any] | None,
+) -> None:
+    """Print per-checkpoint summary with M_t and ΔM."""
+    logger.info(f"\nStep {step}:")
+    for group in ["target", "retain", "control"]:
+        m = metrics[group]
+        logger.info(
+            f"  {group:8s}: acc={m['accuracy']:.3f}  "
+            f"M={m['mean_signed_margin']:+.2f}",
+        )
+        if delta:
+            d = delta[group]
+            logger.info(
+                f"           Δacc={d['accuracy']:+.3f}  "
+                f"ΔM={d['mean_signed_margin']:+.2f}",
+            )
+        # direct_visual detail
+        dv = m["per_family"].get("direct_visual", {})
+        if dv:
+            logger.info(
+                f"           DV: acc={dv['accuracy']:.3f}  "
+                f"M={dv['mean_signed_margin']:+.2f}",
+            )
+            if delta:
+                ddv = delta[group]["per_family"].get("direct_visual", {})
+                if ddv:
+                    logger.info(
+                        f"           DV Δacc={ddv['accuracy']:+.3f}  "
+                        f"ΔM={ddv['mean_signed_margin']:+.2f}",
+                    )
+
+
+def _print_decision_analysis(trajectory: list[dict]) -> None:
+    """Print decision analysis across the full trajectory."""
+    logger.info("\n" + "="*60)
+    logger.info("DECISION ANALYSIS")
+    logger.info("="*60)
+
+    # Find the first step where target DV accuracy drops below 0.5
+    # while retain DV accuracy remains >= 0.98
+    selective_steps = []
+    for entry in trajectory:
+        step = entry["step"]
+        if step == 0:
+            continue
+        m = entry["metrics"]
+        target_dv = m["target"]["per_family"].get("direct_visual", {})
+        retain_dv = m["retain"]["per_family"].get("direct_visual", {})
+        control_dv = m["control"]["per_family"].get("direct_visual", {})
+        t_acc = target_dv.get("accuracy", 0)
+        r_acc = retain_dv.get("accuracy", 0)
+        c_acc = control_dv.get("accuracy", 0)
+        if t_acc < 0.5 and r_acc >= 0.98:
+            selective_steps.append(step)
+            logger.info(
+                f"\nStep {step}: SELECTIVE — "
+                f"target_dv_acc={t_acc:.3f}, retain_dv_acc={r_acc:.3f}, "
+                f"control_dv_acc={c_acc:.3f}"
+            )
+
+    if selective_steps:
+        logger.info(
+            f"\n✓ Selective window found at steps: {selective_steps}"
+        )
+    else:
+        logger.info("\n✗ No selective window found (target DV < 0.5 while retain DV >= 0.98)")
+
+    # Check route-family coupling: do IPN/WN/VTC move together across groups?
+    logger.info("\n--- Route-family coupling analysis ---")
+    for entry in trajectory:
+        step = entry["step"]
+        if step == 0:
+            continue
+        d = entry.get("delta_metrics")
+        if d is None:
+            continue
+        logger.info(f"\nStep {step} ΔM by group × family:")
+        for group in ["target", "retain", "control"]:
+            fams = d[group].get("per_family", {})
+            parts = []
+            for fam in BINARY_FAMILIES:
+                fd = fams.get(fam, {})
+                dm = fd.get("mean_signed_margin", float("nan"))
+                parts.append(f"{fam[:3]:>3s}={dm:+6.2f}")
+            logger.info(f"  {group:8s}: {'  '.join(parts)}")
+
+
+# --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
 
@@ -290,36 +410,37 @@ def main():
     
     # Evaluate each checkpoint
     trajectory = []
-    
+    baseline_metrics = None  # step-0 metrics for ΔM computation
+
     for ckpt_dir in checkpoint_dirs:
         step = int(ckpt_dir.name.split("_")[-1])
         checkpoint_name = f"step_{step:03d}"
-        
+
         logger.info(f"\n{'='*60}")
         logger.info(f"Evaluating checkpoint: step {step}")
         logger.info(f"{'='*60}")
-        
+
         results = evaluate_checkpoint(
             ckpt_dir, checkpoint_name, config, diagnostic_probe_ids,
         )
-        
+
         metrics = compute_metrics(results, target_ids, retain_ids, control_ids)
-        
+
+        # Compute ΔM = M_t - M_0
+        delta_metrics = None
+        if step == 0:
+            baseline_metrics = metrics
+        elif baseline_metrics is not None:
+            delta_metrics = _compute_delta_metrics(metrics, baseline_metrics)
+
         trajectory.append({
             "step": step,
             "metrics": metrics,
+            "delta_metrics": delta_metrics,
         })
-        
+
         # Print summary for this checkpoint
-        logger.info(f"\nStep {step} results:")
-        for group in ["target", "retain", "control"]:
-            m = metrics[group]
-            logger.info(f"  {group:8s}: acc={m['accuracy']:.3f}, margin={m['mean_signed_margin']:.2f}")
-            
-            # Show direct_visual specifically
-            dv = m["per_family"].get("direct_visual", {})
-            if dv:
-                logger.info(f"           direct_visual: acc={dv['accuracy']:.3f}, margin={dv['mean_signed_margin']:.2f}")
+        _print_step_summary(step, metrics, delta_metrics)
     
     # Save trajectory
     output_path = args.pilot_dir / "analysis" / "checkpoint_trajectory.json"
@@ -332,44 +453,15 @@ def main():
     logger.info("\n" + "="*60)
     logger.info("CHECKPOINT TRAJECTORY SUMMARY")
     logger.info("="*60)
-    
+
     for entry in trajectory:
         step = entry["step"]
         metrics = entry["metrics"]
-        
-        logger.info(f"\nStep {step}:")
-        for group in ["target", "retain", "control"]:
-            m = metrics[group]
-            logger.info(f"  {group:8s}: acc={m['accuracy']:.3f}, margin={m['mean_signed_margin']:.2f}")
-            
-            # Show direct_visual specifically
-            dv = m["per_family"].get("direct_visual", {})
-            if dv:
-                logger.info(f"           direct_visual: acc={dv['accuracy']:.3f}, margin={dv['mean_signed_margin']:.2f}")
-    
-    # Decision logic
-    logger.info("\n" + "="*60)
-    logger.info("DECISION ANALYSIS")
-    logger.info("="*60)
-    
-    # Check if step 10 or 25 shows useful separation
-    for entry in trajectory:
-        step = entry["step"]
-        if step in [10, 25]:
-            metrics = entry["metrics"]
-            target_acc = metrics["target"]["per_family"].get("direct_visual", {}).get("accuracy", 0)
-            retain_acc = metrics["retain"]["per_family"].get("direct_visual", {}).get("accuracy", 0)
-            control_acc = metrics["control"]["per_family"].get("direct_visual", {}).get("accuracy", 0)
-            
-            separation = retain_acc - target_acc
-            logger.info(f"\nStep {step}: target_dv_acc={target_acc:.3f}, retain_dv_acc={retain_acc:.3f}, control_dv_acc={control_acc:.3f}")
-            logger.info(f"  Separation (retain - target): {separation:.3f}")
-            
-            if separation > 0.2 and target_acc < 0.5:
-                logger.info(f"  ✓ Step {step} shows useful target/retain separation!")
-                logger.info(f"  → Primary fix is EARLY STOPPING, not lower LR")
-            else:
-                logger.info(f"  ✗ Step {step} does not show useful separation")
+        delta = entry.get("delta_metrics")
+        _print_step_summary(step, metrics, delta)
+
+    # Decision analysis
+    _print_decision_analysis(trajectory)
 
 
 if __name__ == "__main__":
