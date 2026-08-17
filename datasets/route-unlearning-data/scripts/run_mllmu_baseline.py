@@ -105,6 +105,7 @@ def run_preflight(config: dict[str, Any]) -> dict[str, Any]:
         "mllmu_ga", "mllmu_ga_difference", "mllmu_kl_min",
         "mllmu_npo", "mllmu_prompting", "npo_oracle",
         "midp_candidate_margin",
+        "mmunlearner", "manu", "r2mu_adapted",
     }, method_name)
 
     output_dir = config.get("runtime", {}).get("output_dir", "")
@@ -155,7 +156,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--method", required=True,
-        choices=["ga", "gd", "kl", "prompting", "npo", "npo_oracle", "midp_cm"],
+        choices=["ga", "gd", "kl", "prompting", "npo", "npo_oracle", "midp_cm",
+                 "mmunlearner", "manu", "r2mu_adapted"],
         help="Which baseline method to run.",
     )
     parser.add_argument(
@@ -304,7 +306,8 @@ def main() -> None:
         )
 
     retain_ds = None
-    if method_name in ("mllmu_ga_difference", "mllmu_kl_min", "npo_oracle"):
+    if method_name in ("mllmu_ga_difference", "mllmu_kl_min", "npo_oracle",
+                       "mmunlearner", "manu", "r2mu_adapted"):
         logger.info("Building retain dataset ...")
         retain_ds = build_retain_dataset(
             processed_dataset_path=training_config.processed_dataset_path,
@@ -338,6 +341,83 @@ def main() -> None:
             dtype=training_config.dtype,
             device=training_config.device,
         )
+
+    # ------------------------------------------------------------------ #
+    # Structural / representation baselines (B7–B9)
+    # These have their own training loops and do NOT use BaselineTrainer.
+    # ------------------------------------------------------------------ #
+    if method_name in ("mmunlearner", "manu", "r2mu_adapted"):
+        from torch.utils.data import DataLoader
+        from route_data.eval.unlearning_harness import qwen_collate_fn
+
+        batch_size = config.get("training", {}).get("batch_size", 1)
+        forget_loader = DataLoader(forget_ds, batch_size=batch_size, shuffle=True,
+                                   collate_fn=qwen_collate_fn)
+        retain_loader = (
+            DataLoader(retain_ds, batch_size=batch_size, shuffle=True,
+                       collate_fn=qwen_collate_fn)
+            if retain_ds is not None else None
+        )
+
+        if method_name == "mmunlearner":
+            from route_data.unlearning import MMUnlearner, MMUnlearnerConfig
+            method_cfg = MMUnlearnerConfig(
+                saliency_n_samples=config.get("saliency_n_samples", 32),
+                target_sparsity=config.get("target_sparsity", 0.5),
+                mask_granularity=config.get("mask_granularity", "element"),
+                modality=config.get("modality", "both"),
+                learning_rate=config.get("training", {}).get("learning_rate", 2e-5),
+                num_optimizer_steps=config.get("training", {}).get("max_optimizer_steps", 125),
+                gradient_accumulation_steps=config.get("training", {}).get("gradient_accumulation_steps", 4),
+                max_grad_norm=config.get("training", {}).get("max_grad_norm", 1.0),
+                output_dir=training_config.output_dir,
+            )
+            runner = MMUnlearner(method_cfg)
+            summary = runner.run(model, forget_loader, retain_loader, device=str(training_config.device))
+
+        elif method_name == "manu":
+            from route_data.unlearning import MANU, MANUConfig
+            method_cfg = MANUConfig(
+                primary_prune_fraction=config.get("primary_prune_fraction", 0.10),
+                secondary_prune_fraction=config.get("secondary_prune_fraction", 0.05),
+                importance_n_samples=config.get("importance_n_samples", 32),
+                neuron_unit=config.get("neuron_unit", "mlp_intermediate"),
+                num_optimizer_steps=config.get("training", {}).get("max_optimizer_steps", 0),
+                output_dir=training_config.output_dir,
+            )
+            runner = MANU(method_cfg)
+            summary = runner.run(model, forget_loader, retain_loader, device=str(training_config.device))
+
+        elif method_name == "r2mu_adapted":
+            from route_data.unlearning import R2MUAdapted, R2MUAdaptedConfig
+            from route_data.unlearning.reference_models import load_frozen_reference_model
+            ref_path = config.get("runtime", {}).get("reference_model_path", "")
+            logger.info(f"Loading frozen reference model for R²MU-adapted ...")
+            frozen_model, _ = load_frozen_reference_model(
+                model_id=training_config.model_id,
+                revision=training_config.model_revision,
+                dtype=training_config.dtype,
+                device=training_config.device,
+            )
+            method_cfg = R2MUAdaptedConfig(
+                candidate_layers=config.get("candidate_layers", [8, 16, 24, 32]),
+                n_select_layers=config.get("n_select_layers", 2),
+                target_seed=config.get("target_seed", 42),
+                target_norm=config.get("target_norm", 1.0),
+                gamma=config.get("gamma", 1.0),
+                learning_rate=config.get("training", {}).get("learning_rate", 2e-5),
+                num_optimizer_steps=config.get("training", {}).get("max_optimizer_steps", 125),
+                gradient_accumulation_steps=config.get("training", {}).get("gradient_accumulation_steps", 4),
+                max_grad_norm=config.get("training", {}).get("max_grad_norm", 1.0),
+                checkpoint_steps=config.get("training", {}).get("checkpoint_steps", [1, 5, 10, 25, 50, 60, 75, 90, 125]),
+                output_dir=training_config.output_dir,
+            )
+            runner = R2MUAdapted(method_cfg)
+            summary = runner.run(model, frozen_model, forget_loader, retain_loader, device=str(training_config.device))
+
+        logger.info(f"Training complete: {summary}")
+        logger.info(f"Output: {training_config.output_dir}")
+        return
 
     # Build objective
     objective = build_objective(training_config)

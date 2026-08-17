@@ -62,6 +62,9 @@ METHOD_ORDER = [
     ("npo_oracle", "B5-oracle", "NPO Oracle Training"),
     ("npo", "B5", "Negative Preference Optimization"),
     ("midp_cm", "B6", "MIDP Candidate Margin (existing)"),
+    ("mmunlearner", "B7", "MMUnlearner (saliency gradient masks)"),
+    ("manu", "B8", "MANU (neuron pruning)"),
+    ("r2mu_adapted", "B9", "R²MU-adapted (representation misdirection)"),
 ]
 
 
@@ -132,7 +135,7 @@ def _run_single_method(
         config.setdefault("runtime", {})["output_dir"] = output_dir
 
     # Inject runtime dependencies from suite state
-    if method == "kl":
+    if method in ("kl", "r2mu_adapted"):
         ref_path = suite_state.get("reference_model_path", "")
         if ref_path:
             config.setdefault("runtime", {})["reference_model_path"] = ref_path

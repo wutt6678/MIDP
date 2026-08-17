@@ -118,7 +118,7 @@ def generate_random_target(
 
 def target_sha256(target: torch.Tensor) -> str:
     """Compute SHA-256 hash of the target vector for provenance."""
-    raw = target.detach().cpu().numpy().tobytes()
+    raw = target.detach().float().cpu().numpy().tobytes()
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -255,7 +255,23 @@ def _collect_representations(
 
         if "repr" in hook_output:
             # Pool over sequence dimension (mean pooling)
-            repr_pooled = hook_output["repr"].mean(dim=1)  # (batch, hidden_size)
+            h = hook_output["repr"]
+            # Determine sequence dimension: assume (batch, seq, hidden) or (batch, hidden, seq)
+            if h.dim() == 3:
+                # Find which dim is hidden_size
+                hidden_dim = None
+                for d in [1, 2]:
+                    if h.shape[d] == hidden_size:
+                        hidden_dim = d
+                        break
+                if hidden_dim is not None:
+                    seq_dim = 3 - hidden_dim
+                    repr_pooled = h.mean(dim=seq_dim)
+                else:
+                    # Fallback: assume dim=1 is sequence
+                    repr_pooled = h.mean(dim=1)
+            else:
+                repr_pooled = h
             representations.append(repr_pooled.cpu())
 
         count += 1
@@ -269,8 +285,16 @@ def _collect_representations(
 
 
 def _is_transformer_layer(name: str) -> bool:
-    """Check if a module is a transformer layer."""
-    return ".layers." in name and name.count(".") == 2
+    """Check if a module is a transformer layer.
+
+    Matches patterns like 'model.layers.0' or 'base_model.model.model.layers.0'.
+    """
+    if ".layers." not in name:
+        return False
+    # Check if the part after the last '.layers.' is a number
+    parts = name.split(".layers.")
+    suffix = parts[-1]
+    return suffix.isdigit()
 
 
 # --------------------------------------------------------------------------- #
@@ -384,6 +408,9 @@ class R2MUAdapted:
             target_norm=self.config.target_norm,
             device=dev,
         )
+        # Match model dtype (e.g. bfloat16) to avoid dtype mismatch in backward
+        model_dtype = next(model.parameters()).dtype
+        target = target.to(dtype=model_dtype)
         sha = target_sha256(target)
         logger.info(f"Target vector SHA-256: {sha}")
 
@@ -438,6 +465,7 @@ class R2MUAdapted:
         forget_iter = iter(forget_loader)
         retain_iter = iter(retain_loader)
         grad_accum = self.config.gradient_accumulation_steps
+        model_dtype = next(model.parameters()).dtype
 
         losses = []
         forget_repr_distances = []
@@ -485,16 +513,16 @@ class R2MUAdapted:
                     )
 
                 # Forget loss: MSE to random target
-                f_loss = torch.tensor(0.0, device=device)
+                f_loss = torch.tensor(0.0, device=device, dtype=model_dtype)
                 f_dist = 0.0
                 for layer_repr in forget_reprs:
                     f_loss = f_loss + forget_representation_loss(layer_repr, target)
                     with torch.no_grad():
-                        f_dist += (layer_repr.mean(dim=0) - target).norm().item()
+                        f_dist += (layer_repr.mean(dim=0).float() - target.float()).norm().item()
                 f_loss = f_loss / len(forget_reprs) / grad_accum
 
                 # Retain loss: MSE to frozen model
-                r_loss = torch.tensor(0.0, device=device)
+                r_loss = torch.tensor(0.0, device=device, dtype=model_dtype)
                 for curr, frozen in zip(retain_reprs_current, retain_reprs_frozen):
                     r_loss = r_loss + retain_representation_loss(curr, frozen)
                 r_loss = r_loss / max(len(retain_reprs_current), 1) / grad_accum
@@ -590,17 +618,45 @@ class R2MUAdapted:
         # Pool representations (mean over sequence dimension)
         for layer_idx in selected_layers:
             if layer_idx in hook_outputs:
-                repr_pooled = hook_outputs[layer_idx].mean(dim=1)
+                h = hook_outputs[layer_idx]
+                # Determine sequence dimension: assume (batch, seq, hidden) or (batch, hidden, seq)
+                # Pool over the dimension that is NOT hidden_size
+                if h.dim() == 3:
+                    # Find which dim is hidden_size
+                    hidden_dim = None
+                    for d in [1, 2]:
+                        if h.shape[d] == self._get_hidden_size(model):
+                            hidden_dim = d
+                            break
+                    if hidden_dim is not None:
+                        seq_dim = 3 - hidden_dim  # If hidden is 1, seq is 2; if hidden is 2, seq is 1
+                        repr_pooled = h.mean(dim=seq_dim)
+                    else:
+                        # Fallback: assume dim=1 is sequence
+                        repr_pooled = h.mean(dim=1)
+                else:
+                    repr_pooled = h
                 representations.append(repr_pooled)
 
         return representations
 
     def _get_hidden_size(self, model: nn.Module) -> int:
-        """Extract hidden size from model config."""
-        if hasattr(model, "config") and hasattr(model.config, "hidden_size"):
-            return model.config.hidden_size
-        # Fallback: try to infer from first linear layer
+        """Extract hidden size from model config.
+
+        Handles both simple configs (``config.hidden_size``) and
+        multimodal configs like ``Qwen3_5Config`` where the text
+        hidden size lives at ``config.text_config.hidden_size``.
+        """
+        if hasattr(model, "config"):
+            cfg = model.config
+            # Direct hidden_size (e.g. LlamaConfig, Qwen2Config)
+            if hasattr(cfg, "hidden_size"):
+                return cfg.hidden_size
+            # Multimodal config (e.g. Qwen3_5Config)
+            if hasattr(cfg, "text_config") and hasattr(cfg.text_config, "hidden_size"):
+                return cfg.text_config.hidden_size
+        # Fallback: infer from lm_head or first language-model linear
         for name, module in model.named_modules():
-            if isinstance(module, nn.Linear):
+            if name.endswith("lm_head") and isinstance(module, nn.Linear):
                 return module.weight.shape[1]
         raise RuntimeError("Cannot determine hidden size")

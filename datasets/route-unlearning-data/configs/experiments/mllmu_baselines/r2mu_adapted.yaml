@@ -2,7 +2,8 @@
 # Paper: Wang et al., EMNLP 2025 (arXiv:2506.12963)
 # NOTE: Cross-domain adaptation, NOT paper-faithful multimodal reproduction.
 
-method: r2mu_adapted
+method:
+  name: r2mu_adapted
 description: >
   Representation misdirection: MSE between hidden representation and
   fixed random target vector (forget), MSE between current and frozen
@@ -28,3 +29,6 @@ max_grad_norm: 1.0
 
 # Checkpointing
 checkpoint_steps: [1, 5, 10, 25, 50, 60, 75, 90, 125]
+
+runtime:
+  output_dir: outputs/experiments/mllmu_baselines/r2mu_adapted

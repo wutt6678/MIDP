@@ -135,13 +135,14 @@ def build_neuron_inventory(model: nn.Module) -> dict[str, Any]:
 
 
 def _is_mlp_layer(name: str, module: nn.Module) -> bool:
-    """Check if a module is an MLP sub-layer."""
+    """Check if a module is an MLP sub-layer.
+
+    Only matches ``up_proj`` to avoid dimension mismatches between
+    gate/up (intermediate_size) and down (hidden_size) projections.
+    """
     if not isinstance(module, nn.Linear):
         return False
-    # Match common MLP naming patterns
-    mlp_indicators = [".mlp.gate_proj", ".mlp.up_proj", ".mlp.down_proj",
-                      ".mlp.fc1", ".mlp.fc2", ".mlp.c_proj"]
-    return any(ind in name for ind in mlp_indicators)
+    return ".mlp.up_proj" in name
 
 
 def _get_intermediate_size(module: nn.Module) -> int:
@@ -416,7 +417,7 @@ def prune_neurons(
     pruned_layers = []
 
     for name, module in model.named_modules():
-        if not _is_mlp_layer(name, module):
+        if not isinstance(module, nn.Linear):
             continue
 
         layer_path = _extract_mlp_layer_path(name)
@@ -427,30 +428,28 @@ def prune_neurons(
 
         if hasattr(module, "weight"):
             with torch.no_grad():
-                # For gate_proj/up_proj (out_features = intermediate_size):
-                # Zero rows corresponding to pruned neurons
-                # For down_proj (in_features = intermediate_size):
-                # Zero columns corresponding to pruned neurons
                 out_features = module.weight.shape[0]
                 in_features = module.weight.shape[1]
 
-                if out_features >= in_features:
-                    # This is gate_proj or up_proj: out = intermediate_size
+                if ".mlp.up_proj" in name:
+                    # up_proj: out_features = intermediate_size → zero rows
                     for idx in neuron_indices:
                         if idx < out_features:
                             module.weight[idx, :] = 0.0
                             n_parameters_modified += in_features
                             n_pruned += 1
-                else:
-                    # This is down_proj: in = intermediate_size
+                elif ".mlp.down_proj" in name:
+                    # down_proj: in_features = intermediate_size → zero columns
                     for idx in neuron_indices:
                         if idx < in_features:
                             module.weight[:, idx] = 0.0
                             n_parameters_modified += out_features
                             n_pruned += 1
+                # gate_proj is intentionally skipped — pruning is defined
+                # by up_proj row zeroing + down_proj column zeroing.
 
-            if layer_path not in pruned_layers:
-                pruned_layers.append(layer_path)
+        if layer_path not in pruned_layers:
+            pruned_layers.append(layer_path)
 
     prune_info = {
         "n_neurons_pruned": n_pruned,
@@ -541,6 +540,9 @@ class MANU:
             f.write("\n")
 
         # Step 3: Pruning at multiple rates
+        # Save original weights to CPU to restore between prune rates (avoids OOM from deepcopy)
+        original_state = {n: p.cpu().clone() for n, p in model.state_dict().items()}
+
         results = {}
         for prune_rate in self.config.prune_rates:
             logger.info(f"Step 3: Pruning at {prune_rate * 100:.0f}% ...")
@@ -548,17 +550,13 @@ class MANU:
             # Select neurons
             neurons = select_neurons_to_prune(importance, prune_rate)
 
-            # Clone model for this prune rate
-            import copy
-            pruned_model = copy.deepcopy(model)
-
-            # Prune
-            prune_info = prune_neurons(pruned_model, neurons)
+            # Prune in-place (avoids OOM from deepcopy)
+            prune_info = prune_neurons(model, neurons)
             prune_info["prune_fraction"] = prune_rate
 
             # Verify forward pass works
             try:
-                _verify_forward(pruned_model, forget_loader, dev)
+                _verify_forward(model, forget_loader, dev)
                 prune_info["forward_pass_ok"] = True
             except Exception as e:
                 logger.error(f"Forward pass failed after pruning: {e}")
@@ -571,6 +569,12 @@ class MANU:
                 f.write("\n")
 
             results[f"prune_{rate_str}"] = prune_info
+
+            # Restore original weights for next prune rate
+            model.load_state_dict(original_state)
+
+        # Clean up
+        del original_state
 
         return {
             "inventory": inventory.get("_summary", {}),
