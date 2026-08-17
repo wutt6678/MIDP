@@ -1,0 +1,15 @@
+# MLLMU-Bench B5: Negative Preference Optimization (NPO)
+#
+# loss = -(2/beta) * log_sigmoid(-beta * log_ratio)
+# log_ratio = logp_current - logp_oracle
+# beta = 0.9 (paper value, NOT repo default 0.4)
+# Oracle = retain-only fine-tuned model (from npo_oracle.yaml)
+
+method:
+  name: mllmu_npo
+  beta: 0.9  # Paper value (NOT repo default 0.4)
+
+runtime:
+  output_dir: outputs/experiments/mllmu_baselines/npo/unlearned
+  # Oracle adapter path filled at runtime after oracle training
+  oracle_adapter_path: ""

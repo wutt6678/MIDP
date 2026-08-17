@@ -1,0 +1,54 @@
+# MLLMU-Bench Baselines — Common Configuration
+#
+# Shared settings for all baseline methods (B0–B6).
+# Per-method configs inherit these defaults and override method-specific
+# hyperparameters.
+#
+# Controlled experiment: same model, same LoRA, same seed, same data.
+
+base_model:
+  id: Qwen/Qwen3.5-9B
+  revision: "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+  dtype: bfloat16
+  backend: qwen_hf
+
+training:
+  seed: 17
+  learning_rate: 2.0e-5
+  max_optimizer_steps: 125
+  batch_size: 1
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+  warmup_steps: 0
+  checkpoint_steps: [1, 5, 10, 25, 50, 60, 75, 90, 125]
+
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.0
+  target_modules: [q_proj, v_proj, k_proj, o_proj]
+
+data:
+  # Identity counts: 2 target / 2 retain / 2 control (match E2B)
+  target_identity_count: 2
+  retain_identity_count: 2
+  control_identity_count: 2
+  # Identity IDs from E2B
+  forget_identity_ids:
+    - "2c1fad4cae23251c"
+    - "a3fce824eb38f618"
+  retain_identity_ids:
+    - "4a7c949dbe59693d"
+    - "cbb9f0b7b65140bd"
+  control_identity_ids:
+    - "79e55019b5576f88"
+    - "81b95673fc82fe47"
+  # Dataset path
+  processed_dataset_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl
+  selection_manifest_sha256: ""
+
+evaluation:
+  reuse_frozen_500_probes: true
+  primary_metric: signed_answer_margin
+  preserve_visual_capability: true
+  direct_visual_accuracy_gate: 0.98

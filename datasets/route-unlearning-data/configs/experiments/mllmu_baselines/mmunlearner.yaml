@@ -1,0 +1,27 @@
+# MMUnlearner (B7) — Saliency-guided structural unlearning
+# Paper: Huo et al., ACL Findings 2025 (arXiv:2502.11051)
+
+method: mmunlearner
+description: >
+  Saliency-guided gradient masking. Parameters with high forget importance
+  and low retain/text importance are selectively modified during answer-only
+  gradient ascent training.
+
+# Saliency estimation
+saliency_n_samples: 32
+saliency_batch_size: 1
+
+# Mask generation
+mask_granularity: element  # "element" or "row"
+target_sparsity: 0.5       # Fraction of parameters to mask out
+min_mask_fraction: 0.01
+max_mask_fraction: 0.99
+
+# Training (masked GA)
+learning_rate: 2.0e-5
+num_optimizer_steps: 125
+gradient_accumulation_steps: 4
+max_grad_norm: 1.0
+
+# Modality ablation
+modality: both  # "both", "vision_only", "language_only"

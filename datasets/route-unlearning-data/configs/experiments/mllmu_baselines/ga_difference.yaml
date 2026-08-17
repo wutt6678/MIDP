@@ -1,0 +1,12 @@
+# MLLMU-Bench B2: Gradient Difference (GD)
+#
+# loss = -ce_forget + retain_weight * ce_retain
+# retain_weight = 1.0 (paper-faithful, NOT E2B's 0.1)
+# Balanced paired forget/retain batches.
+
+method:
+  name: mllmu_ga_difference
+  retain_weight: 1.0  # Paper-faithful (NOT E2B's 0.1)
+
+runtime:
+  output_dir: outputs/experiments/mllmu_baselines/ga_difference

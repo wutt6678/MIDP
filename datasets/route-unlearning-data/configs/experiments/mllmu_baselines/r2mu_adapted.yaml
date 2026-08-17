@@ -1,0 +1,30 @@
+# R²MU-adapted (B9) — Representation-level unlearning
+# Paper: Wang et al., EMNLP 2025 (arXiv:2506.12963)
+# NOTE: Cross-domain adaptation, NOT paper-faithful multimodal reproduction.
+
+method: r2mu_adapted
+description: >
+  Representation misdirection: MSE between hidden representation and
+  fixed random target vector (forget), MSE between current and frozen
+  model representations (retain). No CoT components.
+
+# Layer selection
+candidate_layers: [8, 16, 24, 32]
+n_select_layers: 2
+separability_n_samples: 32
+
+# Forget target
+target_seed: 42
+target_norm: 1.0
+
+# Retain objective
+gamma: 1.0  # Weight for retain MSE term
+
+# Training
+learning_rate: 2.0e-5
+num_optimizer_steps: 125
+gradient_accumulation_steps: 4
+max_grad_norm: 1.0
+
+# Checkpointing
+checkpoint_steps: [1, 5, 10, 25, 50, 60, 75, 90, 125]

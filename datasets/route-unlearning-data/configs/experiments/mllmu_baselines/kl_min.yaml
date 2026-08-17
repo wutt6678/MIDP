@@ -1,0 +1,16 @@
+# MLLMU-Bench B3: KL Minimization
+#
+# loss = -ce_forget + kl_weight * KL(current || reference)
+# T = 1.0, frozen reference = pre-unlearning model.
+# Paper equation: no second retain CE term (include_retain_ce = false).
+
+method:
+  name: mllmu_kl_min
+  kl_weight: 1.0
+  temperature: 1.0
+  include_retain_ce: false  # Paper-faithful: KL only, no extra retain CE
+
+runtime:
+  output_dir: outputs/experiments/mllmu_baselines/kl_min
+  # Reference model path filled at runtime (pre-unlearning checkpoint)
+  reference_model_path: ""

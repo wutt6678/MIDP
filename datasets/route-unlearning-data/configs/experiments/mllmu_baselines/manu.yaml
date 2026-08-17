@@ -1,0 +1,21 @@
+# MANU (B8) — Modality-Aware Neuron Unlearning
+# Paper: Liu et al., ACL 2025 (arXiv:2502.15910)
+
+method: manu
+description: >
+  Modality-aware neuron pruning. MLP neurons with high forget importance
+  and low retain importance are identified and pruned at 5% and 10% rates.
+
+# Pruning rates
+primary_prune_fraction: 0.10   # 10% primary
+secondary_prune_fraction: 0.05 # 5% secondary
+
+# Importance estimation
+importance_n_samples: 32
+importance_batch_size: 1
+
+# Neuron selection
+neuron_unit: mlp_intermediate  # primary unit: MLP intermediate channels
+
+# Post-pruning fine-tuning (disabled by default — pruning-only)
+num_optimizer_steps: 0

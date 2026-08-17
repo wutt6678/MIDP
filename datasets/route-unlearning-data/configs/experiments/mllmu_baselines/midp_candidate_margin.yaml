@@ -1,0 +1,19 @@
+# MLLMU-Bench B6: MIDP Candidate Margin (existing E2B-B2 result)
+#
+# No retraining needed. This config references the existing E2B-B2
+# experiment output for comparison.
+#
+# The E2B-B2 experiment used:
+#   - method: lora_targeted_candidate_margin
+#   - retain_weight: 1.0
+#   - lr: 2e-5, steps: 125, seed: 17
+#   - rank: 8, alpha: 16, dropout: 0.0
+
+method:
+  name: midp_candidate_margin
+  source_experiment: unlearning_pilot_e2b_b2
+
+runtime:
+  # Reference to existing E2B-B2 output
+  output_dir: outputs/experiments/mllmu_baselines/midp_candidate_margin
+  e2b_b2_output_dir: outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_e2b_b2

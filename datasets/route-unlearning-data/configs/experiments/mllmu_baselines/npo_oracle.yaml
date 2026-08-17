@@ -1,0 +1,30 @@
+# MLLMU-Bench B5 — NPO Oracle Training
+#
+# Separate retain-only training job from the same Qwen revision.
+# Same LoRA (rank 8, alpha 16), same seed 17, 125 steps, lr=2e-5.
+# Only retain examples — zero target/control examples.
+#
+# This config trains the oracle model that is then used as the frozen
+# reference in npo.yaml.
+
+method:
+  name: npo_oracle  # Special: retain-only CE, not an UnlearningObjective
+
+training:
+  seed: 17
+  learning_rate: 2.0e-5
+  max_optimizer_steps: 125
+  batch_size: 1
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+  checkpoint_steps: [1, 5, 10, 25, 50, 60, 75, 90, 125]
+  retain_only: true  # Zero forget examples
+
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.0
+  target_modules: [q_proj, v_proj, k_proj, o_proj]
+
+runtime:
+  output_dir: outputs/experiments/mllmu_baselines/npo/oracle
