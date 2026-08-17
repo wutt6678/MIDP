@@ -42,6 +42,7 @@ from .objectives import (
     GradientDifference,
     KLMinimization,
     NegativePreferenceOptimization,
+    RetainOnlyCE,
     UnlearningObjective,
 )
 from .r2mu_adapted import (
@@ -55,6 +56,7 @@ __all__ = [
     "GradientAscent",
     "GradientDifference",
     "KLMinimization",
+    "RetainOnlyCE",
     "NegativePreferenceOptimization",
     # Training infrastructure
     "BaselineTrainingConfig",

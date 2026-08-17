@@ -1,7 +1,7 @@
 """Unlearning objective implementations for MLLMU-Bench baselines.
 
 This module implements the UnlearningObjective Protocol and concrete
-objective classes for GA, GD, KL, and NPO baselines.
+objective classes for GA, GD, KL, NPO oracle, and NPO baselines.
 
 All objectives use answer-only cross-entropy: CE is computed only on
 assistant answer tokens, never on prompts, system messages, or image
@@ -13,6 +13,7 @@ Public API
 .. autoclass:: GradientAscent
 .. autoclass:: GradientDifference
 .. autoclass:: KLMinimization
+.. autoclass:: RetainOnlyCE
 .. autoclass:: NegativePreferenceOptimization
 """
 
@@ -394,6 +395,52 @@ class KLMinimization:
         kl = kl_per_token.sum() / answer_token_count
 
         return kl
+
+
+# --------------------------------------------------------------------------- #
+# Baseline B5-oracle: Retain-Only CE (NPO Oracle Training)
+# --------------------------------------------------------------------------- #
+
+class RetainOnlyCE:
+    """Retain-only cross-entropy objective (MLLMU-Bench B5 oracle training).
+
+    Trains the model on retain data only with standard cross-entropy.
+    No forget term. Used to produce the oracle adapter for NPO.
+    """
+
+    name = "npo_oracle"
+
+    def compute_loss(
+        self,
+        model: torch.nn.Module,
+        forget_batch: dict[str, Any],
+        retain_batch: dict[str, Any] | None = None,
+        reference_model: torch.nn.Module | None = None,
+        oracle_model: torch.nn.Module | None = None,
+    ) -> dict[str, torch.Tensor | None]:
+        """Compute retain-only CE loss.
+
+        Returns
+        -------
+        loss_dict:
+            total_loss = ce_retain
+            forget_loss = None
+            retain_loss = ce_retain
+            kl_loss = None
+            npo_loss = None
+        """
+        if retain_batch is None:
+            raise ValueError("RetainOnlyCE requires retain_batch")
+
+        ce_retain = answer_only_cross_entropy(model, retain_batch)
+
+        return {
+            "total_loss": ce_retain,
+            "forget_loss": None,
+            "retain_loss": ce_retain,
+            "kl_loss": None,
+            "npo_loss": None,
+        }
 
 
 # --------------------------------------------------------------------------- #

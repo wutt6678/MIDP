@@ -291,19 +291,24 @@ def main() -> None:
     check_base_parameter_integrity(model)
 
     # Build datasets
-    logger.info("Building forget dataset ...")
-    forget_ds = build_forget_dataset(
-        processed_dataset_path=training_config.processed_dataset_path,
-        target_identity_ids=training_config.forget_identity_ids,
-        processor=processor,
-    )
+    # npo_oracle is retain-only: no forget dataset needed
+    is_retain_only = config.get("training", {}).get("retain_only", False)
+
+    forget_ds = None
+    if not is_retain_only:
+        logger.info("Building forget dataset ...")
+        forget_ds = build_forget_dataset(
+            processed_dataset_path=training_config.processed_dataset_path,
+            target_identity_ids=training_config.forget_identity_ids,
+            processor=processor,
+        )
 
     retain_ds = None
-    if method_name in ("mllmu_ga_difference", "mllmu_kl_min"):
+    if method_name in ("mllmu_ga_difference", "mllmu_kl_min", "npo_oracle"):
         logger.info("Building retain dataset ...")
         retain_ds = build_retain_dataset(
             processed_dataset_path=training_config.processed_dataset_path,
-            identity_ids=training_config.retain_identity_ids,
+            retain_identity_ids=training_config.retain_identity_ids,
             processor=processor,
         )
 

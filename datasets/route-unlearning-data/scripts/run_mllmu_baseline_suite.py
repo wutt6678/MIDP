@@ -32,6 +32,7 @@ import json
 import logging
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -141,12 +142,19 @@ def _run_single_method(
         if oracle_path:
             config.setdefault("runtime", {})["oracle_adapter_path"] = oracle_path
 
-    method_path = CONFIGS_DIR / f"{method}.yaml"
+    # Write merged config (with injected runtime values) to temp YAML
+    # so the subprocess can read the complete config from disk
+    tmp_config = tempfile.NamedTemporaryFile(
+        mode="w", suffix=f"_{method}.yaml", delete=False,
+    )
+    yaml.dump(config, tmp_config, default_flow_style=False)
+    tmp_config.close()
+
     cmd = [
         sys.executable,
         str(PROJECT_ROOT / "scripts" / "run_mllmu_baseline.py"),
         "--method", method,
-        "--config", str(method_path),
+        "--config", tmp_config.name,
     ]
 
     logger.info(f"{'='*60}")
@@ -178,6 +186,13 @@ def _run_single_method(
             "error": str(exc),
             "elapsed_seconds": elapsed,
         }
+    finally:
+        # Clean up temp config file
+        import os
+        try:
+            os.unlink(tmp_config.name)
+        except OSError:
+            pass
 
 
 # --------------------------------------------------------------------------- #

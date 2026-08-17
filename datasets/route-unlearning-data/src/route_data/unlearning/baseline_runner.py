@@ -42,6 +42,7 @@ from .objectives import (
     GradientDifference,
     KLMinimization,
     NegativePreferenceOptimization,
+    RetainOnlyCE,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,7 @@ class BaselineTrainingConfig:
     kl_weight: float = 1.0  # For KL
     include_retain_ce: bool = False  # For KL
     npo_beta: float = 0.9  # For NPO (paper value, NOT repo default 0.4)
+    retain_only: bool = False  # For npo_oracle: train on retain data only
 
     # Data
     forget_identity_ids: list[str] = field(default_factory=list)
@@ -110,6 +112,20 @@ class BaselineTrainingConfig:
     @property
     def effective_batch_size(self) -> int:
         return self.batch_size * self.gradient_accumulation_steps
+
+
+# --------------------------------------------------------------------------- #
+# Dummy loader for retain-only training
+# --------------------------------------------------------------------------- #
+
+class _DummyLoader:
+    """Yields empty dicts for retain-only training (no forget dataset)."""
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> dict[str, Any]:
+        return {}
 
 
 # --------------------------------------------------------------------------- #
@@ -171,14 +187,19 @@ class BaselineTrainer:
         self.generator.manual_seed(seed)
 
         # Data loaders
-        self.forget_loader = DataLoader(
-            forget_dataset,
-            batch_size=config.batch_size,
-            shuffle=True,
-            num_workers=0,
-            generator=self.generator,
-            collate_fn=qwen_collate_fn,
-        )
+        if forget_dataset is not None:
+            self.forget_loader = DataLoader(
+                forget_dataset,
+                batch_size=config.batch_size,
+                shuffle=True,
+                num_workers=0,
+                generator=self.generator,
+                collate_fn=qwen_collate_fn,
+            )
+        else:
+            # Retain-only mode: dummy forget loader yielding empty dicts
+            self.forget_loader = _DummyLoader()
+
         self.retain_loader = None
         if retain_dataset is not None:
             self.retain_loader = DataLoader(
@@ -484,6 +505,9 @@ class BaselineTrainer:
             manifest["method_hyperparameters"]["kl_weight"] = self.config.kl_weight
             manifest["method_hyperparameters"]["temperature"] = self.config.kl_temperature
             manifest["method_hyperparameters"]["include_retain_ce"] = self.config.include_retain_ce
+        elif self.config.method_name == "npo_oracle":
+            manifest["method_hyperparameters"]["retain_only"] = True
+            manifest["method_hyperparameters"]["description"] = "Oracle training on retain data only for NPO"
         elif self.config.method_name == "mllmu_npo":
             manifest["method_hyperparameters"]["beta"] = self.config.npo_beta
             manifest["method_hyperparameters"]["upstream_paper_beta"] = 0.9
@@ -541,6 +565,8 @@ def build_objective(config: BaselineTrainingConfig) -> Any:
             temperature=config.kl_temperature,
             include_retain_ce=config.include_retain_ce,
         )
+    elif config.method_name == "npo_oracle":
+        return RetainOnlyCE()
     elif config.method_name == "mllmu_npo":
         return NegativePreferenceOptimization(beta=config.npo_beta)
     else:
@@ -594,6 +620,7 @@ def load_config_from_yaml(path: str | Path) -> BaselineTrainingConfig:
         kl_weight=method.get("kl_weight", 1.0),
         include_retain_ce=method.get("include_retain_ce", False),
         npo_beta=method.get("beta", 0.9),
+        retain_only=training.get("retain_only", False),
         output_dir=runtime.get("output_dir", ""),
         checkpoint_steps=training.get("checkpoint_steps", [1, 5, 10, 25, 50, 60, 75, 90, 125]),
     )
