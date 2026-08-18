@@ -285,12 +285,12 @@ def generate_saliency_mask(
     model: nn.Module,
     saliency: dict[str, torch.Tensor],
     config: MMUnlearnerConfig,
-) -> dict[str, torch.Tensor]:
+) -> tuple[dict[str, torch.Tensor], dict[str, Any]]:
     """Generate an element-level binary mask from saliency scores.
 
     Individual elements (not whole tensors) are ranked by saliency.
-    The top-k elements (by ``target_sparsity`` fraction of total numel)
-    receive a mask value of 1; all others receive 0.
+    Uses **exact global top-k index selection** over trainable parameters
+    only (Option A — LoRA-compatible mask population).
 
     Parameters
     ----------
@@ -305,50 +305,96 @@ def generate_saliency_mask(
     -------
     mask:
         Dict mapping parameter names to binary mask tensors.
+    mask_meta:
+        Metadata about mask construction including exact cardinality.
     """
-    # Compute total number of elements across all parameters.
-    total_numel = sum(p.numel() for p in model.parameters())
-    if total_numel == 0:
-        logger.warning("No parameters — generating full mask")
-        return {n: torch.ones_like(p.data) for n, p in model.named_parameters()}
+    # Option A: trainable-only population (coherent with LoRA optimizer).
+    trainable_params = [
+        (n, p) for n, p in model.named_parameters() if p.requires_grad
+    ]
+    total_numel = sum(p.numel() for _, p in trainable_params)
 
-    # Collect all element scores on CPU for global ranking.
-    all_scores_list = []
-    for name, param in model.named_parameters():
+    if total_numel == 0:
+        logger.warning("No trainable parameters — generating empty mask")
+        mask = {n: torch.zeros_like(p.data) for n, p in trainable_params}
+        meta = {
+            "requested_sparsity": config.target_sparsity,
+            "requested_selected_fraction": 1.0 - config.effective_sparsity,
+            "population_numel": 0,
+            "requested_selected_numel": 0,
+            "actual_selected_numel": 0,
+            "measured_sparsity": 0.0,
+            "mask_population": "trainable_only",
+        }
+        return mask, meta
+
+    # Collect all element scores on CPU for global ranking — trainable only.
+    all_scores_list: list[torch.Tensor] = []
+    param_layout: list[tuple[str, torch.Size, int, torch.dtype]] = []
+    for name, param in trainable_params:
         score = saliency.get(name)
         if score is not None:
             all_scores_list.append(score.detach().flatten().cpu())
         else:
             all_scores_list.append(torch.zeros(param.numel()))
+        param_layout.append((name, param.data.shape, param.numel(), param.data.dtype))
 
     all_scores_flat = torch.cat(all_scores_list)
-
-    # Top-k elements by saliency (higher = more important for forgetting).
-    target_n = int(total_numel * (1.0 - config.effective_sparsity))
-    target_n = max(1, min(target_n, total_numel))
-
-    # Compute threshold via topk on CPU.
-    threshold = torch.topk(all_scores_flat, target_n).values[-1].item()
-
-    # Build per-element binary masks.
-    mask: dict[str, torch.Tensor] = {}
-    n_selected = 0
-    for name, param in model.named_parameters():
-        score = saliency.get(name)
-        if score is not None:
-            m = (score >= threshold).to(param.data.dtype)
-        else:
-            m = torch.zeros_like(param.data)
-        mask[name] = m
-        n_selected += int(m.sum().item())
-
-    sparsity = 1.0 - (n_selected / max(total_numel, 1))
-    logger.info(
-        f"Mask generated (element-level): {n_selected}/{total_numel} "
-        f"elements selected (effective sparsity: {sparsity:.3f})"
+    assert all_scores_flat.numel() == total_numel, (
+        f"Score vector numel {all_scores_flat.numel()} != "
+        f"trainable population {total_numel}"
     )
 
-    return mask
+    # Exact global top-k index selection.
+    requested_selected_numel = int(total_numel * (1.0 - config.effective_sparsity))
+    requested_selected_numel = max(1, min(requested_selected_numel, total_numel))
+
+    topk_indices = torch.topk(
+        all_scores_flat, k=requested_selected_numel, largest=True,
+    ).indices
+
+    global_mask = torch.zeros(total_numel, dtype=torch.bool)
+    global_mask[topk_indices] = True
+
+    # Split global_mask back into the original parameter tensor shapes.
+    mask: dict[str, torch.Tensor] = {}
+    offset = 0
+    n_selected = 0
+    for name, shape, numel, dtype in param_layout:
+        chunk = global_mask[offset:offset + numel]
+        m = chunk.reshape(shape).to(dtype)
+        mask[name] = m
+        n_selected += int(m.sum().item())
+        offset += numel
+
+    actual_selected_numel = n_selected
+    measured_sparsity = 1.0 - (actual_selected_numel / max(total_numel, 1))
+
+    # Hard validation gate — exact or ±1 tolerance.
+    if abs(actual_selected_numel - requested_selected_numel) > 1:
+        raise RuntimeError(
+            f"Mask cardinality gate FAILED: requested "
+            f"{requested_selected_numel} selected elements, got "
+            f"{actual_selected_numel} (tolerance: 1)"
+        )
+
+    mask_meta: dict[str, Any] = {
+        "requested_sparsity": config.target_sparsity,
+        "requested_selected_fraction": 1.0 - config.effective_sparsity,
+        "population_numel": total_numel,
+        "requested_selected_numel": requested_selected_numel,
+        "actual_selected_numel": actual_selected_numel,
+        "measured_sparsity": measured_sparsity,
+        "mask_population": "trainable_only",
+    }
+
+    logger.info(
+        f"Mask generated (element-level, trainable-only): "
+        f"{actual_selected_numel}/{total_numel} elements selected "
+        f"(measured sparsity: {measured_sparsity:.3f})"
+    )
+
+    return mask, mask_meta
 
 
 def apply_mask_to_gradients(
@@ -434,18 +480,13 @@ class MMUnlearner:
 
         # Step 3: Mask generation
         logger.info("Step 3: Generating saliency mask ...")
-        mask = generate_saliency_mask(model, saliency, self.config)
+        mask, mask_meta = generate_saliency_mask(model, saliency, self.config)
 
-        # Save mask info
+        # Save mask info — merge config + exact cardinality metadata
         mask_info = {
             "granularity": self.config.mask_granularity,
-            "target_sparsity": self.config.target_sparsity,
-            "effective_sparsity": self.config.effective_sparsity,
             "modality": self.config.modality,
-            "n_parameters_total": sum(p.numel() for p in model.parameters()),
-            "n_parameters_selected": sum(
-                m.sum().item() for m in mask.values() if m.sum() > 0
-            ),
+            **mask_meta,
         }
         with open(output_dir / "mask_info.json", "w") as f:
             json.dump(mask_info, f, indent=2)

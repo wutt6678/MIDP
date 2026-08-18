@@ -108,6 +108,55 @@ def _load_method_config(method: str) -> dict[str, Any]:
     return merged
 
 
+# Methods for which NPO-oracle is a training dependency, not a final
+# comparison result.  Everything else in METHOD_ORDER is a comparison method.
+_ORACLE_ONLY_METHODS = {"npo_oracle"}
+
+# Comparison methods that MUST produce a valid eval_results.json.
+COMPARISON_METHODS = [m[0] for m in METHOD_ORDER if m[0] not in _ORACLE_ONLY_METHODS]
+
+
+def _validate_eval_result(eval_metrics: dict[str, Any], expected_method: str) -> str | None:
+    """Validate a loaded eval_results.json.
+
+    Returns None on success or an error-message string on failure.
+    """
+    # exact_pair_count must be 500
+    pair_count = eval_metrics.get("exact_pair_count", eval_metrics.get("actual_pair_count", 0))
+    if pair_count != 500:
+        return f"exact_pair_count={pair_count}, expected 500"
+
+    # inference_errors must be 0
+    errors = eval_metrics.get("inference_errors", -1)
+    if errors != 0:
+        return f"inference_errors={errors}, expected 0"
+
+    # strict_validation_pass must be true
+    if not eval_metrics.get("strict_validation_pass", False):
+        return "strict_validation_pass is not true"
+
+    # exact_pairing_pass must be true
+    if not eval_metrics.get("exact_pairing_pass", False):
+        return "exact_pairing_pass is not true"
+
+    # results_path must exist (if provided)
+    results_path = eval_metrics.get("results_path", "")
+    if results_path and not Path(results_path).is_file():
+        return f"results_path does not exist: {results_path}"
+
+    # manifest SHA must be non-empty (if the field is present)
+    manifest_sha = eval_metrics.get("manifest_sha256", "")
+    if "manifest_sha256" in eval_metrics and not manifest_sha:
+        return "manifest_sha256 is empty"
+
+    # delta fields must be present when applicable
+    for field in ("delta_target", "delta_retain", "delta_control"):
+        if field in eval_metrics and not eval_metrics[field]:
+            return f"{field} is present but empty"
+
+    return None
+
+
 def _run_single_method(
     method: str,
     config: dict[str, Any],
@@ -127,7 +176,8 @@ def _run_single_method(
     Returns
     -------
     result:
-        Dict with status, output_dir, elapsed_seconds.
+        Dict with status, output_dir, elapsed_seconds, and optionally
+        eval_metrics loaded from the subprocess eval_results.json.
     """
     output_dir = config.get("runtime", {}).get("output_dir", "")
     if not output_dir:
@@ -174,19 +224,14 @@ def _run_single_method(
             check=True,
         )
         elapsed = time.time() - t0
-        return {
-            "method": method,
-            "status": "success",
-            "output_dir": output_dir,
-            "elapsed_seconds": elapsed,
-        }
     except subprocess.CalledProcessError as exc:
         elapsed = time.time() - t0
         logger.error(f"Method {method} FAILED (exit code {exc.returncode})")
         return {
             "method": method,
-            "status": "failed",
+            "status": "training_failed",
             "error": str(exc),
+            "output_dir": output_dir,
             "elapsed_seconds": elapsed,
         }
     finally:
@@ -196,6 +241,89 @@ def _run_single_method(
             os.unlink(tmp_config.name)
         except OSError:
             pass
+
+    # --- Subprocess exited 0.  Now load eval_results.json (P0-2). ---
+    # MANU produces per-rate eval dirs; other methods write to <output>/eval/.
+    if method == "manu":
+        # MANU evaluation is handled per-prune-rate inside the subprocess.
+        # We look for eval_results.json under each prune rate dir.
+        eval_results_by_rate = {}
+        all_rates_valid = True
+        for rate in [0.05, 0.10]:
+            rate_str = f"{rate * 100:.0f}"
+            eval_path = Path(output_dir) / "eval" / f"manu_prune_{rate_str}" / "eval_results.json"
+            if not eval_path.is_file():
+                # Also check directly under checkpoints
+                eval_path = Path(output_dir) / "checkpoints" / f"prune_{rate_str}" / "eval_results.json"
+            if eval_path.is_file():
+                with open(eval_path) as f:
+                    metrics = json.load(f)
+                err = _validate_eval_result(metrics, f"manu_prune_{rate_str}")
+                if err:
+                    logger.error(f"MANU prune_{rate_str} eval invalid: {err}")
+                    all_rates_valid = False
+                eval_results_by_rate[f"prune_{rate_str}"] = metrics
+            else:
+                logger.error(f"MANU prune_{rate_str}: eval_results.json not found")
+                all_rates_valid = False
+
+        if not eval_results_by_rate:
+            return {
+                "method": method,
+                "status": "missing_eval",
+                "output_dir": output_dir,
+                "elapsed_seconds": elapsed,
+            }
+        if not all_rates_valid:
+            return {
+                "method": method,
+                "status": "invalid_eval",
+                "output_dir": output_dir,
+                "elapsed_seconds": elapsed,
+                "eval_metrics": eval_results_by_rate,
+            }
+        return {
+            "method": method,
+            "status": "success",
+            "output_dir": output_dir,
+            "elapsed_seconds": elapsed,
+            "eval_metrics": eval_results_by_rate,
+        }
+
+    # Standard single-eval methods
+    eval_path = Path(output_dir) / "eval" / "eval_results.json"
+    if not eval_path.is_file():
+        logger.error(f"Method {method}: eval_results.json not found at {eval_path}")
+        return {
+            "method": method,
+            "status": "missing_eval",
+            "output_dir": output_dir,
+            "elapsed_seconds": elapsed,
+        }
+
+    with open(eval_path) as f:
+        eval_metrics = json.load(f)
+
+    validation_error = _validate_eval_result(eval_metrics, method)
+    if validation_error:
+        logger.error(f"Method {method}: eval invalid — {validation_error}")
+        return {
+            "method": method,
+            "status": "invalid_eval",
+            "output_dir": output_dir,
+            "elapsed_seconds": elapsed,
+            "eval_metrics": eval_metrics,
+            "eval_error": validation_error,
+        }
+
+    logger.info(f"Method {method}: eval_results.json loaded and validated")
+    return {
+        "method": method,
+        "status": "success",
+        "output_dir": output_dir,
+        "elapsed_seconds": elapsed,
+        "eval_metrics": eval_metrics,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -246,11 +374,19 @@ def run_suite_preflight(
     )
 
     data_cfg = common_config.get("data", {})
-    manifest_sha = data_cfg.get("selection_manifest_sha256", "")
+    processed_sha = data_cfg.get("processed_dataset_sha256", "")
     _check(
-        "selection_manifest_sha256_nonempty",
-        bool(manifest_sha) and len(manifest_sha) == 64,
-        f"sha256_len={len(manifest_sha)}",
+        "processed_dataset_sha256_nonempty",
+        bool(processed_sha) and len(processed_sha) == 64,
+        f"sha256_len={len(processed_sha)}",
+    )
+
+    # Also verify route_probe_sha256 is present.
+    probe_sha = data_cfg.get("route_probe_sha256", "")
+    _check(
+        "route_probe_sha256_nonempty",
+        bool(probe_sha) and len(probe_sha) == 64,
+        f"sha256_len={len(probe_sha)}",
     )
 
     # If the processed dataset file exists, verify its SHA-256.
@@ -267,9 +403,9 @@ def run_suite_preflight(
                     h.update(chunk)
             actual_sha = h.hexdigest()
             _check(
-                "processed_dataset_sha256",
-                actual_sha == manifest_sha,
-                f"expected={manifest_sha[:16]}... actual={actual_sha[:16]}...",
+                "processed_dataset_sha256_match",
+                actual_sha == processed_sha,
+                f"expected={processed_sha[:16]}... actual={actual_sha[:16]}...",
             )
         else:
             _check(
@@ -382,15 +518,31 @@ def main() -> None:
 
     suite_elapsed = time.time() - suite_start
 
-    # Suite summary
+    # Suite summary (P0-2: explicit status states)
     per_method_status = {}
     for r in results:
         has_eval = bool(r.get("eval_metrics"))
         per_method_status[r["method"]] = {
-            "status": r["status"],  # "success" | "failed" | "missing_eval"
+            "status": r["status"],
             "has_eval_result": has_eval,
             "elapsed_seconds": r.get("elapsed_seconds", 0),
         }
+        if r.get("eval_error"):
+            per_method_status[r["method"]]["eval_error"] = r["eval_error"]
+
+    # eval_complete: all comparison methods have valid eval results.
+    # NPO-oracle is a training dependency, not a comparison method.
+    eval_complete = all(
+        r.get("status") == "success" and bool(r.get("eval_metrics"))
+        for r in results
+        if r["method"] in COMPARISON_METHODS
+    ) if results else False
+
+    # all_succeeded: every requested method completed its required phase
+    # AND every comparison method produced a valid eval result.
+    all_succeeded = all(
+        r["status"] == "success" for r in results
+    ) and eval_complete
 
     summary = {
         "suite": "mllmu_baselines",
@@ -399,10 +551,9 @@ def main() -> None:
         "total_elapsed_seconds": suite_elapsed,
         "code_commit": suite_state["code_commit"],
         "per_method_status": per_method_status,
-        "eval_complete": all(
-            s["has_eval_result"] for s in per_method_status.values()
-        ) if per_method_status else False,
-        "all_succeeded": all(r["status"] == "success" for r in results),
+        "eval_complete": eval_complete,
+        "all_succeeded": all_succeeded,
+        "comparison_methods": COMPARISON_METHODS,
     }
 
     summary_path = OUTPUT_ROOT / "suite_summary.json"
@@ -418,7 +569,8 @@ def main() -> None:
         eval_icon = "eval" if has_eval else "NO_EVAL"
         logger.info(
             f"  [{status_icon}] {r['method']} "
-            f"({r.get('elapsed_seconds', 0):.1f}s) [{eval_icon}]"
+            f"({r.get('elapsed_seconds', 0):.1f}s) [{eval_icon}] "
+            f"status={r['status']}"
         )
     logger.info(f"Summary: {summary_path}")
     logger.info(f"{'='*60}")

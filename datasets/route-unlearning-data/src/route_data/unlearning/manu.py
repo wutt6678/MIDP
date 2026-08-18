@@ -21,11 +21,12 @@ Public API
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import torch
 from torch import nn
@@ -412,6 +413,7 @@ def prune_neurons(
         Information about what was pruned.
     """
     n_parameters_modified = 0
+    n_weight_slices_modified = 0
     pruned_layers = []
     # Track unique (layer_path, neuron_idx) pairs to avoid double-counting
     # when the same neuron is zeroed in both up_proj and down_proj.
@@ -438,6 +440,7 @@ def prune_neurons(
                         if idx < out_features:
                             module.weight[idx, :] = 0.0
                             n_parameters_modified += in_features
+                            n_weight_slices_modified += 1
                             pruned_neuron_set.add((layer_path, idx))
                 elif ".mlp.down_proj" in name:
                     # down_proj: in_features = intermediate_size → zero columns
@@ -445,6 +448,7 @@ def prune_neurons(
                         if idx < in_features:
                             module.weight[:, idx] = 0.0
                             n_parameters_modified += out_features
+                            n_weight_slices_modified += 1
                             pruned_neuron_set.add((layer_path, idx))
                 # gate_proj is intentionally skipped — pruning is defined
                 # by up_proj row zeroing + down_proj column zeroing.
@@ -452,17 +456,19 @@ def prune_neurons(
         if layer_path not in pruned_layers:
             pruned_layers.append(layer_path)
 
-    n_pruned = len(pruned_neuron_set)
+    n_unique = len(pruned_neuron_set)
 
     prune_info = {
-        "n_neurons_pruned": n_pruned,
+        "unique_neurons_pruned": n_unique,
+        "weight_slices_modified": n_weight_slices_modified,
         "n_parameters_modified": n_parameters_modified,
         "n_layers_affected": len(pruned_layers),
         "pruned_layers": pruned_layers,
     }
 
     logger.info(
-        f"Pruned {n_pruned} neurons ({n_parameters_modified} parameters) "
+        f"Pruned {n_unique} unique neurons ({n_weight_slices_modified} weight "
+        f"slices, {n_parameters_modified} parameters) "
         f"across {len(pruned_layers)} layers"
     )
 
@@ -491,6 +497,7 @@ class MANU:
         forget_loader: Any,
         retain_loader: Any | None = None,
         device: str = "cuda:0",
+        eval_callback: Callable[[str, nn.Module], dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Run the full MANU pipeline.
 
@@ -504,11 +511,15 @@ class MANU:
             DataLoader for retain examples.
         device:
             Compute device.
+        eval_callback:
+            Optional callback ``f(rate_str, model)`` invoked on the **live
+            pruned model** before restoration.  Must return an eval-results
+            dict (e.g. from ``evaluate_intervention``).
 
         Returns
         -------
         results:
-            Pipeline results dict.
+            Pipeline results.
         """
         dev = torch.device(device)
         model.to(dev)
@@ -555,7 +566,6 @@ class MANU:
 
             # Prune in-place (avoids OOM from deepcopy)
             prune_info = prune_neurons(model, neurons)
-            prune_info["prune_fraction"] = prune_rate
 
             # Verify forward pass works
             try:
@@ -565,23 +575,54 @@ class MANU:
                 logger.error(f"Forward pass failed after pruning: {e}")
                 prune_info["forward_pass_ok"] = False
 
-            # Save adapter checkpoint BEFORE restoring (P0-6)
+            # Deterministic pruning specification with selection hash (P0-8)
+            selection_str = json.dumps(
+                {k: sorted(v) for k, v in neurons.items()}, sort_keys=True,
+            )
+            selection_sha = hashlib.sha256(selection_str.encode()).hexdigest()
+
+            prune_spec = {
+                "prune_fraction": prune_rate,
+                "selected_neurons": {k: sorted(v) for k, v in neurons.items()},
+                "n_unique_neurons_pruned": prune_info["unique_neurons_pruned"],
+                "n_parameters_modified": prune_info["n_parameters_modified"],
+                "n_weight_slices_modified": prune_info["weight_slices_modified"],
+                "n_layers_affected": prune_info["n_layers_affected"],
+                "selection_sha256": selection_sha,
+            }
+
+            # Persist pruning specification (P0-8)
             rate_str = f"{prune_rate * 100:.0f}"
-            adapter_path = output_dir / f"checkpoints/prune_{rate_str}"
-            adapter_path.mkdir(parents=True, exist_ok=True)
-            model.save_pretrained(str(adapter_path))
-            prune_info["adapter_path"] = str(adapter_path)
-            logger.info(f"Saved pruned adapter checkpoint: {adapter_path}")
-
-            # Save prune info
-            with open(output_dir / f"prune_info_{rate_str}.json", "w") as f:
-                json.dump(prune_info, f, indent=2)
+            with open(output_dir / f"prune_spec_{rate_str}.json", "w") as f:
+                json.dump(prune_spec, f, indent=2)
                 f.write("\n")
+            logger.info(
+                f"Saved pruning specification (rate={rate_str}%, "
+                f"sha256={selection_sha[:16]}...)"
+            )
 
+            # Evaluate the live pruned model BEFORE restoration (P0-8).
+            # PeftModel.save_pretrained() cannot preserve base-weight zeroing,
+            # so we must evaluate the in-memory pruned model directly.
+            if eval_callback is not None and prune_info.get("forward_pass_ok"):
+                logger.info(
+                    f"Evaluating live pruned model at {rate_str}% ..."
+                )
+                eval_result = eval_callback(rate_str, model)
+                prune_info["eval_result"] = eval_result
+                if not eval_result.get("strict_validation_pass"):
+                    logger.error(
+                        f"MANU prune_{rate_str}: strict validation FAILED"
+                    )
+            else:
+                eval_result = None
+
+            prune_info["prune_fraction"] = prune_rate
             results[f"prune_{rate_str}"] = prune_info
 
             # Restore original weights for next prune rate
             model.load_state_dict(original_state)
+            logger.info(f"Restored original model after {rate_str}% evaluation")
 
         # Clean up
         del original_state
