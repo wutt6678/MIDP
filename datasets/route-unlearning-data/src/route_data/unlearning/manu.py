@@ -558,6 +558,10 @@ class MANU:
         # Save original weights to CPU to restore between prune rates (avoids OOM from deepcopy)
         original_state = {n: p.cpu().clone() for n, p in model.state_dict().items()}
 
+        # P1-18: Compute pre-prune state hash for restore verification.
+        pre_prune_hash = _state_dict_sha256(original_state)
+        logger.info(f"Pre-prune state hash: {pre_prune_hash[:16]}...")
+
         results = {}
         for prune_rate in self.config.prune_rates:
             logger.info(f"Step 3: Pruning at {prune_rate * 100:.0f}% ...")
@@ -625,7 +629,23 @@ class MANU:
 
             # Restore original weights for next prune rate
             model.load_state_dict(original_state)
-            logger.info(f"Restored original model after {rate_str}% evaluation")
+            # P1-18: Verify restoration.
+            post_restore_hash = _state_dict_sha256(
+                {n: p.cpu().clone() for n, p in model.state_dict().items()}
+            )
+            restore_verified = post_restore_hash == pre_prune_hash
+            prune_info["restore_verified"] = restore_verified
+            if not restore_verified:
+                logger.error(
+                    f"MANU prune_{rate_str}: restoration FAILED "
+                    f"(pre={pre_prune_hash[:16]}..., "
+                    f"post={post_restore_hash[:16]}...)"
+                )
+            else:
+                logger.info(
+                    f"Restored original model after {rate_str}% "
+                    f"(verified: {post_restore_hash[:16]}...)"
+                )
 
         # Clean up
         del original_state
@@ -634,7 +654,25 @@ class MANU:
             "inventory": inventory.get("_summary", {}),
             "importance": importance_info,
             "pruning": results,
+            # P1-18: Restore verification metadata.
+            "pre_prune_state_hash": pre_prune_hash,
+            "post_restore_state_hash": post_restore_hash,
+            "restore_verified": restore_verified,
         }
+
+
+def _state_dict_sha256(state_dict: dict[str, torch.Tensor]) -> str:
+    """Compute SHA-256 of a model state dict for restore verification (P1-18).
+
+    Hashes the raw bytes of each tensor in sorted key order.
+    """
+    h = hashlib.sha256()
+    for key in sorted(state_dict.keys()):
+        t = state_dict[key]
+        raw = t.detach().contiguous().cpu().numpy().tobytes()
+        h.update(key.encode("utf-8"))
+        h.update(raw)
+    return h.hexdigest()
 
 
 def _verify_forward(

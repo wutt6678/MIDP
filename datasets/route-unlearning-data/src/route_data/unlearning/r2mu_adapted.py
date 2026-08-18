@@ -14,8 +14,8 @@ Key steps:
    random target vector z (norm-matched)
 3. Retain objective — MSE between current and frozen-model
    representations (gamma=1.0 primary)
-4. Representation pooling — answer-decision representation immediately
-   before candidate scoring
+4. Representation pooling — pre-answer decision position
+   (last token before ground-truth answer, derived from _prefix_len)
 5. Trainable scope — same rank-8 LoRA as E2B
 
 Public API
@@ -37,6 +37,69 @@ import torch
 from torch import nn
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------- #
+# Decision-position extraction (P0-R2MU)
+# --------------------------------------------------------------------------- #
+
+def get_decision_positions(
+    batch: dict[str, Any],
+    seq_len: int,
+) -> torch.Tensor:
+    """Compute pre-answer decision positions from ``_prefix_len``.
+
+    The decision representation is the hidden state *immediately before*
+    the ground-truth answer tokens, i.e. at index ``prefix_len - 1``.
+
+    Parameters
+    ----------
+    batch:
+        A collated batch dict.  Must contain ``_prefix_len`` — a list or
+        tensor with one entry per example.
+    seq_len:
+        Total sequence length (for bounds validation).
+
+    Returns
+    -------
+    positions:
+        1-D ``torch.LongTensor`` of shape ``(batch_size,)`` with the
+        token index to extract from each example.
+
+    Raises
+    ------
+    RuntimeError
+        If ``_prefix_len`` is missing or any value is out of bounds.
+    """
+    prefix_len_raw = batch.get("_prefix_len")
+    if prefix_len_raw is None:
+        raise RuntimeError(
+            "R2MU decision-position extraction requires _prefix_len "
+            "in the batch.  Ensure both ForgetDataset and RetainDataset "
+            "store _prefix_len and the collate function preserves it."
+        )
+
+    # Normalise to a list of ints.
+    if torch.is_tensor(prefix_len_raw):
+        prefix_lens = prefix_len_raw.tolist()
+    elif isinstance(prefix_len_raw, (list, tuple)):
+        prefix_lens = [int(v) for v in prefix_len_raw]
+    else:
+        prefix_lens = [int(prefix_len_raw)]
+
+    positions = []
+    for i, pl in enumerate(prefix_lens):
+        if pl <= 0:
+            raise RuntimeError(
+                f"_prefix_len[{i}]={pl} must be > 0"
+            )
+        if pl > seq_len:
+            raise RuntimeError(
+                f"_prefix_len[{i}]={pl} exceeds seq_len={seq_len}"
+            )
+        positions.append(pl - 1)
+
+    return torch.tensor(positions, dtype=torch.long)
 
 
 # --------------------------------------------------------------------------- #
@@ -253,8 +316,8 @@ def _collect_representations(
             model(**model_kwargs)
 
         if "repr" in hook_output:
-            # Extract hidden state at the last prefix token position
-            # (last non-padded position per attention_mask), NOT mean-pooling.
+            # P0-R2MU: Extract hidden state at the pre-answer decision
+            # position (_prefix_len - 1), NOT the last non-padding token.
             h = hook_output["repr"]
             if h.dim() == 3:
                 # Determine which dim is hidden_size
@@ -263,17 +326,17 @@ def _collect_representations(
                     if h.shape[d] == hidden_size:
                         hidden_dim = d
                         break
-                attn = batch["attention_mask"]
-                last_pos = attn.sum(dim=1) - 1  # (batch,)
+                decision_pos = get_decision_positions(batch, h.size(1))
+                batch_idx = torch.arange(h.size(0))
                 if hidden_dim == 2:
                     # Standard layout: (batch, seq, hidden)
-                    repr_extracted = h[torch.arange(h.size(0)), last_pos]
+                    repr_extracted = h[batch_idx, decision_pos]
                 elif hidden_dim == 1:
                     # Unusual layout: (batch, hidden, seq)
-                    repr_extracted = h[torch.arange(h.size(0)), :, last_pos]
+                    repr_extracted = h[batch_idx, :, decision_pos]
                 else:
                     # Fallback: assume dim=1 is sequence
-                    repr_extracted = h[torch.arange(h.size(0)), last_pos]
+                    repr_extracted = h[batch_idx, decision_pos]
             else:
                 repr_extracted = h
             representations.append(repr_extracted.cpu())
@@ -450,6 +513,12 @@ class R2MUAdapted:
             "selected_layers": selected_layers,
             "training": training_results,
             "adapter_path": adapter_path,
+            # P0-5: Decision-position provenance for B9.
+            "representation_position_definition": (
+                "last_token_before_ground_truth_answer"
+            ),
+            "representation_position_source": "_prefix_len",
+            "answer_tokens_excluded": True,
         }
 
     def _train(
@@ -475,6 +544,13 @@ class R2MUAdapted:
 
         losses = []
         forget_repr_distances = []
+
+        # P1-16: Boundary diagnostics for prefix-length validation.
+        boundary_n_checked = 0
+        boundary_n_valid = 0
+        boundary_n_equal_full_length = 0
+        boundary_min_prefix_len: int | None = None
+        boundary_max_prefix_len: int = 0
 
         for step in range(1, self.config.num_optimizer_steps + 1):
             optimizer.zero_grad()
@@ -504,6 +580,38 @@ class R2MUAdapted:
                     k: v.to(device) if torch.is_tensor(v) else v
                     for k, v in retain_batch.items()
                 }
+
+                # P1-16: Accumulate boundary diagnostics.
+                for _batch_for_diag in (forget_batch, retain_batch):
+                    _pl = _batch_for_diag.get("_prefix_len")
+                    _am = _batch_for_diag.get("attention_mask")
+                    if _pl is not None and _am is not None:
+                        if torch.is_tensor(_pl):
+                            _pl_list = _pl.tolist()
+                        elif isinstance(_pl, (list, tuple)):
+                            _pl_list = list(_pl)
+                        else:
+                            _pl_list = [_pl]
+                        if torch.is_tensor(_am):
+                            _non_pad = _am.sum(dim=1).tolist()
+                        else:
+                            _non_pad = [0] * len(_pl_list)
+                        for _i, (_pv, _np) in enumerate(
+                            zip(_pl_list, _non_pad)
+                        ):
+                            boundary_n_checked += 1
+                            _pv_int = int(_pv)
+                            if 0 < _pv_int <= _np:
+                                boundary_n_valid += 1
+                            if _pv_int == _np:
+                                boundary_n_equal_full_length += 1
+                            if boundary_min_prefix_len is None or (
+                                _pv_int < boundary_min_prefix_len
+                            ):
+                                boundary_min_prefix_len = _pv_int
+                            boundary_max_prefix_len = max(
+                                boundary_max_prefix_len, _pv_int
+                            )
 
                 # Collect representations at selected layers
                 forget_reprs = self._hook_representations(
@@ -583,6 +691,18 @@ class R2MUAdapted:
             "losses": losses,
             "forget_repr_distances": forget_repr_distances,
             "adapter_path": str(adapter_path),
+            # P1-16: Boundary diagnostics for B9 auditability.
+            "boundary_diagnostics": {
+                "n_examples_checked": boundary_n_checked,
+                "n_prefix_boundaries_valid": boundary_n_valid,
+                "n_prefix_boundaries_equal_full_length": boundary_n_equal_full_length,
+                "min_prefix_len": boundary_min_prefix_len,
+                "max_prefix_len": boundary_max_prefix_len,
+                "answer_tokens_excluded": (
+                    boundary_n_valid == boundary_n_checked
+                    and boundary_n_equal_full_length == 0
+                ),
+            },
         }
 
     def _hook_representations(
@@ -633,7 +753,8 @@ class R2MUAdapted:
         for h in handles:
             h.remove()
 
-        # Extract representations at the last prefix token position
+        # P0-R2MU: Extract representations at the pre-answer decision
+        # position (_prefix_len - 1), NOT the last non-padding token.
         for layer_idx in selected_layers:
             if layer_idx in hook_outputs:
                 h = hook_outputs[layer_idx]
@@ -644,17 +765,17 @@ class R2MUAdapted:
                         if h.shape[d] == self._get_hidden_size(model):
                             hidden_dim = d
                             break
-                    attn = batch["attention_mask"]
-                    last_pos = attn.sum(dim=1) - 1  # (batch,)
+                    decision_pos = get_decision_positions(batch, h.size(1))
+                    batch_idx = torch.arange(h.size(0))
                     if hidden_dim == 2:
                         # Standard layout: (batch, seq, hidden)
-                        repr_extracted = h[torch.arange(h.size(0)), last_pos]
+                        repr_extracted = h[batch_idx, decision_pos]
                     elif hidden_dim == 1:
                         # Unusual layout: (batch, hidden, seq)
-                        repr_extracted = h[torch.arange(h.size(0)), :, last_pos]
+                        repr_extracted = h[batch_idx, :, decision_pos]
                     else:
                         # Fallback: assume dim=1 is sequence
-                        repr_extracted = h[torch.arange(h.size(0)), last_pos]
+                        repr_extracted = h[batch_idx, decision_pos]
                 else:
                     repr_extracted = h
                 representations.append(repr_extracted)

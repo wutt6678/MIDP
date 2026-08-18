@@ -196,6 +196,45 @@ def _validate_eval_result(
     if "manifest_sha256" in eval_metrics and not manifest_sha:
         return "manifest_sha256 is empty"
 
+    # P1-17: Validate actual artifact hashes where recorded.
+    # Verify manifest.json SHA matches on-disk content.
+    if eval_output_dir and manifest_sha:
+        manifest_path = Path(eval_output_dir) / "manifest.json"
+        if manifest_path.is_file():
+            actual_manifest_sha = _sha256_file(manifest_path)
+            if actual_manifest_sha != manifest_sha:
+                return (
+                    f"manifest.json SHA mismatch: "
+                    f"recorded={manifest_sha[:16]}..., "
+                    f"actual={actual_manifest_sha[:16]}..."
+                )
+
+    # P1-17: Verify strict_validation.json SHA if recorded.
+    strict_val_sha = eval_metrics.get("strict_validation_sha256", "")
+    if eval_output_dir and strict_val_sha:
+        strict_path = Path(eval_output_dir) / "strict_validation.json"
+        if strict_path.is_file():
+            actual_strict_sha = _sha256_file(strict_path)
+            if actual_strict_sha != strict_val_sha:
+                return (
+                    f"strict_validation.json SHA mismatch: "
+                    f"recorded={strict_val_sha[:16]}..., "
+                    f"actual={actual_strict_sha[:16]}..."
+                )
+
+    # P1-17: Verify pairing_validation.json SHA if recorded.
+    pairing_val_sha = eval_metrics.get("pairing_validation_sha256", "")
+    if eval_output_dir and pairing_val_sha:
+        pairing_path = Path(eval_output_dir) / "pairing_validation.json"
+        if pairing_path.is_file():
+            actual_pairing_sha = _sha256_file(pairing_path)
+            if actual_pairing_sha != pairing_val_sha:
+                return (
+                    f"pairing_validation.json SHA mismatch: "
+                    f"recorded={pairing_val_sha[:16]}..., "
+                    f"actual={actual_pairing_sha[:16]}..."
+                )
+
     # delta fields must be present and non-empty
     for field in ("delta_target", "delta_retain", "delta_control",
                   "delta_untargeted"):
@@ -1035,19 +1074,40 @@ def main() -> None:
         if r.get("eval_error"):
             per_method_status[r["method"]]["eval_error"] = r["eval_error"]
 
-    # eval_complete: all comparison methods have valid eval results.
-    # NPO-oracle is a training dependency, not a comparison method.
-    eval_complete = all(
-        r.get("status") == "success" and bool(r.get("eval_metrics"))
+    # P0-7/8/9/10/11: Non-vacuous suite completeness.
+    # Determine which comparison methods were requested and which succeeded.
+    required_comparison_methods = set(COMPARISON_METHODS)
+    requested_comparison_methods = {
+        m for m in method_keys if m in COMPARISON_METHODS
+    }
+    valid_eval_methods = {
+        r["method"]
         for r in results
-        if r["method"] in COMPARISON_METHODS
-    ) if results else False
+        if (
+            r["method"] in COMPARISON_METHODS
+            and r.get("status") == "success"
+            and bool(r.get("eval_metrics"))
+        )
+    }
+    missing_comparison_methods = sorted(
+        required_comparison_methods - valid_eval_methods
+    )
+    execution_scope = (
+        "full" if requested_comparison_methods == required_comparison_methods
+        else "partial"
+    )
 
-    # all_succeeded: every requested method completed its required phase
-    # AND every comparison method produced a valid eval result.
-    all_succeeded = all(
-        r["status"] == "success" for r in results
-    ) and eval_complete
+    # eval_complete: ALL required comparison methods have valid eval results.
+    eval_complete = valid_eval_methods == required_comparison_methods
+
+    # research_suite_complete: full evidence exists for final comparison.
+    research_suite_complete = eval_complete and execution_scope == "full"
+
+    # run_success: selected commands completed correctly (partial-aware).
+    run_success = all(r["status"] == "success" for r in results) and bool(results)
+
+    # all_succeeded: backward-compatible alias for run_success + eval_complete.
+    all_succeeded = run_success and eval_complete
 
     # P0-3: Post-run git cleanliness check.
     git_clean_at_end = _git_working_tree_clean()
@@ -1063,7 +1123,15 @@ def main() -> None:
         "git_dirty_at_start": suite_state["git_dirty_at_start"],
         "git_clean_at_end": git_clean_at_end,
         "per_method_status": per_method_status,
+        # P0-7/8/9/10/11: Non-vacuous completeness.
+        "required_comparison_methods": sorted(required_comparison_methods),
+        "requested_comparison_methods": sorted(requested_comparison_methods),
+        "valid_eval_methods": sorted(valid_eval_methods),
+        "missing_comparison_methods": missing_comparison_methods,
+        "execution_scope": execution_scope,
+        "run_success": run_success,
         "eval_complete": eval_complete,
+        "research_suite_complete": research_suite_complete,
         "all_succeeded": all_succeeded,
         "comparison_methods": COMPARISON_METHODS,
     }

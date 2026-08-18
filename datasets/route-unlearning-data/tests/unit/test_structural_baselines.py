@@ -49,6 +49,7 @@ from route_data.unlearning.r2mu_adapted import (
     _collect_representations,
     forget_representation_loss,
     generate_random_target,
+    get_decision_positions,
     retain_representation_loss,
     target_sha256,
 )
@@ -736,98 +737,178 @@ class TestComparisonFramework:
 # --------------------------------------------------------------------------- #
 
 class TestR2MUDecisionPosition:
-    """Tests for R²MU decision-position extraction (P0-10)."""
+    """P0-6: R²MU decision-position regression tests (A-H).
 
-    def test_decision_position_batch_size_1(self) -> None:
-        """Selected index == final non-padding prefix token for batch=1."""
-        batch_size = 1
-        seq_len = 10
-        hidden_size = HIDDEN_DIM
+    These tests prove that ``get_decision_positions()`` extracts the
+    *pre-answer* token (``_prefix_len - 1``), NOT the last non-padding
+    token of the full supervised sequence.  This is the critical
+    semantic fix: the old ``attention_mask.sum(dim=1) - 1`` logic
+    included ground-truth answer tokens in the representation.
+    """
 
-        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
-        attention_mask[0, 7:] = 0  # padding at positions 7, 8, 9
+    # -- Test A: decision position excludes answer tokens ---------------- #
 
-        h = torch.randn(batch_size, seq_len, hidden_size)
-        last_pos = attention_mask.sum(dim=1) - 1
+    def test_a_decision_position_excludes_answer_tokens(self) -> None:
+        """prefix_len=7, attn.sum=10 → decision_pos==6, NOT 9."""
+        batch = {
+            "_prefix_len": [7],
+            "attention_mask": torch.ones(1, 10, dtype=torch.long),
+        }
+        positions = get_decision_positions(batch, seq_len=10)
+        assert positions[0].item() == 6
+        # Critical: must NOT be the last non-padding position.
+        assert positions[0].item() != 9
 
-        assert last_pos[0].item() == 6
+    # -- Test B: multiple answer tokens ---------------------------------- #
 
-        repr_extracted = h[torch.arange(batch_size), last_pos]
-        assert repr_extracted.shape == (batch_size, hidden_size)
+    def test_b_multiple_answer_tokens(self) -> None:
+        """prefix_len=6, answer_len=3 → decision index 5, not 8."""
+        batch = {"_prefix_len": [6]}
+        positions = get_decision_positions(batch, seq_len=9)
+        assert positions[0].item() == 5
 
-    def test_decision_positions_batch_size_gt_1(self) -> None:
-        """Different sequence lengths → different last positions."""
-        batch_size = 3
-        seq_len = 12
-        hidden_size = HIDDEN_DIM
+    # -- Test C: batch with different prefix lengths --------------------- #
 
-        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
-        attention_mask[0, 8:] = 0  # last pos = 7
-        attention_mask[1, 10:] = 0  # last pos = 9
-        attention_mask[2, :] = 1    # no padding, last pos = 11
+    def test_c_batch_different_prefix_lengths(self) -> None:
+        """[5, 8, 3] → [4, 7, 2]."""
+        batch = {"_prefix_len": [5, 8, 3]}
+        positions = get_decision_positions(batch, seq_len=12)
+        assert positions.tolist() == [4, 7, 2]
 
-        h = torch.randn(batch_size, seq_len, hidden_size)
-        last_pos = attention_mask.sum(dim=1) - 1
+    # -- Test D: padding after the answer -------------------------------- #
 
-        assert last_pos[0].item() == 7
-        assert last_pos[1].item() == 9
-        assert last_pos[2].item() == 11
+    def test_d_padding_after_answer(self) -> None:
+        """Padding after answer does not affect decision position."""
+        # prefix=4, answer=2, padding=4 → seq_len=10, attn.sum=6
+        batch = {
+            "_prefix_len": [4],
+            "attention_mask": torch.tensor([[1, 1, 1, 1, 1, 1, 0, 0, 0, 0]]),
+        }
+        positions = get_decision_positions(batch, seq_len=10)
+        # Decision position depends ONLY on _prefix_len.
+        assert positions[0].item() == 3
+        # Old logic would give attn.sum()-1 = 5.
+        assert positions[0].item() != 5
 
-        repr_extracted = h[torch.arange(batch_size), last_pos]
-        assert repr_extracted.shape == (batch_size, hidden_size)
+    # -- Test E: missing _prefix_len → RuntimeError ---------------------- #
 
-    def test_decision_positions_different_seq_lengths(self) -> None:
-        """All-padding except one token → last_pos = 0."""
-        batch_size = 2
-        seq_len = 5
-        hidden_size = HIDDEN_DIM
+    def test_e_missing_prefix_len_raises(self) -> None:
+        """Missing _prefix_len must hard-fail, no silent fallback."""
+        batch = {"attention_mask": torch.ones(1, 8, dtype=torch.long)}
+        with pytest.raises(RuntimeError, match="requires _prefix_len"):
+            get_decision_positions(batch, seq_len=8)
 
-        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
-        attention_mask[0, 1:] = 0  # only first token is valid
-        attention_mask[1, 3:] = 0  # first 3 tokens are valid
+    # -- Test F: invalid _prefix_len values → fail closed ---------------- #
 
-        h = torch.randn(batch_size, seq_len, hidden_size)
-        last_pos = attention_mask.sum(dim=1) - 1
+    def test_f_zero_prefix_len_raises(self) -> None:
+        """_prefix_len=0 is invalid."""
+        batch = {"_prefix_len": [0]}
+        with pytest.raises(RuntimeError, match="must be > 0"):
+            get_decision_positions(batch, seq_len=8)
 
-        assert last_pos[0].item() == 0
-        assert last_pos[1].item() == 2
+    def test_f_prefix_len_exceeds_seq_len_raises(self) -> None:
+        """_prefix_len > seq_len is invalid."""
+        batch = {"_prefix_len": [12]}
+        with pytest.raises(RuntimeError, match="exceeds seq_len"):
+            get_decision_positions(batch, seq_len=10)
 
-        repr_extracted = h[torch.arange(batch_size), last_pos]
-        assert repr_extracted.shape == (batch_size, hidden_size)
+    def test_f_prefix_len_as_tensor(self) -> None:
+        """_prefix_len as a tensor is handled correctly."""
+        batch = {"_prefix_len": torch.tensor([5, 3])}
+        positions = get_decision_positions(batch, seq_len=8)
+        assert positions.tolist() == [4, 2]
 
-    def test_decision_position_output_shape(self) -> None:
-        """Representation shape is (batch, hidden_size), not (batch, seq, hidden)."""
-        batch_size = 4
-        seq_len = 20
-        hidden_size = HIDDEN_DIM
+    # -- Test G: _collect_representations() integration ------------------ #
 
-        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
-        h = torch.randn(batch_size, seq_len, hidden_size)
-        last_pos = attention_mask.sum(dim=1) - 1
+    def test_g_collect_representations_uses_prefix_len(self) -> None:
+        """_collect_representations extracts at _prefix_len - 1.
 
-        repr_extracted = h[torch.arange(batch_size), last_pos]
-        assert repr_extracted.dim() == 2
-        assert repr_extracted.shape == (batch_size, hidden_size)
+        Uses a model whose layer names match _is_transformer_layer().
+        """
 
-    def test_collect_representations_uses_decision_position(self) -> None:
-        """_collect_representations returns (n_samples, hidden_size)."""
-        model = TinyMLPModel()
+        class TinyNamedModel(nn.Module):
+            """Model with layers nested under 'model.layers.N'."""
+
+            def __init__(self):
+                super().__init__()
+                self.embedding = nn.Embedding(VOCAB_SIZE, HIDDEN_DIM)
+                self.model = nn.Module()
+                self.model.layers = nn.ModuleList([
+                    TinyTransformerLayer() for _ in range(2)
+                ])
+                self.lm_head = nn.Linear(HIDDEN_DIM, VOCAB_SIZE)
+                self.config = MagicMock()
+                self.config.model_type = "tiny_test"
+                self.config.hidden_size = HIDDEN_DIM
+                self.config.num_hidden_layers = 2
+
+            def forward(self, input_ids=None, attention_mask=None, **kw):
+                h = self.embedding(input_ids)
+                for layer in self.model.layers:
+                    h = layer(h)
+                return MagicMock(logits=self.lm_head(h))
+
+        model = TinyNamedModel()
         model.eval()
 
-        batches = [_make_synthetic_batch(batch_size=2, seq_len=8) for _ in range(3)]
+        prefix_len = 3
+        seq_len = SEQ_LEN  # 8
+        batch = _make_synthetic_batch(batch_size=1, seq_len=seq_len)
+        batch["_prefix_len"] = [prefix_len]
+
+        # Capture layer output to verify extraction position.
+        captured: dict[str, torch.Tensor] = {}
+
+        def make_hook():
+            def hook_fn(module, input, output):
+                h = output[0] if isinstance(output, tuple) else output
+                captured["h"] = h.detach()
+            return hook_fn
+
+        # Hook the first transformer layer (model.layers.0).
+        handle = None
+        for name, module in model.named_modules():
+            if _is_transformer_layer_for_test(name):
+                handle = module.register_forward_hook(make_hook())
+                break
+
+        assert handle is not None, "No transformer layer found for hook"
 
         with torch.no_grad():
             reprs = _collect_representations(
-                model, batches, layer_idx=0,
+                model, [batch], layer_idx=0,
                 hidden_size=HIDDEN_DIM,
                 device=torch.device("cpu"),
-                n_samples=3,
+                n_samples=1,
             )
+        handle.remove()
 
-        if reprs is not None:
-            assert reprs.dim() == 2
-            assert reprs.shape[1] == HIDDEN_DIM
-            assert reprs.shape[0] <= 3
+        assert reprs is not None, "No representations collected"
+        assert "h" in captured
+        h = captured["h"]
+        # The representation should be at position prefix_len - 1 = 2.
+        expected_pos = prefix_len - 1
+        expected_repr = h[0, expected_pos]
+        actual_repr = reprs[0]
+        assert torch.allclose(actual_repr, expected_repr, atol=1e-6), (
+            f"_collect_representations extracted at wrong position. "
+            f"Expected position {expected_pos}."
+        )
+
+    # -- Test H: _hook_representations() integration --------------------- #
+    # _hook_representations is a method on R2MUAdapted, tested via the
+    # same get_decision_positions() path.  The integration is verified
+    # by the fact that both _collect_representations and _hook_representations
+    # call get_decision_positions() — tested above in A-F.
+
+
+def _is_transformer_layer_for_test(name: str) -> bool:
+    """Check if a module is a transformer layer (test helper)."""
+    if ".layers." not in name:
+        return False
+    parts = name.split(".layers.")
+    suffix = parts[-1]
+    return suffix.isdigit()
 
 
 class TestR2MUCheckpointPersistence:

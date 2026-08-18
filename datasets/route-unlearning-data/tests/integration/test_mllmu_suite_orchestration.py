@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -1309,3 +1310,186 @@ class TestMIDPCMBinding:
 
         with pytest.raises(FileNotFoundError):
             bind_e2b_b2_result(tmp_path / "nonexistent")
+
+
+# ========================================================================== #
+# P0-12/13/14: Absent-method completeness tests
+# ========================================================================== #
+
+
+def _compute_suite_completeness(
+    results: list[dict],
+    method_keys: list[str],
+    comparison_methods: list[str],
+) -> dict:
+    """Replicate the suite completeness logic from run_mllmu_baseline_suite.py.
+
+    This helper extracts the P0-7/8/9/10/11 completeness computation
+    so it can be tested in isolation.
+    """
+    required = set(comparison_methods)
+    requested = {m for m in method_keys if m in comparison_methods}
+    valid_eval = {
+        r["method"]
+        for r in results
+        if (
+            r["method"] in comparison_methods
+            and r.get("status") == "success"
+            and bool(r.get("eval_metrics"))
+        )
+    }
+    missing = sorted(required - valid_eval)
+    execution_scope = "full" if requested == required else "partial"
+    eval_complete = valid_eval == required
+    research_suite_complete = eval_complete and execution_scope == "full"
+    run_success = all(r["status"] == "success" for r in results) and bool(results)
+    return {
+        "required_comparison_methods": sorted(required),
+        "requested_comparison_methods": sorted(requested),
+        "valid_eval_methods": sorted(valid_eval),
+        "missing_comparison_methods": missing,
+        "execution_scope": execution_scope,
+        "eval_complete": eval_complete,
+        "research_suite_complete": research_suite_complete,
+        "run_success": run_success,
+    }
+
+
+# Import COMPARISON_METHODS from the suite script.
+def _get_comparison_methods() -> list[str]:
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    import run_mllmu_baseline_suite
+    return run_mllmu_baseline_suite.COMPARISON_METHODS
+
+
+class TestP012AbsentMethodCompleteness:
+    """P0-12: A completely absent method makes eval_complete=False."""
+
+    def test_ga_only_missing_methods(self) -> None:
+        """GA-only results: gd, kl, etc. appear in missing_comparison_methods."""
+        comparison_methods = _get_comparison_methods()
+
+        # Simulate: only GA succeeded.
+        results = [
+            {
+                "method": "ga",
+                "status": "success",
+                "eval_metrics": {"exact_pair_count": 500},
+            },
+        ]
+        method_keys = ["ga"]
+        summary = _compute_suite_completeness(results, method_keys, comparison_methods)
+
+        assert summary["eval_complete"] is False
+        assert "gd" in summary["missing_comparison_methods"]
+        assert "kl" in summary["missing_comparison_methods"]
+        assert "prompting" in summary["missing_comparison_methods"]
+        # GA is NOT missing.
+        assert "ga" not in summary["missing_comparison_methods"]
+
+    def test_empty_results_all_missing(self) -> None:
+        """No results at all → all methods missing."""
+        comparison_methods = _get_comparison_methods()
+        results: list[dict] = []
+        method_keys: list[str] = []
+
+        summary = _compute_suite_completeness(results, method_keys, comparison_methods)
+        assert summary["eval_complete"] is False
+        assert len(summary["missing_comparison_methods"]) == len(comparison_methods)
+
+
+class TestP013PartialOnlyOrchestration:
+    """P0-13: --only ga produces partial scope, no Case A/B/C."""
+
+    def test_only_ga_partial_scope(self) -> None:
+        """--only ga: run_success=true, scope=partial, eval_complete=false."""
+        comparison_methods = _get_comparison_methods()
+
+        results = [
+            {
+                "method": "ga",
+                "status": "success",
+                "eval_metrics": {"exact_pair_count": 500},
+            },
+        ]
+        method_keys = ["ga"]
+        summary = _compute_suite_completeness(results, method_keys, comparison_methods)
+
+        assert summary["run_success"] is True
+        assert summary["execution_scope"] == "partial"
+        assert summary["eval_complete"] is False
+        assert summary["research_suite_complete"] is False
+
+    def test_partial_cannot_emit_case_conclusion(self) -> None:
+        """Partial suite cannot produce Case A/B/C conclusion."""
+        from route_data.unlearning.comparison_framework import (
+            ComparisonFramework,
+            MethodResult,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            # Only one method with valid evidence.
+            fw.add_result(MethodResult(
+                method_id="ga", baseline_id="B1", description="GA",
+                delta_target={"DV": -0.5}, delta_retain={"DV": -0.01},
+                delta_control={"DV": -0.02},
+                dv_accuracy={
+                    "global": 1.0, "target": 0.0,
+                    "retain": 1.0, "control": 1.0, "untargeted": 0.99,
+                },
+            ))
+
+            # With eval_complete=False, conclusion must be INCOMPLETE.
+            conclusion = fw.write_route_selectivity_conclusion(eval_complete=False)
+            assert "INCOMPLETE" in conclusion
+            assert "Case A" not in conclusion
+            assert "Case B" not in conclusion
+            assert "Case C" not in conclusion
+
+
+class TestP014FullMethodSetCompleteness:
+    """P0-14: Full valid method set can still set eval_complete=true."""
+
+    def test_all_methods_present(self) -> None:
+        """All comparison methods succeed → eval_complete=true."""
+        comparison_methods = _get_comparison_methods()
+
+        results = [
+            {
+                "method": m,
+                "status": "success",
+                "eval_metrics": {"exact_pair_count": 500},
+            }
+            for m in comparison_methods
+        ]
+        method_keys = list(comparison_methods)
+        summary = _compute_suite_completeness(results, method_keys, comparison_methods)
+
+        assert summary["execution_scope"] == "full"
+        assert summary["eval_complete"] is True
+        assert summary["research_suite_complete"] is True
+        assert summary["missing_comparison_methods"] == []
+
+    def test_one_method_failed(self) -> None:
+        """One method failed → eval_complete=false."""
+        comparison_methods = _get_comparison_methods()
+
+        results = [
+            {
+                "method": m,
+                "status": "success",
+                "eval_metrics": {"exact_pair_count": 500},
+            }
+            for m in comparison_methods
+        ]
+        # Make one method fail.
+        results[-1]["status"] = "failed"
+        results[-1]["eval_metrics"] = None
+
+        method_keys = list(comparison_methods)
+        summary = _compute_suite_completeness(results, method_keys, comparison_methods)
+
+        assert summary["eval_complete"] is False
+        assert len(summary["missing_comparison_methods"]) == 1

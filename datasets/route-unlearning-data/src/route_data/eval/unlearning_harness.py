@@ -385,6 +385,11 @@ class RetainDataset(Dataset):
         labels[:assistant_start] = -100
         result["labels"] = labels
 
+        # P0-R2MU: Store _prefix_len for R²MU decision-position extraction.
+        # _prefix_len = number of tokens in the complete input prefix before
+        # the ground-truth answer.  Identical semantics to ForgetDataset.
+        result["_prefix_len"] = assistant_start
+
         return result
 
 
