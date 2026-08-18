@@ -217,17 +217,15 @@ class ComparisonFramework:
         missing_eval_methods = []
 
         for r in self.results:
-            if not r.delta_target:
+            # Missing evidence → INCOMPLETE, not any Case (P0-13/14).
+            if not r.delta_target or not r.delta_retain or not r.delta_control:
+                missing_eval_methods.append(r.method_id)
                 continue
 
             # Check if target degradation is specific (not uniform)
             target_degradation = self._has_target_degradation(r)
             retain_status = self._check_preservation(r.delta_retain)
             control_status = self._check_preservation(r.delta_control)
-
-            # Missing evidence: method cannot be Case A
-            if retain_status == "MISSING" or control_status == "MISSING":
-                missing_eval_methods.append(r.method_id)
 
             if target_degradation and retain_status == "PASS" and control_status == "PASS":
                 case_a_methods.append(r.method_id)
@@ -275,27 +273,32 @@ class ComparisonFramework:
                 "action": "freeze_and_proceed",
             }
 
-        # Save decision
-        with open(self.output_dir / "e2c_decision.json", "w") as f:
-            json.dump(decision, f, indent=2)
-            f.write("\n")
-
         if missing_eval_methods:
+            decision["missing_eval_methods"] = missing_eval_methods
             logger.warning(
                 f"Methods with MISSING evaluation data: {missing_eval_methods}. "
                 f"These cannot be classified as Case A."
             )
 
+        # Save decision
+        with open(self.output_dir / "e2c_decision.json", "w") as f:
+            json.dump(decision, f, indent=2)
+            f.write("\n")
+
         logger.info(f"E2C decision: Case {decision['case']}")
         return decision
 
     def _has_target_degradation(self, result: MethodResult) -> bool:
-        """Check if target attributes show degradation."""
+        """Check if target attributes show degradation.
+
+        Uses signed margin semantics: degradation means the mean signed
+        margin decreased (negative delta).  The threshold is a
+        pre-registered margin decrease, *not* a percentage accuracy.
+        """
         if not result.delta_target:
             return False
-        # Target degradation = negative delta (decrease in attribute accuracy)
         avg_delta = sum(result.delta_target.values()) / len(result.delta_target)
-        return avg_delta < -0.1  # At least 10% degradation
+        return avg_delta < 0.0  # any negative mean-margin decrease
 
     def _check_preservation(self, deltas: dict[str, float]) -> str:
         """Three-state preservation check: PASS, FAIL, or MISSING.
@@ -367,23 +370,37 @@ class ComparisonFramework:
     def _compute_selectivity_score(self, result: MethodResult) -> float | None:
         """Compute a selectivity score for a method.
 
-        Selectivity = target degradation - max(retain, control) degradation.
+        Selectivity = target-forgetting − max(retain-drift, control-drift).
+
+        *target_forgetting* = −mean(delta_target).  A positive value means
+        the target margin *decreased* (successful forgetting).  If the
+        target margin did not decrease (mean ≥ 0) the method is not
+        forgetting and selectivity is ``None``.
+
+        *retain_drift* / *control_drift* use ``abs()`` because any
+        deviation (positive or negative) is undesirable drift.
+
         Higher = more selective (target-specific).
         """
         if not result.delta_target:
             return None
 
-        target_deg = abs(sum(result.delta_target.values()) / len(result.delta_target))
-        retain_deg = (
+        mean_target_delta = sum(result.delta_target.values()) / len(result.delta_target)
+        # Prerequisite: target must actually decrease (forgetting).
+        if mean_target_delta >= 0:
+            return None  # not forgetting → no selectivity
+
+        target_forgetting = -mean_target_delta  # positive = good
+        retain_drift = (
             abs(sum(result.delta_retain.values()) / len(result.delta_retain))
             if result.delta_retain else 0.0
         )
-        control_deg = (
+        control_drift = (
             abs(sum(result.delta_control.values()) / len(result.delta_control))
             if result.delta_control else 0.0
         )
 
-        selectivity = target_deg - max(retain_deg, control_deg)
+        selectivity = target_forgetting - max(retain_drift, control_drift)
         return selectivity
 
     def write_route_selectivity_conclusion(self) -> str:

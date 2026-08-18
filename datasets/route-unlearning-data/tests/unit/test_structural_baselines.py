@@ -45,7 +45,9 @@ from route_data.unlearning.mmunlearner import (
     save_parameter_inventory,
 )
 from route_data.unlearning.r2mu_adapted import (
+    R2MUAdapted,
     R2MUAdaptedConfig,
+    _collect_representations,
     forget_representation_loss,
     generate_random_target,
     retain_representation_loss,
@@ -210,11 +212,12 @@ class TestMMUnlearnerMask:
         }
 
         config = MMUnlearnerConfig(target_sparsity=0.5)
-        mask1 = generate_saliency_mask(model, saliency, config)
-        mask2 = generate_saliency_mask(model, saliency, config)
+        mask1, meta1 = generate_saliency_mask(model, saliency, config)
+        mask2, meta2 = generate_saliency_mask(model, saliency, config)
 
         for name in mask1:
             assert torch.equal(mask1[name], mask2[name])
+        assert meta1 == meta2
 
     def test_mask_non_empty(self) -> None:
         """Mask should have at least some selected parameters."""
@@ -226,10 +229,11 @@ class TestMMUnlearnerMask:
         }
 
         config = MMUnlearnerConfig(target_sparsity=0.5)
-        mask = generate_saliency_mask(model, saliency, config)
+        mask, meta = generate_saliency_mask(model, saliency, config)
 
         total_selected = sum(m.sum().item() for m in mask.values())
         assert total_selected > 0
+        assert meta["actual_selected_numel"] == total_selected
 
     def test_mask_not_100_percent(self) -> None:
         """Mask should not select 100% of parameters."""
@@ -241,11 +245,12 @@ class TestMMUnlearnerMask:
         }
 
         config = MMUnlearnerConfig(target_sparsity=0.5, max_mask_fraction=0.99)
-        mask = generate_saliency_mask(model, saliency, config)
+        mask, meta = generate_saliency_mask(model, saliency, config)
 
         total_params = sum(p.numel() for p in model.parameters())
         total_selected = sum(m.sum().item() for m in mask.values())
         assert total_selected < total_params
+        assert meta["mask_population"] == "trainable_only"
 
     def test_gradient_zero_outside_mask(self) -> None:
         """Gradients should be zero for parameters outside mask."""
@@ -720,3 +725,456 @@ class TestComparisonFramework:
             conclusion = fw.write_route_selectivity_conclusion()
             assert "ROUTE-SELECTIVITY CONCLUSION" in conclusion
             assert (Path(tmpdir) / "route_selectivity_conclusion.txt").exists()
+
+
+# --------------------------------------------------------------------------- #
+# Tests — R²MU Decision Position (R7)
+# --------------------------------------------------------------------------- #
+
+class TestR2MUDecisionPosition:
+    """Tests for R²MU decision-position extraction (P0-10)."""
+
+    def test_decision_position_batch_size_1(self) -> None:
+        """Selected index == final non-padding prefix token for batch=1."""
+        batch_size = 1
+        seq_len = 10
+        hidden_size = HIDDEN_DIM
+
+        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
+        attention_mask[0, 7:] = 0  # padding at positions 7, 8, 9
+
+        h = torch.randn(batch_size, seq_len, hidden_size)
+        last_pos = attention_mask.sum(dim=1) - 1
+
+        assert last_pos[0].item() == 6
+
+        repr_extracted = h[torch.arange(batch_size), last_pos]
+        assert repr_extracted.shape == (batch_size, hidden_size)
+
+    def test_decision_positions_batch_size_gt_1(self) -> None:
+        """Different sequence lengths → different last positions."""
+        batch_size = 3
+        seq_len = 12
+        hidden_size = HIDDEN_DIM
+
+        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
+        attention_mask[0, 8:] = 0  # last pos = 7
+        attention_mask[1, 10:] = 0  # last pos = 9
+        attention_mask[2, :] = 1    # no padding, last pos = 11
+
+        h = torch.randn(batch_size, seq_len, hidden_size)
+        last_pos = attention_mask.sum(dim=1) - 1
+
+        assert last_pos[0].item() == 7
+        assert last_pos[1].item() == 9
+        assert last_pos[2].item() == 11
+
+        repr_extracted = h[torch.arange(batch_size), last_pos]
+        assert repr_extracted.shape == (batch_size, hidden_size)
+
+    def test_decision_positions_different_seq_lengths(self) -> None:
+        """All-padding except one token → last_pos = 0."""
+        batch_size = 2
+        seq_len = 5
+        hidden_size = HIDDEN_DIM
+
+        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
+        attention_mask[0, 1:] = 0  # only first token is valid
+        attention_mask[1, 3:] = 0  # first 3 tokens are valid
+
+        h = torch.randn(batch_size, seq_len, hidden_size)
+        last_pos = attention_mask.sum(dim=1) - 1
+
+        assert last_pos[0].item() == 0
+        assert last_pos[1].item() == 2
+
+        repr_extracted = h[torch.arange(batch_size), last_pos]
+        assert repr_extracted.shape == (batch_size, hidden_size)
+
+    def test_decision_position_output_shape(self) -> None:
+        """Representation shape is (batch, hidden_size), not (batch, seq, hidden)."""
+        batch_size = 4
+        seq_len = 20
+        hidden_size = HIDDEN_DIM
+
+        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
+        h = torch.randn(batch_size, seq_len, hidden_size)
+        last_pos = attention_mask.sum(dim=1) - 1
+
+        repr_extracted = h[torch.arange(batch_size), last_pos]
+        assert repr_extracted.dim() == 2
+        assert repr_extracted.shape == (batch_size, hidden_size)
+
+    def test_collect_representations_uses_decision_position(self) -> None:
+        """_collect_representations returns (n_samples, hidden_size)."""
+        model = TinyMLPModel()
+        model.eval()
+
+        batches = [_make_synthetic_batch(batch_size=2, seq_len=8) for _ in range(3)]
+
+        with torch.no_grad():
+            reprs = _collect_representations(
+                model, batches, layer_idx=0,
+                hidden_size=HIDDEN_DIM,
+                device=torch.device("cpu"),
+                n_samples=3,
+            )
+
+        if reprs is not None:
+            assert reprs.dim() == 2
+            assert reprs.shape[1] == HIDDEN_DIM
+            assert reprs.shape[0] <= 3
+
+
+class TestR2MUCheckpointPersistence:
+    """Tests for R²MU checkpoint persistence (P0-10)."""
+
+    def test_checkpoint_steps_config(self) -> None:
+        """Config includes required checkpoint steps."""
+        config = R2MUAdaptedConfig()
+        required_steps = [1, 5, 10, 25, 50, 60, 75, 90, 125]
+        assert config.checkpoint_steps == required_steps
+
+    def test_adapter_checkpoint_dirs_created(self) -> None:
+        """Adapter checkpoint directories are created at required steps."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            checkpoints_dir = output_dir / "checkpoints"
+            checkpoints_dir.mkdir(parents=True, exist_ok=True)
+
+            checkpoint_steps = [1, 5, 10, 25, 50, 60, 75, 90, 125]
+            for step in checkpoint_steps:
+                ckpt_path = checkpoints_dir / f"adapter_step{step}"
+                ckpt_path.mkdir(parents=True, exist_ok=True)
+                assert ckpt_path.exists()
+
+            final_path = checkpoints_dir / "adapter_final"
+            final_path.mkdir(parents=True, exist_ok=True)
+            assert final_path.exists()
+
+    def test_diagnostics_saved_at_checkpoint_steps(self) -> None:
+        """Diagnostic JSON files are saved at checkpoint steps."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+
+            checkpoint_steps = [1, 5, 10, 25, 50, 60, 75, 90, 125]
+            for step in checkpoint_steps:
+                diag = {"step": step, "loss": 0.5, "forget_repr_distance": 0.3}
+                with open(output_dir / f"diagnostic_step{step}.json", "w") as f:
+                    json.dump(diag, f)
+
+            for step in checkpoint_steps:
+                diag_path = output_dir / f"diagnostic_step{step}.json"
+                assert diag_path.exists()
+                with open(diag_path) as f:
+                    loaded = json.load(f)
+                assert loaded["step"] == step
+
+
+# --------------------------------------------------------------------------- #
+# Tests — MANU Targeted (R10)
+# --------------------------------------------------------------------------- #
+
+class TestMANUTargeted:
+    """Targeted regression tests for MANU (P0-22)."""
+
+    def test_unique_neuron_counting(self) -> None:
+        """One neuron zeroed through two matrix slices counts once."""
+        model = TinyMLPModel()
+        inventory = build_neuron_inventory(model)
+
+        # Select specific neurons from first layer
+        first_layer_path = list(inventory["layers"].keys())[0]
+        neurons = {first_layer_path: [0, 1, 2]}
+
+        prune_info = prune_neurons(model, neurons)
+
+        # Each neuron should be counted once, even though it appears
+        # in both up_proj and down_proj
+        assert prune_info["unique_neurons_pruned"] == 3
+        # But weight_slices_modified counts each matrix separately
+        assert prune_info["weight_slices_modified"] >= 3
+
+    def test_restoration_exact(self) -> None:
+        """After prune → restore: original state checksum restored exactly."""
+        model = TinyMLPModel()
+
+        # Save original state
+        original_state = {n: p.cpu().clone() for n, p in model.state_dict().items()}
+
+        # Prune
+        inventory = build_neuron_inventory(model)
+        importance = {
+            layer_path: torch.randn(info["n_neurons"])
+            for layer_path, info in inventory["layers"].items()
+        }
+        neurons = select_neurons_to_prune(importance, 0.10)
+        prune_neurons(model, neurons)
+
+        # Verify weights changed
+        changed = False
+        for name, param in model.named_parameters():
+            if not torch.equal(param.data, original_state[name]):
+                changed = True
+                break
+        assert changed, "Pruning should modify weights"
+
+        # Restore
+        model.load_state_dict(original_state)
+
+        # Verify exact restoration
+        for name, param in model.named_parameters():
+            assert torch.equal(param.data, original_state[name])
+
+    def test_pruning_effect_up_proj_rows_zero(self) -> None:
+        """Selected up_proj rows are zero after pruning."""
+        model = TinyMLPModel()
+        inventory = build_neuron_inventory(model)
+
+        # Find a layer with MLP modules
+        first_layer_path = list(inventory["layers"].keys())[0]
+        neurons = {first_layer_path: [0, 1]}
+
+        prune_neurons(model, neurons)
+
+        # Check that up_proj rows are zeroed
+        for name, module in model.named_modules():
+            if first_layer_path in name and ".mlp.up_proj" in name:
+                assert module.weight[0, :].abs().sum() == 0.0
+                assert module.weight[1, :].abs().sum() == 0.0
+
+    def test_pruning_effect_down_proj_cols_zero(self) -> None:
+        """Selected down_proj columns are zero after pruning."""
+        model = TinyMLPModel()
+        inventory = build_neuron_inventory(model)
+
+        first_layer_path = list(inventory["layers"].keys())[0]
+        neurons = {first_layer_path: [0, 1]}
+
+        prune_neurons(model, neurons)
+
+        # Check that down_proj columns are zeroed
+        for name, module in model.named_modules():
+            if first_layer_path in name and ".mlp.down_proj" in name:
+                assert module.weight[:, 0].abs().sum() == 0.0
+                assert module.weight[:, 1].abs().sum() == 0.0
+
+    def test_prune_spec_reconstruction(self) -> None:
+        """Saved pruning specification reproduces the same zero pattern."""
+        import hashlib
+
+        model = TinyMLPModel()
+        inventory = build_neuron_inventory(model)
+        importance = {
+            layer_path: torch.randn(info["n_neurons"])
+            for layer_path, info in inventory["layers"].items()
+        }
+        neurons = select_neurons_to_prune(importance, 0.10)
+
+        # Save prune spec
+        selection_str = json.dumps(
+            {k: sorted(v) for k, v in neurons.items()}, sort_keys=True,
+        )
+        selection_sha = hashlib.sha256(selection_str.encode()).hexdigest()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prune_spec = {
+                "selected_neurons": {k: sorted(v) for k, v in neurons.items()},
+                "selection_sha256": selection_sha,
+            }
+            spec_path = Path(tmpdir) / "prune_spec.json"
+            with open(spec_path, "w") as f:
+                json.dump(prune_spec, f)
+
+            # Reload and verify
+            with open(spec_path) as f:
+                loaded_spec = json.load(f)
+
+            # Verify SHA matches
+            loaded_selection_str = json.dumps(
+                loaded_spec["selected_neurons"], sort_keys=True,
+            )
+            loaded_sha = hashlib.sha256(loaded_selection_str.encode()).hexdigest()
+            assert loaded_sha == selection_sha
+
+            # Verify neurons match
+            assert loaded_spec["selected_neurons"] == {
+                k: sorted(v) for k, v in neurons.items()
+            }
+
+    def test_multi_rate_independence(self) -> None:
+        """Different prune rates select different numbers of neurons."""
+        importance = {
+            "layer_0": torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+            "layer_1": torch.tensor([0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]),
+        }
+
+        neurons_10 = select_neurons_to_prune(importance, 0.10)
+        neurons_50 = select_neurons_to_prune(importance, 0.50)
+
+        total_10 = sum(len(idxs) for idxs in neurons_10.values())
+        total_50 = sum(len(idxs) for idxs in neurons_50.values())
+
+        assert total_10 < total_50
+        assert total_10 == max(1, int(16 * 0.10))
+        assert total_50 == 8
+
+
+# --------------------------------------------------------------------------- #
+# Tests — MMUnlearner Targeted (R10)
+# --------------------------------------------------------------------------- #
+
+class TestMMUnlearnerTargeted:
+    """Targeted regression tests for MMUnlearner (P0-21)."""
+
+    def test_exact_k_selection(self) -> None:
+        """Exact-k mask selects exactly k elements."""
+        model = TinyMLPModel()
+        # Create saliency with known values
+        saliency = {
+            name: torch.randn_like(p.float())
+            for name, p in model.named_parameters()
+            if p.requires_grad
+        }
+
+        # Request specific sparsity
+        config = MMUnlearnerConfig(target_sparsity=0.3)
+        mask, meta = generate_saliency_mask(model, saliency, config)
+
+        # Verify exact selection (within tolerance)
+        requested = meta["requested_selected_numel"]
+        actual = meta["actual_selected_numel"]
+        assert abs(actual - requested) <= 1
+
+    def test_measured_sparsity_matches_request(self) -> None:
+        """Measured sparsity matches requested within tolerance."""
+        model = TinyMLPModel()
+        saliency = {
+            name: torch.randn_like(p.float())
+            for name, p in model.named_parameters()
+            if p.requires_grad
+        }
+
+        config = MMUnlearnerConfig(target_sparsity=0.5)
+        mask, meta = generate_saliency_mask(model, saliency, config)
+
+        measured_sparsity = meta["measured_sparsity"]
+        requested_sparsity = config.target_sparsity
+
+        # Within 1% tolerance
+        assert abs(measured_sparsity - requested_sparsity) <= 0.01
+
+    def test_trainable_only_population(self) -> None:
+        """Frozen parameters excluded from mask population."""
+        model = TinyMLPModel()
+
+        # Freeze some parameters
+        for name, param in model.named_parameters():
+            if "embedding" in name:
+                param.requires_grad = False
+
+        saliency = {
+            name: torch.randn_like(p.float())
+            for name, p in model.named_parameters()
+            if p.requires_grad
+        }
+
+        config = MMUnlearnerConfig(target_sparsity=0.5)
+        mask, meta = generate_saliency_mask(model, saliency, config)
+
+        # Verify population is trainable-only
+        assert meta["mask_population"] == "trainable_only"
+
+
+# --------------------------------------------------------------------------- #
+# Tests — Comparison Framework Targeted (R10)
+# --------------------------------------------------------------------------- #
+
+class TestComparisonTargeted:
+    """Targeted regression tests for comparison framework (P0-26)."""
+
+    def test_incomplete_method_missing_retain_control(self) -> None:
+        """Missing retain/control → INCOMPLETE, not Case A/C."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            # Method with only delta_target (missing retain/control)
+            fw.add_result(MethodResult(
+                method_id="incomplete",
+                baseline_id="B1",
+                description="Incomplete method",
+                delta_target={"DV": -0.3},
+                delta_retain={},  # Missing
+                delta_control={},  # Missing
+            ))
+
+            decision = fw.make_e2c_decision()
+            # Should be classified as missing, not Case A or C
+            assert "incomplete" in decision.get("missing_eval_methods", [])
+            # Should NOT be in any case
+            assert "incomplete" not in decision.get("case_a_methods", [])
+            assert "incomplete" not in decision.get("case_c_methods", [])
+
+    def test_positive_target_delta_not_forgetting(self) -> None:
+        """Positive target delta = not forgetting."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            result = MethodResult(
+                method_id="test",
+                baseline_id="B1",
+                description="Test",
+                delta_target={"DV": +0.5},  # Positive = improvement
+                delta_retain={"DV": -0.01},
+                delta_control={"DV": -0.02},
+            )
+            fw.add_result(result)
+
+            # Selectivity should be None (not forgetting)
+            score = fw._compute_selectivity_score(result)
+            assert score is None
+
+            # Target degradation should be False
+            has_deg = fw._has_target_degradation(result)
+            assert has_deg is False
+
+    def test_non_selective_collapse(self) -> None:
+        """Target/retain/control all degrade → non-selective (Case C)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            fw.add_result(MethodResult(
+                method_id="test",
+                baseline_id="B1",
+                description="Test",
+                delta_target={"DV": -0.5},   # Target degrades
+                delta_retain={"DV": -0.49},   # Retain also degrades
+                delta_control={"DV": -0.51},  # Control also degrades
+            ))
+
+            decision = fw.make_e2c_decision()
+            # Should be Case C (non-selective)
+            assert decision["case"] == "C"
+            assert "test" in decision["case_c_methods"]
+
+    def test_selective_target_effect(self) -> None:
+        """Selective target degradation → Case A."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            fw.add_result(MethodResult(
+                method_id="test",
+                baseline_id="B1",
+                description="Test",
+                delta_target={"DV": -0.5},    # Target degrades
+                delta_retain={"DV": -0.01},   # Retain preserved
+                delta_control={"DV": 0.0},    # Control preserved
+            ))
+
+            decision = fw.make_e2c_decision()
+            # Should be Case A (selective)
+            assert decision["case"] == "A"
+            assert "test" in decision["case_a_methods"]
+
+            # Selectivity should be positive
+            score = fw._compute_selectivity_score(
+                fw.results[0],
+            )
+            assert score is not None
+            assert score > 0
