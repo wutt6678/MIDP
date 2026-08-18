@@ -242,10 +242,9 @@ def estimate_saliency(
 
             for name, param in model.named_parameters():
                 if param.grad is not None:
-                    grad_mag = param.grad.data.abs().mean().item()
                     if name not in importance_dict:
-                        importance_dict[name] = 0.0
-                    importance_dict[name] += grad_mag
+                        importance_dict[name] = torch.zeros_like(param.data)
+                    importance_dict[name] += param.grad.data.abs()
 
             count += 1
         # Normalize
@@ -264,7 +263,7 @@ def estimate_saliency(
         logger.info("Estimating text preservation saliency ...")
         _accumulate(text_loader, text_importance, config.saliency_n_samples)
 
-    # Compute combined saliency score:
+    # Compute combined saliency score (per-element):
     # High forget, low retain, low text → high score
     saliency: dict[str, torch.Tensor] = {}
     for name, forget_score in forget_importance.items():
@@ -273,7 +272,7 @@ def estimate_saliency(
 
         # Saliency = forget importance - retain importance - text importance
         score = forget_score - retain_score - text_score
-        saliency[name] = torch.tensor(score)
+        saliency[name] = score
 
     return saliency
 
@@ -287,17 +286,18 @@ def generate_saliency_mask(
     saliency: dict[str, torch.Tensor],
     config: MMUnlearnerConfig,
 ) -> dict[str, torch.Tensor]:
-    """Generate a binary mask from saliency scores.
+    """Generate an element-level binary mask from saliency scores.
 
-    Parameters with high forget saliency (and low retain/text saliency)
-    are selected for modification. All other parameters get zero gradient.
+    Individual elements (not whole tensors) are ranked by saliency.
+    The top-k elements (by ``target_sparsity`` fraction of total numel)
+    receive a mask value of 1; all others receive 0.
 
     Parameters
     ----------
     model:
         The model.
     saliency:
-        Per-parameter saliency scores.
+        Per-element saliency score tensors (one tensor per parameter).
     config:
         MMUnlearner configuration.
 
@@ -306,43 +306,46 @@ def generate_saliency_mask(
     mask:
         Dict mapping parameter names to binary mask tensors.
     """
-    # Collect all scores for thresholding
-    all_scores = []
-    for name, score in saliency.items():
-        all_scores.append(score.item())
+    # Compute total number of elements across all parameters.
+    total_numel = sum(p.numel() for p in model.parameters())
+    if total_numel == 0:
+        logger.warning("No parameters — generating full mask")
+        return {n: torch.ones_like(p.data) for n, p in model.named_parameters()}
 
-    if not all_scores:
-        logger.warning("Empty saliency — generating full mask")
-        mask = {}
-        for name, param in model.named_parameters():
-            mask[name] = torch.ones_like(param.data)
-        return mask
+    # Collect all element scores on CPU for global ranking.
+    all_scores_list = []
+    for name, param in model.named_parameters():
+        score = saliency.get(name)
+        if score is not None:
+            all_scores_list.append(score.detach().flatten().cpu())
+        else:
+            all_scores_list.append(torch.zeros(param.numel()))
 
-    all_scores_t = torch.tensor(all_scores)
+    all_scores_flat = torch.cat(all_scores_list)
 
-    # Select top-k parameters by saliency
-    # Higher saliency = more important for forgetting = should be modified
-    target_n = int(len(all_scores) * (1.0 - config.effective_sparsity))
-    target_n = max(1, min(target_n, len(all_scores)))
+    # Top-k elements by saliency (higher = more important for forgetting).
+    target_n = int(total_numel * (1.0 - config.effective_sparsity))
+    target_n = max(1, min(target_n, total_numel))
 
-    threshold = torch.topk(all_scores_t, target_n).values[-1]
+    # Compute threshold via topk on CPU.
+    threshold = torch.topk(all_scores_flat, target_n).values[-1].item()
 
+    # Build per-element binary masks.
     mask: dict[str, torch.Tensor] = {}
     n_selected = 0
-    n_total = 0
     for name, param in model.named_parameters():
-        score = saliency.get(name, torch.tensor(0.0))
-        if score >= threshold:
-            mask[name] = torch.ones_like(param.data)
-            n_selected += param.numel()
+        score = saliency.get(name)
+        if score is not None:
+            m = (score >= threshold).to(param.data.dtype)
         else:
-            mask[name] = torch.zeros_like(param.data)
-        n_total += param.numel()
+            m = torch.zeros_like(param.data)
+        mask[name] = m
+        n_selected += int(m.sum().item())
 
-    sparsity = 1.0 - (n_selected / max(n_total, 1))
+    sparsity = 1.0 - (n_selected / max(total_numel, 1))
     logger.info(
-        f"Mask generated: {n_selected}/{n_total} parameters selected "
-        f"(effective sparsity: {sparsity:.3f})"
+        f"Mask generated (element-level): {n_selected}/{total_numel} "
+        f"elements selected (effective sparsity: {sparsity:.3f})"
     )
 
     return mask
@@ -454,10 +457,17 @@ class MMUnlearner:
             model, forget_loader, mask, dev,
         )
 
+        # Step 5: Save LoRA adapter checkpoint (P0-5)
+        adapter_path = output_dir / "checkpoints" / "adapter_final"
+        adapter_path.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(str(adapter_path))
+        logger.info(f"Saved LoRA adapter checkpoint: {adapter_path}")
+
         return {
             "inventory": inventory.get("_summary", {}),
             "mask_info": mask_info,
             "training": training_results,
+            "adapter_path": str(adapter_path),
         }
 
     def _train_with_mask(

@@ -253,25 +253,30 @@ def _collect_representations(
             model(**model_kwargs)
 
         if "repr" in hook_output:
-            # Pool over sequence dimension (mean pooling)
+            # Extract hidden state at the last prefix token position
+            # (last non-padded position per attention_mask), NOT mean-pooling.
             h = hook_output["repr"]
-            # Determine sequence dimension: assume (batch, seq, hidden) or (batch, hidden, seq)
             if h.dim() == 3:
-                # Find which dim is hidden_size
+                # Determine which dim is hidden_size
                 hidden_dim = None
                 for d in [1, 2]:
                     if h.shape[d] == hidden_size:
                         hidden_dim = d
                         break
-                if hidden_dim is not None:
-                    seq_dim = 3 - hidden_dim
-                    repr_pooled = h.mean(dim=seq_dim)
+                attn = batch["attention_mask"]
+                last_pos = attn.sum(dim=1) - 1  # (batch,)
+                if hidden_dim == 2:
+                    # Standard layout: (batch, seq, hidden)
+                    repr_extracted = h[torch.arange(h.size(0)), last_pos]
+                elif hidden_dim == 1:
+                    # Unusual layout: (batch, hidden, seq)
+                    repr_extracted = h[torch.arange(h.size(0)), :, last_pos]
                 else:
                     # Fallback: assume dim=1 is sequence
-                    repr_pooled = h.mean(dim=1)
+                    repr_extracted = h[torch.arange(h.size(0)), last_pos]
             else:
-                repr_pooled = h
-            representations.append(repr_pooled.cpu())
+                repr_extracted = h
+            representations.append(repr_extracted.cpu())
 
     handle.remove()
 
@@ -437,10 +442,14 @@ class R2MUAdapted:
             target, selected_layers, dev, output_dir,
         )
 
+        # Propagate adapter_path from training results
+        adapter_path = training_results.get("adapter_path")
+
         return {
             "target_info": target_info,
             "selected_layers": selected_layers,
             "training": training_results,
+            "adapter_path": adapter_path,
         }
 
     def _train(
@@ -545,7 +554,7 @@ class R2MUAdapted:
                     f"forget_repr_dist={avg_dist:.4f}"
                 )
 
-            # Checkpoint diagnostics
+            # Checkpoint diagnostics + adapter save
             if step in self.config.checkpoint_steps:
                 diag = {
                     "step": step,
@@ -555,6 +564,17 @@ class R2MUAdapted:
                 with open(output_dir / f"diagnostic_step{step}.json", "w") as f:
                     json.dump(diag, f, indent=2)
                     f.write("\n")
+                # Save adapter checkpoint at this step
+                ckpt_path = output_dir / "checkpoints" / f"adapter_step{step}"
+                ckpt_path.mkdir(parents=True, exist_ok=True)
+                model.save_pretrained(str(ckpt_path))
+                logger.info(f"Saved adapter checkpoint: {ckpt_path}")
+
+        # Save final adapter checkpoint
+        adapter_path = output_dir / "checkpoints" / "adapter_final"
+        adapter_path.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(str(adapter_path))
+        logger.info(f"Saved final adapter checkpoint: {adapter_path}")
 
         return {
             "num_steps": self.config.num_optimizer_steps,
@@ -562,6 +582,7 @@ class R2MUAdapted:
             "final_forget_repr_distance": forget_repr_distances[-1] if forget_repr_distances else None,
             "losses": losses,
             "forget_repr_distances": forget_repr_distances,
+            "adapter_path": str(adapter_path),
         }
 
     def _hook_representations(
@@ -612,28 +633,31 @@ class R2MUAdapted:
         for h in handles:
             h.remove()
 
-        # Pool representations (mean over sequence dimension)
+        # Extract representations at the last prefix token position
         for layer_idx in selected_layers:
             if layer_idx in hook_outputs:
                 h = hook_outputs[layer_idx]
-                # Determine sequence dimension: assume (batch, seq, hidden) or (batch, hidden, seq)
-                # Pool over the dimension that is NOT hidden_size
                 if h.dim() == 3:
-                    # Find which dim is hidden_size
+                    # Determine which dim is hidden_size
                     hidden_dim = None
                     for d in [1, 2]:
                         if h.shape[d] == self._get_hidden_size(model):
                             hidden_dim = d
                             break
-                    if hidden_dim is not None:
-                        seq_dim = 3 - hidden_dim  # If hidden is 1, seq is 2; if hidden is 2, seq is 1
-                        repr_pooled = h.mean(dim=seq_dim)
+                    attn = batch["attention_mask"]
+                    last_pos = attn.sum(dim=1) - 1  # (batch,)
+                    if hidden_dim == 2:
+                        # Standard layout: (batch, seq, hidden)
+                        repr_extracted = h[torch.arange(h.size(0)), last_pos]
+                    elif hidden_dim == 1:
+                        # Unusual layout: (batch, hidden, seq)
+                        repr_extracted = h[torch.arange(h.size(0)), :, last_pos]
                     else:
                         # Fallback: assume dim=1 is sequence
-                        repr_pooled = h.mean(dim=1)
+                        repr_extracted = h[torch.arange(h.size(0)), last_pos]
                 else:
-                    repr_pooled = h
-                representations.append(repr_pooled)
+                    repr_extracted = h
+                representations.append(repr_extracted)
 
         return representations
 

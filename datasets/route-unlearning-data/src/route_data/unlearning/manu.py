@@ -411,9 +411,11 @@ def prune_neurons(
     prune_info:
         Information about what was pruned.
     """
-    n_pruned = 0
     n_parameters_modified = 0
     pruned_layers = []
+    # Track unique (layer_path, neuron_idx) pairs to avoid double-counting
+    # when the same neuron is zeroed in both up_proj and down_proj.
+    pruned_neuron_set: set[tuple[str, int]] = set()
 
     for name, module in model.named_modules():
         if not isinstance(module, nn.Linear):
@@ -436,19 +438,21 @@ def prune_neurons(
                         if idx < out_features:
                             module.weight[idx, :] = 0.0
                             n_parameters_modified += in_features
-                            n_pruned += 1
+                            pruned_neuron_set.add((layer_path, idx))
                 elif ".mlp.down_proj" in name:
                     # down_proj: in_features = intermediate_size → zero columns
                     for idx in neuron_indices:
                         if idx < in_features:
                             module.weight[:, idx] = 0.0
                             n_parameters_modified += out_features
-                            n_pruned += 1
+                            pruned_neuron_set.add((layer_path, idx))
                 # gate_proj is intentionally skipped — pruning is defined
                 # by up_proj row zeroing + down_proj column zeroing.
 
         if layer_path not in pruned_layers:
             pruned_layers.append(layer_path)
+
+    n_pruned = len(pruned_neuron_set)
 
     prune_info = {
         "n_neurons_pruned": n_pruned,
@@ -561,8 +565,15 @@ class MANU:
                 logger.error(f"Forward pass failed after pruning: {e}")
                 prune_info["forward_pass_ok"] = False
 
-            # Save prune info
+            # Save adapter checkpoint BEFORE restoring (P0-6)
             rate_str = f"{prune_rate * 100:.0f}"
+            adapter_path = output_dir / f"checkpoints/prune_{rate_str}"
+            adapter_path.mkdir(parents=True, exist_ok=True)
+            model.save_pretrained(str(adapter_path))
+            prune_info["adapter_path"] = str(adapter_path)
+            logger.info(f"Saved pruned adapter checkpoint: {adapter_path}")
+
+            # Save prune info
             with open(output_dir / f"prune_info_{rate_str}.json", "w") as f:
                 json.dump(prune_info, f, indent=2)
                 f.write("\n")
