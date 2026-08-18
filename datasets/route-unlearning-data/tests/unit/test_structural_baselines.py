@@ -45,7 +45,6 @@ from route_data.unlearning.mmunlearner import (
     save_parameter_inventory,
 )
 from route_data.unlearning.r2mu_adapted import (
-    R2MUAdapted,
     R2MUAdaptedConfig,
     _collect_representations,
     forget_representation_loss,
@@ -884,7 +883,7 @@ class TestMANUTargeted:
         inventory = build_neuron_inventory(model)
 
         # Select specific neurons from first layer
-        first_layer_path = list(inventory["layers"].keys())[0]
+        first_layer_path = next(iter(inventory["layers"].keys()))
         neurons = {first_layer_path: [0, 1, 2]}
 
         prune_info = prune_neurons(model, neurons)
@@ -932,7 +931,7 @@ class TestMANUTargeted:
         inventory = build_neuron_inventory(model)
 
         # Find a layer with MLP modules
-        first_layer_path = list(inventory["layers"].keys())[0]
+        first_layer_path = next(iter(inventory["layers"].keys()))
         neurons = {first_layer_path: [0, 1]}
 
         prune_neurons(model, neurons)
@@ -948,7 +947,7 @@ class TestMANUTargeted:
         model = TinyMLPModel()
         inventory = build_neuron_inventory(model)
 
-        first_layer_path = list(inventory["layers"].keys())[0]
+        first_layer_path = next(iter(inventory["layers"].keys()))
         neurons = {first_layer_path: [0, 1]}
 
         prune_neurons(model, neurons)
@@ -1039,7 +1038,7 @@ class TestMMUnlearnerTargeted:
 
         # Request specific sparsity
         config = MMUnlearnerConfig(target_sparsity=0.3)
-        mask, meta = generate_saliency_mask(model, saliency, config)
+        _, meta = generate_saliency_mask(model, saliency, config)
 
         # Verify exact selection (within tolerance)
         requested = meta["requested_selected_numel"]
@@ -1056,7 +1055,7 @@ class TestMMUnlearnerTargeted:
         }
 
         config = MMUnlearnerConfig(target_sparsity=0.5)
-        mask, meta = generate_saliency_mask(model, saliency, config)
+        _, meta = generate_saliency_mask(model, saliency, config)
 
         measured_sparsity = meta["measured_sparsity"]
         requested_sparsity = config.target_sparsity
@@ -1080,7 +1079,7 @@ class TestMMUnlearnerTargeted:
         }
 
         config = MMUnlearnerConfig(target_sparsity=0.5)
-        mask, meta = generate_saliency_mask(model, saliency, config)
+        _, meta = generate_saliency_mask(model, saliency, config)
 
         # Verify population is trainable-only
         assert meta["mask_population"] == "trainable_only"

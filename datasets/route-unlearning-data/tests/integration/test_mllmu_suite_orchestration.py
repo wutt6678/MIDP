@@ -23,7 +23,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-import yaml
 
 # --------------------------------------------------------------------------- #
 # Helpers

@@ -588,10 +588,8 @@ def run_suite_preflight(
             _check("freeze_route_probe_sha_consistent",
                    freeze_probe_sha == probe_sha,
                    "freeze vs config route probe SHA")
-        # Cross-check processed dataset SHA in freeze data
-        freeze_ds_sha = fv_data.get("dataset_manifest_sha256", "")
-        # (informational — the freeze manifest SHA differs from the
-        # processed dataset SHA; both are independently verified.)
+        # Cross-check processed dataset SHA in freeze data (informational).
+        fv_data.get("dataset_manifest_sha256", "")
 
     # -- Identity selection (P0-6) -------------------------------------- #
     sel_path = data_cfg.get("selection_manifest_path", "")

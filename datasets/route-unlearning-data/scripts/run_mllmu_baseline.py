@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import shutil
 import subprocess
 import sys
 import time
@@ -389,12 +388,12 @@ def main() -> None:
         # P0-7: The canonical prompting evaluation uses the system-prompt-
         # aware backend through the common 500-probe evaluator.  There is
         # NO duplicate plain-model evaluation.
+        from route_data.config import ModelConfig
+        from route_data.models.qwen import QwenHFBackend
         from route_data.unlearning.baseline_methods import (
             MLLMU_PRIVACY_SYSTEM_PROMPT,
             _PromptingBackend,
         )
-        from route_data.models.qwen import QwenHFBackend
-        from route_data.config import ModelConfig
 
         logger.info("Running prompting via common evaluator with PromptingBackend")
 

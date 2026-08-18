@@ -650,7 +650,6 @@ def evaluate_intervention(
         ``eval_output_dir``.
     """
     from ..config import ModelConfig
-    from .baseline_runner import BaselineResult
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

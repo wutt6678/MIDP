@@ -174,21 +174,21 @@ class PromptingBaseline:
         )
 
         # Run the frozen 500-probe evaluation.
-        runner_kw = dict(
-            backend=prompting_backend,
-            probe_path=str(probe_dataset_path),
-            output_dir=str(output_dir),
-            model_config=model_config_obj,
-            resume=True,
-        )
+        runner_kw = {
+            "backend": prompting_backend,
+            "probe_path": str(probe_dataset_path),
+            "output_dir": str(output_dir),
+            "model_config": model_config_obj,
+            "resume": True,
+        }
         if freeze_verification_path:
             runner_kw["freeze_verification_path"] = str(freeze_verification_path)
         if dataset_manifest_path:
             runner_kw["dataset_manifest_path"] = str(dataset_manifest_path)
         runner = BaselineRunner(**runner_kw)
         logger.info(
-            f"Prompting baseline: running evaluation with system prompt "
-            f"(no training)"
+            "Prompting baseline: running evaluation with system prompt "
+            "(no training)"
         )
         if not skip_research_preflight:
             runner.validate_research_preflight()
