@@ -435,7 +435,7 @@ class TestPromptingBaseline:
             name: p.clone() for name, p in model.named_parameters()
         }
 
-        # Create a dummy probe file
+        # Create dummy probe and freeze verification files
         with tempfile.TemporaryDirectory() as tmpdir:
             probe_path = Path(tmpdir) / "probes.jsonl"
             with open(probe_path, "w") as f:
@@ -457,12 +457,25 @@ class TestPromptingBaseline:
                     "answer_text": "No answer.",
                 }) + "\n")
 
+            freeze_path = Path(tmpdir) / "freeze_verification.json"
+            with open(freeze_path, "w") as f:
+                json.dump({
+                    "dataset_version": "fiubench-route-v1",
+                    "ready_for_experiments": True,
+                    "bundle_verifier_pass": True,
+                    "strict_final_verify_pass": True,
+                    "manual_audit_pass": True,
+                    "exact_ci_pass": True,
+                    "hard_stop_conditions": [],
+                }, f)
+
             baseline = PromptingBaseline()
             baseline.run_evaluation(
                 model=model,
                 processor=MagicMock(),
                 probe_dataset_path=str(probe_path),
                 output_dir="/tmp/test_prompting",
+                freeze_verification_path=str(freeze_path),
             )
 
         # Verify no parameters changed
@@ -490,7 +503,7 @@ class TestPromptingBaseline:
 
         baseline = PromptingBaseline()
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a dummy probe file
+            # Create dummy probe and freeze verification files
             probe_path = Path(tmpdir) / "probes.jsonl"
             with open(probe_path, "w") as f:
                 f.write(json.dumps({
@@ -511,11 +524,24 @@ class TestPromptingBaseline:
                     "answer_text": "No answer.",
                 }) + "\n")
 
+            freeze_path = Path(tmpdir) / "freeze_verification.json"
+            with open(freeze_path, "w") as f:
+                json.dump({
+                    "dataset_version": "fiubench-route-v1",
+                    "ready_for_experiments": True,
+                    "bundle_verifier_pass": True,
+                    "strict_final_verify_pass": True,
+                    "manual_audit_pass": True,
+                    "exact_ci_pass": True,
+                    "hard_stop_conditions": [],
+                }, f)
+
             result = baseline.run_evaluation(
                 model=MagicMock(),
                 processor=MagicMock(),
                 probe_dataset_path=str(probe_path),
                 output_dir=tmpdir,
+                freeze_verification_path=str(freeze_path),
             )
             assert result["training"] is False
             assert result["adapter"] == "none"

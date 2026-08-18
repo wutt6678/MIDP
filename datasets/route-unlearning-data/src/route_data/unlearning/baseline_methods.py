@@ -110,6 +110,7 @@ class PromptingBaseline:
         baseline_results_path: str | Path = "",
         method_name: str = "mllmu_prompting",
         model_config_obj: Any = None,
+        freeze_verification_path: str | Path = "",
     ) -> dict[str, Any]:
         """Run the prompting baseline evaluation.
 
@@ -171,13 +172,16 @@ class PromptingBaseline:
         )
 
         # Run the frozen 500-probe evaluation.
-        runner = BaselineRunner(
+        runner_kw = dict(
             backend=prompting_backend,
             probe_path=str(probe_dataset_path),
             output_dir=str(output_dir),
             model_config=model_config_obj,
             resume=True,
         )
+        if freeze_verification_path:
+            runner_kw["freeze_verification_path"] = str(freeze_verification_path)
+        runner = BaselineRunner(**runner_kw)
         logger.info(
             f"Prompting baseline: running evaluation with system prompt "
             f"(no training)"
