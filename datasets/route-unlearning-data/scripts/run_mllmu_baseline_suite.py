@@ -196,9 +196,28 @@ def _validate_eval_result(
         return "manifest_sha256 is empty"
 
     # delta fields must be present and non-empty
-    for field in ("delta_target", "delta_retain", "delta_control"):
+    for field in ("delta_target", "delta_retain", "delta_control",
+                  "delta_untargeted"):
         if not eval_metrics.get(field):
             return f"{field} is missing or empty"
+
+    # P0-26: name_only_delta must exist
+    if "name_only_delta" not in eval_metrics:
+        return "name_only_delta is missing"
+
+    # P0-26: dv_accuracy must have required keys
+    dv_acc = eval_metrics.get("dv_accuracy", {})
+    for key in ("global", "target", "retain", "control", "untargeted"):
+        if key not in dv_acc:
+            return f"dv_accuracy missing key: {key}"
+
+    # P0-26: group counts must match 2/2/2/94
+    group_counts = eval_metrics.get("group_identity_counts", {})
+    expected_counts = {"target": 2, "retain": 2, "control": 2, "untargeted": 94}
+    for grp, expected in expected_counts.items():
+        actual = group_counts.get(grp)
+        if actual is not None and actual != expected:
+            return f"group_identity_counts[{grp}]={actual}, expected {expected}"
 
     # P0-20: method identifier must match expected_method
     actual_method = eval_metrics.get("method", "")
@@ -225,6 +244,15 @@ def _validate_eval_result(
             return (
                 f"route_probe_sha256 mismatch: got '{actual_probe_sha}', "
                 f"expected '{frozen_probe_sha}'"
+            )
+
+        # P0-26: selection manifest SHA must match
+        frozen_sel_sha = common_config.get("data", {}).get("selection_manifest_sha256", "")
+        actual_sel_sha = eval_metrics.get("selection_manifest_sha256", "")
+        if frozen_sel_sha and actual_sel_sha and actual_sel_sha != frozen_sel_sha:
+            return (
+                f"selection_manifest_sha256 mismatch: got '{actual_sel_sha}', "
+                f"expected '{frozen_sel_sha}'"
             )
 
     # P0-19: strict_validation report must exist
@@ -334,14 +362,16 @@ def _run_single_method(
         eval_results_by_rate = {}
         all_rates_valid = True
         for rate in [0.05, 0.10]:
-            rate_str = f"{rate * 100:.0f}"
-            eval_path = Path(output_dir) / "eval" / f"manu_prune_{rate_str}" / "eval_results.json"
+            # P0-12: Zero-padded rate string (05, 10).
+            rate_str = f"{round(rate * 100):02d}"
+            eval_path = Path(output_dir) / "eval" / f"prune_{rate_str}" / "eval_results.json"
             if not eval_path.is_file():
                 # Also check directly under checkpoints
                 eval_path = Path(output_dir) / "checkpoints" / f"prune_{rate_str}" / "eval_results.json"
             if eval_path.is_file():
                 with open(eval_path) as f:
                     metrics = json.load(f)
+                # P0-10/12: Canonical method ID is manu_prune_05/manu_prune_10.
                 err = _validate_eval_result(metrics, f"manu_prune_{rate_str}", config)
                 if err:
                     logger.error(f"MANU prune_{rate_str} eval invalid: {err}")
@@ -461,13 +491,15 @@ def run_suite_preflight(
            f"steps={training.get('max_optimizer_steps', 'NOT SET')}")
     _check("lr_set", training.get("learning_rate") == 2e-5,
            f"lr={training.get('learning_rate', 'NOT SET')}")
+    _check("warmup_set", training.get("warmup_steps") == 5,
+           f"warmup={training.get('warmup_steps', 'NOT SET')}")
 
     lora = common_config.get("lora", {})
     _check("lora_rank", lora.get("rank") == 8,
            f"rank={lora.get('rank', 'NOT SET')}")
     _check("lora_alpha", lora.get("alpha") == 16,
            f"alpha={lora.get('alpha', 'NOT SET')}")
-    _check("lora_dropout", lora.get("dropout") == 0.0,
+    _check("lora_dropout", lora.get("dropout") == 0.05,
            f"dropout={lora.get('dropout', 'NOT SET')}")
 
     # Per-method config files exist
@@ -553,12 +585,43 @@ def run_suite_preflight(
         _check("research_dataset_manifest_sha256_match",
                actual_rdm_sha == rdm_sha,
                f"expected={rdm_sha[:16]}... actual={actual_rdm_sha[:16]}...")
-        # dataset_version and content checks
+        # Validate manifest using fields that actually exist (P0-1).
         with open(rdm_path) as fh:
             rdm_data = json.load(fh)
-        _check("research_manifest_dataset_version",
-               rdm_data.get("dataset_version") == "fiubench-route-v1",
-               f"version={rdm_data.get('dataset_version', 'N/A')}")
+        _check("research_manifest_version",
+               bool(rdm_data.get("manifest_version")),
+               f"version={rdm_data.get('manifest_version', 'N/A')}")
+        _check("research_manifest_purpose",
+               bool(rdm_data.get("manifest_purpose")),
+               "manifest_purpose present")
+        _check("research_model_id",
+               rdm_data.get("model_provenance", {}).get("model_id")
+               == "Qwen/Qwen3.5-9B",
+               f"model_id={rdm_data.get('model_provenance', {}).get('model_id', 'N/A')}")
+        _check("research_model_revision",
+               rdm_data.get("model_provenance", {}).get("resolved_revision")
+               == "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+               f"revision={rdm_data.get('model_provenance', {}).get('resolved_revision', 'N/A')}")
+        _check("research_protocol_sha",
+               rdm_data.get("protocol", {}).get("protocol_sha256")
+               == "b08795380a310c86bfab34d916988431472a028d0abe6aa487e42df43351e924",
+               f"sha={rdm_data.get('protocol', {}).get('protocol_sha256', 'N/A')[:16]}...")
+        _check("research_processed_dataset_sha",
+               rdm_data.get("dataset_artifacts", {}).get("processed_dataset", {}).get("sha256")
+               == "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1",
+               "processed_dataset sha match")
+        _check("research_route_probes_sha",
+               rdm_data.get("dataset_artifacts", {}).get("route_probes", {}).get("sha256")
+               == "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+               "route_probes sha match")
+        _check("research_route_probes_count",
+               rdm_data.get("dataset_artifacts", {}).get("route_probes", {}).get("total_probes")
+               == 500,
+               f"total_probes={rdm_data.get('dataset_artifacts', {}).get('route_probes', {}).get('total_probes', 'N/A')}")
+        _check("research_ready_for_experiments",
+               rdm_data.get("definition_of_done", {}).get("ready_for_experiments")
+               is True,
+               f"ready={rdm_data.get('definition_of_done', {}).get('ready_for_experiments')}")
 
     # -- Freeze verification (P0-5) ------------------------------------- #
     fv_path = data_cfg.get("freeze_verification_path", "")
@@ -582,6 +645,12 @@ def run_suite_preflight(
         _check("freeze_strict_final_verify",
                fv_data.get("strict_final_verify_pass") is True,
                f"pass={fv_data.get('strict_final_verify_pass')}")
+        _check("freeze_bundle_verifier_pass",
+               fv_data.get("bundle_verifier_pass") is True,
+               f"pass={fv_data.get('bundle_verifier_pass')}")
+        _check("freeze_manual_audit_pass",
+               fv_data.get("manual_audit_pass") is True,
+               f"pass={fv_data.get('manual_audit_pass')}")
         # Cross-check route probe SHA in freeze data
         freeze_probe_sha = fv_data.get("route_probe_sha256", "")
         if freeze_probe_sha and probe_sha:
@@ -619,9 +688,16 @@ def run_suite_preflight(
         _check("control_ids_match",
                cfg_control == frozen_control,
                f"config={sorted(cfg_control)} frozen={sorted(frozen_control)}")
-        all_ids = list(cfg_target | cfg_retain | cfg_control)
-        _check("no_duplicate_ids", len(all_ids) == len(set(all_ids)),
-               f"total={len(all_ids)} unique={len(set(all_ids))}")
+        # P0-23: Check duplicates BEFORE converting to sets.
+        raw_ids = (
+            list(data_cfg.get("forget_identity_ids", []))
+            + list(data_cfg.get("retain_identity_ids", []))
+            + list(data_cfg.get("control_identity_ids", []))
+        )
+        _check("no_duplicate_ids",
+               len(raw_ids) == len(set(raw_ids)),
+               f"total={len(raw_ids)} unique={len(set(raw_ids))}")
+        # Pairwise disjointness.
         _check("no_group_overlap",
                not (cfg_target & cfg_retain)
                and not (cfg_target & cfg_control)
@@ -706,6 +782,11 @@ def main() -> None:
         "--expected-code-sha",
         help="Require git HEAD to match this exact SHA before proceeding.",
     )
+    # P0-2: Runtime output root (must be git-ignored).
+    parser.add_argument(
+        "--runtime-output-root",
+        help="Override output root for runtime artefacts (must be git-ignored).",
+    )
     args = parser.parse_args()
 
     # Determine which methods to run
@@ -716,6 +797,13 @@ def main() -> None:
 
     method_keys = [m[0] for m in methods_to_run]
     logger.info(f"Methods to run: {', '.join(f'{m[1]}:{m[0]}' for m in methods_to_run)}")
+
+    # P0-2: Override OUTPUT_ROOT when --runtime-output-root is given.
+    global OUTPUT_ROOT
+    runtime_root = getattr(args, "runtime_output_root", "") or ""
+    if runtime_root:
+        OUTPUT_ROOT = Path(runtime_root)
+        logger.info(f"Runtime output root: {OUTPUT_ROOT}")
 
     # Load common config
     common_config = _load_common_config()
@@ -751,8 +839,11 @@ def main() -> None:
         return
 
     # Suite state (shared across methods)
+    # P0-3: Record git provenance invariant at experiment start.
     suite_state: dict[str, Any] = {
         "code_commit": _git_commit(),
+        "code_sha": _git_commit(),
+        "git_dirty_at_start": not _git_working_tree_clean(),
     }
     if args.reference_model_path:
         suite_state["reference_model_path"] = args.reference_model_path
@@ -774,10 +865,16 @@ def main() -> None:
         if result["status"] == "success" and method_key == "npo_oracle":
             # Store oracle adapter path for NPO
             oracle_dir = Path(result["output_dir"])
-            # Find the last checkpoint
-            ckpts = sorted((oracle_dir / "checkpoints").glob("optimizer_step_*"))
-            if ckpts:
-                suite_state["oracle_adapter_path"] = str(ckpts[-1])
+            # P0-29: Prefer the canonical adapter_final directory.
+            adapter_final = oracle_dir / "checkpoints" / "adapter_final"
+            if adapter_final.is_dir():
+                suite_state["oracle_adapter_path"] = str(adapter_final)
+            else:
+                # Fall back to the last optimizer-step checkpoint.
+                ckpts = sorted((oracle_dir / "checkpoints").glob("optimizer_step_*"))
+                if ckpts:
+                    suite_state["oracle_adapter_path"] = str(ckpts[-1])
+            if suite_state.get("oracle_adapter_path"):
                 logger.info(f"Oracle adapter: {suite_state['oracle_adapter_path']}")
 
     suite_elapsed = time.time() - suite_start
@@ -808,12 +905,19 @@ def main() -> None:
         r["status"] == "success" for r in results
     ) and eval_complete
 
+    # P0-3: Post-run git cleanliness check.
+    git_clean_at_end = _git_working_tree_clean()
+
     summary = {
         "suite": "mllmu_baselines",
         "methods_run": [r["method"] for r in results],
         "results": results,
         "total_elapsed_seconds": suite_elapsed,
+        # P0-3: Git provenance invariant.
+        "code_sha": suite_state["code_sha"],
         "code_commit": suite_state["code_commit"],
+        "git_dirty_at_start": suite_state["git_dirty_at_start"],
+        "git_clean_at_end": git_clean_at_end,
         "per_method_status": per_method_status,
         "eval_complete": eval_complete,
         "all_succeeded": all_succeeded,

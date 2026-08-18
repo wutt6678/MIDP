@@ -71,6 +71,8 @@ class PostEvalConfig:
     freeze_verification_path: str = ""
     processed_dataset_path: str = ""
     model_config_path: str = ""
+    # P0-4: Selection manifest path for identity-based grouping.
+    selection_manifest_path: str = ""
     # P0-19/20: Route probe SHA for suite-level verification
     route_probe_sha256: str = ""
 
@@ -593,6 +595,7 @@ def evaluate_intervention(
     *,
     baseline_results_path: str | Path = "",
     method_name: str = "unknown",
+    objective_name: str = "",
     model_config_obj: Any = None,
     backend_override: Any = None,
 ) -> dict[str, Any]:
@@ -737,6 +740,30 @@ def evaluate_intervention(
 
     summary = evaluator.generate_summary()
 
+    # -- Load selection manifest for identity-based grouping (P0-5) ------ #
+    selection_manifest_path = getattr(config, "selection_manifest_path", "")
+    target_ids: set[str] = set()
+    retain_ids: set[str] = set()
+    control_ids: set[str] = set()
+    selection_manifest_sha = ""
+    if selection_manifest_path and Path(selection_manifest_path).is_file():
+        with open(selection_manifest_path) as _sf:
+            _sel = json.load(_sf)
+        target_ids = set(_sel.get("target_identities", []))
+        retain_ids = set(_sel.get("retain_identities", []))
+        control_ids = set(_sel.get("control_identities", []))
+        selection_manifest_sha = _sha256_file(selection_manifest_path)
+
+    def _classify_identity(identity_id: str) -> str:
+        """Classify an identity into target/retain/control/untargeted."""
+        if identity_id in target_ids:
+            return "target"
+        if identity_id in retain_ids:
+            return "retain"
+        if identity_id in control_ids:
+            return "control"
+        return "untargeted"
+
     # -- Load baseline results for ΔM computation ----------------------------- #
     baseline_path = Path(config.baseline_results_path)
     baseline_results: list[dict[str, Any]] = []
@@ -766,13 +793,19 @@ def evaluate_intervention(
                 return r.get("normalized_exact_match")
             return r.get("signed_answer_margin")
 
-    # Aggregate: group by (probe_family, protocol_role) → list of ΔM.
+    # Aggregate: group by (probe_family, group) → list of ΔM.
     from collections import defaultdict
     delta_accum: dict[str, dict[str, list[float]]] = defaultdict(
         lambda: defaultdict(list)
     )
-    # P1-35: Track per-role DV accuracy for preservation reporting.
-    dv_correct_per_role: dict[str, list[bool]] = defaultdict(list)
+    # P0-8: Separate accumulator for name_only metrics.
+    name_only_accum: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    # P0-16: Track per-group DV accuracy for preservation reporting.
+    dv_correct_per_group: dict[str, list[bool]] = defaultdict(list)
+    # Track all identity IDs seen for count enforcement.
+    identity_groups: dict[str, str] = {}
     n_pairs = 0
     n_inference_errors = 0
 
@@ -787,14 +820,17 @@ def evaluate_intervention(
         if pr.error is not None:
             n_inference_errors += 1
 
-        # P1-35: Track DV accuracy per protocol role.
+        # P0-5: Classify by identity, not protocol_role.
+        identity_id = pr.identity_id if hasattr(pr, "identity_id") else ""
+        group = _classify_identity(identity_id)
+
+        # Track identity → group mapping for count enforcement.
+        if identity_id:
+            identity_groups[identity_id] = group
+
+        # P0-16: Track DV accuracy per group.
         if pr.probe_family == "direct_visual" and pr.correct is not None:
-            role_label = {
-                "exclude": "target",
-                "train": "retain",
-                "eval": "control",
-            }.get(pr.protocol_role, "untargeted")
-            dv_correct_per_role[role_label].append(pr.correct)
+            dv_correct_per_group[group].append(pr.correct)
 
         post_m = _metric(pr, is_dataclass=True)
         pre_m = _metric(br, is_dataclass=False)
@@ -803,15 +839,27 @@ def evaluate_intervention(
         delta = post_m - pre_m
 
         family = pr.probe_family
-        role = pr.protocol_role  # train | eval | exclude
-        # Map protocol roles to comparison-framework vocabulary.
-        role_key = {
-            "exclude": "delta_target",
-            "train": "delta_retain",
-            "eval": "delta_control",
-        }.get(role, "delta_untargeted")
+        role_key = f"delta_{group}"
 
-        delta_accum[family][role_key].append(delta)
+        # P0-8: name_only uses a separate accumulator.
+        if family == "name_only":
+            name_only_accum[family][role_key].append(delta)
+        else:
+            delta_accum[family][role_key].append(delta)
+
+    # P0-6: Enforce frozen 2/2/2/94 identity counts.
+    _EXPECTED_IDENTITY_COUNTS = {
+        "target": 2, "retain": 2, "control": 2, "untargeted": 94,
+    }
+    group_identity_counts: dict[str, int] = {}
+    for grp in ("target", "retain", "control", "untargeted"):
+        group_identity_counts[grp] = sum(
+            1 for g in identity_groups.values() if g == grp
+        )
+    identity_counts_valid = all(
+        group_identity_counts.get(g, 0) == expected
+        for g, expected in _EXPECTED_IDENTITY_COUNTS.items()
+    )
 
     # Average per (family, role).
     _FAMILY_ABBREV = {
@@ -819,7 +867,6 @@ def evaluate_intervention(
         "image_plus_name": "IPN",
         "wrong_name": "WN",
         "visual_text_conflict": "VTC",
-        "name_only": "name_only",
     }
 
     def _avg_deltas(accum_key: str) -> dict[str, float]:
@@ -827,7 +874,6 @@ def evaluate_intervention(
         for family, roles in delta_accum.items():
             vals = roles.get(accum_key, [])
             if vals:
-                # Abbreviate family names for the comparison framework.
                 short = _FAMILY_ABBREV.get(family, family)
                 out[short] = sum(vals) / len(vals)
         return out
@@ -835,9 +881,23 @@ def evaluate_intervention(
     delta_target = _avg_deltas("delta_target")
     delta_retain = _avg_deltas("delta_retain")
     delta_control = _avg_deltas("delta_control")
-    # P0-15: Include delta_untargeted for probes whose protocol_role
-    # does not map to exclude/train/eval.
     delta_untargeted = _avg_deltas("delta_untargeted")
+
+    # P0-8: Compute name_only deltas separately.
+    def _avg_name_only(accum_key: str) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for roles in name_only_accum.values():
+            vals = roles.get(accum_key, [])
+            if vals:
+                out["normalized_exact_match"] = sum(vals) / len(vals)
+        return out
+
+    name_only_delta = {
+        "target": _avg_name_only("delta_target"),
+        "retain": _avg_name_only("delta_retain"),
+        "control": _avg_name_only("delta_control"),
+        "untargeted": _avg_name_only("delta_untargeted"),
+    }
 
     # -- P0-13: Generate the post-eval manifest BEFORE computing its SHA ---- #
     evaluator.generate_post_eval_manifest()
@@ -848,13 +908,17 @@ def evaluate_intervention(
     if manifest_path.is_file():
         manifest_sha = _sha256_file(manifest_path)
 
-    # -- P1-35: Compute DV accuracy per protocol role ----------------------- #
-    dv_accuracy_per_role: dict[str, float] = {}
-    for role_label, corrects in dv_correct_per_role.items():
+    # -- P0-16: Compute DV accuracy per identity-based group ----------------- #
+    dv_accuracy: dict[str, float] = {}
+    all_dv_corrects = []
+    for grp_label, corrects in dv_correct_per_group.items():
         if corrects:
-            dv_accuracy_per_role[role_label] = (
-                sum(corrects) / len(corrects)
-            )
+            dv_accuracy[grp_label] = sum(corrects) / len(corrects)
+            all_dv_corrects.extend(corrects)
+    if all_dv_corrects:
+        dv_accuracy["global"] = sum(all_dv_corrects) / len(all_dv_corrects)
+    else:
+        dv_accuracy["global"] = 0.0
 
     # -- P1-30: Build intervention provenance -------------------------------- #
     intervention_provenance: dict[str, Any] = {
@@ -873,14 +937,18 @@ def evaluate_intervention(
     # These are picked up from the result dict additions below.
 
     # -- Build result dict ---------------------------------------------------- #
-    # P0-16: name_only uses normalized_exact_match (not signed_answer_margin)
-    # and is kept in a separate key to prevent metric mixing.
+    # P0-8: name_only separated; P0-16: DV accuracy; P0-25: group provenance.
+    # P0-10: objective_name records the training objective; method is the
+    # canonical suite ID.
     result: dict[str, Any] = {
         "method": method_name,
+        "objective_name": objective_name or method_name,
         "delta_target": delta_target,
         "delta_retain": delta_retain,
         "delta_control": delta_control,
         "delta_untargeted": delta_untargeted,
+        # P0-8: name_only fully separated from signed-margin deltas.
+        "name_only_delta": name_only_delta,
         "exact_pair_count": n_pairs,
         "inference_errors": n_inference_errors,
         "manifest_sha256": manifest_sha,
@@ -897,10 +965,24 @@ def evaluate_intervention(
         # P0-19/20: Provenance fields for suite-level verification.
         "model_revision": config.model_revision,
         "route_probe_sha256": getattr(config, "route_probe_sha256", ""),
+        # P0-4: Selection manifest SHA for identity-grouping provenance.
+        "selection_manifest_sha256": selection_manifest_sha,
+        # P0-16: DV accuracy per identity-based group for preservation gate.
+        "dv_accuracy": dv_accuracy,
+        # P0-6: Identity group counts for frozen-contract enforcement.
+        "group_identity_counts": group_identity_counts,
+        "identity_counts_valid": identity_counts_valid,
+        # P0-25: Experimental-group provenance.
+        "group_definition": {
+            "selection_manifest_path": selection_manifest_path,
+            "selection_manifest_sha256": selection_manifest_sha,
+            "target_identity_ids": sorted(target_ids),
+            "retain_identity_ids": sorted(retain_ids),
+            "control_identity_ids": sorted(control_ids),
+            "untargeted_identity_count": group_identity_counts.get("untargeted", 0),
+        },
         # P1-30: Intervention provenance for traceability.
         "intervention_provenance": intervention_provenance,
-        # P1-35: DV accuracy per protocol role for preservation reporting.
-        "dv_accuracy_per_role": dv_accuracy_per_role,
     }
 
     # -- Persist as the canonical suite artifact (P0-1) ---------------------- #

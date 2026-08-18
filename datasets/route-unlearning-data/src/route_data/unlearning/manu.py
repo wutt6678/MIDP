@@ -582,6 +582,9 @@ class MANU:
             )
             selection_sha = hashlib.sha256(selection_str.encode()).hexdigest()
 
+            # P0-12: Use zero-padded rate string (05, 10) for consistency.
+            rate_str = f"{round(prune_rate * 100):02d}"
+
             prune_spec = {
                 "prune_fraction": prune_rate,
                 "selected_neurons": {k: sorted(v) for k, v in neurons.items()},
@@ -593,7 +596,6 @@ class MANU:
             }
 
             # Persist pruning specification (P0-8)
-            rate_str = f"{prune_rate * 100:.0f}"
             with open(output_dir / f"prune_spec_{rate_str}.json", "w") as f:
                 json.dump(prune_spec, f, indent=2)
                 f.write("\n")

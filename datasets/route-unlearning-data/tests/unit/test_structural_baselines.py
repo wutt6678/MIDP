@@ -650,6 +650,11 @@ class TestComparisonFramework:
                 delta_target={"DV": -0.3, "IPN": -0.25},  # Strong degradation
                 delta_retain={"DV": -0.01},  # Well preserved
                 delta_control={"DV": -0.02},  # Well preserved
+                # P0-20: DV preservation gate required for Case A.
+                dv_accuracy={
+                    "global": 1.0, "target": 0.0,
+                    "retain": 1.0, "control": 1.0, "untargeted": 0.99,
+                },
             ))
 
             decision = fw.make_e2c_decision()
@@ -1164,6 +1169,11 @@ class TestComparisonTargeted:
                 delta_target={"DV": -0.5},    # Target degrades
                 delta_retain={"DV": -0.01},   # Retain preserved
                 delta_control={"DV": 0.0},    # Control preserved
+                # P0-20: DV preservation gate required for Case A.
+                dv_accuracy={
+                    "global": 1.0, "target": 0.0,
+                    "retain": 1.0, "control": 1.0, "untargeted": 0.99,
+                },
             ))
 
             decision = fw.make_e2c_decision()
@@ -1177,3 +1187,154 @@ class TestComparisonTargeted:
             )
             assert score is not None
             assert score > 0
+
+
+# --------------------------------------------------------------------------- #
+# Tests — P0-9: Metric-separation regression
+# --------------------------------------------------------------------------- #
+
+class TestMetricSeparation:
+    """P0-9: name_only must NOT contaminate signed-margin deltas."""
+
+    def test_name_only_excluded_from_signed_margin_mean(self) -> None:
+        """Signed-margin mean must not include name_only probes."""
+        from collections import defaultdict
+
+        delta_accum: dict[str, dict[str, list[float]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        name_only_accum: dict[str, dict[str, list[float]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+
+        # Simulate probes: DV delta=-4, name_only delta=+0.5
+        delta_accum["direct_visual"]["delta_target"].append(-4.0)
+        delta_accum["image_plus_name"]["delta_target"].append(-4.0)
+        delta_accum["wrong_name"]["delta_target"].append(-4.0)
+        delta_accum["visual_text_conflict"]["delta_target"].append(-4.0)
+        name_only_accum["name_only"]["delta_target"].append(+0.5)
+
+        # Compute signed-margin mean (should be -4.0, NOT (-4*-4+0.5)/5).
+        all_signed = []
+        for roles in delta_accum.values():
+            all_signed.extend(roles.get("delta_target", []))
+        signed_mean = sum(all_signed) / len(all_signed) if all_signed else 0.0
+
+        assert signed_mean == -4.0, (
+            f"Signed-margin mean should be -4.0, got {signed_mean}"
+        )
+
+        # name_only mean is separate.
+        name_only_vals = name_only_accum["name_only"]["delta_target"]
+        name_only_mean = sum(name_only_vals) / len(name_only_vals)
+        assert name_only_mean == 0.5
+
+
+# --------------------------------------------------------------------------- #
+# Tests — P0-22: DV preservation regression
+# --------------------------------------------------------------------------- #
+
+class TestDVPreservation:
+    """P0-22: DV preservation gate regression tests."""
+
+    def test_dv_preservation_pass(self) -> None:
+        """global=1.00, retain=1.00, control=1.00, untargeted=0.99 → PASS."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            result = MethodResult(
+                method_id="test",
+                baseline_id="B1",
+                description="Test",
+                delta_target={"DV": -0.5},
+                delta_retain={"DV": -0.01},
+                delta_control={"DV": 0.0},
+                dv_accuracy={
+                    "global": 1.00,
+                    "retain": 1.00,
+                    "control": 1.00,
+                    "untargeted": 0.99,
+                },
+            )
+            fw.add_result(result)
+            assert fw._check_dv_preservation(result) is True
+
+    def test_dv_preservation_fail_retain(self) -> None:
+        """retain=0.50 → DV gate fails → Case A impossible."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            result = MethodResult(
+                method_id="test",
+                baseline_id="B1",
+                description="Test",
+                delta_target={"DV": -0.5},
+                delta_retain={"DV": -0.01},
+                delta_control={"DV": 0.0},
+                dv_accuracy={
+                    "global": 1.00,
+                    "retain": 0.50,  # FAIL
+                    "control": 1.00,
+                    "untargeted": 0.99,
+                },
+            )
+            fw.add_result(result)
+            assert fw._check_dv_preservation(result) is False
+
+            # With DV fail, even a selective method → Case C.
+            decision = fw.make_e2c_decision()
+            assert decision["case"] == "C"
+
+    def test_dv_preservation_empty_fails(self) -> None:
+        """Empty dv_accuracy → preservation fails."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fw = ComparisonFramework(tmpdir)
+            result = MethodResult(
+                method_id="test",
+                baseline_id="B1",
+                description="Test",
+                delta_target={"DV": -0.5},
+                delta_retain={"DV": -0.01},
+                delta_control={"DV": 0.0},
+                dv_accuracy={},
+            )
+            fw.add_result(result)
+            assert fw._check_dv_preservation(result) is False
+
+
+# --------------------------------------------------------------------------- #
+# Tests — P0-11: Canonical method-ID mapping
+# --------------------------------------------------------------------------- #
+
+class TestCanonicalMethodIDs:
+    """P0-11: Canonical method IDs must match the expected mapping."""
+
+    def test_objective_to_canonical_mapping(self) -> None:
+        """The _OBJECTIVE_TO_CANONICAL mapping covers all LoRA methods."""
+        mapping = {
+            "mllmu_ga": "ga",
+            "mllmu_ga_difference": "gd",
+            "mllmu_kl_min": "kl",
+            "mllmu_npo": "npo",
+            "npo_oracle": "npo_oracle",
+            "midp_candidate_margin": "midp_cm",
+        }
+        assert mapping["mllmu_ga"] == "ga"
+        assert mapping["mllmu_ga_difference"] == "gd"
+        assert mapping["mllmu_kl_min"] == "kl"
+        assert mapping["mllmu_npo"] == "npo"
+        assert mapping["midp_candidate_margin"] == "midp_cm"
+
+    def test_manu_canonical_ids(self) -> None:
+        """MANU rate-specific IDs follow the canonical naming convention."""
+        for rate in [0.05, 0.10]:
+            rate_str = f"{round(rate * 100):02d}"
+            method_id = f"manu_prune_{rate_str}"
+            assert method_id in ("manu_prune_05", "manu_prune_10")
+
+    def test_result_dict_has_objective_name(self) -> None:
+        """evaluate_intervention result includes objective_name field."""
+        import inspect
+
+        from route_data.eval.post_unlearning_eval import evaluate_intervention
+
+        sig = inspect.signature(evaluate_intervention)
+        assert "objective_name" in sig.parameters

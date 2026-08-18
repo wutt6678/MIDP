@@ -19,13 +19,13 @@ training:
   batch_size: 1
   gradient_accumulation_steps: 4
   max_grad_norm: 1.0
-  warmup_steps: 0
+  warmup_steps: 5
   checkpoint_steps: [1, 5, 10, 25, 50, 60, 75, 90, 125]
 
 lora:
   rank: 8
   alpha: 16
-  dropout: 0.0
+  dropout: 0.05
   target_modules: [q_proj, v_proj, k_proj, o_proj]
 
 data:

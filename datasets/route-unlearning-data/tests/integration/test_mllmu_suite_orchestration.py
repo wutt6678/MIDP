@@ -60,6 +60,9 @@ def _make_common_config(tmp_path: Path) -> dict:
     processed_dataset = tmp_path / "processed.jsonl"
     processed_dataset.write_text("{}")
 
+    selection_manifest = tmp_path / "selection_manifest.json"
+    selection_manifest.write_text("{}")
+
     return {
         "data": {
             "route_probe_path": str(probe_path),
@@ -69,6 +72,7 @@ def _make_common_config(tmp_path: Path) -> dict:
             "freeze_verification_path": str(freeze_verification),
             "processed_dataset_path": str(processed_dataset),
             "selection_manifest_sha256": "abc123selection",
+            "selection_manifest_path": str(selection_manifest),
             "route_probe_sha256": "def456probe",
         },
         "base_model": {
@@ -123,6 +127,7 @@ class TestP024RunEvalFrozenContract:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
+            objective_name="",
         ):
             captured_config["config"] = config
             return {
@@ -214,6 +219,7 @@ class TestP025PromptingBackend:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
+            objective_name="",
         ):
             captured_kwargs["backend_override"] = backend_override
             captured_kwargs["method_name"] = method_name
@@ -257,6 +263,7 @@ class TestP025PromptingBackend:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
+            objective_name="",
         ):
             captured_method["name"] = method_name
             return {
@@ -306,6 +313,7 @@ class TestP026ManuOutputIsolation:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
+            objective_name="",
         ):
             captured_dirs[method_name] = Path(output_dir)
             return {
@@ -358,6 +366,7 @@ class TestP026ManuOutputIsolation:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
+            objective_name="",
         ):
             captured_methods[method_name] = Path(output_dir).name
             return {
@@ -802,6 +811,10 @@ class TestValidateEvalResult:
             "delta_target": {"DV": 0.5},
             "delta_retain": {"DV": 0.01},
             "delta_control": {"DV": 0.005},
+            "delta_untargeted": {"DV": 0.002},
+            "name_only_delta": {},
+            "dv_accuracy": {"global": 1.0, "target": 0.5, "retain": 1.0, "control": 1.0, "untargeted": 0.99},
+            "group_identity_counts": {"target": 2, "retain": 2, "control": 2, "untargeted": 94},
             "method": "wrong_method",
         }
         err = suite._validate_eval_result(result, "ga")
@@ -824,6 +837,10 @@ class TestValidateEvalResult:
             "delta_target": {"DV": 0.5},
             "delta_retain": {"DV": 0.01},
             "delta_control": {"DV": 0.005},
+            "delta_untargeted": {"DV": 0.002},
+            "name_only_delta": {},
+            "dv_accuracy": {"global": 1.0, "target": 0.5, "retain": 1.0, "control": 1.0, "untargeted": 0.99},
+            "group_identity_counts": {"target": 2, "retain": 2, "control": 2, "untargeted": 94},
             "method": "ga",
         }
         err = suite._validate_eval_result(result, "ga")
@@ -846,6 +863,10 @@ class TestValidateEvalResult:
             "delta_target": {"DV": 0.5},
             "delta_retain": {"DV": 0.01},
             "delta_control": {"DV": 0.005},
+            "delta_untargeted": {"DV": 0.002},
+            "name_only_delta": {},
+            "dv_accuracy": {"global": 1.0, "target": 0.5, "retain": 1.0, "control": 1.0, "untargeted": 0.99},
+            "group_identity_counts": {"target": 2, "retain": 2, "control": 2, "untargeted": 94},
             "method": "ga",
             "model_revision": "wrong_revision",
         }
@@ -872,6 +893,10 @@ class TestValidateEvalResult:
             "delta_target": {"DV": 0.5},
             "delta_retain": {"DV": 0.01},
             "delta_control": {"DV": 0.005},
+            "delta_untargeted": {"DV": 0.002},
+            "name_only_delta": {},
+            "dv_accuracy": {"global": 1.0, "target": 0.5, "retain": 1.0, "control": 1.0, "untargeted": 0.99},
+            "group_identity_counts": {"target": 2, "retain": 2, "control": 2, "untargeted": 94},
             "method": "ga",
             "route_probe_sha256": "wrong_sha",
         }
@@ -899,13 +924,227 @@ class TestValidateEvalResult:
             "delta_target": {"DV": 0.5},
             "delta_retain": {"DV": 0.01},
             "delta_control": {"DV": 0.005},
+            "delta_untargeted": {"DV": 0.002},
+            "name_only_delta": {"target": {}, "retain": {}},
+            "dv_accuracy": {
+                "global": 1.0, "target": 0.5,
+                "retain": 1.0, "control": 1.0, "untargeted": 0.99,
+            },
+            "group_identity_counts": {
+                "target": 2, "retain": 2, "control": 2, "untargeted": 94,
+            },
             "method": "ga",
             "model_revision": "rev123",
             "route_probe_sha256": "sha456",
+            "selection_manifest_sha256": "sel_sha",
         }
         common_config = {
             "base_model": {"revision": "rev123"},
-            "data": {"route_probe_sha256": "sha456"},
+            "data": {
+                "route_probe_sha256": "sha456",
+                "selection_manifest_sha256": "sel_sha",
+            },
         }
         err = suite._validate_eval_result(result, "ga", common_config)
         assert err is None
+
+
+# ========================================================================== #
+# P0-31: Real-schema integration tests
+# ========================================================================== #
+
+
+class TestRealSchemaIntegration:
+    """P0-31: Load actual committed artifacts and verify preflight accepts them."""
+
+    @staticmethod
+    def _project_root() -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def test_research_manifest_loads(self) -> None:
+        """The committed research_dataset_manifest.json is valid JSON."""
+        root = self._project_root()
+        manifest_path = (
+            root / "outputs" / "full_fiubench" / "evidence"
+            / "research_dataset_manifest.json"
+        )
+        if not manifest_path.is_file():
+            pytest.skip("research manifest not found")
+        with open(manifest_path) as f:
+            data = json.load(f)
+        assert data.get("manifest_version"), "manifest_version missing"
+        assert data.get("model_provenance", {}).get("model_id") == "Qwen/Qwen3.5-9B"
+
+    def test_freeze_verification_loads(self) -> None:
+        """The committed final_freeze_verification.json is valid."""
+        root = self._project_root()
+        fv_path = (
+            root / "outputs" / "full_fiubench" / "evidence"
+            / "final_freeze_verification.json"
+        )
+        if not fv_path.is_file():
+            pytest.skip("freeze verification not found")
+        with open(fv_path) as f:
+            data = json.load(f)
+        assert data.get("dataset_version") == "fiubench-route-v1"
+        assert data.get("ready_for_experiments") is True
+
+    def test_selection_manifest_loads(self) -> None:
+        """The committed pilot_identity_selection.json is valid."""
+        root = self._project_root()
+        sel_path = (
+            root / "outputs" / "experiments" / "unlearning_pilot"
+            / "Qwen_Qwen3.5-9B" / "pilot_v1" / "selection"
+            / "pilot_identity_selection.json"
+        )
+        if not sel_path.is_file():
+            pytest.skip("selection manifest not found")
+        with open(sel_path) as f:
+            data = json.load(f)
+        target = data.get("target_identities", [])
+        retain = data.get("retain_identities", [])
+        control = data.get("control_identities", [])
+        assert len(target) == 2
+        assert len(retain) == 2
+        assert len(control) == 2
+
+
+# ========================================================================== #
+# P0-32: Frozen-group regression test
+# ========================================================================== #
+
+
+class TestFrozenGroupRegression:
+    """P0-32: All selected IDs have protocol_role=train but are correctly
+    classified as target/retain/control by identity ID."""
+
+    def test_selected_ids_are_all_train_role(self) -> None:
+        """All 6 selected identities have protocol_role=train."""
+        root = Path(__file__).resolve().parents[2]
+        sel_path = (
+            root / "outputs" / "experiments" / "unlearning_pilot"
+            / "Qwen_Qwen3.5-9B" / "pilot_v1" / "selection"
+            / "pilot_identity_selection.json"
+        )
+        if not sel_path.is_file():
+            pytest.skip("selection manifest not found")
+        with open(sel_path) as f:
+            data = json.load(f)
+
+        identity_details = data.get("identity_details", {})
+        selected_ids = (
+            set(data.get("target_identities", []))
+            | set(data.get("retain_identities", []))
+            | set(data.get("control_identities", []))
+        )
+
+        for iid in selected_ids:
+            detail = identity_details.get(iid, {})
+            assert detail.get("protocol_role") == "train", (
+                f"Identity {iid} has protocol_role={detail.get('protocol_role')}, "
+                f"expected 'train'. This prevents regression to protocol-role grouping."
+            )
+
+    def test_identity_based_classification_not_protocol_role(self) -> None:
+        """Identity-based classification produces 2/2/2 groups,
+        not protocol-role-based groups."""
+        root = Path(__file__).resolve().parents[2]
+        sel_path = (
+            root / "outputs" / "experiments" / "unlearning_pilot"
+            / "Qwen_Qwen3.5-9B" / "pilot_v1" / "selection"
+            / "pilot_identity_selection.json"
+        )
+        if not sel_path.is_file():
+            pytest.skip("selection manifest not found")
+        with open(sel_path) as f:
+            data = json.load(f)
+
+        target_ids = set(data.get("target_identities", []))
+        retain_ids = set(data.get("retain_identities", []))
+        control_ids = set(data.get("control_identities", []))
+
+        # All 6 have protocol_role=train, but they are different groups.
+        assert len(target_ids) == 2
+        assert len(retain_ids) == 2
+        assert len(control_ids) == 2
+        # No overlap between groups.
+        assert not (target_ids & retain_ids)
+        assert not (target_ids & control_ids)
+        assert not (retain_ids & control_ids)
+
+
+# ========================================================================== #
+# P0-33: Runtime git-cleanliness test
+# ========================================================================== #
+
+
+class TestRuntimeGitCleanliness:
+    """P0-33: Runtime output path is git-ignored."""
+
+    def test_runtime_outputs_in_gitignore(self) -> None:
+        """runtime_outputs/ is listed in .gitignore."""
+        root = Path(__file__).resolve().parents[2]
+        gitignore = root / ".gitignore"
+        if not gitignore.is_file():
+            pytest.skip(".gitignore not found")
+        content = gitignore.read_text()
+        assert "runtime_outputs/" in content, (
+            "runtime_outputs/ must be in .gitignore"
+        )
+
+
+# ========================================================================== #
+# P0-15: Real MIDP-CM binding test
+# ========================================================================== #
+
+
+class TestMIDPCMBinding:
+    """P0-15: E2B-B2 evidence binder works with actual committed layout."""
+
+    def test_bind_e2b_b2_produces_common_schema(self) -> None:
+        """bind_e2b_b2_result() reads actual artifacts and produces
+        the common comparison schema."""
+        root = Path(__file__).resolve().parents[2]
+        e2b_dir = (
+            root / "outputs" / "experiments" / "unlearning_pilot"
+            / "Qwen_Qwen3.5-9B" / "pilot_e2b_b2"
+        )
+        if not e2b_dir.is_dir():
+            pytest.skip("E2B-B2 directory not found")
+
+        from route_data.unlearning.e2b_evidence_binding import bind_e2b_b2_result
+
+        result = bind_e2b_b2_result(e2b_dir)
+
+        # Common schema fields present.
+        assert result["method"] == "midp_cm"
+        assert result["objective_name"] == "midp_candidate_margin"
+        assert "delta_target" in result
+        assert "delta_retain" in result
+        assert "delta_control" in result
+        assert "delta_untargeted" in result
+        assert "name_only_delta" in result
+        assert "dv_accuracy" in result
+        assert "group_identity_counts" in result
+
+        # DV accuracy has required keys.
+        dv = result["dv_accuracy"]
+        for key in ("global", "target", "retain", "control", "untargeted"):
+            assert key in dv, f"dv_accuracy missing key: {key}"
+
+        # Group counts match 2/2/2/94.
+        counts = result["group_identity_counts"]
+        assert counts.get("target") == 2
+        assert counts.get("retain") == 2
+        assert counts.get("control") == 2
+        assert counts.get("untargeted") == 94
+
+        # Artifact SHAs are populated.
+        assert result.get("e2b_artifact_shas"), "e2b_artifact_shas empty"
+
+    def test_bind_e2b_b2_sha_mismatch_hard_fails(self, tmp_path: Path) -> None:
+        """Missing artifacts cause a hard failure."""
+        from route_data.unlearning.e2b_evidence_binding import bind_e2b_b2_result
+
+        with pytest.raises(FileNotFoundError):
+            bind_e2b_b2_result(tmp_path / "nonexistent")

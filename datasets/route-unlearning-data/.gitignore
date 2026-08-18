@@ -1,13 +1,35 @@
+# Runtime outputs from MLLMU baseline suite execution.
+# These artefacts are generated during R11–R14 and must not dirty Git.
+runtime_outputs/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
+dist/
+build/
+.eggs/
+
+# Caches
 .env
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Data directories
 data/raw/
 data/interim/
 data/processed/
 data/manifests/
-# outputs/  # Now tracking baseline results (binary files still excluded by parent .gitignore)
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
 data/tmp_final_verify/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

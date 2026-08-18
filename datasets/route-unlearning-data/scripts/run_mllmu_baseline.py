@@ -57,13 +57,14 @@ def _run_eval(
     *,
     eval_subdir: str = "",
     backend_override: Any = None,
+    objective_name: str = "",
 ) -> dict[str, Any]:
     """Call evaluate_intervention with a complete PostEvalConfig (P0-1).
 
     Parameters
     ----------
     method_label:
-        Human-readable method identifier.
+        Human-readable method identifier (canonical suite ID).
     model, processor:
         The model in its final intervention state and its processor.
     adapter_path:
@@ -78,6 +79,9 @@ def _run_eval(
     backend_override:
         Optional pre-built backend to pass through to
         ``evaluate_intervention()`` (P0-7 prompting).
+    objective_name:
+        P0-10: Training objective name (e.g. ``mllmu_ga``).  Defaults
+        to *method_label* when empty.
     """
     from route_data.eval.post_unlearning_eval import (
         PostEvalConfig,
@@ -106,6 +110,7 @@ def _run_eval(
     freeze_verification_path = data.get("freeze_verification_path", "")
     processed_dataset_path = data.get("processed_dataset_path", "")
     selection_manifest_sha256 = data.get("selection_manifest_sha256", "")
+    selection_manifest_path = data.get("selection_manifest_path", "")
     route_probe_sha256 = data.get("route_probe_sha256", "")
 
     # P0-1: Build a complete PostEvalConfig with the full frozen contract.
@@ -120,6 +125,7 @@ def _run_eval(
         baseline_manifest_path=str(baseline_manifest_path),
         output_dir=str(eval_output_dir),
         selection_manifest_sha256=selection_manifest_sha256,
+        selection_manifest_path=str(selection_manifest_path),
         code_commit=_git_commit(),
         dataset_manifest_path=str(research_dataset_manifest_path),
         freeze_verification_path=str(freeze_verification_path),
@@ -136,6 +142,7 @@ def _run_eval(
         "dataset_manifest_path": post_config.dataset_manifest_path,
         "freeze_verification_path": post_config.freeze_verification_path,
         "processed_dataset_path": post_config.processed_dataset_path,
+        "selection_manifest_path": post_config.selection_manifest_path,
     }
     empty_fields = [k for k, v in mandatory.items() if not v]
     if empty_fields:
@@ -154,6 +161,7 @@ def _run_eval(
         config=post_config,
         baseline_results_path=str(baseline_results_path),
         method_name=method_label,
+        objective_name=objective_name or method_label,
         backend_override=backend_override,
     )
     logger.info(
@@ -431,12 +439,9 @@ def main() -> None:
         return
 
     if method_name == "midp_candidate_margin":
-        # P0-12: Bind validated E2B-B2 evidence as the canonical MIDP-CM
-        # artifact.  No retraining; no wholesale directory copy.  The source
-        # evidence is SHA-verified and a canonical eval_results.json is written
-        # into the method's own output directory.
-        import hashlib
-
+        # P0-14: Bind validated E2B-B2 evidence via the real artifact binder.
+        # No retraining; reads actual E2B-B2 artifacts and transforms them
+        # into the common comparison schema.
         logger.info("MIDP-CM: binding existing E2B-B2 result (no retraining)")
         e2b_dir = config.get("runtime", {}).get("e2b_b2_output_dir", "")
         output_dir = Path(training_config.output_dir)
@@ -454,63 +459,22 @@ def main() -> None:
             )
             sys.exit(1)
 
-        # Locate the source evidence file.
-        source_eval_results = e2b_path / "eval_results.json"
-        if not source_eval_results.is_file():
-            logger.error(
-                f"MIDP-CM: source eval_results.json not found at {source_eval_results}"
+        # P0-14: Use the real evidence binder.
+        from route_data.unlearning.e2b_evidence_binding import bind_e2b_b2_result
+
+        selection_path = config.get("data", {}).get("selection_manifest_path", "")
+        try:
+            bind_e2b_b2_result(
+                e2b_dir=e2b_path,
+                output_dir=eval_dir,
+                selection_manifest_path=selection_path,
             )
+        except (FileNotFoundError, ValueError) as exc:
+            logger.error(f"MIDP-CM: evidence binding FAILED — {exc}")
             sys.exit(1)
 
-        # Compute source evidence SHA for provenance binding.
-        sha = hashlib.sha256()
-        with open(source_eval_results, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                sha.update(chunk)
-        source_sha = sha.hexdigest()
-
-        # Load the existing evidence.
-        with open(source_eval_results) as f:
-            source_result = json.load(f)
-
-        # Validate that evidence contains required comparison fields.
-        for field_name in ("delta_target", "delta_retain", "delta_control"):
-            if not source_result.get(field_name):
-                logger.error(
-                    f"MIDP-CM: missing required field '{field_name}' in source evidence"
-                )
-                sys.exit(1)
-
-        # Build the canonical result with source-evidence provenance.
-        result = {
-            "method": "midp_candidate_margin",
-            "delta_target": source_result.get("delta_target", {}),
-            "delta_retain": source_result.get("delta_retain", {}),
-            "delta_control": source_result.get("delta_control", {}),
-            "delta_untargeted": source_result.get("delta_untargeted", {}),
-            "exact_pair_count": source_result.get("exact_pair_count", 0),
-            "inference_errors": source_result.get("inference_errors", 0),
-            "manifest_sha256": source_result.get("manifest_sha256", ""),
-            "per_family_post": source_result.get("per_family_post", {}),
-            "summary": source_result.get("summary", {}),
-            "eval_output_dir": str(eval_dir),
-            "results_path": str(eval_dir / "eval_results.json"),
-            "adapter_path": None,
-            "e2b_source": str(e2b_path),
-            "e2b_source_eval_results_sha256": source_sha,
-            "strict_validation_pass": source_result.get("strict_validation_pass", False),
-            "exact_pairing_pass": source_result.get("exact_pairing_pass", False),
-        }
-
-        # Write the canonical eval_results.json under eval/.
-        canonical_path = eval_dir / "eval_results.json"
-        with open(canonical_path, "w") as f:
-            json.dump(result, f, indent=2, default=str)
-            f.write("\n")
-
         logger.info(
-            f"MIDP-CM: evidence bound from {e2b_path} "
-            f"(SHA256={source_sha[:16]}…) → {canonical_path}"
+            f"MIDP-CM: evidence bound from {e2b_path} → {eval_dir / 'eval_results.json'}"
         )
         return
 
@@ -741,8 +705,20 @@ def main() -> None:
     model.save_pretrained(str(adapter_save_path))
     logger.info(f"Saved LoRA adapter: {adapter_save_path}")
 
+    # P0-10: Map config objective name → canonical suite method ID.
+    _OBJECTIVE_TO_CANONICAL = {
+        "mllmu_ga": "ga",
+        "mllmu_ga_difference": "gd",
+        "mllmu_kl_min": "kl",
+        "mllmu_npo": "npo",
+        "npo_oracle": "npo_oracle",
+        "midp_candidate_margin": "midp_cm",
+    }
+    canonical_id = _OBJECTIVE_TO_CANONICAL.get(method_name, method_name)
+
     eval_result = _run_eval(
-        method_name, model, processor, adapter_save_path, config, training_config,
+        canonical_id, model, processor, adapter_save_path, config, training_config,
+        objective_name=method_name,
     )
     if not eval_result.get("strict_validation_pass"):
         logger.error(f"{method_name}: strict validation FAILED")

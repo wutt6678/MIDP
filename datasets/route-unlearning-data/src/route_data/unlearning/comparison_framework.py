@@ -49,6 +49,9 @@ class MethodResult:
     retain_preservation: dict[str, float] = field(default_factory=dict)
     control_preservation: dict[str, float] = field(default_factory=dict)
 
+    # P0-16: DV accuracy per group for preservation gate.
+    dv_accuracy: dict[str, float] = field(default_factory=dict)
+
     # Exact pairing
     exact_pair_count: int = 0
     inference_errors: int = 0
@@ -154,6 +157,7 @@ class ComparisonFramework:
                 "exact_pairs": result.exact_pair_count,
                 "inference_errors": result.inference_errors,
             },
+            "dv_accuracy": result.dv_accuracy,
         }
 
     def generate_efficiency_report(self) -> dict[str, Any]:
@@ -196,14 +200,12 @@ class ComparisonFramework:
     def make_e2c_decision(self) -> dict[str, Any]:
         """Make the E2C decision based on route-selectivity evidence.
 
-        Decision rules (from plan Section 4.4):
+        Decision rules (P0-20):
         - INCOMPLETE: Any method missing evaluation data → no final decision
-        - Case A: At least one method achieves target-specific degradation
-          while preserving retain/control → replicate ≥3 seeds before E2C
-        - Case B: Method improves stability but not selectivity
-          (target ≈ retain ≈ control) → record as evidence, proceed to E2C
-        - Case C: All methods collapse non-selectively → freeze results,
-          proceed directly to E2C
+        - Case A: target binary ΔM < 0 + clear selectivity
+          + DV preservation >= 0.98 for global/retain/control/untargeted
+        - Case B: stable intervention but no selectivity
+        - Case C: broad non-selective collapse or preservation failure
 
         Returns
         -------
@@ -236,28 +238,34 @@ class ComparisonFramework:
             return decision
 
         # All methods have complete evidence — classify into Case A/B/C.
+        _DV_GATE = 0.98
         case_a_methods = []
         case_b_methods = []
         case_c_methods = []
 
         for r in self.results:
             target_degradation = self._has_target_degradation(r)
-            retain_status = self._check_preservation(r.delta_retain)
-            control_status = self._check_preservation(r.delta_control)
+            # P0-20: Use DV preservation gate instead of old mean-delta rule.
+            dv_pass = self._check_dv_preservation(r, threshold=_DV_GATE)
+            selectivity = self._compute_selectivity_score(r)
+            has_selectivity = selectivity is not None and selectivity > 0
 
-            if target_degradation and retain_status == "PASS" and control_status == "PASS":
+            if target_degradation and has_selectivity and dv_pass:
                 case_a_methods.append(r.method_id)
-            elif target_degradation and not (retain_status == "PASS" and control_status == "PASS"):
+            elif target_degradation and not dv_pass:
                 case_c_methods.append(r.method_id)
-            else:
+            elif not target_degradation:
                 case_b_methods.append(r.method_id)
+            else:
+                case_c_methods.append(r.method_id)
 
         if case_a_methods:
             decision = {
                 "case": "A",
                 "rationale": (
                     f"At least one method ({', '.join(case_a_methods)}) achieves "
-                    f"target-specific degradation while preserving retain/control. "
+                    f"target-specific degradation with selectivity while "
+                    f"preserving DV >= {_DV_GATE}. "
                     f"Recommend: replicate with ≥3 seeds before E2C."
                 ),
                 "case_a_methods": case_a_methods,
@@ -279,9 +287,8 @@ class ComparisonFramework:
             decision = {
                 "case": "C",
                 "rationale": (
-                    "All methods collapse non-selectively. "
-                    "Strong support for claim that conventional objectives "
-                    "don't isolate identity routes. "
+                    "All methods collapse non-selectively or fail "
+                    "DV preservation. "
                     "Freeze results and proceed directly to E2C."
                 ),
                 "case_c_methods": case_c_methods,
@@ -327,6 +334,23 @@ class ComparisonFramework:
         if avg_delta > -0.05:
             return "PASS"
         return "FAIL"
+
+    def _check_dv_preservation(
+        self, result: MethodResult, *, threshold: float = 0.98,
+    ) -> bool:
+        """P0-20: DV preservation gate.
+
+        Returns True when global, retain, control, and untargeted DV
+        accuracy all meet or exceed *threshold*.  Target DV is reported
+        separately and is NOT part of the gate.
+        """
+        dv = result.dv_accuracy
+        if not dv:
+            return False
+        for key in ("global", "retain", "control", "untargeted"):
+            if dv.get(key, 0.0) < threshold:
+                return False
+        return True
 
     def generate_trajectory_analysis(self) -> dict[str, Any]:
         """Generate trajectory analysis across checkpoints.
