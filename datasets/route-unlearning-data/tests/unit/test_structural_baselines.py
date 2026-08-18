@@ -203,9 +203,11 @@ class TestMMUnlearnerMask:
     def test_mask_deterministic(self) -> None:
         """Same saliency → same mask."""
         model = TinyMLPModel()
-        saliency = {name: torch.randn(1).item() for name, _ in model.named_parameters()}
-        # Convert to tensors
-        saliency = {name: torch.tensor(score) for name, score in saliency.items()}
+        # Create per-element saliency tensors matching parameter shapes
+        saliency = {
+            name: torch.randn_like(p.float())
+            for name, p in model.named_parameters()
+        }
 
         config = MMUnlearnerConfig(target_sparsity=0.5)
         mask1 = generate_saliency_mask(model, saliency, config)
@@ -217,8 +219,11 @@ class TestMMUnlearnerMask:
     def test_mask_non_empty(self) -> None:
         """Mask should have at least some selected parameters."""
         model = TinyMLPModel()
-        saliency = {name: torch.randn(1).item() for name, _ in model.named_parameters()}
-        saliency = {name: torch.tensor(score) for name, score in saliency.items()}
+        # Create per-element saliency tensors
+        saliency = {
+            name: torch.randn_like(p.float())
+            for name, p in model.named_parameters()
+        }
 
         config = MMUnlearnerConfig(target_sparsity=0.5)
         mask = generate_saliency_mask(model, saliency, config)
@@ -229,8 +234,11 @@ class TestMMUnlearnerMask:
     def test_mask_not_100_percent(self) -> None:
         """Mask should not select 100% of parameters."""
         model = TinyMLPModel()
-        saliency = {name: torch.randn(1).item() for name, _ in model.named_parameters()}
-        saliency = {name: torch.tensor(score) for name, score in saliency.items()}
+        # Create per-element saliency tensors
+        saliency = {
+            name: torch.randn_like(p.float())
+            for name, p in model.named_parameters()
+        }
 
         config = MMUnlearnerConfig(target_sparsity=0.5, max_mask_fraction=0.99)
         mask = generate_saliency_mask(model, saliency, config)

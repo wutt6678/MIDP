@@ -437,7 +437,7 @@ class TestPromptingBaseline:
         baseline.run_evaluation(
             model=model,
             processor=MagicMock(),
-            probe_dataset=[{"sample_id": "test"}],
+            probe_dataset_path="/tmp/test_probes.jsonl",
             output_dir="/tmp/test_prompting",
         )
 
@@ -469,7 +469,7 @@ class TestPromptingBaseline:
             result = baseline.run_evaluation(
                 model=MagicMock(),
                 processor=MagicMock(),
-                probe_dataset=[{"sample_id": "test"}],
+                probe_dataset_path=f"{tmpdir}/probes.jsonl",
                 output_dir=tmpdir,
             )
             assert result["training"] is False
