@@ -482,6 +482,7 @@ class TestPromptingBaseline:
                 probe_dataset_path=str(probe_path),
                 output_dir="/tmp/test_prompting",
                 freeze_verification_path=str(freeze_path),
+                skip_research_preflight=True,
             )
 
         # Verify no parameters changed
@@ -554,6 +555,7 @@ class TestPromptingBaseline:
                 probe_dataset_path=str(probe_path),
                 output_dir=tmpdir,
                 freeze_verification_path=str(freeze_path),
+                skip_research_preflight=True,
             )
             assert result["training"] is False
             assert result["adapter"] == "none"

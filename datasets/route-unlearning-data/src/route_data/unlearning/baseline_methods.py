@@ -111,6 +111,8 @@ class PromptingBaseline:
         method_name: str = "mllmu_prompting",
         model_config_obj: Any = None,
         freeze_verification_path: str | Path = "",
+        dataset_manifest_path: str | Path = "",
+        skip_research_preflight: bool = False,
     ) -> dict[str, Any]:
         """Run the prompting baseline evaluation.
 
@@ -181,12 +183,15 @@ class PromptingBaseline:
         )
         if freeze_verification_path:
             runner_kw["freeze_verification_path"] = str(freeze_verification_path)
+        if dataset_manifest_path:
+            runner_kw["dataset_manifest_path"] = str(dataset_manifest_path)
         runner = BaselineRunner(**runner_kw)
         logger.info(
             f"Prompting baseline: running evaluation with system prompt "
             f"(no training)"
         )
-        runner.validate_research_preflight()
+        if not skip_research_preflight:
+            runner.validate_research_preflight()
         results = runner.run_all()
         summary = runner.generate_summary()
 
