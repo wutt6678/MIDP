@@ -50,16 +50,18 @@ data:
   route_probe_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl
   route_probe_sha256: "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864"
   # Selection manifest (identity assignment provenance)
-  selection_manifest_path: ""
-  selection_manifest_sha256: ""
+  selection_manifest_path: outputs/experiments/unlearning_pilot/Qwen_Qwen3.5-9B/pilot_v1/selection/pilot_identity_selection.json
+  selection_manifest_sha256: "a7ff1fceb715fb30b34809d98eb6e7e25a4a21a88a8b188c024d124b49b19655"
   # Research dataset manifest and freeze verification
-  research_dataset_manifest_path: ""
-  freeze_verification_path: ""
+  research_dataset_manifest_path: outputs/full_fiubench/evidence/research_dataset_manifest.json
+  research_dataset_manifest_sha256: "172eb141bf1e80b463bf433a7c1795c560be03facd72d27bcd05bfd5a75256ec"
+  freeze_verification_path: outputs/full_fiubench/evidence/final_freeze_verification.json
+  freeze_verification_sha256: "ade4c13faef460fdb698f6577a2a07f8d79385dd7013cd88dc3ad6d3180fdae1"
   # Pre-unlearning baseline binding (P0-16)
-  baseline_results_path: ""
-  baseline_results_sha256: ""
-  baseline_manifest_path: ""
-  baseline_manifest_sha256: ""
+  baseline_results_path: outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_results.jsonl
+  baseline_results_sha256: "b3d497877fcfe1f4020cf7e751bbd4c0991064d2a67b0fd622090f487311cd50"
+  baseline_manifest_path: outputs/experiments/pre_unlearning/Qwen_Qwen3.5-9B/baseline_v1/baseline_manifest.json
+  baseline_manifest_sha256: "d3366acb45851e5107ce91f408b51767e5f548f385a1269ffb61fbdab6413908"
 
 evaluation:
   reuse_frozen_500_probes: true

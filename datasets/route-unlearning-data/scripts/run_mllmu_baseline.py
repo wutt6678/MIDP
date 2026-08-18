@@ -48,32 +48,6 @@ logger = logging.getLogger("run_mllmu_baseline")
 # Common evaluation wiring (P0-1)
 # --------------------------------------------------------------------------- #
 
-def _resolve_eval_params(config: dict[str, Any], training_config) -> dict[str, Any]:
-    """Resolve parameters for evaluate_intervention from merged config."""
-    data = config.get("data", {})
-    output_dir = Path(training_config.output_dir)
-
-    baseline_results_path = data.get("baseline_results_path", "")
-    if not baseline_results_path:
-        # Conventional default location for pre-unlearning baseline.
-        conventional = (
-            Path(training_config.output_dir).parent.parent
-            / "baseline" / "results.jsonl"
-        )
-        if conventional.is_file():
-            baseline_results_path = str(conventional)
-
-    return {
-        "probe_dataset_path": data.get(
-            "route_probe_path",
-            "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/"
-            "fiubench_route_conflict_eval.jsonl",
-        ),
-        "output_dir": str(output_dir / "eval"),
-        "baseline_results_path": baseline_results_path,
-    }
-
-
 def _run_eval(
     method_label: str,
     model,
@@ -81,13 +55,95 @@ def _run_eval(
     adapter_path,
     config: dict[str, Any],
     training_config,
+    *,
+    eval_subdir: str = "",
+    backend_override: Any = None,
 ) -> dict[str, Any]:
-    """Call evaluate_intervention and persist eval_results.json."""
-    from route_data.eval.post_unlearning_eval import evaluate_intervention
+    """Call evaluate_intervention with a complete PostEvalConfig (P0-1).
 
-    params = _resolve_eval_params(config, training_config)
+    Parameters
+    ----------
+    method_label:
+        Human-readable method identifier.
+    model, processor:
+        The model in its final intervention state and its processor.
+    adapter_path:
+        Path to the LoRA adapter checkpoint, or *None*.
+    config:
+        Merged common + method YAML config dict.
+    training_config:
+        The training config object (carries model/dtype/device/seed).
+    eval_subdir:
+        Optional subdirectory name under the eval output directory.
+        Used by MANU to isolate prune-rate outputs (P0-9/10).
+    backend_override:
+        Optional pre-built backend to pass through to
+        ``evaluate_intervention()`` (P0-7 prompting).
+    """
+    from route_data.eval.post_unlearning_eval import (
+        PostEvalConfig,
+        evaluate_intervention,
+    )
+
+    data = config.get("data", {})
     project_root = Path(__file__).resolve().parent.parent
-    probe_path = project_root / params["probe_dataset_path"]
+
+    probe_path = project_root / data.get(
+        "route_probe_path",
+        "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/"
+        "fiubench_route_conflict_eval.jsonl",
+    )
+
+    # Resolve output directory, optionally with a rate-specific subdir.
+    eval_output_dir = Path(training_config.output_dir) / "eval"
+    if eval_subdir:
+        eval_output_dir = eval_output_dir / eval_subdir
+    eval_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolve frozen-contract paths from the merged config.
+    baseline_results_path = data.get("baseline_results_path", "")
+    baseline_manifest_path = data.get("baseline_manifest_path", "")
+    research_dataset_manifest_path = data.get("research_dataset_manifest_path", "")
+    freeze_verification_path = data.get("freeze_verification_path", "")
+    processed_dataset_path = data.get("processed_dataset_path", "")
+    selection_manifest_sha256 = data.get("selection_manifest_sha256", "")
+    route_probe_sha256 = data.get("route_probe_sha256", "")
+
+    # P0-1: Build a complete PostEvalConfig with the full frozen contract.
+    post_config = PostEvalConfig(
+        model_id=getattr(training_config, "model_id", "Qwen/Qwen3.5-9B"),
+        model_revision=getattr(training_config, "model_revision", ""),
+        dtype=getattr(training_config, "dtype", "bfloat16"),
+        device=str(getattr(training_config, "device", "cuda:0")),
+        seed=getattr(training_config, "seed", 17),
+        probe_path=str(probe_path),
+        baseline_results_path=str(baseline_results_path),
+        baseline_manifest_path=str(baseline_manifest_path),
+        output_dir=str(eval_output_dir),
+        selection_manifest_sha256=selection_manifest_sha256,
+        code_commit=_git_commit(),
+        dataset_manifest_path=str(research_dataset_manifest_path),
+        freeze_verification_path=str(freeze_verification_path),
+        processed_dataset_path=str(processed_dataset_path),
+        model_config_path="",
+        route_probe_sha256=route_probe_sha256,
+    )
+
+    # P0-1: Fail immediately if any mandatory frozen-contract field is empty.
+    mandatory = {
+        "probe_path": post_config.probe_path,
+        "baseline_results_path": post_config.baseline_results_path,
+        "baseline_manifest_path": post_config.baseline_manifest_path,
+        "dataset_manifest_path": post_config.dataset_manifest_path,
+        "freeze_verification_path": post_config.freeze_verification_path,
+        "processed_dataset_path": post_config.processed_dataset_path,
+    }
+    empty_fields = [k for k, v in mandatory.items() if not v]
+    if empty_fields:
+        raise RuntimeError(
+            f"_run_eval({method_label}): mandatory PostEvalConfig fields "
+            f"are empty: {empty_fields}. Check common.yaml provenance."
+        )
 
     logger.info(f"Running common 500-probe evaluation: {method_label}")
     result = evaluate_intervention(
@@ -95,9 +151,11 @@ def _run_eval(
         processor=processor,
         adapter_path=str(adapter_path) if adapter_path else None,
         probe_dataset_path=str(probe_path),
-        output_dir=params["output_dir"],
-        baseline_results_path=params.get("baseline_results_path", ""),
+        output_dir=str(eval_output_dir),
+        config=post_config,
+        baseline_results_path=str(baseline_results_path),
         method_name=method_label,
+        backend_override=backend_override,
     )
     logger.info(
         f"Evaluation complete: {result.get('exact_pair_count', 0)} pairs, "
@@ -328,24 +386,45 @@ def main() -> None:
 
     # Handle special methods that do NOT use BaselineTrainer
     if method_name == "mllmu_prompting":
-        from route_data.unlearning.baseline_methods import PromptingBaseline
-        probe_path = project_root / data.get(
-            "route_probe_path",
-            "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
+        # P0-7: The canonical prompting evaluation uses the system-prompt-
+        # aware backend through the common 500-probe evaluator.  There is
+        # NO duplicate plain-model evaluation.
+        from route_data.unlearning.baseline_methods import (
+            MLLMU_PRIVACY_SYSTEM_PROMPT,
+            _PromptingBackend,
         )
-        logger.info("Running prompting baseline (no training, no LoRA)")
-        baseline = PromptingBaseline()
-        baseline.run_evaluation(
+        from route_data.models.qwen import QwenHFBackend
+        from route_data.config import ModelConfig
+
+        logger.info("Running prompting via common evaluator with PromptingBackend")
+
+        # Build the same ModelConfig used by other methods.
+        prompting_model_config = ModelConfig(
+            backend="qwen_hf",
+            model_id=getattr(training_config, "model_id", "Qwen/Qwen3.5-9B"),
+            revision=getattr(training_config, "model_revision", ""),
+            dtype=getattr(training_config, "dtype", "bfloat16"),
+            device_map=str(getattr(training_config, "device", "cuda:0")),
+            seed=getattr(training_config, "seed", 17),
+        )
+
+        # Create the system-prompt-aware backend.
+        inner_backend = QwenHFBackend.from_loaded_model(
+            config=prompting_model_config,
             model=model,
             processor=processor,
-            probe_dataset_path=str(probe_path),
-            output_dir=training_config.output_dir,
+            resolved_revision=training_config.model_revision,
         )
-        logger.info("Prompting baseline complete")
+        prompting_backend = _PromptingBackend(
+            inner=inner_backend,
+            system_prompt=MLLMU_PRIVACY_SYSTEM_PROMPT,
+        )
 
-        # Wire through common 500-probe evaluation (P0-1).
+        # Single canonical evaluation through the common evaluator (P0-7/8).
+        # The full frozen contract is passed via PostEvalConfig inside _run_eval.
         eval_result = _run_eval(
             "prompting", model, processor, None, config, training_config,
+            backend_override=prompting_backend,
         )
         if not eval_result.get("strict_validation_pass"):
             logger.error("Prompting: strict validation FAILED")
@@ -353,62 +432,86 @@ def main() -> None:
         return
 
     if method_name == "midp_candidate_margin":
-        logger.info("MIDP-CM: referencing existing E2B-B2 result (no retraining)")
+        # P0-12: Bind validated E2B-B2 evidence as the canonical MIDP-CM
+        # artifact.  No retraining; no wholesale directory copy.  The source
+        # evidence is SHA-verified and a canonical eval_results.json is written
+        # into the method's own output directory.
+        import hashlib
+
+        logger.info("MIDP-CM: binding existing E2B-B2 result (no retraining)")
         e2b_dir = config.get("runtime", {}).get("e2b_b2_output_dir", "")
         output_dir = Path(training_config.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        eval_dir = output_dir / "eval"
+        eval_dir.mkdir(parents=True, exist_ok=True)
 
         if not e2b_dir:
             logger.error("MIDP-CM: e2b_b2_output_dir not set in config")
-            return
+            sys.exit(1)
 
         e2b_path = Path(e2b_dir)
         if not e2b_path.exists():
             logger.error(
                 f"MIDP-CM: E2B-B2 output directory not found: {e2b_path}"
             )
-            return
+            sys.exit(1)
 
-        # Copy E2B-B2 results into the current method's output dir.
-        for item in e2b_path.iterdir():
-            dest = output_dir / item.name
-            if item.is_file():
-                shutil.copy2(item, dest)
-            elif item.is_dir():
-                shutil.copytree(item, dest, dirs_exist_ok=True)
+        # Locate the source evidence file.
+        source_eval_results = e2b_path / "eval_results.json"
+        if not source_eval_results.is_file():
+            logger.error(
+                f"MIDP-CM: source eval_results.json not found at {source_eval_results}"
+            )
+            sys.exit(1)
 
-        # Load eval results in the common schema.
-        result_json = output_dir / "eval_results.json"
-        result = {
-            "method": "midp_candidate_margin",
-            "delta_target": {},
-            "delta_retain": {},
-            "delta_control": {},
-            "exact_pair_count": 0,
-            "inference_errors": 0,
-            "manifest_sha256": "",
-            "per_family_post": {},
-            "summary": {},
-            "eval_output_dir": str(output_dir),
-            "results_path": str(result_json),
-            "adapter_path": None,
-            "e2b_source": str(e2b_path),
-        }
-        if result_json.is_file():
-            with open(result_json) as f:
-                loaded = json.load(f)
-            result.update(loaded)
+        # Compute source evidence SHA for provenance binding.
+        sha = hashlib.sha256()
+        with open(source_eval_results, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha.update(chunk)
+        source_sha = sha.hexdigest()
+
+        # Load the existing evidence.
+        with open(source_eval_results) as f:
+            source_result = json.load(f)
 
         # Validate that evidence contains required comparison fields.
         for field_name in ("delta_target", "delta_retain", "delta_control"):
-            if not result.get(field_name):
+            if not source_result.get(field_name):
                 logger.error(
-                    f"MIDP-CM: missing required field '{field_name}' in evidence"
+                    f"MIDP-CM: missing required field '{field_name}' in source evidence"
                 )
                 sys.exit(1)
 
+        # Build the canonical result with source-evidence provenance.
+        result = {
+            "method": "midp_candidate_margin",
+            "delta_target": source_result.get("delta_target", {}),
+            "delta_retain": source_result.get("delta_retain", {}),
+            "delta_control": source_result.get("delta_control", {}),
+            "delta_untargeted": source_result.get("delta_untargeted", {}),
+            "exact_pair_count": source_result.get("exact_pair_count", 0),
+            "inference_errors": source_result.get("inference_errors", 0),
+            "manifest_sha256": source_result.get("manifest_sha256", ""),
+            "per_family_post": source_result.get("per_family_post", {}),
+            "summary": source_result.get("summary", {}),
+            "eval_output_dir": str(eval_dir),
+            "results_path": str(eval_dir / "eval_results.json"),
+            "adapter_path": None,
+            "e2b_source": str(e2b_path),
+            "e2b_source_eval_results_sha256": source_sha,
+            "strict_validation_pass": source_result.get("strict_validation_pass", False),
+            "exact_pairing_pass": source_result.get("exact_pairing_pass", False),
+        }
+
+        # Write the canonical eval_results.json under eval/.
+        canonical_path = eval_dir / "eval_results.json"
+        with open(canonical_path, "w") as f:
+            json.dump(result, f, indent=2, default=str)
+            f.write("\n")
+
         logger.info(
-            f"MIDP-CM: evidence bound from {e2b_path} → {output_dir}"
+            f"MIDP-CM: evidence bound from {e2b_path} "
+            f"(SHA256={source_sha[:16]}…) → {canonical_path}"
         )
         return
 
@@ -520,6 +623,7 @@ def main() -> None:
             # Eval callback: evaluates the live pruned model BEFORE restoration.
             # PeftModel.save_pretrained() cannot preserve base-weight zeroing,
             # so evaluation must happen on the in-memory pruned model (P0-8).
+            # P0-9/10: Each prune rate gets an isolated eval subdirectory.
             def _manu_eval_callback(
                 rate_str: str, pruned_model,
             ) -> dict[str, Any]:
@@ -527,6 +631,7 @@ def main() -> None:
                     f"manu_prune_{rate_str}",
                     pruned_model, processor, None,
                     config, training_config,
+                    eval_subdir=f"prune_{rate_str}",
                 )
 
             runner = MANU(method_cfg)
@@ -578,6 +683,34 @@ def main() -> None:
             if not eval_result.get("strict_validation_pass"):
                 logger.error(f"{method_name}: strict validation FAILED")
                 sys.exit(1)
+
+        # P0-11: MANU hard-fail — verify each prune-rate evaluation produced
+        # a valid eval_results.json.  Missing results are a hard error.
+        if method_name == "manu":
+            for rate_str in ("05", "10"):
+                eval_results_path = (
+                    Path(training_config.output_dir)
+                    / "eval" / f"prune_{rate_str}" / "eval_results.json"
+                )
+                if not eval_results_path.is_file():
+                    logger.error(
+                        f"MANU: eval_results.json missing for prune rate "
+                        f"{rate_str}: {eval_results_path}"
+                    )
+                    sys.exit(1)
+                with open(eval_results_path) as f:
+                    rate_result = json.load(f)
+                if not rate_result.get("strict_validation_pass"):
+                    logger.error(
+                        f"MANU prune_{rate_str}: strict validation FAILED"
+                    )
+                    sys.exit(1)
+                logger.info(
+                    f"MANU prune_{rate_str}: "
+                    f"{rate_result.get('exact_pair_count', 0)} pairs, "
+                    f"{rate_result.get('inference_errors', 0)} errors"
+                )
+
         return
 
     # Build objective

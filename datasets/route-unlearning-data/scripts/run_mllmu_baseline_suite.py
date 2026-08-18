@@ -28,6 +28,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import subprocess
@@ -90,6 +91,27 @@ def _load_common_config() -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _sha256_file(path: str | Path) -> str:
+    """Compute SHA-256 hex digest of a file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _git_working_tree_clean() -> bool:
+    """Return True if ``git status --porcelain`` produces no output."""
+    try:
+        r = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, check=False,
+        )
+        return r.returncode == 0 and r.stdout.strip() == ""
+    except FileNotFoundError:
+        return False
+
+
 def _load_method_config(method: str) -> dict[str, Any]:
     """Load a per-method configuration, merged with common."""
     common = _load_common_config()
@@ -116,13 +138,30 @@ _ORACLE_ONLY_METHODS = {"npo_oracle"}
 COMPARISON_METHODS = [m[0] for m in METHOD_ORDER if m[0] not in _ORACLE_ONLY_METHODS]
 
 
-def _validate_eval_result(eval_metrics: dict[str, Any], expected_method: str) -> str | None:
+def _validate_eval_result(
+    eval_metrics: dict[str, Any],
+    expected_method: str,
+    common_config: dict[str, Any] | None = None,
+) -> str | None:
     """Validate a loaded eval_results.json.
+
+    P0-19/20: Strengthened with method-ID, revision, route-probe SHA,
+    and on-disk artifact existence checks.
 
     Returns None on success or an error-message string on failure.
     """
+    # P0-19: expected_pair_count must be 500
+    expected_pc = eval_metrics.get("expected_pair_count", 0)
+    if expected_pc != 500:
+        return f"expected_pair_count={expected_pc}, must be 500"
+
+    # P0-19: actual_pair_count must be 500
+    actual_pc = eval_metrics.get("actual_pair_count", 0)
+    if actual_pc != 500:
+        return f"actual_pair_count={actual_pc}, must be 500"
+
     # exact_pair_count must be 500
-    pair_count = eval_metrics.get("exact_pair_count", eval_metrics.get("actual_pair_count", 0))
+    pair_count = eval_metrics.get("exact_pair_count", 0)
     if pair_count != 500:
         return f"exact_pair_count={pair_count}, expected 500"
 
@@ -139,20 +178,65 @@ def _validate_eval_result(eval_metrics: dict[str, Any], expected_method: str) ->
     if not eval_metrics.get("exact_pairing_pass", False):
         return "exact_pairing_pass is not true"
 
-    # results_path must exist (if provided)
+    # results_path must exist on disk
     results_path = eval_metrics.get("results_path", "")
     if results_path and not Path(results_path).is_file():
         return f"results_path does not exist: {results_path}"
 
-    # manifest SHA must be non-empty (if the field is present)
+    # P0-19: manifest path must exist (derive from eval_output_dir)
+    eval_output_dir = eval_metrics.get("eval_output_dir", "")
+    if eval_output_dir:
+        manifest_path = Path(eval_output_dir) / "manifest.json"
+        if not manifest_path.is_file():
+            return f"manifest.json not found: {manifest_path}"
+
+    # manifest SHA must be non-empty
     manifest_sha = eval_metrics.get("manifest_sha256", "")
     if "manifest_sha256" in eval_metrics and not manifest_sha:
         return "manifest_sha256 is empty"
 
-    # delta fields must be present when applicable
+    # delta fields must be present and non-empty
     for field in ("delta_target", "delta_retain", "delta_control"):
-        if field in eval_metrics and not eval_metrics[field]:
-            return f"{field} is present but empty"
+        if not eval_metrics.get(field):
+            return f"{field} is missing or empty"
+
+    # P0-20: method identifier must match expected_method
+    actual_method = eval_metrics.get("method", "")
+    if actual_method != expected_method:
+        return (
+            f"method mismatch: got '{actual_method}', "
+            f"expected '{expected_method}'"
+        )
+
+    # P0-19: base model revision must match frozen revision
+    if common_config is not None:
+        frozen_revision = common_config.get("base_model", {}).get("revision", "")
+        actual_revision = eval_metrics.get("model_revision", "")
+        if frozen_revision and actual_revision and actual_revision != frozen_revision:
+            return (
+                f"model_revision mismatch: got '{actual_revision}', "
+                f"expected '{frozen_revision}'"
+            )
+
+        # P0-19: route probe SHA must match frozen SHA
+        frozen_probe_sha = common_config.get("data", {}).get("route_probe_sha256", "")
+        actual_probe_sha = eval_metrics.get("route_probe_sha256", "")
+        if frozen_probe_sha and actual_probe_sha and actual_probe_sha != frozen_probe_sha:
+            return (
+                f"route_probe_sha256 mismatch: got '{actual_probe_sha}', "
+                f"expected '{frozen_probe_sha}'"
+            )
+
+    # P0-19: strict_validation report must exist
+    if eval_output_dir:
+        strict_path = Path(eval_output_dir) / "strict_validation.json"
+        if not strict_path.is_file():
+            return f"strict_validation.json not found: {strict_path}"
+
+        # P0-19: pairing report must exist
+        pairing_path = Path(eval_output_dir) / "pairing_validation.json"
+        if not pairing_path.is_file():
+            return f"pairing_validation.json not found: {pairing_path}"
 
     return None
 
@@ -258,7 +342,7 @@ def _run_single_method(
             if eval_path.is_file():
                 with open(eval_path) as f:
                     metrics = json.load(f)
-                err = _validate_eval_result(metrics, f"manu_prune_{rate_str}")
+                err = _validate_eval_result(metrics, f"manu_prune_{rate_str}", config)
                 if err:
                     logger.error(f"MANU prune_{rate_str} eval invalid: {err}")
                     all_rates_valid = False
@@ -304,7 +388,7 @@ def _run_single_method(
     with open(eval_path) as f:
         eval_metrics = json.load(f)
 
-    validation_error = _validate_eval_result(eval_metrics, method)
+    validation_error = _validate_eval_result(eval_metrics, method, config)
     if validation_error:
         logger.error(f"Method {method}: eval invalid — {validation_error}")
         return {
@@ -333,19 +417,43 @@ def _run_single_method(
 def run_suite_preflight(
     methods: list[str],
     common_config: dict[str, Any],
+    *,
+    expected_code_sha: str = "",
 ) -> dict[str, Any]:
-    """Run preflight checks for all methods.
+    """Run suite-wide preflight — full frozen-contract verification (P0-21).
+
+    Gates checked:
+      * Model: ID, revision, dtype, backend
+      * Data: processed dataset, route probe, research manifest,
+              freeze verification, baseline results & manifest,
+              identity selection — all existence + SHA verified
+      * Identity: target/retain/control IDs match frozen selection
+      * Code: git HEAD, clean working tree, optional exact-SHA gate
+      * Output: directories writable, method isolation
 
     Returns a suite-level preflight report.
     """
-    logger.info("Running suite-wide preflight ...")
+    logger.info("Running suite-wide preflight (full frozen contract) ...")
 
     checks: list[dict[str, Any]] = []
 
     def _check(name: str, passed: bool, detail: str = "") -> None:
         checks.append({"name": name, "pass": passed, "detail": detail})
 
-    # Common config checks
+    # -- Model checks (P0-21) ------------------------------------------- #
+    base_model = common_config.get("base_model", {})
+    _check("model_id", base_model.get("id") == "Qwen/Qwen3.5-9B",
+           f"id={base_model.get('id', 'NOT SET')}")
+    frozen_revision = "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+    _check("model_revision_frozen",
+           base_model.get("revision") == frozen_revision,
+           f"revision={base_model.get('revision', 'NOT SET')}")
+    _check("model_dtype", base_model.get("dtype") == "bfloat16",
+           f"dtype={base_model.get('dtype', 'NOT SET')}")
+    _check("model_backend", base_model.get("backend") == "qwen_hf",
+           f"backend={base_model.get('backend', 'NOT SET')}")
+
+    # -- Training config checks ----------------------------------------- #
     training = common_config.get("training", {})
     _check("seed_set", training.get("seed") == 17,
            f"seed={training.get('seed', 'NOT SET')}")
@@ -355,81 +463,216 @@ def run_suite_preflight(
            f"lr={training.get('learning_rate', 'NOT SET')}")
 
     lora = common_config.get("lora", {})
-    _check("lora_rank", lora.get("rank") == 8, f"rank={lora.get('rank', 'NOT SET')}")
-    _check("lora_alpha", lora.get("alpha") == 16, f"alpha={lora.get('alpha', 'NOT SET')}")
-    _check("lora_dropout", lora.get("dropout") == 0.0, f"dropout={lora.get('dropout', 'NOT SET')}")
+    _check("lora_rank", lora.get("rank") == 8,
+           f"rank={lora.get('rank', 'NOT SET')}")
+    _check("lora_alpha", lora.get("alpha") == 16,
+           f"alpha={lora.get('alpha', 'NOT SET')}")
+    _check("lora_dropout", lora.get("dropout") == 0.0,
+           f"dropout={lora.get('dropout', 'NOT SET')}")
 
     # Per-method config files exist
     for method in methods:
         cfg_path = CONFIGS_DIR / f"{method}.yaml"
         _check(f"config_{method}", cfg_path.exists(), str(cfg_path))
 
-    # P0-11: Frozen artifact SHA verification.
-    base_model = common_config.get("base_model", {})
-    frozen_revision = "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
-    _check(
-        "base_model_revision_frozen",
-        base_model.get("revision") == frozen_revision,
-        f"revision={base_model.get('revision', 'NOT SET')}",
-    )
-
     data_cfg = common_config.get("data", {})
+
+    # -- Processed dataset (P0-3, P0-21) -------------------------------- #
     processed_sha = data_cfg.get("processed_dataset_sha256", "")
-    _check(
-        "processed_dataset_sha256_nonempty",
-        bool(processed_sha) and len(processed_sha) == 64,
-        f"sha256_len={len(processed_sha)}",
-    )
-
-    # Also verify route_probe_sha256 is present.
-    probe_sha = data_cfg.get("route_probe_sha256", "")
-    _check(
-        "route_probe_sha256_nonempty",
-        bool(probe_sha) and len(probe_sha) == 64,
-        f"sha256_len={len(probe_sha)}",
-    )
-
-    # If the processed dataset file exists, verify its SHA-256.
+    _check("processed_dataset_sha256_configured",
+           bool(processed_sha) and len(processed_sha) == 64,
+           f"sha256_len={len(processed_sha)}")
     dataset_path = data_cfg.get("processed_dataset_path", "")
-    if dataset_path:
-        from pathlib import Path as _Path
-        import hashlib as _hashlib
+    if dataset_path and Path(dataset_path).is_file():
+        actual_sha = _sha256_file(dataset_path)
+        _check("processed_dataset_sha256_match",
+               actual_sha == processed_sha,
+               f"expected={processed_sha[:16]}... actual={actual_sha[:16]}...")
+    else:
+        _check("processed_dataset_exists", False,
+               f"not found: {dataset_path}")
 
-        ds_file = _Path(dataset_path)
-        if ds_file.is_file():
-            h = _hashlib.sha256()
-            with open(ds_file, "rb") as fh:
-                for chunk in iter(lambda: fh.read(8192), b""):
-                    h.update(chunk)
-            actual_sha = h.hexdigest()
-            _check(
-                "processed_dataset_sha256_match",
-                actual_sha == processed_sha,
-                f"expected={processed_sha[:16]}... actual={actual_sha[:16]}...",
-            )
-        else:
-            _check(
-                "processed_dataset_exists",
-                False,
-                f"not found: {dataset_path}",
-            )
+    # -- Route probe (P0-3, P0-21) -------------------------------------- #
+    probe_sha = data_cfg.get("route_probe_sha256", "")
+    _check("route_probe_sha256_configured",
+           bool(probe_sha) and len(probe_sha) == 64,
+           f"sha256_len={len(probe_sha)}")
+    probe_path = data_cfg.get("route_probe_path", "")
+    if probe_path:
+        _check("route_probe_exists", Path(probe_path).is_file(),
+               str(probe_path))
+        if Path(probe_path).is_file():
+            actual_probe_sha = _sha256_file(probe_path)
+            _check("route_probe_sha256_match",
+                   actual_probe_sha == probe_sha,
+                   f"expected={probe_sha[:16]}... actual={actual_probe_sha[:16]}...")
 
+    # -- Baseline results & manifest (P0-4) ----------------------------- #
+    bl_results_path = data_cfg.get("baseline_results_path", "")
+    bl_results_sha = data_cfg.get("baseline_results_sha256", "")
+    _check("baseline_results_exists",
+           bool(bl_results_path) and Path(bl_results_path).is_file(),
+           str(bl_results_path))
+    if bl_results_path and Path(bl_results_path).is_file():
+        actual_bl_sha = _sha256_file(bl_results_path)
+        _check("baseline_results_sha256_match",
+               actual_bl_sha == bl_results_sha,
+               f"expected={bl_results_sha[:16]}... actual={actual_bl_sha[:16]}...")
+        # Structural: 500 rows, 500 unique probe IDs
+        bl_rows: list[dict[str, Any]] = []
+        with open(bl_results_path) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    bl_rows.append(json.loads(line))
+        _check("baseline_500_rows", len(bl_rows) == 500,
+               f"rows={len(bl_rows)}")
+        bl_probe_ids = {r.get("probe_id") for r in bl_rows}
+        _check("baseline_500_unique_probes", len(bl_probe_ids) == 500,
+               f"unique_probe_ids={len(bl_probe_ids)}")
+
+    bl_manifest_path = data_cfg.get("baseline_manifest_path", "")
+    bl_manifest_sha = data_cfg.get("baseline_manifest_sha256", "")
+    _check("baseline_manifest_exists",
+           bool(bl_manifest_path) and Path(bl_manifest_path).is_file(),
+           str(bl_manifest_path))
+    if bl_manifest_path and Path(bl_manifest_path).is_file():
+        actual_bm_sha = _sha256_file(bl_manifest_path)
+        _check("baseline_manifest_sha256_match",
+               actual_bm_sha == bl_manifest_sha,
+               f"expected={bl_manifest_sha[:16]}... actual={actual_bm_sha[:16]}...")
+
+    # -- Research dataset manifest (P0-5) ------------------------------- #
+    rdm_path = data_cfg.get("research_dataset_manifest_path", "")
+    rdm_sha = data_cfg.get("research_dataset_manifest_sha256", "")
+    _check("research_dataset_manifest_exists",
+           bool(rdm_path) and Path(rdm_path).is_file(),
+           str(rdm_path))
+    if rdm_path and Path(rdm_path).is_file():
+        actual_rdm_sha = _sha256_file(rdm_path)
+        _check("research_dataset_manifest_sha256_match",
+               actual_rdm_sha == rdm_sha,
+               f"expected={rdm_sha[:16]}... actual={actual_rdm_sha[:16]}...")
+        # dataset_version and content checks
+        with open(rdm_path) as fh:
+            rdm_data = json.load(fh)
+        _check("research_manifest_dataset_version",
+               rdm_data.get("dataset_version") == "fiubench-route-v1",
+               f"version={rdm_data.get('dataset_version', 'N/A')}")
+
+    # -- Freeze verification (P0-5) ------------------------------------- #
+    fv_path = data_cfg.get("freeze_verification_path", "")
+    fv_sha = data_cfg.get("freeze_verification_sha256", "")
+    _check("freeze_verification_exists",
+           bool(fv_path) and Path(fv_path).is_file(),
+           str(fv_path))
+    if fv_path and Path(fv_path).is_file():
+        actual_fv_sha = _sha256_file(fv_path)
+        _check("freeze_verification_sha256_match",
+               actual_fv_sha == fv_sha,
+               f"expected={fv_sha[:16]}... actual={actual_fv_sha[:16]}...")
+        with open(fv_path) as fh:
+            fv_data = json.load(fh)
+        _check("freeze_dataset_version",
+               fv_data.get("dataset_version") == "fiubench-route-v1",
+               f"version={fv_data.get('dataset_version', 'N/A')}")
+        _check("freeze_ready_for_experiments",
+               fv_data.get("ready_for_experiments") is True,
+               f"ready={fv_data.get('ready_for_experiments')}")
+        _check("freeze_strict_final_verify",
+               fv_data.get("strict_final_verify_pass") is True,
+               f"pass={fv_data.get('strict_final_verify_pass')}")
+        # Cross-check route probe SHA in freeze data
+        freeze_probe_sha = fv_data.get("route_probe_sha256", "")
+        if freeze_probe_sha and probe_sha:
+            _check("freeze_route_probe_sha_consistent",
+                   freeze_probe_sha == probe_sha,
+                   "freeze vs config route probe SHA")
+        # Cross-check processed dataset SHA in freeze data
+        freeze_ds_sha = fv_data.get("dataset_manifest_sha256", "")
+        # (informational — the freeze manifest SHA differs from the
+        # processed dataset SHA; both are independently verified.)
+
+    # -- Identity selection (P0-6) -------------------------------------- #
+    sel_path = data_cfg.get("selection_manifest_path", "")
+    sel_sha = data_cfg.get("selection_manifest_sha256", "")
+    _check("selection_manifest_exists",
+           bool(sel_path) and Path(sel_path).is_file(),
+           str(sel_path))
+    if sel_path and Path(sel_path).is_file():
+        actual_sel_sha = _sha256_file(sel_path)
+        _check("selection_manifest_sha256_match",
+               actual_sel_sha == sel_sha,
+               f"expected={sel_sha[:16]}... actual={actual_sel_sha[:16]}...")
+        with open(sel_path) as fh:
+            sel_data = json.load(fh)
+        cfg_target = set(data_cfg.get("forget_identity_ids", []))
+        cfg_retain = set(data_cfg.get("retain_identity_ids", []))
+        cfg_control = set(data_cfg.get("control_identity_ids", []))
+        frozen_target = set(sel_data.get("target_identities", []))
+        frozen_retain = set(sel_data.get("retain_identities", []))
+        frozen_control = set(sel_data.get("control_identities", []))
+        _check("target_ids_match",
+               cfg_target == frozen_target,
+               f"config={sorted(cfg_target)} frozen={sorted(frozen_target)}")
+        _check("retain_ids_match",
+               cfg_retain == frozen_retain,
+               f"config={sorted(cfg_retain)} frozen={sorted(frozen_retain)}")
+        _check("control_ids_match",
+               cfg_control == frozen_control,
+               f"config={sorted(cfg_control)} frozen={sorted(frozen_control)}")
+        all_ids = list(cfg_target | cfg_retain | cfg_control)
+        _check("no_duplicate_ids", len(all_ids) == len(set(all_ids)),
+               f"total={len(all_ids)} unique={len(set(all_ids))}")
+        _check("no_group_overlap",
+               not (cfg_target & cfg_retain)
+               and not (cfg_target & cfg_control)
+               and not (cfg_retain & cfg_control),
+               "target/retain/control pairwise disjoint")
+
+    # -- Code state (P0-21, P0-22, P0-23) -------------------------------- #
+    code_commit = _git_commit()
+    _check("git_head_available", bool(code_commit),
+           f"HEAD={code_commit[:16] if code_commit else 'N/A'}")
+    if expected_code_sha:
+        _check("expected_code_sha_match",
+               code_commit == expected_code_sha,
+               f"expected={expected_code_sha[:16]}... HEAD={code_commit[:16] if code_commit else 'N/A'}")
+    _check("git_clean_working_tree", _git_working_tree_clean(),
+           "git status --porcelain must be empty")
+
+    # -- Output directories (P0-21) ------------------------------------- #
+    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    _check("output_root_writable", OUTPUT_ROOT.is_dir(),
+           str(OUTPUT_ROOT))
+    for method in methods:
+        method_dir = OUTPUT_ROOT / method
+        try:
+            method_dir.mkdir(parents=True, exist_ok=True)
+            _check(f"output_{method}_writable", method_dir.is_dir(),
+                   str(method_dir))
+        except OSError as exc:
+            _check(f"output_{method}_writable", False, str(exc))
+
+    # -- Assemble report ------------------------------------------------- #
     all_passed = all(c["pass"] for c in checks)
     report = {
         "preflight_passed": all_passed,
         "checks": checks,
         "methods": methods,
         "timestamp": time.time(),
-        "code_commit": _git_commit(),
+        "code_commit": code_commit,
     }
 
-    # Write report
-    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     report_path = OUTPUT_ROOT / "suite_preflight_report.json"
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
         f.write("\n")
     logger.info(f"Preflight: {'PASSED' if all_passed else 'FAILED'}")
+    if not all_passed:
+        for c in checks:
+            if not c["pass"]:
+                logger.error(f"  FAIL: {c['name']} — {c['detail']}")
 
     return report
 
@@ -460,6 +703,11 @@ def main() -> None:
         "--reference-model-path",
         help="Path to frozen reference model for KL (overrides config).",
     )
+    # P0-23: Exact code-SHA gate
+    parser.add_argument(
+        "--expected-code-sha",
+        help="Require git HEAD to match this exact SHA before proceeding.",
+    )
     args = parser.parse_args()
 
     # Determine which methods to run
@@ -474,8 +722,26 @@ def main() -> None:
     # Load common config
     common_config = _load_common_config()
 
+    # P0-22/23: Git state gates (before preflight)
+    current_sha = _git_commit()
+    expected_sha = getattr(args, "expected_code_sha", "") or ""
+    if expected_sha and current_sha != expected_sha:
+        logger.error(
+            f"Expected code SHA {expected_sha} but HEAD is {current_sha}"
+        )
+        sys.exit(1)
+    if not _git_working_tree_clean():
+        logger.error(
+            "Git working tree is dirty — commit or stash changes "
+            "before running the suite."
+        )
+        sys.exit(1)
+
     # Preflight
-    preflight_report = run_suite_preflight(method_keys, common_config)
+    preflight_report = run_suite_preflight(
+        method_keys, common_config,
+        expected_code_sha=expected_sha,
+    )
     if not preflight_report["preflight_passed"]:
         for check in preflight_report["checks"]:
             if not check["pass"]:

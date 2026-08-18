@@ -197,6 +197,7 @@ class ComparisonFramework:
         """Make the E2C decision based on route-selectivity evidence.
 
         Decision rules (from plan Section 4.4):
+        - INCOMPLETE: Any method missing evaluation data → no final decision
         - Case A: At least one method achieves target-specific degradation
           while preserving retain/control → replicate ≥3 seeds before E2C
         - Case B: Method improves stability but not selectivity
@@ -209,20 +210,37 @@ class ComparisonFramework:
         decision:
             E2C decision with rationale.
         """
-        # Analyze each method for target-specific degradation
+        # P0-17: Fail closed — any method with missing evidence prevents
+        # a final Case A/B/C classification.
+        missing_eval_methods = [
+            r.method_id for r in self.results
+            if not r.delta_target or not r.delta_retain or not r.delta_control
+        ]
+        if missing_eval_methods:
+            decision = {
+                "decision_status": "INCOMPLETE",
+                "missing_eval_methods": missing_eval_methods,
+                "action": "complete_missing_evaluations",
+                "rationale": (
+                    f"Methods with MISSING evaluation data: "
+                    f"{missing_eval_methods}. No final Case A/B/C "
+                    f"decision is possible with incomplete evidence."
+                ),
+            }
+            with open(self.output_dir / "e2c_decision.json", "w") as f:
+                json.dump(decision, f, indent=2)
+                f.write("\n")
+            logger.warning(
+                f"E2C decision: INCOMPLETE — missing {missing_eval_methods}"
+            )
+            return decision
+
+        # All methods have complete evidence — classify into Case A/B/C.
         case_a_methods = []
         case_b_methods = []
         case_c_methods = []
 
-        missing_eval_methods = []
-
         for r in self.results:
-            # Missing evidence → INCOMPLETE, not any Case (P0-13/14).
-            if not r.delta_target or not r.delta_retain or not r.delta_control:
-                missing_eval_methods.append(r.method_id)
-                continue
-
-            # Check if target degradation is specific (not uniform)
             target_degradation = self._has_target_degradation(r)
             retain_status = self._check_preservation(r.delta_retain)
             control_status = self._check_preservation(r.delta_control)
@@ -230,13 +248,10 @@ class ComparisonFramework:
             if target_degradation and retain_status == "PASS" and control_status == "PASS":
                 case_a_methods.append(r.method_id)
             elif target_degradation and not (retain_status == "PASS" and control_status == "PASS"):
-                # Target degrades but so do retain/control (or evidence missing)
                 case_c_methods.append(r.method_id)
             else:
-                # No specific target degradation
                 case_b_methods.append(r.method_id)
 
-        # Make decision
         if case_a_methods:
             decision = {
                 "case": "A",
@@ -273,14 +288,6 @@ class ComparisonFramework:
                 "action": "freeze_and_proceed",
             }
 
-        if missing_eval_methods:
-            decision["missing_eval_methods"] = missing_eval_methods
-            logger.warning(
-                f"Methods with MISSING evaluation data: {missing_eval_methods}. "
-                f"These cannot be classified as Case A."
-            )
-
-        # Save decision
         with open(self.output_dir / "e2c_decision.json", "w") as f:
             json.dump(decision, f, indent=2)
             f.write("\n")
@@ -403,14 +410,31 @@ class ComparisonFramework:
         selectivity = target_forgetting - max(retain_drift, control_drift)
         return selectivity
 
-    def write_route_selectivity_conclusion(self) -> str:
+    def write_route_selectivity_conclusion(
+        self,
+        *,
+        eval_complete: bool = True,
+    ) -> str:
         """Write the route-selectivity conclusion.
+
+        Parameters
+        ----------
+        eval_complete:
+            P0-18 gate.  When *False* the suite did not produce valid
+            eval results for every comparison method.  In that case no
+            publishable conclusion is generated — only an incomplete
+            report is written.
 
         Returns
         -------
         conclusion:
             Text conclusion about route selectivity.
         """
+        # P0-18: Gate on eval_complete — partial runs must not produce
+        # publishable-looking conclusions.
+        if not eval_complete:
+            return self._write_incomplete_conclusion()
+
         decision = self.make_e2c_decision()
         tables = self.generate_tables()
         efficiency = self.generate_efficiency_report()
@@ -422,6 +446,43 @@ class ComparisonFramework:
             f.write(conclusion)
 
         logger.info("Wrote route-selectivity conclusion")
+        return conclusion
+
+    def _write_incomplete_conclusion(self) -> str:
+        """Write an incomplete-suite report (P0-18).
+
+        Called when ``eval_complete`` is *False*.  No Case A/B/C
+        decision is made; no comparison tables are generated.
+        """
+        missing = [
+            r.method_id for r in self.results
+            if not r.delta_target or not r.delta_retain or not r.delta_control
+        ]
+        incomplete = {
+            "decision_status": "INCOMPLETE",
+            "rationale": "Suite evaluation is not complete for all methods.",
+            "missing_eval_methods": missing,
+            "methods_present": [r.method_id for r in self.results],
+            "action": "complete_missing_evaluations",
+        }
+        path = self.output_dir / "incomplete_suite_report.json"
+        with open(path, "w") as f:
+            json.dump(incomplete, f, indent=2)
+            f.write("\n")
+
+        conclusion = (
+            "ROUTE-SELECTIVITY CONCLUSION: INCOMPLETE\n"
+            f"Missing methods: {missing}\n"
+            "No final decision can be made until all methods have "
+            "complete evaluation evidence.\n"
+        )
+        txt_path = self.output_dir / "route_selectivity_conclusion.txt"
+        with open(txt_path, "w") as f:
+            f.write(conclusion)
+
+        logger.warning(
+            f"Wrote incomplete conclusion (missing={missing})"
+        )
         return conclusion
 
     def _format_conclusion(

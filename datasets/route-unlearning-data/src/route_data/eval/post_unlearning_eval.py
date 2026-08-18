@@ -71,6 +71,8 @@ class PostEvalConfig:
     freeze_verification_path: str = ""
     processed_dataset_path: str = ""
     model_config_path: str = ""
+    # P0-19/20: Route probe SHA for suite-level verification
+    route_probe_sha256: str = ""
 
     @property
     def experiment_id(self) -> str:
@@ -592,6 +594,7 @@ def evaluate_intervention(
     baseline_results_path: str | Path = "",
     method_name: str = "unknown",
     model_config_obj: Any = None,
+    backend_override: Any = None,
 ) -> dict[str, Any]:
     """Common evaluation orchestrator for all unlearning methods.
 
@@ -629,12 +632,19 @@ def evaluate_intervention(
         Optional :class:`~route_data.config.ModelConfig` for the
         backend.  When *None* a default config is built from
         ``PostEvalConfig`` defaults.
+    backend_override:
+        Optional pre-built backend instance (e.g. ``_PromptingBackend``)
+        to use *instead of* constructing a fresh ``QwenHFBackend`` from
+        the model.  Used by the prompting baseline (P0-7) so that the
+        canonical 500-probe evaluation sees the system-prompt-aware
+        backend rather than the plain base model.
 
     Returns
     -------
     dict[str, Any]
         Standardised result dict with keys: ``method``,
         ``delta_target``, ``delta_retain``, ``delta_control``,
+        ``delta_untargeted``,
         ``exact_pair_count``, ``inference_errors``,
         ``manifest_sha256``, ``per_family_post``, ``summary``,
         ``eval_output_dir``.
@@ -668,17 +678,22 @@ def evaluate_intervention(
     from ..models.qwen import QwenHFBackend
 
     adapter_metadata = None
-    if adapter_path is not None:
-        adapter_path = Path(adapter_path)
-        adapter_metadata = _build_adapter_metadata(adapter_path)
+    if backend_override is not None:
+        # P0-7: Use the caller-supplied backend (e.g. _PromptingBackend)
+        # instead of constructing a plain QwenHFBackend.
+        backend = backend_override
+    else:
+        if adapter_path is not None:
+            adapter_path = Path(adapter_path)
+            adapter_metadata = _build_adapter_metadata(adapter_path)
 
-    backend = QwenHFBackend.from_loaded_model(
-        config=model_config_obj,
-        model=model,
-        processor=processor,
-        adapter_metadata=adapter_metadata,
-        resolved_revision=config.model_revision,
-    )
+        backend = QwenHFBackend.from_loaded_model(
+            config=model_config_obj,
+            model=model,
+            processor=processor,
+            adapter_metadata=adapter_metadata,
+            resolved_revision=config.model_revision,
+        )
 
     # -- Run evaluation ------------------------------------------------------- #
     evaluator = PostUnlearningEvaluator(
@@ -707,6 +722,19 @@ def evaluate_intervention(
             f"evaluate_intervention({method_name}): exact pairing FAILED — "
             f"{pair_report}"
         )
+
+    # -- P0-14: Persist validation reports to disk ------------------------- #
+    strict_report_path = output_dir / "strict_validation.json"
+    with open(strict_report_path, "w") as f:
+        json.dump(strict_report, f, indent=2, default=str)
+        f.write("\n")
+    logger.info(f"Persisted strict_validation.json: {strict_report_path}")
+
+    pair_report_path = output_dir / "pairing_validation.json"
+    with open(pair_report_path, "w") as f:
+        json.dump(pair_report, f, indent=2, default=str)
+        f.write("\n")
+    logger.info(f"Persisted pairing_validation.json: {pair_report_path}")
 
     summary = evaluator.generate_summary()
 
@@ -744,6 +772,8 @@ def evaluate_intervention(
     delta_accum: dict[str, dict[str, list[float]]] = defaultdict(
         lambda: defaultdict(list)
     )
+    # P1-35: Track per-role DV accuracy for preservation reporting.
+    dv_correct_per_role: dict[str, list[bool]] = defaultdict(list)
     n_pairs = 0
     n_inference_errors = 0
 
@@ -757,6 +787,15 @@ def evaluate_intervention(
         # Count inference errors.
         if pr.error is not None:
             n_inference_errors += 1
+
+        # P1-35: Track DV accuracy per protocol role.
+        if pr.probe_family == "direct_visual" and pr.correct is not None:
+            role_label = {
+                "exclude": "target",
+                "train": "retain",
+                "eval": "control",
+            }.get(pr.protocol_role, "untargeted")
+            dv_correct_per_role[role_label].append(pr.correct)
 
         post_m = _metric(pr, is_dataclass=True)
         pre_m = _metric(br, is_dataclass=False)
@@ -776,6 +815,14 @@ def evaluate_intervention(
         delta_accum[family][role_key].append(delta)
 
     # Average per (family, role).
+    _FAMILY_ABBREV = {
+        "direct_visual": "DV",
+        "image_plus_name": "IPN",
+        "wrong_name": "WN",
+        "visual_text_conflict": "VTC",
+        "name_only": "name_only",
+    }
+
     def _avg_deltas(accum_key: str) -> dict[str, float]:
         out: dict[str, float] = {}
         for family, roles in delta_accum.items():
@@ -786,17 +833,15 @@ def evaluate_intervention(
                 out[short] = sum(vals) / len(vals)
         return out
 
-    _FAMILY_ABBREV = {
-        "direct_visual": "DV",
-        "image_plus_name": "IPN",
-        "wrong_name": "WN",
-        "visual_text_conflict": "VTC",
-        "name_only": "name_only",
-    }
-
     delta_target = _avg_deltas("delta_target")
     delta_retain = _avg_deltas("delta_retain")
     delta_control = _avg_deltas("delta_control")
+    # P0-15: Include delta_untargeted for probes whose protocol_role
+    # does not map to exclude/train/eval.
+    delta_untargeted = _avg_deltas("delta_untargeted")
+
+    # -- P0-13: Generate the post-eval manifest BEFORE computing its SHA ---- #
+    evaluator.generate_post_eval_manifest()
 
     # -- Manifest SHA --------------------------------------------------------- #
     manifest_sha = ""
@@ -804,12 +849,39 @@ def evaluate_intervention(
     if manifest_path.is_file():
         manifest_sha = _sha256_file(manifest_path)
 
+    # -- P1-35: Compute DV accuracy per protocol role ----------------------- #
+    dv_accuracy_per_role: dict[str, float] = {}
+    for role_label, corrects in dv_correct_per_role.items():
+        if corrects:
+            dv_accuracy_per_role[role_label] = (
+                sum(corrects) / len(corrects)
+            )
+
+    # -- P1-30: Build intervention provenance -------------------------------- #
+    intervention_provenance: dict[str, Any] = {
+        "method": method_name,
+    }
+    if adapter_metadata:
+        # Adapter methods: record adapter SHA and config SHA.
+        intervention_provenance["adapter_checkpoint_sha"] = (
+            adapter_metadata.get("adapter_checkpoint_sha", "")
+        )
+        intervention_provenance["adapter_config_sha"] = (
+            adapter_metadata.get("adapter_config_sha", "")
+        )
+    # Callers may supply extra method-specific provenance via the
+    # backend_override (e.g. MANU prune fraction, prompting prompt hash).
+    # These are picked up from the result dict additions below.
+
     # -- Build result dict ---------------------------------------------------- #
+    # P0-16: name_only uses normalized_exact_match (not signed_answer_margin)
+    # and is kept in a separate key to prevent metric mixing.
     result: dict[str, Any] = {
         "method": method_name,
         "delta_target": delta_target,
         "delta_retain": delta_retain,
         "delta_control": delta_control,
+        "delta_untargeted": delta_untargeted,
         "exact_pair_count": n_pairs,
         "inference_errors": n_inference_errors,
         "manifest_sha256": manifest_sha,
@@ -823,6 +895,13 @@ def evaluate_intervention(
         "exact_pairing_pass": pair_report.get("exact_match", False),
         "expected_pair_count": 500,
         "actual_pair_count": n_pairs,
+        # P0-19/20: Provenance fields for suite-level verification.
+        "model_revision": config.model_revision,
+        "route_probe_sha256": getattr(config, "route_probe_sha256", ""),
+        # P1-30: Intervention provenance for traceability.
+        "intervention_provenance": intervention_provenance,
+        # P1-35: DV accuracy per protocol role for preservation reporting.
+        "dv_accuracy_per_role": dv_accuracy_per_role,
     }
 
     # -- Persist as the canonical suite artifact (P0-1) ---------------------- #
@@ -837,6 +916,7 @@ def evaluate_intervention(
         f"{n_pairs} pairs, {n_inference_errors} errors, "
         f"target_families={list(delta_target)}, "
         f"retain_families={list(delta_retain)}, "
-        f"control_families={list(delta_control)}"
+        f"control_families={list(delta_control)}, "
+        f"untargeted_families={list(delta_untargeted)}"
     )
     return result
