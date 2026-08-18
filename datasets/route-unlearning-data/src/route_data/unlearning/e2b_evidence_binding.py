@@ -29,6 +29,11 @@ _FAMILY_ABBREV = {
     "visual_text_conflict": "VTC",
 }
 
+# P1-25: Known frozen route-probe SHA (from common.yaml).
+_FROZEN_ROUTE_PROBE_SHA256 = (
+    "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864"
+)
+
 
 def _sha256_file(path: Path) -> str:
     """Compute SHA-256 hex digest of a file."""
@@ -130,9 +135,11 @@ def bind_e2b_b2_result(
         )
     
     # P0-8: Bind actual post-eval result artifacts.
+    # P0-2: validation_report.json is now required.
     post_eval_artifacts = {
         "results_jsonl": post_eval_dir / "results.jsonl",
         "manifest_json": post_eval_dir / "manifest.json",
+        "validation_report_json": post_eval_dir / "validation_report.json",
     }
     # Optional artifacts.
     optional_post_eval = {
@@ -155,6 +162,10 @@ def bind_e2b_b2_result(
     for name, path in optional_post_eval.items():
         if path.is_file():
             post_eval_shas[name] = _sha256_file(path)
+    
+    # P0-2: Load historical validation report.
+    with open(post_eval_artifacts["validation_report_json"]) as f:
+        historical_validation = json.load(f)
 
     # -- Compute artifact SHAs ---------------------------------------------- #
     artifact_shas: dict[str, str] = {}
@@ -170,8 +181,8 @@ def bind_e2b_b2_result(
         pass
     with open(artifact_paths["route_effects_post"]):
         pass
-    with open(artifact_paths["preservation_report"]):
-        pass
+    with open(artifact_paths["preservation_report"]) as f:
+        preservation_report = json.load(f)
     with open(artifact_paths["pairing_validation"]) as f:
         pairing = json.load(f)
     with open(artifact_paths["identity_effects"]):
@@ -253,6 +264,20 @@ def bind_e2b_b2_result(
     dv_accuracy["global"] = (
         sum(all_dv_corrects) / len(all_dv_corrects) if all_dv_corrects else 0.0
     )
+
+    # P1-23: Cross-check DV accuracy against preservation report.
+    preservation_dv = preservation_report.get("dv_accuracy", {})
+    dv_crosscheck_pass = True
+    if preservation_dv:
+        for grp_key in ("global", "target", "retain", "control", "untargeted"):
+            pres_val = preservation_dv.get(grp_key)
+            comp_val = dv_accuracy.get(grp_key)
+            if pres_val is not None and comp_val is not None and abs(pres_val - comp_val) > 1e-6:
+                logger.warning(
+                    f"DV accuracy cross-check mismatch for {grp_key}: "
+                    f"preservation={pres_val}, computed={comp_val}"
+                )
+                dv_crosscheck_pass = False
     
     # P1-30: Finite-value validation.
     import math
@@ -290,6 +315,33 @@ def bind_e2b_b2_result(
     expected_n = pairing.get("expected_n", 0)
     post_n = pairing.get("post_rows", 0)
     
+    # P0-2: strict_validation_pass comes from historical validation report.
+    strict_validation_pass = bool(historical_validation.get("pass", False))
+    
+    # P0-3: Cross-check historical validation against pairing evidence.
+    if not strict_validation_pass:
+        raise ValueError("Historical validation report pass != true")
+    if not pairing_pass:
+        raise ValueError("Pairing validation pass != true")
+    
+    # P0-3: Cross-check validation report checks.
+    val_checks = historical_validation.get("checks", {})
+    exact_probe_check = val_checks.get("exact_probe_id_set", {})
+    if exact_probe_check.get("actual_count") != 500:
+        raise ValueError(
+            f"Validation report exact_probe_id_set.actual_count="
+            f"{exact_probe_check.get('actual_count')}, expected 500"
+        )
+    if exact_probe_check.get("unique_count") != 500:
+        raise ValueError(
+            f"Validation report exact_probe_id_set.unique_count="
+            f"{exact_probe_check.get('unique_count')}, expected 500"
+        )
+    if not val_checks.get("family_counts_match", {}).get("pass", False):
+        raise ValueError("Validation report family_counts_match.pass != true")
+    if not val_checks.get("zero_inference_errors", {}).get("pass", False):
+        raise ValueError("Validation report zero_inference_errors.pass != true")
+    
     # P1-28: Cross-check historical pair counts.
     baseline_n = pairing.get("baseline_rows", 0)
     if expected_n != 500 or baseline_n != 500 or post_n != 500:
@@ -324,31 +376,125 @@ def bind_e2b_b2_result(
             )
 
     # -- Build result dict -------------------------------------------------- #
-    # Selection manifest SHA.
+    # P0-6: Bind historical selection manifest explicitly.
+    historical_selection_path = e2b / "selection" / "pilot_identity_selection.json"
+    historical_selection_sha = ""
+    historical_selection_data: dict[str, Any] = {}
+    if historical_selection_path.is_file():
+        historical_selection_sha = _sha256_file(historical_selection_path)
+        with open(historical_selection_path) as f:
+            historical_selection_data = json.load(f)
+    else:
+        raise FileNotFoundError(
+            f"Historical selection manifest not found: {historical_selection_path}"
+        )
+    
+    # Selection manifest SHA (current comparison selection).
     selection_manifest_sha = ""
+    current_selection_data: dict[str, Any] = {}
     if selection_manifest_path and Path(selection_manifest_path).is_file():
         selection_manifest_sha = _sha256_file(Path(selection_manifest_path))
+        with open(Path(selection_manifest_path)) as f:
+            current_selection_data = json.load(f)
     
     # P0-13: Load selection manifest to get control IDs.
     control_ids: list[str] = []
     target_ids: list[str] = []
     retain_ids: list[str] = []
-    if selection_manifest_path and Path(selection_manifest_path).is_file():
-        with open(Path(selection_manifest_path)) as f:
-            sel_data = json.load(f)
-        control_ids = sorted(sel_data.get("control_identities", []))
-        target_ids = sorted(sel_data.get("target_identities", []))
-        retain_ids = sorted(sel_data.get("retain_identities", []))
+    if current_selection_data:
+        control_ids = sorted(current_selection_data.get("control_identities", []))
+        target_ids = sorted(current_selection_data.get("target_identities", []))
+        retain_ids = sorted(current_selection_data.get("retain_identities", []))
+    
+    # P0-7: Verify historical/current group assignments match semantically.
+    historical_target = sorted(historical_selection_data.get("target_identities", []))
+    historical_retain = sorted(historical_selection_data.get("retain_identities", []))
+    historical_control = sorted(historical_selection_data.get("control_identities", []))
+    
+    # Only verify semantic match when current selection data is available.
+    if current_selection_data:
+        if historical_target != target_ids:
+            raise ValueError(
+                f"Historical/current target IDs mismatch: "
+                f"historical={historical_target}, current={target_ids}"
+            )
+        if historical_retain != retain_ids:
+            raise ValueError(
+                f"Historical/current retain IDs mismatch: "
+                f"historical={historical_retain}, current={retain_ids}"
+            )
+        if historical_control != control_ids:
+            raise ValueError(
+                f"Historical/current control IDs mismatch: "
+                f"historical={historical_control}, current={control_ids}"
+            )
+    else:
+        # Fall back to historical selection IDs when no current selection given.
+        target_ids = historical_target
+        retain_ids = historical_retain
+        control_ids = historical_control
+    
+    # P0-1/9: Cross-check route-probe SHA through both selection manifests.
+    historical_route_sha = historical_selection_data.get("route_probe_sha256", "")
+    current_route_sha = current_selection_data.get("route_probe_sha256", "")
+    
+    if not historical_route_sha:
+        raise ValueError("Historical selection missing route_probe_sha256")
+    if current_selection_data:
+        if not current_route_sha:
+            raise ValueError("Current selection missing route_probe_sha256")
+        if historical_route_sha != current_route_sha:
+            raise ValueError(
+                f"Historical/current route probe SHA mismatch: "
+                f"historical={historical_route_sha}, current={current_route_sha}"
+            )
+    
+    # P0-1: Use the frozen route-probe SHA, not paired_probe_deltas SHA.
+    route_probe_sha256 = current_route_sha or historical_route_sha
+    
+    # P0-5: Fix historical source_code_commit (use code_provenance.git_commit).
+    historical_code_commit = (
+        run_manifest
+        .get("code_provenance", {})
+        .get("git_commit", "")
+    )
+    if not historical_code_commit:
+        raise ValueError(
+            "Historical run manifest missing code_provenance.git_commit"
+        )
     
     # P0-10: Build historical evidence manifest.
     historical_evidence_manifest = {
         "source_experiment_id": run_manifest.get("experiment_id", ""),
-        "source_code_commit": run_manifest.get("code_commit", ""),
+        "source_code_commit": historical_code_commit,
         "source_model_revision": run_manifest.get("base_model", {}).get("revision", ""),
         "source_selection_provenance": str(selection_manifest_path or ""),
         "source_artifacts": {
             "analysis_artifacts": artifact_shas,
             "post_eval_artifacts": post_eval_shas,
+        },
+        # P0-8: Record both selection SHAs.
+        "selection_provenance": {
+            "historical_selection_path": str(historical_selection_path),
+            "historical_selection_sha256": historical_selection_sha,
+            "current_selection_path": str(selection_manifest_path or ""),
+            "current_selection_sha256": selection_manifest_sha,
+            "semantic_group_assignment_match": True,
+        },
+        # P1-25: Record route-probe provenance explicitly.
+        "route_probe_provenance": {
+            "historical_selection_route_probe_sha256": historical_route_sha,
+            "current_selection_route_probe_sha256": current_route_sha,
+            "frozen_common_config_route_probe_sha256": _FROZEN_ROUTE_PROBE_SHA256,
+            "all_match": (
+                historical_route_sha == current_route_sha == _FROZEN_ROUTE_PROBE_SHA256
+            ),
+        },
+        # P1-26: Record historical code provenance explicitly.
+        "historical_code_provenance": {
+            "git_commit": historical_code_commit,
+            "experiment_id": run_manifest.get("experiment_id", ""),
+            "model_revision": run_manifest.get("base_model", {}).get("revision", ""),
         },
         "binding_timestamp": time.time() if 'time' in globals() else 0,
     }
@@ -392,20 +538,27 @@ def bind_e2b_b2_result(
         "inference_errors": 0,
         # P0-16: DV accuracy.
         "dv_accuracy": dv_accuracy,
+        # P1-23: DV accuracy provenance with cross-check.
+        "dv_accuracy_provenance": {
+            "primary_source": "paired_probe_deltas",
+            "crosscheck_source": "preservation_report",
+            "crosscheck_pass": dv_crosscheck_pass,
+        },
         # P0-6: Group counts.
         "group_identity_counts": group_identity_counts,
         "identity_counts_valid": True,
         # P0-19: Per-family group probe counts.
         "group_probe_counts": _compute_group_probe_counts(delta_accum, name_only_accum),
         # Validation.
-        "strict_validation_pass": pairing_pass,
+        # P0-2: strict_validation_pass from historical validation report.
+        "strict_validation_pass": strict_validation_pass,
         "exact_pairing_pass": pairing_pass,
         "expected_pair_count": expected_n,
         "actual_pair_count": post_n,
         # Provenance.
         "model_revision": run_manifest.get("base_model", {}).get("revision", ""),
-        "route_probe_sha256": artifact_shas.get("paired_probe_deltas", ""),
-        "selection_manifest_sha256": selection_manifest_sha,
+        "route_probe_sha256": route_probe_sha256,  # P0-1: Frozen route-probe SHA.
+        "selection_manifest_sha256": selection_manifest_sha or historical_selection_sha,
         # E2B-B2 source provenance.
         "e2b_source": str(e2b),
         "e2b_artifact_shas": artifact_shas,
@@ -413,6 +566,10 @@ def bind_e2b_b2_result(
         # P0-10: Historical evidence manifest.
         "historical_evidence_manifest_path": historical_manifest_path,
         "historical_evidence_manifest_sha256": historical_manifest_sha,
+        # P1-24: Top-level validation report SHA for auditability.
+        "historical_validation_report_sha256": post_eval_shas.get(
+            "validation_report_json", ""
+        ),
         # P0-25: Group definition.
         "group_definition": {
             "selection_manifest_path": str(selection_manifest_path or ""),

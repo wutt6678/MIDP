@@ -516,6 +516,38 @@ class PostUnlearningEvaluator:
             },
         }
 
+        # P0-14: Include per-family per-group probe counts in manifest.
+        _fam_map = {
+            "direct_visual": "DV",
+            "image_plus_name": "IPN",
+            "wrong_name": "WN",
+            "visual_text_conflict": "VTC",
+            "name_only": "name_only",
+        }
+        _grp_counts: dict[str, dict[str, int]] = {
+            g: {f: 0 for f in ("DV", "IPN", "WN", "VTC", "name_only")}
+            for g in ("target", "retain", "control", "untargeted")
+        }
+        # Load selection for group classification.
+        _tgt: set[str] = set()
+        _ret: set[str] = set()
+        _ctl: set[str] = set()
+        _sel_path = self.config.selection_manifest_path
+        if _sel_path and Path(_sel_path).is_file():
+            with open(_sel_path) as _sf:
+                _sd = json.load(_sf)
+            _tgt = set(_sd.get("target_identities", []))
+            _ret = set(_sd.get("retain_identities", []))
+            _ctl = set(_sd.get("control_identities", []))
+        for _r in self._results:
+            _iid = _r.get("identity_id", "") if isinstance(_r, dict) else getattr(_r, "identity_id", "")
+            _grp = "target" if _iid in _tgt else "retain" if _iid in _ret else "control" if _iid in _ctl else "untargeted"
+            _pf = _r.get("probe_family", "") if isinstance(_r, dict) else getattr(_r, "probe_family", "")
+            _fk = _fam_map.get(_pf, "")
+            if _fk and _grp in _grp_counts:
+                _grp_counts[_grp][_fk] += 1
+        manifest["group_probe_counts"] = _grp_counts
+
         # Write manifest
         manifest_path = output_dir / "manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -860,6 +892,26 @@ def evaluate_intervention(
         group_identity_counts.get(g, 0) == expected
         for g, expected in _EXPECTED_IDENTITY_COUNTS.items()
     )
+    
+    # P0-10/11: Compute per-family per-group probe counts.
+    _FAMILIES = ("DV", "IPN", "WN", "VTC", "name_only")
+    _GROUPS = ("target", "retain", "control", "untargeted")
+    _FAMILY_MAP = {
+        "direct_visual": "DV",
+        "image_plus_name": "IPN",
+        "wrong_name": "WN",
+        "visual_text_conflict": "VTC",
+        "name_only": "name_only",
+    }
+    group_probe_counts: dict[str, dict[str, int]] = {
+        grp: {fam: 0 for fam in _FAMILIES} for grp in _GROUPS
+    }
+    for pr in post_results:
+        identity_id = pr.identity_id if hasattr(pr, "identity_id") else ""
+        grp = _classify_identity(identity_id)
+        fam_key = _FAMILY_MAP.get(pr.probe_family, "")
+        if fam_key and grp in group_probe_counts:
+            group_probe_counts[grp][fam_key] += 1
 
     # Average per (family, role).
     _FAMILY_ABBREV = {
@@ -943,6 +995,13 @@ def evaluate_intervention(
     result: dict[str, Any] = {
         "method": method_name,
         "objective_name": objective_name or method_name,
+        # P0-16: Contract metadata for new evaluations.
+        "evidence_mode": "new_evaluation",
+        "validation_contract_version": "mllmu-baseline-suite-v1",
+        "evaluation_scope": {
+            "mode": "full",
+            "expected_probe_count": 500,
+        },
         "delta_target": delta_target,
         "delta_retain": delta_retain,
         "delta_control": delta_control,
@@ -972,6 +1031,8 @@ def evaluate_intervention(
         # P0-6: Identity group counts for frozen-contract enforcement.
         "group_identity_counts": group_identity_counts,
         "identity_counts_valid": identity_counts_valid,
+        # P0-10/11: Per-family per-group probe counts.
+        "group_probe_counts": group_probe_counts,
         # P0-25: Experimental-group provenance.
         "group_definition": {
             "selection_manifest_path": selection_manifest_path,

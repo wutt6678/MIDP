@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import json
 import logging
+import math
 import subprocess
 import sys
 import tempfile
@@ -238,26 +239,31 @@ def _validate_eval_result(
         if not prov_value:
             return f"{prov_field} is empty (fail-closed)"
     
-    # P0-20: Enforce per-family 2/2/2/94 counts.
-    group_probe_counts = eval_metrics.get("group_probe_counts", {})
-    if group_probe_counts:
-        expected_per_family = {
-            "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
-            "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
-            "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
-            "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
-        }
-        for grp, expected_families in expected_per_family.items():
-            actual_families = group_probe_counts.get(grp, {})
-            for fam, expected_count in expected_families.items():
-                actual_count = actual_families.get(fam)
-                if actual_count is None:
-                    return f"group_probe_counts[{grp}][{fam}] is missing"
-                if actual_count != expected_count:
-                    return (
-                        f"group_probe_counts[{grp}][{fam}]={actual_count}, "
-                        f"expected {expected_count}"
-                    )
+    # P0-12/13: group_probe_counts is MANDATORY (fail-closed).
+    group_probe_counts = eval_metrics.get("group_probe_counts")
+    if not isinstance(group_probe_counts, dict):
+        return "group_probe_counts is missing or invalid"
+
+    # P0-13: Enforce exact per-family 2/2/2/94 counts.
+    expected_per_family = {
+        "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+        "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+        "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+        "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
+    }
+    for grp, expected_families in expected_per_family.items():
+        actual_families = group_probe_counts.get(grp)
+        if not isinstance(actual_families, dict):
+            return f"group_probe_counts[{grp}] is missing"
+        for fam, expected_count in expected_families.items():
+            actual_count = actual_families.get(fam)
+            if actual_count is None:
+                return f"group_probe_counts[{grp}][{fam}] is missing"
+            if actual_count != expected_count:
+                return (
+                    f"group_probe_counts[{grp}][{fam}]={actual_count}, "
+                    f"expected {expected_count}"
+                )
 
     # P0-20: method identifier must match expected_method
     actual_method = eval_metrics.get("method", "")
@@ -305,6 +311,82 @@ def _validate_eval_result(
         pairing_path = Path(eval_output_dir) / "pairing_validation.json"
         if not pairing_path.is_file():
             return f"pairing_validation.json not found: {pairing_path}"
+
+    # P0-18: validation_contract_version must match frozen contract.
+    contract_version = eval_metrics.get("validation_contract_version", "")
+    if contract_version != "mllmu-baseline-suite-v1":
+        return (
+            f"validation_contract_version mismatch: "
+            f"got '{contract_version}', expected 'mllmu-baseline-suite-v1'"
+        )
+
+    # P0-19: evaluation_scope must be full/500 for final evidence.
+    scope = eval_metrics.get("evaluation_scope", {})
+    if not isinstance(scope, dict):
+        return "evaluation_scope is missing or invalid"
+    scope_mode = scope.get("mode", "")
+    if scope_mode != "full":
+        return f"evaluation_scope.mode='{scope_mode}', expected 'full'"
+    scope_count = scope.get("expected_probe_count", 0)
+    if scope_count != 500:
+        return (
+            f"evaluation_scope.expected_probe_count={scope_count}, expected 500"
+        )
+
+    # P0-20: evidence_mode must be new_evaluation or historical_bound.
+    evidence_mode = eval_metrics.get("evidence_mode", "")
+    if evidence_mode not in ("new_evaluation", "historical_bound"):
+        return (
+            f"evidence_mode='{evidence_mode}', "
+            f"expected 'new_evaluation' or 'historical_bound'"
+        )
+
+    if evidence_mode == "historical_bound":
+        # P0-21: historical evidence manifest must exist + SHA-verified.
+        manifest_path = eval_metrics.get("historical_evidence_manifest_path", "")
+        manifest_sha = eval_metrics.get("historical_evidence_manifest_sha256", "")
+        if not manifest_path:
+            return "historical_bound mode missing historical_evidence_manifest_path"
+        if not Path(manifest_path).is_file():
+            return f"historical_evidence_manifest not found: {manifest_path}"
+        if not manifest_sha:
+            return "historical_bound mode missing historical_evidence_manifest_sha256"
+        actual_manifest_sha = _sha256_file(manifest_path)
+        if actual_manifest_sha != manifest_sha:
+            return (
+                f"historical_evidence_manifest SHA mismatch: "
+                f"expected={manifest_sha[:16]}..., actual={actual_manifest_sha[:16]}..."
+            )
+
+    # P1-27: Finite-value checks for binary deltas.
+    for field in ("delta_target", "delta_retain", "delta_control", "delta_untargeted"):
+        delta_dict = eval_metrics.get(field, {})
+        if isinstance(delta_dict, dict):
+            for fam_key, val in delta_dict.items():
+                if isinstance(val, (int, float)) and not math.isfinite(val):
+                    return f"{field}[{fam_key}] is not finite"
+
+    # P1-27: DV accuracy must be finite and in [0, 1].
+    dv_acc = eval_metrics.get("dv_accuracy", {})
+    for key, val in dv_acc.items():
+        if isinstance(val, (int, float)):
+            if not math.isfinite(val):
+                return f"dv_accuracy[{key}] is not finite"
+            if not (0.0 <= val <= 1.0):
+                return f"dv_accuracy[{key}]={val} out of [0, 1]"
+
+    # P1-27: name_only metrics must be finite.
+    no_delta = eval_metrics.get("name_only_delta", {})
+    if isinstance(no_delta, dict):
+        for grp_key, grp_val in no_delta.items():
+            if isinstance(grp_val, dict):
+                for metric_key, metric_val in grp_val.items():
+                    if isinstance(metric_val, (int, float)) and not math.isfinite(metric_val):
+                        return f"name_only_delta[{grp_key}][{metric_key}] is not finite"
+
+    # P1-28: identity_counts_valid must be true (redundant consistency check).
+    if "identity_counts_valid" in eval_metrics and not eval_metrics.get("identity_counts_valid"):
+        return "identity_counts_valid is not true"
 
     return None
 

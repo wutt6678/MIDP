@@ -820,6 +820,17 @@ class TestValidateEvalResult:
             "route_probe_sha256": "abc123",
             "selection_manifest_sha256": "def456",
             "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+            # P0-12/13: Mandatory group_probe_counts.
+            "group_probe_counts": {
+                "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
+            },
+            # P0-18/19/20: Contract metadata.
+            "validation_contract_version": "mllmu-baseline-suite-v1",
+            "evaluation_scope": {"mode": "full", "expected_probe_count": 500},
+            "evidence_mode": "new_evaluation",
             "method": "wrong_method",
         }
         err = suite._validate_eval_result(result, "ga")
@@ -875,6 +886,15 @@ class TestValidateEvalResult:
             "name_only_delta": {},
             "dv_accuracy": {"global": 1.0, "target": 0.5, "retain": 1.0, "control": 1.0, "untargeted": 0.99},
             "group_identity_counts": {"target": 2, "retain": 2, "control": 2, "untargeted": 94},
+            "group_probe_counts": {
+                "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
+            },
+            "validation_contract_version": "mllmu-baseline-suite-v1",
+            "evaluation_scope": {"mode": "full", "expected_probe_count": 500},
+            "evidence_mode": "new_evaluation",
             "method": "ga",
             "route_probe_sha256": "abc",
             "selection_manifest_sha256": "def",
@@ -907,6 +927,15 @@ class TestValidateEvalResult:
             "name_only_delta": {},
             "dv_accuracy": {"global": 1.0, "target": 0.5, "retain": 1.0, "control": 1.0, "untargeted": 0.99},
             "group_identity_counts": {"target": 2, "retain": 2, "control": 2, "untargeted": 94},
+            "group_probe_counts": {
+                "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
+            },
+            "validation_contract_version": "mllmu-baseline-suite-v1",
+            "evaluation_scope": {"mode": "full", "expected_probe_count": 500},
+            "evidence_mode": "new_evaluation",
             "method": "ga",
             "route_probe_sha256": "wrong_sha",
             "selection_manifest_sha256": "def",
@@ -945,6 +974,15 @@ class TestValidateEvalResult:
             "group_identity_counts": {
                 "target": 2, "retain": 2, "control": 2, "untargeted": 94,
             },
+            "group_probe_counts": {
+                "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
+            },
+            "validation_contract_version": "mllmu-baseline-suite-v1",
+            "evaluation_scope": {"mode": "full", "expected_probe_count": 500},
+            "evidence_mode": "new_evaluation",
             "method": "ga",
             "model_revision": "rev123",
             "route_probe_sha256": "sha456",
@@ -959,6 +997,117 @@ class TestValidateEvalResult:
         }
         err = suite._validate_eval_result(result, "ga", common_config)
         assert err is None
+
+    # ------------------------------------------------------------------ #
+    # P0-15: Per-family count regression tests
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _valid_base_result() -> dict:
+        """Return a minimal result that passes all checks through P0-13."""
+        return {
+            "expected_pair_count": 500,
+            "actual_pair_count": 500,
+            "exact_pair_count": 500,
+            "inference_errors": 0,
+            "strict_validation_pass": True,
+            "exact_pairing_pass": True,
+            "results_path": "",
+            "eval_output_dir": "",
+            "manifest_sha256": "abc",
+            "delta_target": {"DV": 0.5, "IPN": 0.4, "WN": 0.3, "VTC": 0.2},
+            "delta_retain": {"DV": 0.01, "IPN": 0.02, "WN": 0.03, "VTC": 0.04},
+            "delta_control": {"DV": 0.005, "IPN": 0.006, "WN": 0.007, "VTC": 0.008},
+            "delta_untargeted": {"DV": 0.002, "IPN": 0.003, "WN": 0.004, "VTC": 0.005},
+            "name_only_delta": {},
+            "dv_accuracy": {"global": 1.0, "target": 0.5, "retain": 1.0, "control": 1.0, "untargeted": 0.99},
+            "group_identity_counts": {"target": 2, "retain": 2, "control": 2, "untargeted": 94},
+            "group_probe_counts": {
+                "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+                "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
+            },
+            "validation_contract_version": "mllmu-baseline-suite-v1",
+            "evaluation_scope": {"mode": "full", "expected_probe_count": 500},
+            "evidence_mode": "new_evaluation",
+            "method": "ga",
+            "model_revision": "rev",
+            "route_probe_sha256": "sha",
+            "selection_manifest_sha256": "sel",
+        }
+
+    def test_missing_group_probe_counts_fails(self):
+        """P0-12: Missing group_probe_counts → FAIL (fail-closed)."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        del result["group_probe_counts"]
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "group_probe_counts" in err
+
+    def test_wrong_target_wn_count_fails(self):
+        """P0-15: target.WN = 1 instead of 2 → FAIL."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        result["group_probe_counts"]["target"]["WN"] = 1
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "group_probe_counts[target][WN]" in err
+
+    def test_missing_name_only_target_fails(self):
+        """P0-15: target.name_only = 1 instead of 2 → FAIL."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        result["group_probe_counts"]["target"]["name_only"] = 1
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "group_probe_counts[target][name_only]" in err
+
+    def test_extra_untargeted_dv_fails(self):
+        """P0-15: untargeted.DV = 95 instead of 94 → FAIL."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        result["group_probe_counts"]["untargeted"]["DV"] = 95
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "group_probe_counts[untargeted][DV]" in err
+
+    def test_missing_entire_group_fails(self):
+        """P0-15: Missing 'retain' group → FAIL."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        del result["group_probe_counts"]["retain"]
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "group_probe_counts[retain]" in err
+
+    def test_contract_version_mismatch_fails(self):
+        """P0-18: Wrong validation_contract_version → FAIL."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        result["validation_contract_version"] = "wrong-version"
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "validation_contract_version" in err
+
+    def test_evaluation_scope_smoke_fails(self):
+        """P0-19: Smoke scope cannot pass as final evidence."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        result["evaluation_scope"] = {"mode": "smoke", "expected_probe_count": 50}
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "evaluation_scope.mode" in err
+
+    def test_invalid_evidence_mode_fails(self):
+        """P0-20: Invalid evidence_mode → FAIL."""
+        suite = self._import_suite()
+        result = self._valid_base_result()
+        result["evidence_mode"] = "synthetic"
+        err = suite._validate_eval_result(result, "ga")
+        assert err is not None
+        assert "evidence_mode" in err
 
 
 # ========================================================================== #
