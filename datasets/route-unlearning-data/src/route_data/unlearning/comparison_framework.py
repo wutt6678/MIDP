@@ -214,19 +214,25 @@ class ComparisonFramework:
         case_b_methods = []
         case_c_methods = []
 
+        missing_eval_methods = []
+
         for r in self.results:
             if not r.delta_target:
                 continue
 
             # Check if target degradation is specific (not uniform)
             target_degradation = self._has_target_degradation(r)
-            retain_preserved = self._is_retain_preserved(r)
-            control_preserved = self._is_control_preserved(r)
+            retain_status = self._check_preservation(r.delta_retain)
+            control_status = self._check_preservation(r.delta_control)
 
-            if target_degradation and retain_preserved and control_preserved:
+            # Missing evidence: method cannot be Case A
+            if retain_status == "MISSING" or control_status == "MISSING":
+                missing_eval_methods.append(r.method_id)
+
+            if target_degradation and retain_status == "PASS" and control_status == "PASS":
                 case_a_methods.append(r.method_id)
-            elif target_degradation and not (retain_preserved and control_preserved):
-                # Target degrades but so do retain/control
+            elif target_degradation and not (retain_status == "PASS" and control_status == "PASS"):
+                # Target degrades but so do retain/control (or evidence missing)
                 case_c_methods.append(r.method_id)
             else:
                 # No specific target degradation
@@ -274,6 +280,12 @@ class ComparisonFramework:
             json.dump(decision, f, indent=2)
             f.write("\n")
 
+        if missing_eval_methods:
+            logger.warning(
+                f"Methods with MISSING evaluation data: {missing_eval_methods}. "
+                f"These cannot be classified as Case A."
+            )
+
         logger.info(f"E2C decision: Case {decision['case']}")
         return decision
 
@@ -285,19 +297,26 @@ class ComparisonFramework:
         avg_delta = sum(result.delta_target.values()) / len(result.delta_target)
         return avg_delta < -0.1  # At least 10% degradation
 
-    def _is_retain_preserved(self, result: MethodResult) -> bool:
-        """Check if retain attributes are preserved."""
-        if not result.delta_retain:
-            return True  # No data = assume preserved
-        avg_delta = sum(result.delta_retain.values()) / len(result.delta_retain)
-        return avg_delta > -0.05  # Less than 5% degradation
+    def _check_preservation(self, deltas: dict[str, float]) -> str:
+        """Three-state preservation check: PASS, FAIL, or MISSING.
 
-    def _is_control_preserved(self, result: MethodResult) -> bool:
-        """Check if control attributes are preserved."""
-        if not result.delta_control:
-            return True  # No data = assume preserved
-        avg_delta = sum(result.delta_control.values()) / len(result.delta_control)
-        return avg_delta > -0.05  # Less than 5% degradation
+        Parameters
+        ----------
+        deltas:
+            Per-attribute delta values. Empty dict means no data.
+
+        Returns
+        -------
+        status:
+            'PASS' if avg delta > -0.05, 'FAIL' if <= -0.05,
+            'MISSING' if no data.
+        """
+        if not deltas:
+            return "MISSING"
+        avg_delta = sum(deltas.values()) / len(deltas)
+        if avg_delta > -0.05:
+            return "PASS"
+        return "FAIL"
 
     def generate_trajectory_analysis(self) -> dict[str, Any]:
         """Generate trajectory analysis across checkpoints.
