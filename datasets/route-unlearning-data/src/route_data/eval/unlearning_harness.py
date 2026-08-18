@@ -1081,7 +1081,7 @@ class UnlearningTrainer:
             "total_microsteps": total_microsteps,
             "final_loss": self.training_log[-1]["total_loss"] if self.training_log else None,
             "elapsed_seconds": elapsed,
-            "checkpoints_saved": len(checkpoint_steps) + 1,
+            "checkpoints_saved": len(checkpoint_steps),
         }
 
     def _save_checkpoint(self, name: str) -> Path:

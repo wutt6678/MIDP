@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import shutil
 import subprocess
 import sys
 import time
@@ -244,27 +245,9 @@ def main() -> None:
     if args.output_dir:
         training_config.output_dir = args.output_dir
 
-    # Handle special methods
-    if method_name == "mllmu_prompting":
-        from route_data.unlearning.baseline_methods import PromptingBaseline
-        logger.info("Running prompting baseline (no training)")
-        baseline = PromptingBaseline()
-        baseline.run_evaluation(
-            model=None, processor=None,
-            probe_dataset=[], output_dir=training_config.output_dir,
-        )
-        logger.info("Prompting baseline complete")
-        return
-
-    if method_name == "midp_candidate_margin":
-        logger.info("MIDP-CM: referencing existing E2B-B2 result (no retraining)")
-        e2b_dir = config.get("runtime", {}).get("e2b_b2_output_dir", "")
-        if e2b_dir:
-            logger.info(f"E2B-B2 output: {e2b_dir}")
-        # Copy/symlink existing results
-        return
-
-    # Load model, datasets, and train
+    # ------------------------------------------------------------------ #
+    # Load base model (needed for ALL methods including prompting)        #
+    # ------------------------------------------------------------------ #
     from route_data.eval.unlearning_harness import (
         apply_lora,
         build_forget_dataset,
@@ -280,6 +263,76 @@ def main() -> None:
         dtype=training_config.dtype,
         device=training_config.device,
     )
+
+    # Handle special methods that do NOT use BaselineTrainer
+    if method_name == "mllmu_prompting":
+        from route_data.unlearning.baseline_methods import PromptingBaseline
+        probe_path = project_root / data.get(
+            "route_probe_path",
+            "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
+        )
+        logger.info("Running prompting baseline (no training, no LoRA)")
+        baseline = PromptingBaseline()
+        baseline.run_evaluation(
+            model=model,
+            processor=processor,
+            probe_dataset_path=str(probe_path),
+            output_dir=training_config.output_dir,
+        )
+        logger.info("Prompting baseline complete")
+        return
+
+    if method_name == "midp_candidate_margin":
+        logger.info("MIDP-CM: referencing existing E2B-B2 result (no retraining)")
+        e2b_dir = config.get("runtime", {}).get("e2b_b2_output_dir", "")
+        output_dir = Path(training_config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if not e2b_dir:
+            logger.error("MIDP-CM: e2b_b2_output_dir not set in config")
+            return
+
+        e2b_path = Path(e2b_dir)
+        if not e2b_path.exists():
+            logger.error(
+                f"MIDP-CM: E2B-B2 output directory not found: {e2b_path}"
+            )
+            return
+
+        # Copy E2B-B2 results into the current method's output dir.
+        for item in e2b_path.iterdir():
+            dest = output_dir / item.name
+            if item.is_file():
+                shutil.copy2(item, dest)
+            elif item.is_dir():
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+
+        # Load eval results in the common schema.
+        result_json = output_dir / "eval_results.json"
+        result = {
+            "method": "midp_candidate_margin",
+            "delta_target": {},
+            "delta_retain": {},
+            "delta_control": {},
+            "exact_pair_count": 0,
+            "inference_errors": 0,
+            "manifest_sha256": "",
+            "per_family_post": {},
+            "summary": {},
+            "eval_output_dir": str(output_dir),
+            "results_path": str(result_json),
+            "adapter_path": None,
+            "e2b_source": str(e2b_path),
+        }
+        if result_json.is_file():
+            with open(result_json) as f:
+                loaded = json.load(f)
+            result.update(loaded)
+
+        logger.info(
+            f"MIDP-CM: evidence bound from {e2b_path} → {output_dir}"
+        )
+        return
 
     logger.info("Applying LoRA ...")
     model = apply_lora(

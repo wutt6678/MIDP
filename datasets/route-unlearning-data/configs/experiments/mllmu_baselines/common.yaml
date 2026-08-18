@@ -45,7 +45,9 @@ data:
     - "81b95673fc82fe47"
   # Dataset path
   processed_dataset_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl
-  selection_manifest_sha256: ""
+  selection_manifest_sha256: "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1"
+  # Frozen 500-probe evaluation dataset (must match E2B probe path)
+  route_probe_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl
 
 evaluation:
   reuse_frozen_500_probes: true

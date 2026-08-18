@@ -236,6 +236,48 @@ def run_suite_preflight(
         cfg_path = CONFIGS_DIR / f"{method}.yaml"
         _check(f"config_{method}", cfg_path.exists(), str(cfg_path))
 
+    # P0-11: Frozen artifact SHA verification.
+    base_model = common_config.get("base_model", {})
+    frozen_revision = "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+    _check(
+        "base_model_revision_frozen",
+        base_model.get("revision") == frozen_revision,
+        f"revision={base_model.get('revision', 'NOT SET')}",
+    )
+
+    data_cfg = common_config.get("data", {})
+    manifest_sha = data_cfg.get("selection_manifest_sha256", "")
+    _check(
+        "selection_manifest_sha256_nonempty",
+        bool(manifest_sha) and len(manifest_sha) == 64,
+        f"sha256_len={len(manifest_sha)}",
+    )
+
+    # If the processed dataset file exists, verify its SHA-256.
+    dataset_path = data_cfg.get("processed_dataset_path", "")
+    if dataset_path:
+        from pathlib import Path as _Path
+        import hashlib as _hashlib
+
+        ds_file = _Path(dataset_path)
+        if ds_file.is_file():
+            h = _hashlib.sha256()
+            with open(ds_file, "rb") as fh:
+                for chunk in iter(lambda: fh.read(8192), b""):
+                    h.update(chunk)
+            actual_sha = h.hexdigest()
+            _check(
+                "processed_dataset_sha256",
+                actual_sha == manifest_sha,
+                f"expected={manifest_sha[:16]}... actual={actual_sha[:16]}...",
+            )
+        else:
+            _check(
+                "processed_dataset_exists",
+                False,
+                f"not found: {dataset_path}",
+            )
+
     all_passed = all(c["pass"] for c in checks)
     report = {
         "preflight_passed": all_passed,
@@ -341,12 +383,25 @@ def main() -> None:
     suite_elapsed = time.time() - suite_start
 
     # Suite summary
+    per_method_status = {}
+    for r in results:
+        has_eval = bool(r.get("eval_metrics"))
+        per_method_status[r["method"]] = {
+            "status": r["status"],  # "success" | "failed" | "missing_eval"
+            "has_eval_result": has_eval,
+            "elapsed_seconds": r.get("elapsed_seconds", 0),
+        }
+
     summary = {
         "suite": "mllmu_baselines",
         "methods_run": [r["method"] for r in results],
         "results": results,
         "total_elapsed_seconds": suite_elapsed,
         "code_commit": suite_state["code_commit"],
+        "per_method_status": per_method_status,
+        "eval_complete": all(
+            s["has_eval_result"] for s in per_method_status.values()
+        ) if per_method_status else False,
         "all_succeeded": all(r["status"] == "success" for r in results),
     }
 
@@ -359,7 +414,12 @@ def main() -> None:
     logger.info(f"Suite complete in {suite_elapsed:.1f}s")
     for r in results:
         status_icon = "OK" if r["status"] == "success" else "FAIL"
-        logger.info(f"  [{status_icon}] {r['method']} ({r.get('elapsed_seconds', 0):.1f}s)")
+        has_eval = bool(r.get("eval_metrics"))
+        eval_icon = "eval" if has_eval else "NO_EVAL"
+        logger.info(
+            f"  [{status_icon}] {r['method']} "
+            f"({r.get('elapsed_seconds', 0):.1f}s) [{eval_icon}]"
+        )
     logger.info(f"Summary: {summary_path}")
     logger.info(f"{'='*60}")
 

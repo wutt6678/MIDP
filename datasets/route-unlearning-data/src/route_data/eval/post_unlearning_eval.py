@@ -11,6 +11,7 @@ Public API
 .. autoclass:: PostUnlearningEvaluator
 .. autofunction:: load_lora_checkpoint
 .. autofunction:: validate_exact_probe_matching
+.. autofunction:: evaluate_intervention
 """
 
 from __future__ import annotations
@@ -574,3 +575,236 @@ def _sha256_file(path: str | Path) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# --------------------------------------------------------------------------- #
+# Common evaluation orchestrator (P0-1)
+# --------------------------------------------------------------------------- #
+
+def evaluate_intervention(
+    model: Any,
+    processor: Any,
+    adapter_path: str | Path | None,
+    probe_dataset_path: str | Path,
+    output_dir: str | Path,
+    config: PostEvalConfig | None = None,
+    *,
+    baseline_results_path: str | Path = "",
+    method_name: str = "unknown",
+    model_config_obj: Any = None,
+) -> dict[str, Any]:
+    """Common evaluation orchestrator for all unlearning methods.
+
+    All methods (training-based, pruning-based, prompting) call this
+    function after their intervention to produce a standardised result
+    dict that the comparison framework can consume directly.
+
+    Parameters
+    ----------
+    model:
+        The model in its final intervention state.  For adapter methods
+        this is the base model with the trained LoRA adapter still
+        attached.  For prompting this is the unmodified base model.
+    processor:
+        The Qwen ``AutoProcessor`` matching the base model.
+    adapter_path:
+        Path to the saved LoRA adapter checkpoint directory, or *None*
+        for prompting (no adapter).
+    probe_dataset_path:
+        Path to the frozen 500-probe JSONL file.
+    output_dir:
+        Directory where evaluation artefacts are written.
+    config:
+        Optional :class:`PostEvalConfig` with advanced settings
+        (baseline paths, provenance, frozen-contract paths).  When
+        *None* a minimal default config is constructed from the other
+        parameters.
+    baseline_results_path:
+        Path to the pre-unlearning baseline ``results.jsonl``.  Required
+        for ΔM computation.  Falls back to
+        ``config.baseline_results_path`` when empty.
+    method_name:
+        Human-readable method identifier included in the result dict.
+    model_config_obj:
+        Optional :class:`~route_data.config.ModelConfig` for the
+        backend.  When *None* a default config is built from
+        ``PostEvalConfig`` defaults.
+
+    Returns
+    -------
+    dict[str, Any]
+        Standardised result dict with keys: ``method``,
+        ``delta_target``, ``delta_retain``, ``delta_control``,
+        ``exact_pair_count``, ``inference_errors``,
+        ``manifest_sha256``, ``per_family_post``, ``summary``,
+        ``eval_output_dir``.
+    """
+    from ..config import ModelConfig
+    from .baseline_runner import BaselineResult
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # -- Build effective config ------------------------------------------------ #
+    if config is None:
+        config = PostEvalConfig()
+    if baseline_results_path:
+        config.baseline_results_path = str(baseline_results_path)
+    config.probe_path = str(probe_dataset_path)
+    config.output_dir = str(output_dir)
+
+    # -- Build ModelConfig for the backend ------------------------------------ #
+    if model_config_obj is None:
+        model_config_obj = ModelConfig(
+            backend="qwen_hf",
+            model_id=config.model_id,
+            revision=config.model_revision,
+            dtype=config.dtype,
+            device_map=config.device,
+            seed=config.seed,
+        )
+
+    # -- Wrap model in a VisionLanguageModel backend -------------------------- #
+    from ..models.qwen import QwenHFBackend
+
+    adapter_metadata = None
+    if adapter_path is not None:
+        adapter_path = Path(adapter_path)
+        adapter_metadata = _build_adapter_metadata(adapter_path)
+
+    backend = QwenHFBackend.from_loaded_model(
+        config=model_config_obj,
+        model=model,
+        processor=processor,
+        adapter_metadata=adapter_metadata,
+        resolved_revision=config.model_revision,
+    )
+
+    # -- Run evaluation ------------------------------------------------------- #
+    evaluator = PostUnlearningEvaluator(
+        config=config,
+        backend=backend,
+        model_config=model_config_obj,
+    )
+    post_results: list[BaselineResult] = evaluator.run_evaluation()
+    results_path = evaluator.save_results()
+    summary = evaluator.generate_summary()
+
+    # -- Load baseline results for ΔM computation ----------------------------- #
+    baseline_path = Path(config.baseline_results_path)
+    baseline_results: list[dict[str, Any]] = []
+    if baseline_path.is_file():
+        with open(baseline_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    baseline_results.append(json.loads(line))
+
+    # -- Compute per-probe ΔM and aggregate ----------------------------------- #
+    baseline_by_id: dict[str, dict[str, Any]] = {
+        r["probe_id"]: r for r in baseline_results
+    }
+
+    # Per-probe metric extraction.
+    def _metric(r: Any, is_dataclass: bool) -> float | None:
+        """Extract the primary metric from a result (dataclass or dict)."""
+        if is_dataclass:
+            fam = r.probe_family
+            if fam == "name_only":
+                return r.normalized_exact_match
+            return r.signed_answer_margin
+        else:
+            fam = r.get("probe_family", "")
+            if fam == "name_only":
+                return r.get("normalized_exact_match")
+            return r.get("signed_answer_margin")
+
+    # Aggregate: group by (probe_family, protocol_role) → list of ΔM.
+    from collections import defaultdict
+    delta_accum: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    n_pairs = 0
+    n_inference_errors = 0
+
+    for pr in post_results:
+        pid = pr.probe_id
+        br = baseline_by_id.get(pid)
+        if br is None:
+            continue
+        n_pairs += 1
+
+        # Count inference errors.
+        if pr.error is not None:
+            n_inference_errors += 1
+
+        post_m = _metric(pr, is_dataclass=True)
+        pre_m = _metric(br, is_dataclass=False)
+        if post_m is None or pre_m is None:
+            continue
+        delta = post_m - pre_m
+
+        family = pr.probe_family
+        role = pr.protocol_role  # train | eval | exclude
+        # Map protocol roles to comparison-framework vocabulary.
+        role_key = {
+            "exclude": "delta_target",
+            "train": "delta_retain",
+            "eval": "delta_control",
+        }.get(role, "delta_untargeted")
+
+        delta_accum[family][role_key].append(delta)
+
+    # Average per (family, role).
+    def _avg_deltas(accum_key: str) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for family, roles in delta_accum.items():
+            vals = roles.get(accum_key, [])
+            if vals:
+                # Abbreviate family names for the comparison framework.
+                short = _FAMILY_ABBREV.get(family, family)
+                out[short] = sum(vals) / len(vals)
+        return out
+
+    _FAMILY_ABBREV = {
+        "direct_visual": "DV",
+        "image_plus_name": "IPN",
+        "wrong_name": "WN",
+        "visual_text_conflict": "VTC",
+        "name_only": "name_only",
+    }
+
+    delta_target = _avg_deltas("delta_target")
+    delta_retain = _avg_deltas("delta_retain")
+    delta_control = _avg_deltas("delta_control")
+
+    # -- Manifest SHA --------------------------------------------------------- #
+    manifest_sha = ""
+    manifest_path = output_dir / "manifest.json"
+    if manifest_path.is_file():
+        manifest_sha = _sha256_file(manifest_path)
+
+    # -- Build result dict ---------------------------------------------------- #
+    result: dict[str, Any] = {
+        "method": method_name,
+        "delta_target": delta_target,
+        "delta_retain": delta_retain,
+        "delta_control": delta_control,
+        "exact_pair_count": n_pairs,
+        "inference_errors": n_inference_errors,
+        "manifest_sha256": manifest_sha,
+        "per_family_post": summary.get("per_family", {}),
+        "summary": summary,
+        "eval_output_dir": str(output_dir),
+        "results_path": str(results_path),
+        "adapter_path": str(adapter_path) if adapter_path else None,
+    }
+
+    logger.info(
+        f"evaluate_intervention({method_name}): "
+        f"{n_pairs} pairs, {n_inference_errors} errors, "
+        f"target_families={list(delta_target)}, "
+        f"retain_families={list(delta_retain)}, "
+        f"control_families={list(delta_control)}"
+    )
+    return result
