@@ -55,21 +55,22 @@ def get_decision_positions(
     Parameters
     ----------
     batch:
-        A collated batch dict.  Must contain ``_prefix_len`` — a list or
-        tensor with one entry per example.
+        A collated batch dict.  Must contain ``_prefix_len`` (one entry
+        per example) and ``attention_mask`` (for non-padding validation).
     seq_len:
         Total sequence length (for bounds validation).
 
     Returns
     -------
     positions:
-        1-D ``torch.LongTensor`` of shape ``(batch_size,)`` with the
-        token index to extract from each example.
+        1-D ``torch.LongTensor`` of shape ``(batch_size,)`` on the same
+        device as ``batch["attention_mask"]``.
 
     Raises
     ------
     RuntimeError
-        If ``_prefix_len`` is missing or any value is out of bounds.
+        If ``_prefix_len`` is missing, any value is out of bounds,
+        batch cardinality mismatches, or prefix extends into padding.
     """
     prefix_len_raw = batch.get("_prefix_len")
     if prefix_len_raw is None:
@@ -77,6 +78,14 @@ def get_decision_positions(
             "R2MU decision-position extraction requires _prefix_len "
             "in the batch.  Ensure both ForgetDataset and RetainDataset "
             "store _prefix_len and the collate function preserves it."
+        )
+
+    # P1-3: Require attention_mask for non-padding validation.
+    attention_mask = batch.get("attention_mask")
+    if attention_mask is None:
+        raise RuntimeError(
+            "R2MU decision-position extraction requires attention_mask "
+            "in the batch for non-padding boundary validation."
         )
 
     # Normalise to a list of ints.
@@ -87,11 +96,43 @@ def get_decision_positions(
     else:
         prefix_lens = [int(prefix_len_raw)]
 
+    # P1-3: Validate batch cardinality.
+    batch_size = attention_mask.shape[0]
+    if len(prefix_lens) != batch_size:
+        raise RuntimeError(
+            f"R2MU _prefix_len cardinality mismatch: "
+            f"got {len(prefix_lens)} entries for batch_size={batch_size}"
+        )
+
+    # P1-3: Compute non-padding lengths from attention_mask.
+    non_padding_lengths = attention_mask.sum(dim=1).long()
+    if torch.is_tensor(non_padding_lengths):
+        non_padding_list = non_padding_lengths.tolist()
+    else:
+        non_padding_list = list(non_padding_lengths)
+
+    # Determine output device from attention_mask.
+    device = attention_mask.device
+
     positions = []
     for i, pl in enumerate(prefix_lens):
+        np_len = int(non_padding_list[i])
         if pl <= 0:
             raise RuntimeError(
                 f"_prefix_len[{i}]={pl} must be > 0"
+            )
+        # P1-3: Validate against actual non-padding length.
+        if pl > np_len:
+            raise RuntimeError(
+                f"_prefix_len[{i}]={pl} exceeds non_padding_length={np_len} "
+                f"(prefix extends into padding)"
+            )
+        # P1-3: Supervised B9 requires answer tokens after prefix.
+        if pl >= np_len:
+            raise RuntimeError(
+                f"R2MU _prefix_len[{i}]={pl} reaches the end of the "
+                f"non-padding sequence (length={np_len}); "
+                f"expected supervised answer tokens after the prefix"
             )
         if pl > seq_len:
             raise RuntimeError(
@@ -99,7 +140,7 @@ def get_decision_positions(
             )
         positions.append(pl - 1)
 
-    return torch.tensor(positions, dtype=torch.long)
+    return torch.tensor(positions, dtype=torch.long, device=device)
 
 
 # --------------------------------------------------------------------------- #
@@ -316,27 +357,33 @@ def _collect_representations(
             model(**model_kwargs)
 
         if "repr" in hook_output:
-            # P0-R2MU: Extract hidden state at the pre-answer decision
-            # position (_prefix_len - 1), NOT the last non-padding token.
+            # P0-R2MU / P1-3: Extract hidden state at the pre-answer
+            # decision position (_prefix_len - 1).
             h = hook_output["repr"]
             if h.dim() == 3:
-                # Determine which dim is hidden_size
+                # Determine which dim is hidden_size.
                 hidden_dim = None
                 for d in [1, 2]:
                     if h.shape[d] == hidden_size:
                         hidden_dim = d
                         break
-                decision_pos = get_decision_positions(batch, h.size(1))
-                batch_idx = torch.arange(h.size(0))
+                # P1-3: Determine actual seq dimension.
                 if hidden_dim == 2:
-                    # Standard layout: (batch, seq, hidden)
+                    seq_dim_len = h.shape[1]  # (batch, seq, hidden)
+                elif hidden_dim == 1:
+                    seq_dim_len = h.shape[2]  # (batch, hidden, seq)
+                else:
+                    raise RuntimeError(
+                        f"Unable to identify hidden dimension for "
+                        f"tensor shape {tuple(h.shape)} "
+                        f"(expected hidden_size={hidden_size})"
+                    )
+                decision_pos = get_decision_positions(batch, seq_dim_len)
+                batch_idx = torch.arange(h.size(0), device=h.device)
+                if hidden_dim == 2:
                     repr_extracted = h[batch_idx, decision_pos]
                 elif hidden_dim == 1:
-                    # Unusual layout: (batch, hidden, seq)
                     repr_extracted = h[batch_idx, :, decision_pos]
-                else:
-                    # Fallback: assume dim=1 is sequence
-                    repr_extracted = h[batch_idx, decision_pos]
             else:
                 repr_extracted = h
             representations.append(repr_extracted.cpu())
@@ -753,29 +800,40 @@ class R2MUAdapted:
         for h in handles:
             h.remove()
 
-        # P0-R2MU: Extract representations at the pre-answer decision
-        # position (_prefix_len - 1), NOT the last non-padding token.
+        # P0-R2MU / P1-3: Extract representations at the pre-answer
+        # decision position (_prefix_len - 1).
+        _hs = self._get_hidden_size(model)
         for layer_idx in selected_layers:
             if layer_idx in hook_outputs:
                 h = hook_outputs[layer_idx]
                 if h.dim() == 3:
-                    # Determine which dim is hidden_size
+                    # Determine which dim is hidden_size.
                     hidden_dim = None
                     for d in [1, 2]:
-                        if h.shape[d] == self._get_hidden_size(model):
+                        if h.shape[d] == _hs:
                             hidden_dim = d
                             break
-                    decision_pos = get_decision_positions(batch, h.size(1))
-                    batch_idx = torch.arange(h.size(0))
+                    # P1-3: Determine actual seq dimension.
                     if hidden_dim == 2:
-                        # Standard layout: (batch, seq, hidden)
+                        seq_dim_len = h.shape[1]
+                    elif hidden_dim == 1:
+                        seq_dim_len = h.shape[2]
+                    else:
+                        raise RuntimeError(
+                            f"Unable to identify hidden dimension for "
+                            f"tensor shape {tuple(h.shape)} "
+                            f"(expected hidden_size={_hs})"
+                        )
+                    decision_pos = get_decision_positions(
+                        batch, seq_dim_len,
+                    )
+                    batch_idx = torch.arange(
+                        h.size(0), device=h.device,
+                    )
+                    if hidden_dim == 2:
                         repr_extracted = h[batch_idx, decision_pos]
                     elif hidden_dim == 1:
-                        # Unusual layout: (batch, hidden, seq)
                         repr_extracted = h[batch_idx, :, decision_pos]
-                    else:
-                        # Fallback: assume dim=1 is sequence
-                        repr_extracted = h[batch_idx, decision_pos]
                 else:
                     repr_extracted = h
                 representations.append(repr_extracted)

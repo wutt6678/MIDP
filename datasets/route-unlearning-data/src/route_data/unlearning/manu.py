@@ -563,6 +563,7 @@ class MANU:
         logger.info(f"Pre-prune state hash: {pre_prune_hash[:16]}...")
 
         results = {}
+        restore_records = {}
         for prune_rate in self.config.prune_rates:
             logger.info(f"Step 3: Pruning at {prune_rate * 100:.0f}% ...")
 
@@ -629,17 +630,35 @@ class MANU:
 
             # Restore original weights for next prune rate
             model.load_state_dict(original_state)
-            # P1-18: Verify restoration.
-            post_restore_hash = _state_dict_sha256(
-                {n: p.cpu().clone() for n, p in model.state_dict().items()}
-            )
+            # P1-2: Hash restored state directly (no second full clone).
+            # _state_dict_sha256 internally moves tensors to CPU.
+            post_restore_hash = _state_dict_sha256(model.state_dict())
             restore_verified = post_restore_hash == pre_prune_hash
+
+            # P1-5/6: Per-rate restore metadata.
             prune_info["restore_verified"] = restore_verified
+            prune_info["pre_prune_state_hash"] = pre_prune_hash
+            prune_info["post_restore_state_hash"] = post_restore_hash
+
+            restore_records[rate_str] = {
+                "pre_prune_state_hash": pre_prune_hash,
+                "post_restore_state_hash": post_restore_hash,
+                "restore_verified": restore_verified,
+            }
+
             if not restore_verified:
                 logger.error(
                     f"MANU prune_{rate_str}: restoration FAILED "
                     f"(pre={pre_prune_hash[:16]}..., "
                     f"post={post_restore_hash[:16]}...)"
+                )
+                raise RuntimeError(
+                    f"MANU restoration verification failed after "
+                    f"prune_{rate_str}%. "
+                    f"Pre-prune hash: {pre_prune_hash[:16]}..., "
+                    f"post-restore hash: {post_restore_hash[:16]}.... "
+                    f"A failed restore would contaminate subsequent "
+                    f"prune-rate evaluations."
                 )
             else:
                 logger.info(
@@ -650,28 +669,40 @@ class MANU:
         # Clean up
         del original_state
 
+        # P1-5/6: Aggregate restore verification across all rates.
+        all_restores_verified = all(
+            record["restore_verified"]
+            for record in restore_records.values()
+        )
+
         return {
             "inventory": inventory.get("_summary", {}),
             "importance": importance_info,
             "pruning": results,
-            # P1-18: Restore verification metadata.
-            "pre_prune_state_hash": pre_prune_hash,
-            "post_restore_state_hash": post_restore_hash,
-            "restore_verified": restore_verified,
+            # P1-5/6: Restore verification summary.
+            "restore_records": restore_records,
+            "all_restores_verified": all_restores_verified,
         }
 
 
 def _state_dict_sha256(state_dict: dict[str, torch.Tensor]) -> str:
-    """Compute SHA-256 of a model state dict for restore verification (P1-18).
+    """Compute SHA-256 of a model state dict for restore verification.
 
-    Hashes the raw bytes of each tensor in sorted key order.
+    Hashes each tensor's key, shape, dtype, and raw bytes in sorted key
+    order.  Uses ``view(torch.uint8)`` to safely handle bfloat16 and other
+    dtypes that NumPy cannot directly represent.
+
+    Supports: bfloat16, float16, float32, float64, int32, int64, bool.
     """
     h = hashlib.sha256()
     for key in sorted(state_dict.keys()):
-        t = state_dict[key]
-        raw = t.detach().contiguous().cpu().numpy().tobytes()
+        t = state_dict[key].detach().contiguous().cpu()
         h.update(key.encode("utf-8"))
-        h.update(raw)
+        h.update(str(tuple(t.shape)).encode("utf-8"))
+        h.update(str(t.dtype).encode("utf-8"))
+        # view(uint8) avoids TypeError for bfloat16 → NumPy conversion.
+        raw_bytes = t.view(torch.uint8).numpy().tobytes()
+        h.update(raw_bytes)
     return h.hexdigest()
 
 

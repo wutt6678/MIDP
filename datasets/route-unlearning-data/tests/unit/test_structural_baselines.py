@@ -33,6 +33,7 @@ from route_data.unlearning.comparison_framework import (
 )
 from route_data.unlearning.manu import (
     MANUConfig,
+    _state_dict_sha256,
     build_neuron_inventory,
     prune_neurons,
     select_neurons_to_prune,
@@ -465,6 +466,101 @@ class TestMANUConfig:
         assert 0.10 in rates
 
 
+class TestStateDictSha256:
+    """P0-1 / P1-5/6: MANU state hashing tests.
+
+    Proves that ``_state_dict_sha256()`` is safe for bfloat16,
+    deterministic, sensitive to parameter changes, and shape/dtype-aware.
+    """
+
+    # -- P0-1/4: bfloat16 regression test ------------------------------ #
+
+    def test_bfloat16_no_error(self) -> None:
+        """bfloat16 tensors must hash without TypeError."""
+        state = {
+            "layer.weight": torch.randn(4, 4, dtype=torch.bfloat16),
+        }
+        digest = _state_dict_sha256(state)
+        assert isinstance(digest, str)
+        assert len(digest) == 64
+
+    def test_bfloat16_deterministic(self) -> None:
+        """bfloat16 hash is stable across repeated calls."""
+        state = {
+            "layer.weight": torch.randn(4, 4, dtype=torch.bfloat16),
+        }
+        assert _state_dict_sha256(state) == _state_dict_sha256(state)
+
+    # -- P1-5/20: Multiple dtypes -------------------------------------- #
+
+    @pytest.mark.parametrize(
+        "dtype",
+        [torch.float32, torch.float16, torch.bfloat16, torch.int64],
+    )
+    def test_multiple_dtypes(self, dtype: torch.dtype) -> None:
+        """Hash works for various dtypes and returns 64-char SHA-256."""
+        if dtype in (torch.int64,):
+            t = torch.randint(0, 100, (3, 3), dtype=dtype)
+        else:
+            t = torch.randn(3, 3).to(dtype)
+        state = {"w": t}
+        digest = _state_dict_sha256(state)
+        assert len(digest) == 64
+
+    # -- P1-5/2: Deterministic hash ------------------------------------ #
+
+    def test_deterministic_deepcopy(self) -> None:
+        """hash(state) == hash(deepcopy(state))."""
+        import copy
+        state = {"a": torch.randn(2, 3), "b": torch.randn(4)}
+        state_copy = copy.deepcopy(state)
+        assert _state_dict_sha256(state) == _state_dict_sha256(state_copy)
+
+    def test_deterministic_repeated(self) -> None:
+        """hash(state) == hash(state) across repeated calls."""
+        state = {"x": torch.randn(5, 5)}
+        h1 = _state_dict_sha256(state)
+        h2 = _state_dict_sha256(state)
+        h3 = _state_dict_sha256(state)
+        assert h1 == h2 == h3
+
+    # -- P1-5/3: Sensitive to parameter changes ------------------------ #
+
+    def test_changed_parameter(self) -> None:
+        """Modifying a weight changes the hash."""
+        state = {"some.weight": torch.randn(4, 4)}
+        hash_before = _state_dict_sha256(state)
+        state["some.weight"][0, 0] += 1.0
+        hash_after = _state_dict_sha256(state)
+        assert hash_before != hash_after
+
+    # -- P1-5/21: Key-order independence ------------------------------- #
+
+    def test_key_order_independence(self) -> None:
+        """Insertion order must not affect hash (sorted keys)."""
+        t_a = torch.randn(3)
+        t_b = torch.randn(3)
+        state_ab = {"a": t_a, "b": t_b}
+        state_ba = {"b": t_b, "a": t_a}
+        assert _state_dict_sha256(state_ab) == _state_dict_sha256(state_ba)
+
+    # -- P1-5/22: Shape-sensitive -------------------------------------- #
+
+    def test_shape_sensitive(self) -> None:
+        """[1,2,3,4] must not hash identically to [[1,2],[3,4]]."""
+        flat = {"w": torch.tensor([1.0, 2.0, 3.0, 4.0])}
+        shaped = {"w": torch.tensor([[1.0, 2.0], [3.0, 4.0]])}
+        assert _state_dict_sha256(flat) != _state_dict_sha256(shaped)
+
+    # -- P1-5/23: dtype-sensitive -------------------------------------- #
+
+    def test_dtype_sensitive(self) -> None:
+        """Same values in float32 vs float16 must hash differently."""
+        t32 = {"w": torch.tensor([1.0, 2.0], dtype=torch.float32)}
+        t16 = {"w": torch.tensor([1.0, 2.0], dtype=torch.float16)}
+        assert _state_dict_sha256(t32) != _state_dict_sha256(t16)
+
+
 # --------------------------------------------------------------------------- #
 # Tests — R²MU-adapted (B9)
 # --------------------------------------------------------------------------- #
@@ -763,7 +859,10 @@ class TestR2MUDecisionPosition:
 
     def test_b_multiple_answer_tokens(self) -> None:
         """prefix_len=6, answer_len=3 → decision index 5, not 8."""
-        batch = {"_prefix_len": [6]}
+        batch = {
+            "_prefix_len": [6],
+            "attention_mask": torch.ones(1, 9, dtype=torch.long),
+        }
         positions = get_decision_positions(batch, seq_len=9)
         assert positions[0].item() == 5
 
@@ -771,7 +870,10 @@ class TestR2MUDecisionPosition:
 
     def test_c_batch_different_prefix_lengths(self) -> None:
         """[5, 8, 3] → [4, 7, 2]."""
-        batch = {"_prefix_len": [5, 8, 3]}
+        batch = {
+            "_prefix_len": [5, 8, 3],
+            "attention_mask": torch.ones(3, 12, dtype=torch.long),
+        }
         positions = get_decision_positions(batch, seq_len=12)
         assert positions.tolist() == [4, 7, 2]
 
@@ -802,19 +904,28 @@ class TestR2MUDecisionPosition:
 
     def test_f_zero_prefix_len_raises(self) -> None:
         """_prefix_len=0 is invalid."""
-        batch = {"_prefix_len": [0]}
+        batch = {
+            "_prefix_len": [0],
+            "attention_mask": torch.ones(1, 8, dtype=torch.long),
+        }
         with pytest.raises(RuntimeError, match="must be > 0"):
             get_decision_positions(batch, seq_len=8)
 
     def test_f_prefix_len_exceeds_seq_len_raises(self) -> None:
         """_prefix_len > seq_len is invalid."""
-        batch = {"_prefix_len": [12]}
-        with pytest.raises(RuntimeError, match="exceeds seq_len"):
+        batch = {
+            "_prefix_len": [12],
+            "attention_mask": torch.ones(1, 10, dtype=torch.long),
+        }
+        with pytest.raises(RuntimeError, match="exceeds"):
             get_decision_positions(batch, seq_len=10)
 
     def test_f_prefix_len_as_tensor(self) -> None:
         """_prefix_len as a tensor is handled correctly."""
-        batch = {"_prefix_len": torch.tensor([5, 3])}
+        batch = {
+            "_prefix_len": torch.tensor([5, 3]),
+            "attention_mask": torch.ones(2, 8, dtype=torch.long),
+        }
         positions = get_decision_positions(batch, seq_len=8)
         assert positions.tolist() == [4, 2]
 
@@ -900,6 +1011,57 @@ class TestR2MUDecisionPosition:
     # same get_decision_positions() path.  The integration is verified
     # by the fact that both _collect_representations and _hook_representations
     # call get_decision_positions() — tested above in A-F.
+
+    # -- P1-3/4: Boundary-validation regression tests -------------------- #
+
+    def test_padded_invalid_prefix_raises(self) -> None:
+        """P1-3/15: prefix_len=9, non_padding=8 → extends into padding."""
+        batch = {
+            "_prefix_len": [9],
+            "attention_mask": torch.tensor([
+                [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+            ]),
+        }
+        with pytest.raises(RuntimeError, match="extends into padding"):
+            get_decision_positions(batch, seq_len=12)
+
+    def test_prefix_at_end_raises(self) -> None:
+        """P1-3/16: prefix_len == non_padding → no answer tokens."""
+        batch = {
+            "_prefix_len": [8],
+            "attention_mask": torch.tensor([
+                [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+            ]),
+        }
+        with pytest.raises(
+            RuntimeError, match="expected supervised answer tokens",
+        ):
+            get_decision_positions(batch, seq_len=12)
+
+    def test_batch_cardinality_mismatch_raises(self) -> None:
+        """P1-3/17: _prefix_len has 1 entry but batch_size=2."""
+        batch = {
+            "_prefix_len": [5],
+            "attention_mask": torch.ones(2, 10, dtype=torch.long),
+        }
+        with pytest.raises(RuntimeError, match="cardinality mismatch"):
+            get_decision_positions(batch, seq_len=10)
+
+    def test_missing_attention_mask_raises(self) -> None:
+        """P1-3: Missing attention_mask must hard-fail."""
+        batch = {"_prefix_len": [5]}
+        with pytest.raises(RuntimeError, match="requires attention_mask"):
+            get_decision_positions(batch, seq_len=10)
+
+    def test_device_placement(self) -> None:
+        """P1-3/18: positions.device == attention_mask.device."""
+        batch = {
+            "_prefix_len": [3, 5],
+            "attention_mask": torch.ones(2, 8, dtype=torch.long),
+        }
+        positions = get_decision_positions(batch, seq_len=8)
+        assert positions.device == batch["attention_mask"].device
+        assert positions.dtype == torch.long
 
 
 def _is_transformer_layer_for_test(name: str) -> bool:
