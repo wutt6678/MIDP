@@ -688,6 +688,26 @@ def evaluate_intervention(
     )
     post_results: list[BaselineResult] = evaluator.run_evaluation()
     results_path = evaluator.save_results()
+
+    # -- Strict frozen-contract validation (P0-2) -------------------------- #
+    strict_report = evaluator.validate_results()
+    if not strict_report.get("pass", False):
+        failed = [
+            k for k, v in strict_report.get("checks", {}).items()
+            if not v
+        ]
+        raise RuntimeError(
+            f"evaluate_intervention({method_name}): strict validation FAILED "
+            f"— {failed}"
+        )
+
+    pair_report = evaluator.validate_against_baseline()
+    if not pair_report.get("exact_match", False):
+        raise RuntimeError(
+            f"evaluate_intervention({method_name}): exact pairing FAILED — "
+            f"{pair_report}"
+        )
+
     summary = evaluator.generate_summary()
 
     # -- Load baseline results for ΔM computation ----------------------------- #
@@ -798,7 +818,19 @@ def evaluate_intervention(
         "eval_output_dir": str(output_dir),
         "results_path": str(results_path),
         "adapter_path": str(adapter_path) if adapter_path else None,
+        # Strict validation fields (P0-2).
+        "strict_validation_pass": strict_report.get("pass", False),
+        "exact_pairing_pass": pair_report.get("exact_match", False),
+        "expected_pair_count": 500,
+        "actual_pair_count": n_pairs,
     }
+
+    # -- Persist as the canonical suite artifact (P0-1) ---------------------- #
+    eval_results_path = output_dir / "eval_results.json"
+    with open(eval_results_path, "w") as f:
+        json.dump(result, f, indent=2, default=str)
+        f.write("\n")
+    logger.info(f"Wrote eval_results.json: {eval_results_path}")
 
     logger.info(
         f"evaluate_intervention({method_name}): "

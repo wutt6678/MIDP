@@ -45,6 +45,68 @@ logger = logging.getLogger("run_mllmu_baseline")
 
 
 # --------------------------------------------------------------------------- #
+# Common evaluation wiring (P0-1)
+# --------------------------------------------------------------------------- #
+
+def _resolve_eval_params(config: dict[str, Any], training_config) -> dict[str, Any]:
+    """Resolve parameters for evaluate_intervention from merged config."""
+    data = config.get("data", {})
+    output_dir = Path(training_config.output_dir)
+
+    baseline_results_path = data.get("baseline_results_path", "")
+    if not baseline_results_path:
+        # Conventional default location for pre-unlearning baseline.
+        conventional = (
+            Path(training_config.output_dir).parent.parent
+            / "baseline" / "results.jsonl"
+        )
+        if conventional.is_file():
+            baseline_results_path = str(conventional)
+
+    return {
+        "probe_dataset_path": data.get(
+            "route_probe_path",
+            "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/"
+            "fiubench_route_conflict_eval.jsonl",
+        ),
+        "output_dir": str(output_dir / "eval"),
+        "baseline_results_path": baseline_results_path,
+    }
+
+
+def _run_eval(
+    method_label: str,
+    model,
+    processor,
+    adapter_path,
+    config: dict[str, Any],
+    training_config,
+) -> dict[str, Any]:
+    """Call evaluate_intervention and persist eval_results.json."""
+    from route_data.eval.post_unlearning_eval import evaluate_intervention
+
+    params = _resolve_eval_params(config, training_config)
+    project_root = Path(__file__).resolve().parent.parent
+    probe_path = project_root / params["probe_dataset_path"]
+
+    logger.info(f"Running common 500-probe evaluation: {method_label}")
+    result = evaluate_intervention(
+        model=model,
+        processor=processor,
+        adapter_path=str(adapter_path) if adapter_path else None,
+        probe_dataset_path=str(probe_path),
+        output_dir=params["output_dir"],
+        baseline_results_path=params.get("baseline_results_path", ""),
+        method_name=method_label,
+    )
+    logger.info(
+        f"Evaluation complete: {result.get('exact_pair_count', 0)} pairs, "
+        f"{result.get('inference_errors', 0)} errors"
+    )
+    return result
+
+
+# --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
 
@@ -280,6 +342,14 @@ def main() -> None:
             output_dir=training_config.output_dir,
         )
         logger.info("Prompting baseline complete")
+
+        # Wire through common 500-probe evaluation (P0-1).
+        eval_result = _run_eval(
+            "prompting", model, processor, None, config, training_config,
+        )
+        if not eval_result.get("strict_validation_pass"):
+            logger.error("Prompting: strict validation FAILED")
+            sys.exit(1)
         return
 
     if method_name == "midp_candidate_margin":
@@ -328,6 +398,14 @@ def main() -> None:
             with open(result_json) as f:
                 loaded = json.load(f)
             result.update(loaded)
+
+        # Validate that evidence contains required comparison fields.
+        for field_name in ("delta_target", "delta_retain", "delta_control"):
+            if not result.get(field_name):
+                logger.error(
+                    f"MIDP-CM: missing required field '{field_name}' in evidence"
+                )
+                sys.exit(1)
 
         logger.info(
             f"MIDP-CM: evidence bound from {e2b_path} → {output_dir}"
@@ -438,8 +516,25 @@ def main() -> None:
                 num_optimizer_steps=config.get("training", {}).get("max_optimizer_steps", 0),
                 output_dir=training_config.output_dir,
             )
+
+            # Eval callback: evaluates the live pruned model BEFORE restoration.
+            # PeftModel.save_pretrained() cannot preserve base-weight zeroing,
+            # so evaluation must happen on the in-memory pruned model (P0-8).
+            def _manu_eval_callback(
+                rate_str: str, pruned_model,
+            ) -> dict[str, Any]:
+                return _run_eval(
+                    f"manu_prune_{rate_str}",
+                    pruned_model, processor, None,
+                    config, training_config,
+                )
+
             runner = MANU(method_cfg)
-            summary = runner.run(model, forget_loader, retain_loader, device=str(training_config.device))
+            summary = runner.run(
+                model, forget_loader, retain_loader,
+                device=str(training_config.device),
+                eval_callback=_manu_eval_callback,
+            )
 
         elif method_name == "r2mu_adapted":
             from route_data.unlearning import R2MUAdapted, R2MUAdaptedConfig
@@ -470,6 +565,19 @@ def main() -> None:
 
         logger.info(f"Training complete: {summary}")
         logger.info(f"Output: {training_config.output_dir}")
+
+        # Common 500-probe evaluation for structural methods (P0-1).
+        if method_name in ("mmunlearner", "r2mu_adapted"):
+            adapter_p = (
+                Path(training_config.output_dir)
+                / "checkpoints" / "adapter_final"
+            )
+            eval_result = _run_eval(
+                method_name, model, processor, adapter_p, config, training_config,
+            )
+            if not eval_result.get("strict_validation_pass"):
+                logger.error(f"{method_name}: strict validation FAILED")
+                sys.exit(1)
         return
 
     # Build objective
@@ -492,6 +600,21 @@ def main() -> None:
 
     logger.info(f"Training complete: {summary}")
     logger.info(f"Output: {training_config.output_dir}")
+
+    # Save LoRA adapter and run common 500-probe evaluation (P0-1).
+    adapter_save_path = (
+        Path(training_config.output_dir) / "checkpoints" / "adapter_final"
+    )
+    adapter_save_path.mkdir(parents=True, exist_ok=True)
+    model.save_pretrained(str(adapter_save_path))
+    logger.info(f"Saved LoRA adapter: {adapter_save_path}")
+
+    eval_result = _run_eval(
+        method_name, model, processor, adapter_save_path, config, training_config,
+    )
+    if not eval_result.get("strict_validation_pass"):
+        logger.error(f"{method_name}: strict validation FAILED")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
