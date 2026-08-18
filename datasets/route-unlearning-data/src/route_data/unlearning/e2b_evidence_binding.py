@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,30 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _compute_group_probe_counts(
+    delta_accum: dict[str, dict[str, list[float]]],
+    name_only_accum: dict[str, list[float]],
+) -> dict[str, dict[str, int]]:
+    """P0-19: Compute per-family per-group probe counts.
+    
+    Returns a dict like:
+    {
+        "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+        ...
+    }
+    """
+    counts: dict[str, dict[str, int]] = {}
+    for grp in ("target", "retain", "control", "untargeted"):
+        counts[grp] = {}
+        # Binary families.
+        for family, roles in delta_accum.items():
+            abbrev = _FAMILY_ABBREV.get(family, family)
+            counts[grp][abbrev] = len(roles.get(grp, []))
+        # name_only family.
+        counts[grp]["name_only"] = len(name_only_accum.get(grp, []))
+    return counts
 
 
 def bind_e2b_b2_result(
@@ -97,12 +122,39 @@ def bind_e2b_b2_result(
                 f"Required E2B-B2 artifact missing: {name} at {path}"
             )
 
-    # Also check post_eval directory.
+    # Also check post_eval directory and bind actual files (P0-8).
     post_eval_dir = e2b / "post_eval" / "optimizer_step_125"
     if not post_eval_dir.is_dir():
         raise FileNotFoundError(
             f"Post-eval directory not found: {post_eval_dir}"
         )
+    
+    # P0-8: Bind actual post-eval result artifacts.
+    post_eval_artifacts = {
+        "results_jsonl": post_eval_dir / "results.jsonl",
+        "manifest_json": post_eval_dir / "manifest.json",
+    }
+    # Optional artifacts.
+    optional_post_eval = {
+        "summary_json": post_eval_dir / "summary.json",
+        "strict_validation_json": post_eval_dir / "strict_validation.json",
+        "pairing_validation_json": post_eval_dir / "pairing_validation.json",
+    }
+    
+    # Check required post-eval artifacts.
+    for name, path in post_eval_artifacts.items():
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"Required post-eval artifact missing: {name} at {path}"
+            )
+    
+    # Compute SHAs for post-eval artifacts.
+    post_eval_shas: dict[str, str] = {}
+    for name, path in post_eval_artifacts.items():
+        post_eval_shas[name] = _sha256_file(path)
+    for name, path in optional_post_eval.items():
+        if path.is_file():
+            post_eval_shas[name] = _sha256_file(path)
 
     # -- Compute artifact SHAs ---------------------------------------------- #
     artifact_shas: dict[str, str] = {}
@@ -150,20 +202,21 @@ def bind_e2b_b2_result(
         if identity_id:
             identity_groups[identity_id] = group
 
-        delta = pd.get("delta_signed_margin")
-
         # DV accuracy from pre/post correctness.
         if family == "direct_visual":
             post_correct = pd.get("post_correct", False)
             dv_correct_per_group[group].append(post_correct)
 
+        # P0-5: name_only uses delta_token_overlap, not delta_signed_margin.
         if family == "name_only":
-            # name_only uses a different metric — track separately (P0-8).
-            if delta is not None:
-                name_only_accum[group].append(delta)
-        else:
-            if delta is not None:
-                delta_accum[family][group].append(delta)
+            delta_token_overlap = pd.get("delta_token_overlap")
+            if delta_token_overlap is not None:
+                name_only_accum[group].append(float(delta_token_overlap))
+            continue
+
+        delta = pd.get("delta_signed_margin")
+        if delta is not None:
+            delta_accum[family][group].append(float(delta))
 
     # Average per (family, group).
     def _avg_deltas(group_key: str) -> dict[str, float]:
@@ -180,12 +233,13 @@ def bind_e2b_b2_result(
     delta_control = _avg_deltas("control")
     delta_untargeted = _avg_deltas("untargeted")
 
-    # -- name_only deltas (P0-8) ------------------------------------------- #
+    # -- name_only deltas (P0-5/6/7) --------------------------------------- #
+    # P0-6: Historical name_only uses token_overlap, not normalized_exact_match.
     name_only_delta: dict[str, dict[str, float]] = {}
     for grp in ("target", "retain", "control", "untargeted"):
         vals = name_only_accum.get(grp, [])
         if vals:
-            name_only_delta[grp] = {"normalized_exact_match": sum(vals) / len(vals)}
+            name_only_delta[grp] = {"token_overlap": sum(vals) / len(vals)}
         else:
             name_only_delta[grp] = {}
 
@@ -199,6 +253,21 @@ def bind_e2b_b2_result(
     dv_accuracy["global"] = (
         sum(all_dv_corrects) / len(all_dv_corrects) if all_dv_corrects else 0.0
     )
+    
+    # P1-30: Finite-value validation.
+    import math
+    for grp_deltas in delta_accum.values():
+        for grp_vals in grp_deltas.values():
+            for val in grp_vals:
+                if not math.isfinite(val):
+                    raise ValueError(f"Non-finite binary delta: {val}")
+    for grp_vals in name_only_accum.values():
+        for val in grp_vals:
+            if not math.isfinite(val):
+                raise ValueError(f"Non-finite name_only delta: {val}")
+    for grp, acc in dv_accuracy.items():
+        if not (0 <= acc <= 1):
+            raise ValueError(f"dv_accuracy[{grp}]={acc} out of [0, 1]")
 
     # -- Identity group counts (P0-6) -------------------------------------- #
     group_identity_counts: dict[str, int] = {}
@@ -220,17 +289,97 @@ def bind_e2b_b2_result(
     pairing_pass = pairing.get("pass", False)
     expected_n = pairing.get("expected_n", 0)
     post_n = pairing.get("post_rows", 0)
+    
+    # P1-28: Cross-check historical pair counts.
+    baseline_n = pairing.get("baseline_rows", 0)
+    if expected_n != 500 or baseline_n != 500 or post_n != 500:
+        raise ValueError(
+            f"Pair count mismatch: expected={expected_n}, "
+            f"baseline={baseline_n}, post={post_n} (all must be 500)"
+        )
+    if len(probe_deltas) != 500:
+        raise ValueError(
+            f"paired_probe_deltas has {len(probe_deltas)} rows, expected 500"
+        )
+    unique_probe_ids = {pd.get("probe_id") for pd in probe_deltas}
+    if len(unique_probe_ids) != 500:
+        raise ValueError(
+            f"paired_probe_deltas has {len(unique_probe_ids)} unique probe IDs, expected 500"
+        )
+    
+    # P1-29: Cross-check historical family counts.
+    family_counts: dict[str, int] = defaultdict(int)
+    for pd in probe_deltas:
+        family = pd.get("family", "")
+        family_counts[family] += 1
+    expected_family_counts = {
+        "direct_visual": 100, "image_plus_name": 100,
+        "wrong_name": 100, "visual_text_conflict": 100, "name_only": 100,
+    }
+    for fam, expected in expected_family_counts.items():
+        actual = family_counts.get(fam, 0)
+        if actual != expected:
+            raise ValueError(
+                f"Family count mismatch: {fam} has {actual}, expected {expected}"
+            )
 
     # -- Build result dict -------------------------------------------------- #
     # Selection manifest SHA.
     selection_manifest_sha = ""
     if selection_manifest_path and Path(selection_manifest_path).is_file():
         selection_manifest_sha = _sha256_file(Path(selection_manifest_path))
+    
+    # P0-13: Load selection manifest to get control IDs.
+    control_ids: list[str] = []
+    target_ids: list[str] = []
+    retain_ids: list[str] = []
+    if selection_manifest_path and Path(selection_manifest_path).is_file():
+        with open(Path(selection_manifest_path)) as f:
+            sel_data = json.load(f)
+        control_ids = sorted(sel_data.get("control_identities", []))
+        target_ids = sorted(sel_data.get("target_identities", []))
+        retain_ids = sorted(sel_data.get("retain_identities", []))
+    
+    # P0-10: Build historical evidence manifest.
+    historical_evidence_manifest = {
+        "source_experiment_id": run_manifest.get("experiment_id", ""),
+        "source_code_commit": run_manifest.get("code_commit", ""),
+        "source_model_revision": run_manifest.get("base_model", {}).get("revision", ""),
+        "source_selection_provenance": str(selection_manifest_path or ""),
+        "source_artifacts": {
+            "analysis_artifacts": artifact_shas,
+            "post_eval_artifacts": post_eval_shas,
+        },
+        "binding_timestamp": time.time() if 'time' in globals() else 0,
+    }
+    
+    # Write historical evidence manifest if output_dir given.
+    historical_manifest_path = ""
+    historical_manifest_sha = ""
+    if output_dir is not None:
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        manifest_path = out / "historical_evidence_manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(historical_evidence_manifest, f, indent=2, default=str)
+            f.write("\n")
+        historical_manifest_path = str(manifest_path)
+        historical_manifest_sha = _sha256_file(manifest_path)
+        logger.info(f"Wrote historical evidence manifest: {manifest_path}")
 
     result: dict[str, Any] = {
         # P0-10: Canonical method ID and objective name.
         "method": "midp_cm",
         "objective_name": "midp_candidate_margin",
+        # P0-12: Evidence mode.
+        "evidence_mode": "historical_bound",
+        # P1-31: Validation contract version.
+        "validation_contract_version": "mllmu-baseline-suite-v1",
+        # P1-32: Evaluation scope.
+        "evaluation_scope": {
+            "mode": "full",
+            "expected_probe_count": 500,
+        },
         # Deltas per group (signed-margin, excluding name_only).
         "delta_target": delta_target,
         "delta_retain": delta_retain,
@@ -246,6 +395,8 @@ def bind_e2b_b2_result(
         # P0-6: Group counts.
         "group_identity_counts": group_identity_counts,
         "identity_counts_valid": True,
+        # P0-19: Per-family group probe counts.
+        "group_probe_counts": _compute_group_probe_counts(delta_accum, name_only_accum),
         # Validation.
         "strict_validation_pass": pairing_pass,
         "exact_pairing_pass": pairing_pass,
@@ -253,21 +404,26 @@ def bind_e2b_b2_result(
         "actual_pair_count": post_n,
         # Provenance.
         "model_revision": run_manifest.get("base_model", {}).get("revision", ""),
+        "route_probe_sha256": artifact_shas.get("paired_probe_deltas", ""),
         "selection_manifest_sha256": selection_manifest_sha,
         # E2B-B2 source provenance.
         "e2b_source": str(e2b),
         "e2b_artifact_shas": artifact_shas,
+        "post_eval_artifact_shas": post_eval_shas,
+        # P0-10: Historical evidence manifest.
+        "historical_evidence_manifest_path": historical_manifest_path,
+        "historical_evidence_manifest_sha256": historical_manifest_sha,
         # P0-25: Group definition.
         "group_definition": {
             "selection_manifest_path": str(selection_manifest_path or ""),
             "selection_manifest_sha256": selection_manifest_sha,
-            "target_identity_ids": sorted(
+            "target_identity_ids": target_ids or sorted(
                 run_manifest.get("forget_identities", [])
             ),
-            "retain_identity_ids": sorted(
+            "retain_identity_ids": retain_ids or sorted(
                 run_manifest.get("retain_identities", [])
             ),
-            "control_identity_ids": [],  # Derived from selection manifest.
+            "control_identity_ids": control_ids,  # P0-13: Populated from selection manifest.
             "untargeted_identity_count": group_identity_counts.get("untargeted", 0),
         },
         # Training metadata from the run manifest.

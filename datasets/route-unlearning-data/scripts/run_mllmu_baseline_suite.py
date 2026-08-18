@@ -211,13 +211,53 @@ def _validate_eval_result(
         if key not in dv_acc:
             return f"dv_accuracy missing key: {key}"
 
-    # P0-26: group counts must match 2/2/2/94
+    # P0-26: group counts must match 2/2/2/94 (P0-16: fail-closed).
     group_counts = eval_metrics.get("group_identity_counts", {})
     expected_counts = {"target": 2, "retain": 2, "control": 2, "untargeted": 94}
     for grp, expected in expected_counts.items():
         actual = group_counts.get(grp)
-        if actual is not None and actual != expected:
+        if actual is None:
+            return f"group_identity_counts[{grp}] is missing (fail-closed)"
+        if actual != expected:
             return f"group_identity_counts[{grp}]={actual}, expected {expected}"
+    
+    # P0-18: Require all four binary families in every delta group.
+    required_families = {"DV", "IPN", "WN", "VTC"}
+    for field in ("delta_target", "delta_retain", "delta_control", "delta_untargeted"):
+        delta_dict = eval_metrics.get(field, {})
+        if not isinstance(delta_dict, dict):
+            return f"{field} is not a dict"
+        missing = required_families - set(delta_dict.keys())
+        if missing:
+            return f"{field} missing binary families: {sorted(missing)}"
+    
+    # P0-17: Fail-closed provenance validation.
+    # For full comparison evidence, require non-empty provenance fields.
+    for prov_field in ("route_probe_sha256", "selection_manifest_sha256", "model_revision"):
+        prov_value = eval_metrics.get(prov_field, "")
+        if not prov_value:
+            return f"{prov_field} is empty (fail-closed)"
+    
+    # P0-20: Enforce per-family 2/2/2/94 counts.
+    group_probe_counts = eval_metrics.get("group_probe_counts", {})
+    if group_probe_counts:
+        expected_per_family = {
+            "target": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+            "retain": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+            "control": {"DV": 2, "IPN": 2, "WN": 2, "VTC": 2, "name_only": 2},
+            "untargeted": {"DV": 94, "IPN": 94, "WN": 94, "VTC": 94, "name_only": 94},
+        }
+        for grp, expected_families in expected_per_family.items():
+            actual_families = group_probe_counts.get(grp, {})
+            for fam, expected_count in expected_families.items():
+                actual_count = actual_families.get(fam)
+                if actual_count is None:
+                    return f"group_probe_counts[{grp}][{fam}] is missing"
+                if actual_count != expected_count:
+                    return (
+                        f"group_probe_counts[{grp}][{fam}]={actual_count}, "
+                        f"expected {expected_count}"
+                    )
 
     # P0-20: method identifier must match expected_method
     actual_method = eval_metrics.get("method", "")
@@ -727,6 +767,20 @@ def run_suite_preflight(
                    str(method_dir))
         except OSError as exc:
             _check(f"output_{method}_writable", False, str(exc))
+    
+    # P0-3: Verify runtime output root is git-ignored.
+    runtime_root_str = str(OUTPUT_ROOT)
+    try:
+        r = subprocess.run(
+            ["git", "check-ignore", "-q", runtime_root_str],
+            capture_output=True, text=True, check=False,
+            cwd=PROJECT_ROOT,
+        )
+        runtime_ignored = (r.returncode == 0)
+        _check("runtime_output_root_ignored", runtime_ignored,
+               f"path={runtime_root_str} ignored={runtime_ignored}")
+    except FileNotFoundError:
+        _check("runtime_output_root_ignored", False, "git not available")
 
     # -- Assemble report ------------------------------------------------- #
     all_passed = all(c["pass"] for c in checks)
@@ -736,6 +790,8 @@ def run_suite_preflight(
         "methods": methods,
         "timestamp": time.time(),
         "code_commit": code_commit,
+        "runtime_output_root": runtime_root_str,
+        "runtime_output_root_ignored": runtime_ignored if 'runtime_ignored' in locals() else False,
     }
 
     report_path = OUTPUT_ROOT / "suite_preflight_report.json"
@@ -858,6 +914,12 @@ def main() -> None:
         logger.info(f"{'#'*60}")
 
         config = _load_method_config(method_key)
+        
+        # P0-1: CLI --runtime-output-root overrides YAML runtime.output_dir.
+        if runtime_root:
+            config.setdefault("runtime", {})
+            config["runtime"]["output_dir"] = str(OUTPUT_ROOT / method_key)
+        
         result = _run_single_method(method_key, config, suite_state)
         results.append(result)
 

@@ -56,6 +56,25 @@ jobs:
 
       - name: Lint (ruff)
         run: ruff check src tests scripts
+      
+      # P0-23/24: R11 CPU preflight — must not load real model or require GPU.
+      - name: R11 CPU preflight (exact-SHA gate)
+        run: |
+          EXPECTED_SHA=$(git rev-parse HEAD)
+          python scripts/run_mllmu_baseline_suite.py \
+            --preflight-only \
+            --expected-code-sha "$EXPECTED_SHA" \
+            --runtime-output-root "runtime_outputs/ci/${EXPECTED_SHA}"
+      
+      # P0-24: Verify git cleanliness after preflight.
+      - name: Post-preflight git cleanliness
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: Working tree not clean after preflight"
+            git status --porcelain
+            exit 1
+          fi
+          echo "✓ Git working tree clean after preflight"
 
   syntax:
     runs-on: ubuntu-latest
