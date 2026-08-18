@@ -425,6 +425,8 @@ class TestPromptingBaseline:
 
     def test_prompting_no_model_update(self) -> None:
         """Prompting baseline should not modify any model parameters."""
+        import tempfile
+
         from route_data.unlearning.baseline_methods import PromptingBaseline
 
         model = TinyLogitModel()
@@ -433,13 +435,35 @@ class TestPromptingBaseline:
             name: p.clone() for name, p in model.named_parameters()
         }
 
-        baseline = PromptingBaseline()
-        baseline.run_evaluation(
-            model=model,
-            processor=MagicMock(),
-            probe_dataset_path="/tmp/test_probes.jsonl",
-            output_dir="/tmp/test_prompting",
-        )
+        # Create a dummy probe file
+        with tempfile.TemporaryDirectory() as tmpdir:
+            probe_path = Path(tmpdir) / "probes.jsonl"
+            with open(probe_path, "w") as f:
+                f.write(json.dumps({
+                    "probe_id": "test-001",
+                    "sample_id": "test-sample",
+                    "identity_id": "identity-test",
+                    "benchmark": "route_conflict_eval",
+                    "probe_family": "name_only",
+                    "modality": "text-only",
+                    "question": "Test question?",
+                    "expected_evidence_source": "system-memory",
+                    "controlled_variables": [],
+                    "image_uri": None,
+                    "image_sha256": None,
+                    "registry_hash": "abc123",
+                    "target_attribute": None,
+                    "answer_label": None,
+                    "answer_text": "No answer.",
+                }) + "\n")
+
+            baseline = PromptingBaseline()
+            baseline.run_evaluation(
+                model=model,
+                processor=MagicMock(),
+                probe_dataset_path=str(probe_path),
+                output_dir="/tmp/test_prompting",
+            )
 
         # Verify no parameters changed
         for name, p in model.named_parameters():
@@ -466,10 +490,31 @@ class TestPromptingBaseline:
 
         baseline = PromptingBaseline()
         with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a dummy probe file
+            probe_path = Path(tmpdir) / "probes.jsonl"
+            with open(probe_path, "w") as f:
+                f.write(json.dumps({
+                    "probe_id": "test-001",
+                    "sample_id": "test-sample",
+                    "identity_id": "identity-test",
+                    "benchmark": "route_conflict_eval",
+                    "probe_family": "name_only",
+                    "modality": "text-only",
+                    "question": "Test question?",
+                    "expected_evidence_source": "system-memory",
+                    "controlled_variables": [],
+                    "image_uri": None,
+                    "image_sha256": None,
+                    "registry_hash": "abc123",
+                    "target_attribute": None,
+                    "answer_label": None,
+                    "answer_text": "No answer.",
+                }) + "\n")
+
             result = baseline.run_evaluation(
                 model=MagicMock(),
                 processor=MagicMock(),
-                probe_dataset_path=f"{tmpdir}/probes.jsonl",
+                probe_dataset_path=str(probe_path),
                 output_dir=tmpdir,
             )
             assert result["training"] is False
