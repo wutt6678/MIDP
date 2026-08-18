@@ -492,12 +492,17 @@ class ComparisonFramework:
         efficiency: dict[str, Any],
     ) -> str:
         """Format the conclusion as text."""
+        # Handle INCOMPLETE decisions that don't have a 'case' key (P0-17/18).
+        if "case" in decision:
+            decision_label = f"Case {decision['case']}"
+        else:
+            decision_label = decision.get("decision_status", "UNKNOWN")
         lines = [
             "=" * 80,
             "ROUTE-SELECTIVITY CONCLUSION",
             "=" * 80,
             "",
-            f"E2C Decision: Case {decision['case']}",
+            f"E2C Decision: {decision_label}",
             f"Rationale: {decision['rationale']}",
             "",
             "-" * 80,
