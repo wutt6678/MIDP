@@ -466,7 +466,13 @@ class TestPromptingBaseline:
                     "strict_final_verify_pass": True,
                     "manual_audit_pass": True,
                     "exact_ci_pass": True,
-                    "hard_stop_conditions": [],
+                    "hard_stop_conditions": {
+                        "manual_audit_matches_current_route_artifact": True,
+                        "manual_audit_route_count_matches": True,
+                        "all_artifact_hashes_verified": True,
+                        "all_commits_reachable": True,
+                        "git_dirty_false": True,
+                    },
                 }, f)
 
             baseline = PromptingBaseline()
@@ -533,7 +539,13 @@ class TestPromptingBaseline:
                     "strict_final_verify_pass": True,
                     "manual_audit_pass": True,
                     "exact_ci_pass": True,
-                    "hard_stop_conditions": [],
+                    "hard_stop_conditions": {
+                        "manual_audit_matches_current_route_artifact": True,
+                        "manual_audit_route_count_matches": True,
+                        "all_artifact_hashes_verified": True,
+                        "all_commits_reachable": True,
+                        "git_dirty_false": True,
+                    },
                 }, f)
 
             result = baseline.run_evaluation(
