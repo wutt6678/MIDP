@@ -557,9 +557,11 @@ class TestPromptingBaseline:
                 freeze_verification_path=str(freeze_path),
                 skip_research_preflight=True,
             )
-            assert result["training"] is False
-            assert result["adapter"] == "none"
-            assert result["system_prompt_baseline"] is True
+            # Verify the return schema matches evaluate_intervention() structure.
+            assert result["method"] == "mllmu_prompting"
+            assert result["adapter_path"] is None  # No adapter for prompting.
+            assert "delta_target" in result  # Schema includes delta fields.
+            assert result["exact_pair_count"] >= 0
 
             # Verify manifest file was written
             manifest_path = Path(tmpdir) / "prompting_manifest.json"
