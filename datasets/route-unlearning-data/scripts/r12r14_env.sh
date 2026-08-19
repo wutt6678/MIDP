@@ -31,7 +31,10 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 # -- Paths ----------------------------------------------------------------- #
 # Resolve the route-unlearning-data project root from this file's location.
 export SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export RUN_ROOT="${SUITE_DIR}/runtime_outputs/mllmu_baselines/${CODE_SHA}"
+# RUN_ROOT can be overridden by .frozen_env
+if [ -z "${RUN_ROOT:-}" ]; then
+    export RUN_ROOT="${SUITE_DIR}/runtime_outputs/mllmu_baselines/${CODE_SHA}"
+fi
 
 # -- Hardware info (for reports) ------------------------------------------- #
 export HARDWARE="$(nvidia-smi --query-gpu=name,memory.total \
