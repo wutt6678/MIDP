@@ -87,12 +87,14 @@ run_method() {
     local cwd
     cwd="$(pwd)"
     cd "$SUITE_DIR" || return 1
+    set +o pipefail
     python scripts/run_mllmu_baseline_suite.py \
         --only "$method" \
         --expected-code-sha "$CODE_SHA" \
         --runtime-output-root "$output_root" \
         2>&1 | tee "${output_root}/${method}.log"
     local status=$?
+    set -o pipefail
     cd "$cwd"
     if [ $status -ne 0 ]; then
         echo "FAILED: ${label}"
