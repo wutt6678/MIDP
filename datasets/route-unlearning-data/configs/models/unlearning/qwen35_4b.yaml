@@ -4,9 +4,9 @@ key: qwen35_4b
 
 model:
   id: Qwen/Qwen3.5-4B
-  revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   processor_id: Qwen/Qwen3.5-4B
-  processor_revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  processor_revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   adapter: qwen35
   trust_remote_code: true
   dtype: bfloat16
@@ -22,14 +22,14 @@ lora:
   dropout: 0.05
   scope: language_attention_only
   target_leaf_names: [q_proj, k_proj, v_proj, o_proj]
-  scope_regex: "^model\\.layers\\.\\d+\\.self_attn\\."
+  scope_regex: "^model\\.language_model\\.layers\\.\\d+\\.self_attn\\."
 
 structural:
-  language_layer_path: model.layers
-  language_hidden_size: "<DISCOVER_AND_FREEZE>"
-  intermediate_size: "<DISCOVER_AND_FREEZE>"
-  num_language_layers: "<DISCOVER_AND_FREEZE>"
-  r2mu_candidate_layers: "<DISCOVER_AND_FREEZE>"
+  language_layer_path: model.language_model.layers
+  language_hidden_size: 2560
+  intermediate_size: 9216
+  num_language_layers: 32
+  r2mu_candidate_layers: [8, 16, 24, 29]
   r2mu_n_select_layers: 4
   manu_spec: qwen35_4b_language_mlp_v1
 
@@ -51,5 +51,5 @@ supports_manu: true
 supports_r2mu: true
 
 status:
-  implementation: scaffold
-  research_ready: false
+  implementation: validated_canary
+  research_ready: true
