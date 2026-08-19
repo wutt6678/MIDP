@@ -48,23 +48,18 @@ fi
 
 echo ""
 
-# -- Run each method sequentially on the right GPU ------------------------- #
-# mmunlearner needs ~37 GB → GPU 1 (38 GB free)
-# r2mu_adapted needs ~20 GB → GPU 2 (29 GB free)
-declare -A GPU_MAP
-GPU_MAP[mmunlearner]=1
-GPU_MAP[r2mu_adapted]=2
+# -- Run all on GPU 2 ------------------------------------------------------ #
+GPU_ID=2
 
 failed=0
 for method in "${missing_methods[@]}"; do
-    gpu=${GPU_MAP[$method]}
     log_file="${SMOKE_ROOT}/${method}.log"
     
-    echo "=== Running ${method} on GPU ${gpu} ==="
+    echo "=== Running ${method} on GPU ${GPU_ID} ==="
     
     (
         cd "$SUITE_DIR" || exit 1
-        CUDA_VISIBLE_DEVICES="$gpu" python scripts/run_mllmu_baseline_suite.py \
+        CUDA_VISIBLE_DEVICES="$GPU_ID" python scripts/run_mllmu_baseline_suite.py \
             --only "$method" \
             --expected-code-sha "$CODE_SHA" \
             --runtime-output-root "$SMOKE_ROOT" \

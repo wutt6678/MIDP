@@ -49,34 +49,18 @@ fi
 
 echo ""
 
-# -- GPU assignment -------------------------------------------------------- #
-# kl and npo need ~20 GB each → GPUs 2,3 (29 GB free)
-# mmunlearner needs ~37 GB → GPU 1 (38 GB free)
-declare -A GPU_MAP
-GPU_MAP[kl]=2
-GPU_MAP[npo]=3
-GPU_MAP[mmunlearner]=1
-
-# Run mmunlearner first (needs most memory), then others
-ordered_methods=()
-for m in mmunlearner kl npo; do
-    for missing in "${missing_methods[@]}"; do
-        if [ "$m" = "$missing" ]; then
-            ordered_methods+=("$m")
-        fi
-    done
-done
+# -- Run all on GPU 2 ------------------------------------------------------ #
+GPU_ID=2
 
 failed=0
-for method in "${ordered_methods[@]}"; do
-    gpu=${GPU_MAP[$method]}
+for method in "${missing_methods[@]}"; do
     log_file="${FULL_ROOT}/${method}.log"
     
-    echo "=== Running ${method} on GPU ${gpu} ==="
+    echo "=== Running ${method} on GPU ${GPU_ID} ==="
     
     (
         cd "$SUITE_DIR" || exit 1
-        CUDA_VISIBLE_DEVICES="$gpu" python scripts/run_mllmu_baseline_suite.py \
+        CUDA_VISIBLE_DEVICES="$GPU_ID" python scripts/run_mllmu_baseline_suite.py \
             --only "$method" \
             --expected-code-sha "$CODE_SHA" \
             --runtime-output-root "$FULL_ROOT" \
