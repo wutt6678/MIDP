@@ -20,9 +20,7 @@ source "${SCRIPT_DIR}/r12r14_env.sh"
 # -- Prerequisites --------------------------------------------------------- #
 verify_code_sha || exit 1
 
-# -- Use existing results directory ---------------------------------------- #
-# Results are at 0e2b808... from earlier runs
-FULL_ROOT="${SUITE_DIR}/runtime_outputs/mllmu_baselines/0e2b8083317694936ce8af8dc6857d9160d39f2f/r13_full"
+FULL_ROOT="${RUN_ROOT}/r13_full"
 mkdir -p "${FULL_ROOT}"
 
 echo ""
@@ -34,7 +32,7 @@ echo ""
 
 # -- Check which methods are missing --------------------------------------- #
 missing_methods=()
-for method in kl npo mmunlearner manu; do
+for method in npo mmunlearner manu; do
     if [ -f "${FULL_ROOT}/${method}/eval/eval_results.json" ]; then
         echo "  ${method}: EXISTS (skipping)"
     else
