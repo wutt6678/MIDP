@@ -19,9 +19,7 @@ source "${SCRIPT_DIR}/r12r14_env.sh"
 # -- Prerequisites --------------------------------------------------------- #
 verify_code_sha || exit 1
 
-# -- Use existing results directory ---------------------------------------- #
-# Results are at ff42f7c... from earlier runs
-SMOKE_ROOT="${SUITE_DIR}/runtime_outputs/mllmu_baselines/ff42f7c7a84a62d6a418ee9503bd66ec02bc3d0c/r12_smoke"
+SMOKE_ROOT="${RUN_ROOT}/r12_smoke"
 mkdir -p "${SMOKE_ROOT}"
 
 echo ""
