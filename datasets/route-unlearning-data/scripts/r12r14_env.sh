@@ -26,7 +26,7 @@ if [ -f "${SCRIPT_DIR}/.frozen_env" ]; then
 fi
 
 # -- GPU selection --------------------------------------------------------- #
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-2}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 
 # -- Paths ----------------------------------------------------------------- #
 # Resolve the route-unlearning-data project root from this file's location.
