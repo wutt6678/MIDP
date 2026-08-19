@@ -209,7 +209,7 @@ def main() -> None:
     manifest["results"]["summary_sha256"] = _file_sha256(summary_path)
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
-    print(f"Manifest updated with summary SHA-256")
+    print("Manifest updated with summary SHA-256")
 
     print("\n" + "=" * 60)
     print("Baseline generation complete!")
