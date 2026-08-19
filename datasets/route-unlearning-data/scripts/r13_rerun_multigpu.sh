@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # --------------------------------------------------------------------------- #
-# R13 — Multi-GPU Re-run Missing Methods Only
+# R13 — Re-run Missing Methods (GPU-aware)
 #
-# Runs only missing methods in parallel across GPUs.
+# kl: ~20 GB → GPU 1
+# npo: ~20 GB → GPU 2
+# mmunlearner: ~37 GB → GPU 1 (needs most memory)
 #
 # Usage:
 #   conda activate midp-qwen35
@@ -23,13 +25,10 @@ mkdir -p "${FULL_ROOT}"
 
 echo ""
 echo "================================================================"
-echo "  R13 RE-RUN MISSING — Multi-GPU"
+echo "  R13 RE-RUN MISSING — GPU-aware"
 echo "  output root: ${FULL_ROOT}"
 echo "================================================================"
 echo ""
-
-# -- GPU assignment -------------------------------------------------------- #
-GPU_LIST=(1 2 3)  # Avoid GPU 0 which has most memory pressure
 
 # -- Check which methods are missing --------------------------------------- #
 missing_methods=()
@@ -49,54 +48,50 @@ if [ ${#missing_methods[@]} -eq 0 ]; then
 fi
 
 echo ""
-echo "Will run ${#missing_methods[@]} methods on GPUs: ${GPU_LIST[*]}"
-echo ""
 
-# -- Function to run on specific GPU --------------------------------------- #
-run_on_gpu() {
-    local method="$1"
-    local gpu_id="$2"
-    local log_file="${FULL_ROOT}/${method}.log"
-    
-    echo "[GPU ${gpu_id}] Starting ${method}..."
-    
-    CUDA_VISIBLE_DEVICES="$gpu_id" python "${SUITE_DIR}/scripts/run_mllmu_baseline_suite.py" \
-        --only "$method" \
-        --expected-code-sha "$CODE_SHA" \
-        --runtime-output-root "$FULL_ROOT" \
-        > "$log_file" 2>&1
-    
-    local status=$?
-    if [ $status -eq 0 ]; then
-        echo "[GPU ${gpu_id}] ✓ ${method} complete"
-    else
-        echo "[GPU ${gpu_id}] ✗ ${method} FAILED"
-    fi
-    return $status
-}
+# -- GPU assignment -------------------------------------------------------- #
+# kl and npo need ~20 GB each → GPUs 2,3 (29 GB free)
+# mmunlearner needs ~37 GB → GPU 1 (38 GB free)
+declare -A GPU_MAP
+GPU_MAP[kl]=2
+GPU_MAP[npo]=3
+GPU_MAP[mmunlearner]=1
 
-# -- Run in parallel ------------------------------------------------------- #
-pids=()
-gpu_idx=0
-
-for method in "${missing_methods[@]}"; do
-    gpu=${GPU_LIST[$gpu_idx]}
-    run_on_gpu "$method" "$gpu" &
-    pids+=($!)
-    echo "  Launched PID ${pids[-1]}: ${method} on GPU ${gpu}"
-    gpu_idx=$(( (gpu_idx + 1) % ${#GPU_LIST[@]} ))
+# Run mmunlearner first (needs most memory), then others
+ordered_methods=()
+for m in mmunlearner kl npo; do
+    for missing in "${missing_methods[@]}"; do
+        if [ "$m" = "$missing" ]; then
+            ordered_methods+=("$m")
+        fi
+    done
 done
-
-# -- Wait ------------------------------------------------------------------ #
-echo ""
-echo "Waiting for ${#pids[@]} methods..."
 
 failed=0
-for pid in "${pids[@]}"; do
-    wait "$pid" || failed=$((failed + 1))
+for method in "${ordered_methods[@]}"; do
+    gpu=${GPU_MAP[$method]}
+    log_file="${FULL_ROOT}/${method}.log"
+    
+    echo "=== Running ${method} on GPU ${gpu} ==="
+    
+    (
+        cd "$SUITE_DIR" || exit 1
+        CUDA_VISIBLE_DEVICES="$gpu" python scripts/run_mllmu_baseline_suite.py \
+            --only "$method" \
+            --expected-code-sha "$CODE_SHA" \
+            --runtime-output-root "$FULL_ROOT" \
+            2>&1 | tee "$log_file"
+    )
+    
+    if [ ${PIPESTATUS[0]} -eq 0 ]; then
+        echo "  ✓ ${method} complete"
+    else
+        echo "  ✗ ${method} FAILED"
+        failed=$((failed + 1))
+    fi
+    echo ""
 done
 
-echo ""
 echo "================================================================"
 if [ $failed -eq 0 ]; then
     echo "  R13 RE-RUN — all methods passed ✓"
