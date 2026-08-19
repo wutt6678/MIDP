@@ -7,8 +7,8 @@ profile loading from YAML configuration files.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
 
 from .base import ModelFamilyProfile, TrainableVLMAdapter
 

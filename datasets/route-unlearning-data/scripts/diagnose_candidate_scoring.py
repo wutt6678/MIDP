@@ -14,7 +14,6 @@ Requires GPU access and the model weights to be available.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import torch
@@ -77,7 +76,7 @@ def main() -> None:
     prefix_len = prefix["_prefix_len"]
     print(f"  prefix_len = {prefix_len}")
     print(f"  input_ids shape = {prefix['input_ids'].shape}")
-    print(f"  keys = {sorted(k for k in prefix.keys() if not k.startswith('_'))}")
+    print(f"  keys = {sorted(k for k in prefix if not k.startswith('_'))}")
     print()
 
     # Resolve candidate token IDs

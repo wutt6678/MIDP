@@ -18,7 +18,6 @@ Key Qwen-specific behaviours:
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 import torch
@@ -181,7 +180,6 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
         ``down_proj``.  The intermediate size is ``model.config.intermediate_size``.
         """
         layers = self.language_layers(model)
-        hidden_size = self.language_hidden_size(model)
         intermediate_size = model.config.intermediate_size
 
         specs: list[NeuronSpec] = []

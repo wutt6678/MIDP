@@ -21,7 +21,7 @@ from typing import Any
 
 import torch
 
-from .base import ModelFamilyProfile, TrainableVLMAdapter
+from .base import TrainableVLMAdapter
 
 logger = logging.getLogger(__name__)
 

@@ -11,9 +11,8 @@ profile and adapter, not branch on model names throughout the training code.
 
 from __future__ import annotations
 
-import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import torch

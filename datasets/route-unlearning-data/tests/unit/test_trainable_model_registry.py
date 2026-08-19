@@ -133,16 +133,15 @@ class TestAdapterRegistry:
     """Tests for the trainable adapter registry."""
 
     def test_register_and_create(self):
-        from route_data.models.trainable.registry import (
-            _ADAPTER_FACTORIES,
-            _ADAPTER_CACHE,
-            register_adapter,
-            create_adapter,
-            clear_cache,
-        )
         from route_data.models.trainable.base import (
             ModelFamilyProfile,
             TrainableVLMAdapter,
+        )
+        from route_data.models.trainable.registry import (
+            _ADAPTER_CACHE,
+            _ADAPTER_FACTORIES,
+            create_adapter,
+            register_adapter,
         )
 
         # Save state
