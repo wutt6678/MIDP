@@ -21,6 +21,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/r12r14_env.sh"
 
+# -- GPU override for R13 -------------------------------------------------- #
+export CUDA_VISIBLE_DEVICES=0
+
 # -- Prerequisites --------------------------------------------------------- #
 verify_code_sha || exit 1
 
