@@ -412,7 +412,7 @@ def apply_mask_to_gradients(
     """
     for name, param in model.named_parameters():
         if param.grad is not None and name in mask:
-            param.grad.data *= mask[name]
+            param.grad.data *= mask[name].to(param.grad.data.device)
 
 
 # --------------------------------------------------------------------------- #
