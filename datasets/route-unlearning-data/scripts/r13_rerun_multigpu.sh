@@ -20,7 +20,9 @@ source "${SCRIPT_DIR}/r12r14_env.sh"
 # -- Prerequisites --------------------------------------------------------- #
 verify_code_sha || exit 1
 
-FULL_ROOT="${RUN_ROOT}/r13_full"
+# -- Use existing results directory ---------------------------------------- #
+# Results are at 0e2b808... from earlier runs
+FULL_ROOT="${SUITE_DIR}/runtime_outputs/mllmu_baselines/0e2b8083317694936ce8af8dc6857d9160d39f2f/r13_full"
 mkdir -p "${FULL_ROOT}"
 
 echo ""
