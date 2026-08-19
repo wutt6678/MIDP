@@ -50,7 +50,7 @@ fi
 echo ""
 
 # -- Run all on GPU 2 ------------------------------------------------------ #
-GPU_ID=1
+GPU_ID=3
 
 failed=0
 for method in "${missing_methods[@]}"; do
