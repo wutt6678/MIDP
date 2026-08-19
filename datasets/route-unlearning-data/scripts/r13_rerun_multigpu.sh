@@ -49,8 +49,11 @@ fi
 
 echo ""
 
-# -- Run all on GPU 2 ------------------------------------------------------ #
+# -- Run all on GPU 3 ------------------------------------------------------ #
 GPU_ID=3
+
+# Oracle adapter path for NPO (from previous npo_oracle run)
+ORACLE_ADAPTER="${FULL_ROOT}/npo_oracle/checkpoints/adapter_final"
 
 failed=0
 for method in "${missing_methods[@]}"; do
@@ -58,13 +61,21 @@ for method in "${missing_methods[@]}"; do
     
     echo "=== Running ${method} on GPU ${GPU_ID} ==="
     
+    # Build command with optional oracle adapter path
+    cmd="CUDA_VISIBLE_DEVICES=$GPU_ID python scripts/run_mllmu_baseline_suite.py"
+    cmd+=" --only $method"
+    cmd+=" --expected-code-sha $CODE_SHA"
+    cmd+=" --runtime-output-root $FULL_ROOT"
+    
+    # Add oracle adapter path for NPO
+    if [ "$method" = "npo" ] && [ -d "$ORACLE_ADAPTER" ]; then
+        cmd+=" --oracle-adapter-path $ORACLE_ADAPTER"
+        echo "  Using oracle adapter: $ORACLE_ADAPTER"
+    fi
+    
     (
         cd "$SUITE_DIR" || exit 1
-        CUDA_VISIBLE_DEVICES="$GPU_ID" python scripts/run_mllmu_baseline_suite.py \
-            --only "$method" \
-            --expected-code-sha "$CODE_SHA" \
-            --runtime-output-root "$FULL_ROOT" \
-            2>&1 | tee "$log_file"
+        eval "$cmd" 2>&1 | tee "$log_file"
     )
     
     if [ ${PIPESTATUS[0]} -eq 0 ]; then

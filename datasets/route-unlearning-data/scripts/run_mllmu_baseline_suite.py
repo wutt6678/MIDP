@@ -955,6 +955,10 @@ def main() -> None:
         "--reference-model-path",
         help="Path to frozen reference model for KL (overrides config).",
     )
+    parser.add_argument(
+        "--oracle-adapter-path",
+        help="Path to oracle adapter for NPO (overrides auto-detection).",
+    )
     # P0-23: Exact code-SHA gate
     parser.add_argument(
         "--expected-code-sha",
@@ -1025,6 +1029,8 @@ def main() -> None:
     }
     if args.reference_model_path:
         suite_state["reference_model_path"] = args.reference_model_path
+    if args.oracle_adapter_path:
+        suite_state["oracle_adapter_path"] = args.oracle_adapter_path
 
     # Run methods in order
     results: list[dict[str, Any]] = []
