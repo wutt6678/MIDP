@@ -12,11 +12,18 @@
 # --------------------------------------------------------------------------- #
 
 # -- Frozen contract ------------------------------------------------------- #
+# Default SHA (can be overridden by .frozen_env for local development)
 export CODE_SHA="a19f66c3df92572d50eae8982c91ba7ef68f7b6b"
 export MODEL_REVISION="c202236235762e1c871ad0ccb60c8ee5ba337b9a"
 export PROCESSED_DATASET_SHA="7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1"
 export ROUTE_PROBE_SHA="aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864"
 export SELECTION_MANIFEST_SHA="a7ff1fceb715fb30b34809d98eb6e7e25a4a21a88a8b188c024d124b49b19655"
+
+# Load local overrides (gitignored)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/.frozen_env" ]; then
+    source "${SCRIPT_DIR}/.frozen_env"
+fi
 
 # -- Paths ----------------------------------------------------------------- #
 # Resolve the route-unlearning-data project root from this file's location.
