@@ -128,7 +128,7 @@ class TestP024RunEvalFrozenContract:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
-            objective_name="",
+            objective_name="", trainable_adapter=None,
         ):
             captured_config["config"] = config
             return {
@@ -220,7 +220,7 @@ class TestP025PromptingBackend:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
-            objective_name="",
+            objective_name="", trainable_adapter=None,
         ):
             captured_kwargs["backend_override"] = backend_override
             captured_kwargs["method_name"] = method_name
@@ -264,7 +264,7 @@ class TestP025PromptingBackend:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
-            objective_name="",
+            objective_name="", trainable_adapter=None,
         ):
             captured_method["name"] = method_name
             return {
@@ -314,7 +314,7 @@ class TestP026ManuOutputIsolation:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
-            objective_name="",
+            objective_name="", trainable_adapter=None,
         ):
             captured_dirs[method_name] = Path(output_dir)
             return {
@@ -367,7 +367,7 @@ class TestP026ManuOutputIsolation:
             *, model, processor, adapter_path,
             probe_dataset_path, output_dir, config,
             baseline_results_path, method_name, backend_override,
-            objective_name="",
+            objective_name="", trainable_adapter=None,
         ):
             captured_methods[method_name] = Path(output_dir).name
             return {

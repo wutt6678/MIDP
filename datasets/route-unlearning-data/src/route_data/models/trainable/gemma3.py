@@ -19,58 +19,30 @@ from typing import Any
 
 import torch
 
-from .base import ModelFamilyProfile, TrainableVLMAdapter
+from .base import ModelFamilyProfile
 from .hf_chat import HuggingFaceChatAdapter
-from .registry import register_adapter
+from .registry import register_adapter_family, register_model_key
 
 logger = logging.getLogger(__name__)
 
-_GEMMA3_PROFILE = ModelFamilyProfile(
-    key="gemma3_12b",
-    model_id="google/gemma-3-12b-it",
-    revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    processor_id="google/gemma-3-12b-it",
-    processor_revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    adapter_name="gemma3",
-    trust_remote_code=False,
-    dtype="bfloat16",
-    attn_implementation="sdpa",
-    candidate_positive="Yes",
-    candidate_negative="No",
-    lora_rank=8,
-    lora_alpha=16,
-    lora_dropout=0.05,
-    lora_scope="language_attention_only",
-    lora_target_leaf_names=("q_proj", "k_proj", "v_proj", "o_proj"),
-    lora_scope_regex="<DISCOVER_ON_REAL_MODEL_AND_FREEZE>",
-    r2mu_candidate_layers=(),
-    r2mu_n_select_layers=0,
-    supports_prompting=False,
-    supports_candidate_margin=False,
-    supports_ga=False,
-    supports_gd=False,
-    supports_kl=False,
-    supports_npo=False,
-    supports_mmunlearner=False,
-    supports_manu=False,
-    supports_r2mu=False,
-    min_transformers_version="4.50.0",
-    tested_transformers_version="5.14.1",
-    requires_hf_auth=True,
-)
 
-
+@register_adapter_family("gemma3")
 class Gemma3Adapter(HuggingFaceChatAdapter):
     """Trainable adapter for Gemma3-12B-it (stub).
 
     Inherits standard HF chat-template operations from
     :class:`HuggingFaceChatAdapter`.  Structural methods require
     real-model discovery.
+
+    The profile is **required** and must come from a YAML file.
     """
+
+    def __init__(self, profile: ModelFamilyProfile):
+        self._profile = profile
 
     @property
     def profile(self) -> ModelFamilyProfile:
-        return _GEMMA3_PROFILE
+        return self._profile
 
     # ------------------------------------------------------------------ #
     # Gemma-specific hooks
@@ -112,6 +84,4 @@ class Gemma3Adapter(HuggingFaceChatAdapter):
         )
 
 
-@register_adapter("gemma3_12b")
-def _create_gemma3() -> TrainableVLMAdapter:
-    return Gemma3Adapter()
+register_model_key("gemma3_12b", "gemma3")

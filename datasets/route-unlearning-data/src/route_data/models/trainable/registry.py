@@ -1,64 +1,158 @@
 """Adapter registry for trainable VLM models.
 
-Maps model-family keys to adapter factory callables and provides
-profile loading from YAML configuration files.
+Maps adapter *family* names (e.g. ``"qwen35"``) to adapter classes, and
+*model keys* (e.g. ``"qwen35_9b"``) to families.  The YAML profile is the
+single source of truth — adapters are constructed from profiles, not from
+hard-coded internal defaults.
+
+Architecture
+------------
+::
+
+    YAML profile  ──►  load_profile_from_yaml()  ──►  ModelFamilyProfile
+                                                          │
+    profile.adapter_name ──►  _ADAPTER_FAMILIES[family]  ──►  AdapterClass(profile)
+    profile.key ──► _MODEL_KEY_TO_FAMILY[key] ──► family ──┘
+
+There must be exactly one effective experimental profile per adapter
+instance: ``adapter.profile is profile``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from .base import ModelFamilyProfile, TrainableVLMAdapter
 
 logger = logging.getLogger(__name__)
 
-# key → factory callable: () -> TrainableVLMAdapter
-_ADAPTER_FACTORIES: dict[str, Callable[[], TrainableVLMAdapter]] = {}
+# ------------------------------------------------------------------ #
+# Adapter family registry
+# ------------------------------------------------------------------ #
 
-# key -> cached adapter instance
+# family name → adapter class (accepts profile in __init__)
+_ADAPTER_FAMILIES: dict[str, type[TrainableVLMAdapter]] = {}
+
+# model key → adapter family name
+_MODEL_KEY_TO_FAMILY: dict[str, str] = {}
+
+# model key → cached adapter instance
 _ADAPTER_CACHE: dict[str, TrainableVLMAdapter] = {}
 
 
-def register_adapter(key: str):
-    """Decorator to register a trainable adapter factory by model key.
+def register_adapter_family(name: str) -> Callable:
+    """Decorator to register an adapter *family* class.
 
     Usage::
 
-        @register_adapter("qwen35_9b")
-        def _create_qwen35() -> TrainableVLMAdapter:
-            return Qwen35Adapter()
+        @register_adapter_family("qwen35")
+        class Qwen35Adapter(HuggingFaceChatAdapter):
+            def __init__(self, profile: ModelFamilyProfile):
+                ...
     """
-    def decorator(fn: Callable[[], TrainableVLMAdapter]):
-        if key in _ADAPTER_FACTORIES:
-            raise ValueError(f"Trainable adapter already registered for key: {key!r}")
-        _ADAPTER_FACTORIES[key] = fn
-        return fn
+    def decorator(cls: type[TrainableVLMAdapter]) -> type[TrainableVLMAdapter]:
+        if name in _ADAPTER_FAMILIES:
+            raise ValueError(
+                f"Adapter family already registered: {name!r}"
+            )
+        _ADAPTER_FAMILIES[name] = cls
+        return cls
     return decorator
 
 
-def create_adapter(key: str) -> TrainableVLMAdapter:
-    """Create or return a cached adapter for the given model key.
+def register_model_key(key: str, family: str) -> None:
+    """Map a model key to an adapter family.
 
-    Raises ``KeyError`` if no adapter is registered for *key*.
+    Multiple model keys can share the same family (e.g. ``qwen35_9b``
+    and ``qwen35_4b`` both use the ``qwen35`` family).
     """
-    if key not in _ADAPTER_CACHE:
-        if key not in _ADAPTER_FACTORIES:
-            _ensure_builtin_adapters_loaded()
-        if key not in _ADAPTER_FACTORIES:
+    _MODEL_KEY_TO_FAMILY[key] = family
+
+
+def create_adapter(
+    key: str,
+    profile: ModelFamilyProfile | None = None,
+) -> TrainableVLMAdapter:
+    """Create an adapter for the given model key.
+
+    Parameters
+    ----------
+    key:
+        Model key (e.g. ``"qwen35_9b"``).
+    profile:
+        The YAML-loaded profile.  **Required** for research-mode runs.
+        The adapter's ``.profile`` will be this exact object.
+
+    Returns
+    -------
+    adapter : TrainableVLMAdapter
+        Cached adapter instance with ``adapter.profile is profile``.
+    """
+    if profile is None:
+        raise ValueError(
+            f"create_adapter({key!r}): profile is required. "
+            f"Load a YAML profile first."
+        )
+
+    cache_key = f"{key}:{id(profile)}"
+
+    if cache_key not in _ADAPTER_CACHE:
+        _ensure_builtin_adapters_loaded()
+
+        if key not in _MODEL_KEY_TO_FAMILY:
             raise KeyError(
-                f"Unknown trainable adapter key: {key!r}. "
-                f"Available: {sorted(_ADAPTER_FACTORIES)}"
+                f"Unknown model key: {key!r}. "
+                f"Available: {sorted(_MODEL_KEY_TO_FAMILY)}"
             )
-        _ADAPTER_CACHE[key] = _ADAPTER_FACTORIES[key]()
-    return _ADAPTER_CACHE[key]
+
+        family_name = _MODEL_KEY_TO_FAMILY[key]
+        if family_name not in _ADAPTER_FAMILIES:
+            raise KeyError(
+                f"Adapter family {family_name!r} not registered "
+                f"for model key {key!r}"
+            )
+
+        family_cls = _ADAPTER_FAMILIES[family_name]
+        adapter = family_cls(profile)
+
+        # Invariant: adapter.profile is the provided profile
+        if adapter.profile is not profile:
+            raise RuntimeError(
+                f"Adapter {key!r} did not bind the provided profile. "
+                f"adapter.profile is {adapter.profile!r}, expected {profile!r}"
+            )
+
+        _ADAPTER_CACHE[cache_key] = adapter
+
+    return _ADAPTER_CACHE[cache_key]
 
 
 def available_adapters() -> list[str]:
-    """Return sorted list of registered adapter keys."""
+    """Return sorted list of registered model keys."""
     _ensure_builtin_adapters_loaded()
-    return sorted(_ADAPTER_FACTORIES.keys())
+    return sorted(_MODEL_KEY_TO_FAMILY.keys())
+
+
+def adapter_families() -> list[str]:
+    """Return sorted list of registered adapter family names."""
+    _ensure_builtin_adapters_loaded()
+    return sorted(_ADAPTER_FAMILIES.keys())
+
+
+# ------------------------------------------------------------------ #
+# Profile YAML loading
+# ------------------------------------------------------------------ #
+
+# Pattern for unresolved placeholders like <PIN_EXACT_HF_COMMIT_SHA>
+_PLACEHOLDER_RE = re.compile(r"^<.*>$")
+
+# Full 40-char hex SHA pattern
+_FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
@@ -67,11 +161,15 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
     The YAML schema mirrors the ``ModelFamilyProfile`` dataclass fields
     with nested sections: ``model``, ``candidate_protocol``, ``lora``,
     ``structural``, ``compatibility``, ``access``.
+
+    Performs basic type validation before constructing the dataclass.
     """
     import yaml
 
     with open(path) as fh:
-        data = yaml.safe_load(fh)
+        raw_bytes = fh.read()
+
+    data = yaml.safe_load(raw_bytes)
 
     model = data["model"]
     candidate = data.get("candidate_protocol", {})
@@ -80,6 +178,29 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
     compat = data.get("compatibility", {})
     access = data.get("access", {})
 
+    # --- Type validation ---
+    _validate_profile_types(lora, structural, access, data)
+
+    # --- Structural fields ---
+    raw_layers = structural.get("r2mu_candidate_layers", [])
+    if not isinstance(raw_layers, list):
+        raise TypeError(
+            f"r2mu_candidate_layers must be a list[int], "
+            f"got {type(raw_layers).__name__}: {raw_layers!r}"
+        )
+    if not all(isinstance(v, int) for v in raw_layers):
+        raise ValueError(
+            f"r2mu_candidate_layers must be list[int], "
+            f"got {[type(v).__name__ for v in raw_layers]}"
+        )
+
+    raw_leaf_names = lora.get("target_leaf_names", [])
+    if not isinstance(raw_leaf_names, list):
+        raise TypeError(
+            f"lora.target_leaf_names must be a list[str], "
+            f"got {type(raw_leaf_names).__name__}"
+        )
+
     return ModelFamilyProfile(
         key=data["key"],
         model_id=model["id"],
@@ -87,31 +208,202 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
         processor_id=model.get("processor_id", model["id"]),
         processor_revision=model.get("processor_revision", model["revision"]),
         adapter_name=model.get("adapter", data["key"]),
-        trust_remote_code=model.get("trust_remote_code", False),
+        trust_remote_code=_safe_bool(model.get("trust_remote_code", False)),
         dtype=model.get("dtype", "bfloat16"),
         attn_implementation=model.get("attn_implementation", "sdpa"),
         candidate_positive=candidate.get("positive", "Yes"),
         candidate_negative=candidate.get("negative", "No"),
-        lora_rank=lora.get("rank", 8),
-        lora_alpha=lora.get("alpha", 16),
-        lora_dropout=lora.get("dropout", 0.05),
+        lora_rank=_safe_int(lora.get("rank", 8), "lora.rank"),
+        lora_alpha=_safe_int(lora.get("alpha", 16), "lora.alpha"),
+        lora_dropout=_safe_float(lora.get("dropout", 0.05), "lora.dropout"),
         lora_scope=lora.get("scope", "language_attention_only"),
-        lora_target_leaf_names=tuple(lora.get("target_leaf_names", [])),
+        lora_target_leaf_names=tuple(raw_leaf_names),
         lora_scope_regex=lora.get("scope_regex", ""),
-        r2mu_candidate_layers=tuple(structural.get("r2mu_candidate_layers", ())),
-        r2mu_n_select_layers=structural.get("r2mu_n_select_layers", 0),
-        supports_prompting=data.get("supports_prompting", True),
-        supports_candidate_margin=data.get("supports_candidate_margin", True),
-        supports_ga=data.get("supports_ga", True),
-        supports_gd=data.get("supports_gd", True),
-        supports_kl=data.get("supports_kl", True),
-        supports_npo=data.get("supports_npo", True),
-        supports_mmunlearner=data.get("supports_mmunlearner", True),
-        supports_manu=data.get("supports_manu", True),
-        supports_r2mu=data.get("supports_r2mu", True),
+        r2mu_candidate_layers=tuple(raw_layers),
+        r2mu_n_select_layers=_safe_int(
+            structural.get("r2mu_n_select_layers", 0),
+            "structural.r2mu_n_select_layers",
+        ),
+        supports_prompting=_safe_bool(data.get("supports_prompting", True)),
+        supports_candidate_margin=_safe_bool(
+            data.get("supports_candidate_margin", True)
+        ),
+        supports_ga=_safe_bool(data.get("supports_ga", True)),
+        supports_gd=_safe_bool(data.get("supports_gd", True)),
+        supports_kl=_safe_bool(data.get("supports_kl", True)),
+        supports_npo=_safe_bool(data.get("supports_npo", True)),
+        supports_mmunlearner=_safe_bool(data.get("supports_mmunlearner", True)),
+        supports_manu=_safe_bool(data.get("supports_manu", True)),
+        supports_r2mu=_safe_bool(data.get("supports_r2mu", True)),
         min_transformers_version=compat.get("min_transformers"),
         tested_transformers_version=compat.get("tested_transformers", ""),
-        requires_hf_auth=access.get("requires_hf_auth", False),
+        requires_hf_auth=_safe_bool(access.get("requires_hf_auth", False)),
+    )
+
+
+def compute_profile_sha256(path: str | Path) -> str:
+    """Compute SHA-256 of the raw YAML profile bytes."""
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+# ------------------------------------------------------------------ #
+# Research-profile validation (P0-E)
+# ------------------------------------------------------------------ #
+
+def validate_research_profile(profile: ModelFamilyProfile) -> list[str]:
+    """Validate a profile for research-mode use.
+
+    Returns a list of error messages.  Empty list means the profile is
+    valid for research use.
+
+    Checks
+    ------
+    - Revisions are exact 40-hex SHA (not placeholders, not branch names)
+    - No unresolved ``<...>`` placeholders in critical fields
+    - Capability-consistent fields (e.g. supports_ga → revision pinned)
+    """
+    errors: list[str] = []
+
+    # --- Revision validation ---
+    for name, val in [
+        ("revision", profile.revision),
+        ("processor_revision", profile.processor_revision),
+    ]:
+        if not val:
+            errors.append(f"{name} is empty")
+        elif _PLACEHOLDER_RE.match(val):
+            errors.append(
+                f"{name} contains unresolved placeholder: {val!r}"
+            )
+        elif not _FULL_SHA_RE.fullmatch(val):
+            errors.append(
+                f"{name}={val!r} is not a 40-char hex SHA"
+            )
+
+    # --- Placeholder check on other critical fields ---
+    if profile.lora_scope_regex and _PLACEHOLDER_RE.match(
+        profile.lora_scope_regex
+    ):
+        errors.append(
+            f"lora_scope_regex contains unresolved placeholder: "
+            f"{profile.lora_scope_regex!r}"
+        )
+
+    # --- Capability-consistent validation ---
+    any_method_supported = any([
+        profile.supports_ga,
+        profile.supports_kl,
+        profile.supports_npo,
+        profile.supports_candidate_margin,
+        profile.supports_prompting,
+    ])
+
+    if any_method_supported:
+        # Must have pinned revisions
+        if not _FULL_SHA_RE.fullmatch(profile.revision):
+            errors.append(
+                "Methods enabled but revision is not a pinned SHA"
+            )
+        if not _FULL_SHA_RE.fullmatch(profile.processor_revision):
+            errors.append(
+                "Methods enabled but processor_revision is not a pinned SHA"
+            )
+        if not profile.lora_scope_regex or _PLACEHOLDER_RE.match(
+            profile.lora_scope_regex
+        ):
+            errors.append(
+                "Methods enabled but lora_scope_regex is unresolved"
+            )
+
+    if profile.supports_r2mu and not profile.r2mu_candidate_layers:
+        errors.append(
+            "supports_r2mu=true but r2mu_candidate_layers is empty"
+        )
+
+    # --- Candidate protocol ---
+    if not profile.candidate_positive:
+        errors.append("candidate_positive is empty")
+    if not profile.candidate_negative:
+        errors.append("candidate_negative is empty")
+    if profile.candidate_positive == profile.candidate_negative:
+        errors.append(
+            "candidate_positive and candidate_negative are identical"
+        )
+
+    return errors
+
+
+# ------------------------------------------------------------------ #
+# Internal helpers
+# ------------------------------------------------------------------ #
+
+def _validate_profile_types(
+    lora: dict, structural: dict, access: dict, data: dict,
+) -> None:
+    """Validate YAML field types before dataclass construction."""
+    for field_name, expected_type in [
+        ("lora.rank", (int, float)),
+        ("lora.alpha", (int, float)),
+        ("lora.dropout", (int, float)),
+        ("structural.r2mu_n_select_layers", (int, float)),
+    ]:
+        section, key = field_name.split(".", 1)
+        section_dict = {"lora": lora, "structural": structural}[section]
+        if key in section_dict:
+            val = section_dict[key]
+            if not isinstance(val, expected_type):
+                raise ValueError(
+                    f"{field_name} must be {expected_type}, "
+                    f"got {type(val).__name__}: {val!r}"
+                )
+
+    for field_name in [
+        "supports_prompting", "supports_candidate_margin",
+        "supports_ga", "supports_gd", "supports_kl", "supports_npo",
+        "supports_mmunlearner", "supports_manu", "supports_r2mu",
+    ]:
+        if field_name in data:
+            val = data[field_name]
+            if not isinstance(val, bool):
+                raise ValueError(
+                    f"{field_name} must be bool, "
+                    f"got {type(val).__name__}: {val!r}"
+                )
+
+    if "requires_hf_auth" in access:
+        val = access["requires_hf_auth"]
+        if not isinstance(val, bool):
+            raise ValueError(
+                f"access.requires_hf_auth must be bool, "
+                f"got {type(val).__name__}: {val!r}"
+            )
+
+
+def _safe_bool(val: Any) -> bool:
+    """Coerce YAML value to bool, rejecting non-bool types."""
+    if isinstance(val, bool):
+        return val
+    raise ValueError(f"Expected bool, got {type(val).__name__}: {val!r}")
+
+
+def _safe_int(val: Any, field_name: str) -> int:
+    """Coerce YAML value to int."""
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float) and val == int(val):
+        return int(val)
+    raise ValueError(
+        f"{field_name} must be int, got {type(val).__name__}: {val!r}"
+    )
+
+
+def _safe_float(val: Any, field_name: str) -> float:
+    """Coerce YAML value to float."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    raise ValueError(
+        f"{field_name} must be numeric, got {type(val).__name__}: {val!r}"
     )
 
 

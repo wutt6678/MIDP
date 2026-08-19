@@ -20,58 +20,30 @@ from typing import Any
 
 import torch
 
-from .base import ModelFamilyProfile, TrainableVLMAdapter
+from .base import ModelFamilyProfile
 from .hf_chat import HuggingFaceChatAdapter
-from .registry import register_adapter
+from .registry import register_adapter_family, register_model_key
 
 logger = logging.getLogger(__name__)
 
-_INTERNVL35_PROFILE = ModelFamilyProfile(
-    key="internvl35_8b_hf",
-    model_id="OpenGVLab/InternVL3_5-8B-HF",
-    revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    processor_id="OpenGVLab/InternVL3_5-8B-HF",
-    processor_revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    adapter_name="internvl35",
-    trust_remote_code=True,
-    dtype="bfloat16",
-    attn_implementation="sdpa",
-    candidate_positive="Yes",
-    candidate_negative="No",
-    lora_rank=8,
-    lora_alpha=16,
-    lora_dropout=0.05,
-    lora_scope="language_attention_only",
-    lora_target_leaf_names=("q_proj", "k_proj", "v_proj", "o_proj"),
-    lora_scope_regex="<DISCOVER_ON_REAL_MODEL_AND_FREEZE>",
-    r2mu_candidate_layers=(),
-    r2mu_n_select_layers=0,
-    supports_prompting=False,
-    supports_candidate_margin=False,
-    supports_ga=False,
-    supports_gd=False,
-    supports_kl=False,
-    supports_npo=False,
-    supports_mmunlearner=False,
-    supports_manu=False,
-    supports_r2mu=False,
-    min_transformers_version="4.52.1",
-    tested_transformers_version="5.14.1",
-    requires_hf_auth=False,
-)
 
-
+@register_adapter_family("internvl35")
 class InternVL35Adapter(HuggingFaceChatAdapter):
     """Trainable adapter for InternVL3.5-8B-HF (stub).
 
     Inherits standard HF chat-template operations.  The language backbone
     is Qwen3-family, so LoRA targets and MANU specs are similar to Qwen3.5
     but must be scoped to the language submodule only.
+
+    The profile is **required** and must come from a YAML file.
     """
+
+    def __init__(self, profile: ModelFamilyProfile):
+        self._profile = profile
 
     @property
     def profile(self) -> ModelFamilyProfile:
-        return _INTERNVL35_PROFILE
+        return self._profile
 
     # ------------------------------------------------------------------ #
     # Methods requiring real-model discovery (stubs)
@@ -101,6 +73,4 @@ class InternVL35Adapter(HuggingFaceChatAdapter):
         )
 
 
-@register_adapter("internvl35_8b_hf")
-def _create_internvl35() -> TrainableVLMAdapter:
-    return InternVL35Adapter()
+register_model_key("internvl35_8b_hf", "internvl35")

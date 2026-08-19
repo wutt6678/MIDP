@@ -16,18 +16,28 @@ from .base import (
     TrainableVLMAdapter,
 )
 from .registry import (
+    adapter_families,
     available_adapters,
+    clear_cache,
+    compute_profile_sha256,
     create_adapter,
     load_profile_from_yaml,
-    register_adapter,
+    register_adapter_family,
+    register_model_key,
+    validate_research_profile,
 )
 
 __all__ = [
     "ModelFamilyProfile",
     "NeuronSpec",
     "TrainableVLMAdapter",
+    "adapter_families",
     "available_adapters",
+    "clear_cache",
+    "compute_profile_sha256",
     "create_adapter",
     "load_profile_from_yaml",
-    "register_adapter",
+    "register_adapter_family",
+    "register_model_key",
+    "validate_research_profile",
 ]

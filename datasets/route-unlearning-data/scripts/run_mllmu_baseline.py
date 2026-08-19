@@ -58,6 +58,7 @@ def _run_eval(
     eval_subdir: str = "",
     backend_override: Any = None,
     objective_name: str = "",
+    trainable_adapter: Any = None,
 ) -> dict[str, Any]:
     """Call evaluate_intervention with a complete PostEvalConfig (P0-1).
 
@@ -163,6 +164,7 @@ def _run_eval(
         method_name=method_label,
         objective_name=objective_name or method_label,
         backend_override=backend_override,
+        trainable_adapter=trainable_adapter,
     )
     logger.info(
         f"Evaluation complete: {result.get('exact_pair_count', 0)} pairs, "
@@ -326,21 +328,74 @@ def main() -> None:
 
     # Load trainable adapter if model profile is provided
     _model_adapter = None
+    _profile = None
+    _profile_sha256 = ""
     if args.model_profile:
         from route_data.models.trainable.registry import (
+            compute_profile_sha256,
             create_adapter,
             load_profile_from_yaml,
+            validate_research_profile,
         )
         profile_path = (
             project_root / args.model_profile
             if not Path(args.model_profile).is_absolute()
             else Path(args.model_profile)
         )
-        profile = load_profile_from_yaml(profile_path)
-        _model_adapter = create_adapter(profile.key)
-        logger.info(f"Model adapter: {profile.key} ({profile.model_id})")
+        _profile = load_profile_from_yaml(profile_path)
+        _profile_sha256 = compute_profile_sha256(profile_path)
+
+        # Validate profile for research mode
+        errors = validate_research_profile(_profile)
+        if errors:
+            logger.error(f"Profile validation failed for {_profile.key}:")
+            for err in errors:
+                logger.error(f"  - {err}")
+            sys.exit(1)
+
+        # Enforce capability flags BEFORE model download
+        method_name_for_cap = config.get("method", {}).get("name", "")
+        _METHOD_CAPABILITY_MAP = {
+            "mllmu_prompting": "supports_prompting",
+            "midp_candidate_margin": "supports_candidate_margin",
+            "mllmu_ga": "supports_ga",
+            "mllmu_ga_difference": "supports_gd",
+            "mllmu_kl_min": "supports_kl",
+            "mllmu_npo": "supports_npo",
+            "mmunlearner": "supports_mmunlearner",
+            "manu": "supports_manu",
+            "r2mu_adapted": "supports_r2mu",
+        }
+        required_cap = _METHOD_CAPABILITY_MAP.get(method_name_for_cap)
+        if required_cap and not getattr(_profile, required_cap, False):
+            logger.error(
+                f"{_profile.key} does not support {method_name_for_cap} "
+                f"({required_cap}=false). Fix the profile or choose a "
+                f"different method."
+            )
+            sys.exit(1)
+
+        # Create adapter with the YAML profile (single source of truth)
+        _model_adapter = create_adapter(_profile.key, profile=_profile)
+
+        # Provenance log
+        logger.info("=" * 60)
+        logger.info("Model profile provenance")
+        logger.info(f"  model_key          = {_profile.key}")
+        logger.info(f"  model_id           = {_profile.model_id}")
+        logger.info(f"  model_revision     = {_profile.revision}")
+        logger.info(f"  processor_id       = {_profile.processor_id}")
+        logger.info(f"  processor_revision = {_profile.processor_revision}")
+        logger.info(f"  adapter_name       = {_profile.adapter_name}")
+        logger.info(f"  dtype              = {_profile.dtype}")
+        logger.info(f"  LoRA rank          = {_profile.lora_rank}")
+        logger.info(f"  LoRA alpha         = {_profile.lora_alpha}")
+        logger.info(f"  LoRA scope_regex   = {_profile.lora_scope_regex}")
+        logger.info(f"  profile_sha256     = {_profile_sha256}")
+        logger.info("=" * 60)
+
         # Store model key in config for downstream use
-        config.setdefault("model", {})["key"] = profile.key
+        config.setdefault("model", {})["key"] = _profile.key
 
     # Add code provenance
     config.setdefault("runtime", {})["code_commit"] = _git_commit()
@@ -386,6 +441,15 @@ def main() -> None:
     training_config.dtype = base_model.get("dtype", training_config.dtype)
     training_config.code_commit = _git_commit()
 
+    # P0: Profile is the single source of truth — override legacy config
+    if _profile is not None:
+        training_config.model_id = _profile.model_id
+        training_config.model_revision = _profile.revision
+        training_config.dtype = _profile.dtype
+        training_config.lora_rank = _profile.lora_rank
+        training_config.lora_alpha = _profile.lora_alpha
+        training_config.lora_dropout = _profile.lora_dropout
+
     # Apply data config
     data = config.get("data", {})
     training_config.processed_dataset_path = data.get("processed_dataset_path", "")
@@ -398,21 +462,26 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # Load base model (needed for ALL methods including prompting)        #
     # ------------------------------------------------------------------ #
-    from route_data.eval.unlearning_harness import (
-        apply_lora,
-        build_forget_dataset,
-        build_retain_dataset,
-        check_base_parameter_integrity,
-        load_base_model,
-    )
 
     logger.info(f"Loading base model {training_config.model_id} ...")
-    model, processor = load_base_model(
-        model_id=training_config.model_id,
-        revision=training_config.model_revision,
-        dtype=training_config.dtype,
-        device=training_config.device,
-    )
+
+    if _model_adapter is not None:
+        # P0: Profile-active path — adapter is authoritative
+        from route_data.eval.unlearning_harness import load_base_model_via_adapter
+        model, processor = load_base_model_via_adapter(
+            _model_adapter,
+            device=training_config.device,
+            training=True,
+        )
+    else:
+        # Legacy Qwen-only path
+        from route_data.eval.unlearning_harness import load_base_model
+        model, processor = load_base_model(
+            model_id=training_config.model_id,
+            revision=training_config.model_revision,
+            dtype=training_config.dtype,
+            device=training_config.device,
+        )
 
     # Handle special methods that do NOT use BaselineTrainer
     if method_name == "mllmu_prompting":
@@ -462,6 +531,7 @@ def main() -> None:
         eval_result = _run_eval(
             "prompting", model, processor, None, config, training_config,
             backend_override=prompting_backend,
+            trainable_adapter=_model_adapter,
         )
         if not eval_result.get("strict_validation_pass"):
             logger.error("Prompting: strict validation FAILED")
@@ -509,13 +579,26 @@ def main() -> None:
         return
 
     logger.info("Applying LoRA ...")
-    model = apply_lora(
-        model,
-        r=training_config.lora_rank,
-        lora_alpha=training_config.lora_alpha,
-        lora_dropout=training_config.lora_dropout,
-        target_modules=training_config.lora_target_modules,
-    )
+    if _model_adapter is not None:
+        # P0: Profile-active path — adapter resolves targets
+        from route_data.eval.unlearning_harness import (
+            apply_lora_via_adapter,
+            check_base_parameter_integrity,
+        )
+        model = apply_lora_via_adapter(model, _model_adapter)
+    else:
+        # Legacy Qwen-only path
+        from route_data.eval.unlearning_harness import (
+            apply_lora,
+            check_base_parameter_integrity,
+        )
+        model = apply_lora(
+            model,
+            r=training_config.lora_rank,
+            lora_alpha=training_config.lora_alpha,
+            lora_dropout=training_config.lora_dropout,
+            target_modules=training_config.lora_target_modules,
+        )
     check_base_parameter_integrity(model)
 
     # Build datasets
@@ -525,48 +608,91 @@ def main() -> None:
     forget_ds = None
     if not is_retain_only:
         logger.info("Building forget dataset ...")
-        forget_ds = build_forget_dataset(
-            processed_dataset_path=training_config.processed_dataset_path,
-            target_identity_ids=training_config.forget_identity_ids,
-            processor=processor,
-        )
+        if _model_adapter is not None:
+            from route_data.eval.unlearning_harness import (
+                build_multimodal_forget_dataset,
+            )
+            forget_ds = build_multimodal_forget_dataset(
+                processed_dataset_path=training_config.processed_dataset_path,
+                target_identity_ids=training_config.forget_identity_ids,
+                processor=processor,
+                adapter=_model_adapter,
+            )
+        else:
+            from route_data.eval.unlearning_harness import build_forget_dataset
+            forget_ds = build_forget_dataset(
+                processed_dataset_path=training_config.processed_dataset_path,
+                target_identity_ids=training_config.forget_identity_ids,
+                processor=processor,
+            )
 
     retain_ds = None
     if method_name in ("mllmu_ga_difference", "mllmu_kl_min", "npo_oracle",
                        "mmunlearner", "manu", "r2mu_adapted"):
         logger.info("Building retain dataset ...")
-        retain_ds = build_retain_dataset(
-            processed_dataset_path=training_config.processed_dataset_path,
-            retain_identity_ids=training_config.retain_identity_ids,
-            processor=processor,
-        )
+        if _model_adapter is not None:
+            from route_data.eval.unlearning_harness import (
+                build_multimodal_retain_dataset,
+            )
+            retain_ds = build_multimodal_retain_dataset(
+                processed_dataset_path=training_config.processed_dataset_path,
+                retain_identity_ids=training_config.retain_identity_ids,
+                processor=processor,
+                adapter=_model_adapter,
+            )
+        else:
+            from route_data.eval.unlearning_harness import build_retain_dataset
+            retain_ds = build_retain_dataset(
+                processed_dataset_path=training_config.processed_dataset_path,
+                retain_identity_ids=training_config.retain_identity_ids,
+                processor=processor,
+            )
 
     # Load reference/oracle models if needed
     reference_model = None
     oracle_model = None
 
     if method_name == "mllmu_kl_min":
-        from route_data.unlearning.reference_models import load_frozen_reference_model
-        config.get("runtime", {}).get("reference_model_path", "")
         logger.info("Loading frozen reference model ...")
-        reference_model, _ = load_frozen_reference_model(
-            model_id=training_config.model_id,
-            revision=training_config.model_revision,
-            dtype=training_config.dtype,
-            device=training_config.device,
-        )
+        if _model_adapter is not None:
+            from route_data.unlearning.reference_models import (
+                load_frozen_reference_model_via_adapter,
+            )
+            reference_model, _ = load_frozen_reference_model_via_adapter(
+                _model_adapter,
+                device=training_config.device,
+            )
+        else:
+            from route_data.unlearning.reference_models import load_frozen_reference_model
+            config.get("runtime", {}).get("reference_model_path", "")
+            reference_model, _ = load_frozen_reference_model(
+                model_id=training_config.model_id,
+                revision=training_config.model_revision,
+                dtype=training_config.dtype,
+                device=training_config.device,
+            )
 
     if method_name == "mllmu_npo":
-        from route_data.unlearning.reference_models import load_oracle_model
         oracle_path = config.get("runtime", {}).get("oracle_adapter_path", "")
         logger.info(f"Loading oracle model from {oracle_path} ...")
-        oracle_model, _ = load_oracle_model(
-            model_id=training_config.model_id,
-            revision=training_config.model_revision,
-            adapter_path=oracle_path,
-            dtype=training_config.dtype,
-            device=training_config.device,
-        )
+        if _model_adapter is not None:
+            from route_data.unlearning.reference_models import (
+                load_oracle_model_via_adapter,
+            )
+            oracle_model, _ = load_oracle_model_via_adapter(
+                _model_adapter,
+                adapter_path=oracle_path,
+                device=training_config.device,
+            )
+        else:
+            from route_data.unlearning.reference_models import load_oracle_model
+            oracle_model, _ = load_oracle_model(
+                model_id=training_config.model_id,
+                revision=training_config.model_revision,
+                adapter_path=oracle_path,
+                dtype=training_config.dtype,
+                device=training_config.device,
+            )
 
     # ------------------------------------------------------------------ #
     # Structural / representation baselines (B7–B9)
@@ -630,6 +756,7 @@ def main() -> None:
                     pruned_model, processor, None,
                     config, training_config,
                     eval_subdir=f"prune_{rate_str}",
+                    trainable_adapter=_model_adapter,
                 )
 
             runner = MANU(method_cfg)
@@ -641,15 +768,24 @@ def main() -> None:
 
         elif method_name == "r2mu_adapted":
             from route_data.unlearning import R2MUAdapted, R2MUAdaptedConfig
-            from route_data.unlearning.reference_models import load_frozen_reference_model
-            config.get("runtime", {}).get("reference_model_path", "")
             logger.info("Loading frozen reference model for R²MU-adapted ...")
-            frozen_model, _ = load_frozen_reference_model(
-                model_id=training_config.model_id,
-                revision=training_config.model_revision,
-                dtype=training_config.dtype,
-                device=training_config.device,
-            )
+            if _model_adapter is not None:
+                from route_data.unlearning.reference_models import (
+                    load_frozen_reference_model_via_adapter,
+                )
+                frozen_model, _ = load_frozen_reference_model_via_adapter(
+                    _model_adapter,
+                    device=training_config.device,
+                )
+            else:
+                from route_data.unlearning.reference_models import load_frozen_reference_model
+                config.get("runtime", {}).get("reference_model_path", "")
+                frozen_model, _ = load_frozen_reference_model(
+                    model_id=training_config.model_id,
+                    revision=training_config.model_revision,
+                    dtype=training_config.dtype,
+                    device=training_config.device,
+                )
             method_cfg = R2MUAdaptedConfig(
                 candidate_layers=config.get("candidate_layers", [8, 16, 24, 32]),
                 n_select_layers=config.get("n_select_layers", 2),
@@ -677,6 +813,7 @@ def main() -> None:
             )
             eval_result = _run_eval(
                 method_name, model, processor, adapter_p, config, training_config,
+                trainable_adapter=_model_adapter,
             )
             if not eval_result.get("strict_validation_pass"):
                 logger.error(f"{method_name}: strict validation FAILED")
@@ -724,6 +861,7 @@ def main() -> None:
         retain_dataset=retain_ds,
         reference_model=reference_model,
         oracle_model=oracle_model,
+        adapter=_model_adapter,
     )
 
     logger.info(f"Starting training: {method_name}")
@@ -754,6 +892,7 @@ def main() -> None:
     eval_result = _run_eval(
         canonical_id, model, processor, adapter_save_path, config, training_config,
         objective_name=method_name,
+        trainable_adapter=_model_adapter,
     )
     if not eval_result.get("strict_validation_pass"):
         logger.error(f"{method_name}: strict validation FAILED")

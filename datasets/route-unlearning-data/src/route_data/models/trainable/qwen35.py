@@ -13,6 +13,8 @@ Key Qwen-specific behaviours:
 - Pad token ID is 0.
 - Language tower lives at ``model.model.layers`` with self-attention
   projections ``q_proj``, ``k_proj``, ``v_proj``, ``o_proj``.
+- Language config may live at ``model.config.text_config`` (composite model)
+  or ``model.config`` (standalone).  The adapter resolves both.
 """
 
 from __future__ import annotations
@@ -22,58 +24,27 @@ from typing import Any
 
 import torch
 
-from .base import ModelFamilyProfile, NeuronSpec, TrainableVLMAdapter
+from .base import ModelFamilyProfile, NeuronSpec
 from .hf_chat import HuggingFaceChatAdapter
-from .registry import register_adapter
+from .registry import register_adapter_family, register_model_key
 
 logger = logging.getLogger(__name__)
 
-# Default Qwen3.5-9B profile (frozen for reproducibility)
-_QWEN35_9B_PROFILE = ModelFamilyProfile(
-    key="qwen35_9b",
-    model_id="Qwen/Qwen3.5-9B",
-    revision="c202236235762e1c871ad0ccb60c8ee5ba337b9a",
-    processor_id="Qwen/Qwen3.5-9B",
-    processor_revision="c202236235762e1c871ad0ccb60c8ee5ba337b9a",
-    adapter_name="qwen35",
-    trust_remote_code=True,
-    dtype="bfloat16",
-    attn_implementation="sdpa",
-    candidate_positive="Yes",
-    candidate_negative="No",
-    lora_rank=8,
-    lora_alpha=16,
-    lora_dropout=0.05,
-    lora_scope="language_attention_only",
-    lora_target_leaf_names=("q_proj", "k_proj", "v_proj", "o_proj"),
-    lora_scope_regex=r"^model\.layers\.\d+\.self_attn\.",
-    r2mu_candidate_layers=(7, 14, 21, 25),
-    r2mu_n_select_layers=4,
-    supports_prompting=True,
-    supports_candidate_margin=True,
-    supports_ga=True,
-    supports_gd=True,
-    supports_kl=True,
-    supports_npo=True,
-    supports_mmunlearner=True,
-    supports_manu=True,
-    supports_r2mu=True,
-    min_transformers_version="5.0.0rc0",
-    tested_transformers_version="5.14.1",
-    requires_hf_auth=False,
-)
 
-
+@register_adapter_family("qwen35")
 class Qwen35Adapter(HuggingFaceChatAdapter):
     """Trainable adapter for the Qwen3.5 model family.
 
     Implements the :class:`TrainableVLMAdapter` interface by delegating
     standard HF chat-template operations to :class:`HuggingFaceChatAdapter`
     and providing Qwen-specific structural metadata.
+
+    The profile is **required** and must come from a YAML file.  There are
+    no hard-coded internal defaults.
     """
 
-    def __init__(self, profile: ModelFamilyProfile | None = None):
-        self._profile = profile or _QWEN35_9B_PROFILE
+    def __init__(self, profile: ModelFamilyProfile):
+        self._profile = profile
 
     @property
     def profile(self) -> ModelFamilyProfile:
@@ -124,6 +95,22 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
         return keys
 
     # ------------------------------------------------------------------ #
+    # Language config resolution (P0 — composite vs standalone)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def language_config(model: torch.nn.Module) -> Any:
+        """Resolve the language sub-config from a (possibly composite) model.
+
+        For Qwen3.5 VL the text config lives at ``model.config.text_config``.
+        For standalone language models it is ``model.config`` itself.
+        """
+        cfg = getattr(model.config, "text_config", None)
+        if cfg is not None:
+            return cfg
+        return model.config
+
+    # ------------------------------------------------------------------ #
     # LoRA target resolution
     # ------------------------------------------------------------------ #
 
@@ -163,8 +150,12 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
         self,
         model: torch.nn.Module,
     ) -> int:
-        """Return the hidden dimension of the Qwen3.5 language model."""
-        return model.config.hidden_size
+        """Return the hidden dimension of the Qwen3.5 language model.
+
+        Uses :meth:`language_config` to resolve the correct config node.
+        """
+        cfg = self.language_config(model)
+        return cfg.hidden_size
 
     # ------------------------------------------------------------------ #
     # MANU neuron specifications
@@ -177,10 +168,12 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
         """Return MANU neuron specs for Qwen3.5 language-backbone MLPs.
 
         Qwen3.5 uses a gated MLP with ``gate_proj``, ``up_proj``, and
-        ``down_proj``.  The intermediate size is ``model.config.intermediate_size``.
+        ``down_proj``.  The intermediate size comes from the language
+        config (which may be nested under ``text_config``).
         """
         layers = self.language_layers(model)
-        intermediate_size = model.config.intermediate_size
+        cfg = self.language_config(model)
+        intermediate_size = cfg.intermediate_size
 
         specs: list[NeuronSpec] = []
         for i, layer in enumerate(layers):
@@ -217,56 +210,6 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
         return backend
 
 
-# ------------------------------------------------------------------ #
-# Registration
-# ------------------------------------------------------------------ #
-
-@register_adapter("qwen35_9b")
-def _create_qwen35_9b() -> TrainableVLMAdapter:
-    return Qwen35Adapter(_QWEN35_9B_PROFILE)
-
-
-# Qwen3.5-4B shares the same adapter class with a different profile.
-# The profile is loaded from YAML at runtime; register a placeholder
-# factory that accepts a profile override.
-@register_adapter("qwen35_4b")
-def _create_qwen35_4b() -> TrainableVLMAdapter:
-    """Factory for Qwen3.5-4B scale ablation.
-
-    Uses the same adapter class as Qwen3.5-9B but with a profile
-    that pins the 4B checkpoint.
-    """
-    profile_4b = ModelFamilyProfile(
-        key="qwen35_4b",
-        model_id="Qwen/Qwen3.5-4B",
-        revision="<PIN_EXACT_HF_COMMIT_SHA>",
-        processor_id="Qwen/Qwen3.5-4B",
-        processor_revision="<PIN_EXACT_HF_COMMIT_SHA>",
-        adapter_name="qwen35",
-        trust_remote_code=True,
-        dtype="bfloat16",
-        attn_implementation="sdpa",
-        candidate_positive="Yes",
-        candidate_negative="No",
-        lora_rank=8,
-        lora_alpha=16,
-        lora_dropout=0.05,
-        lora_scope="language_attention_only",
-        lora_target_leaf_names=("q_proj", "k_proj", "v_proj", "o_proj"),
-        lora_scope_regex=r"^model\.layers\.\d+\.self_attn\.",
-        r2mu_candidate_layers=(7, 14, 21, 25),
-        r2mu_n_select_layers=4,
-        supports_prompting=True,
-        supports_candidate_margin=True,
-        supports_ga=True,
-        supports_gd=True,
-        supports_kl=True,
-        supports_npo=True,
-        supports_mmunlearner=True,
-        supports_manu=True,
-        supports_r2mu=True,
-        min_transformers_version="5.0.0rc0",
-        tested_transformers_version="5.14.1",
-        requires_hf_auth=False,
-    )
-    return Qwen35Adapter(profile_4b)
+# Register model keys that share the qwen35 adapter family
+register_model_key("qwen35_9b", "qwen35")
+register_model_key("qwen35_4b", "qwen35")

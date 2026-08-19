@@ -258,6 +258,7 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
 
         # Carry forward metadata from prefix
         result["_prefix_len"] = prefix_len
+        result["_pad_token_id"] = self.pad_token_id(processor)
         result["_correct_answer_token_ids"] = self.candidate_token_ids(
             processor, answer_text,
         )
@@ -397,16 +398,38 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
     def _collate_pad_token_id(self, batch: list[dict[str, Any]]) -> int:
         """Resolve pad token ID for collation.
 
-        Checks the first batch item for a ``_pad_token_id`` field,
-        otherwise returns the profile default.  Subclasses can override.
+        Requires ``_pad_token_id`` in each batch item (set by
+        ``build_supervised_example``).  Validates consistency across
+        the batch.  No generic fallback to 0.
         """
-        if "_pad_token_id" in batch[0]:
-            return batch[0]["_pad_token_id"]
-        return self._default_pad_token_id()
+        if "_pad_token_id" not in batch[0]:
+            raise RuntimeError(
+                f"{self.profile.key}: batch items must contain "
+                f"'_pad_token_id'. Ensure build_supervised_example "
+                f"stores it."
+            )
+        pad_id = batch[0]["_pad_token_id"]
+        if not isinstance(pad_id, int) or pad_id < 0:
+            raise RuntimeError(
+                f"{self.profile.key}: _pad_token_id must be a "
+                f"non-negative integer, got {pad_id!r}"
+            )
+        # Validate consistency across batch
+        for i, item in enumerate(batch):
+            if item.get("_pad_token_id") != pad_id:
+                raise RuntimeError(
+                    f"{self.profile.key}: inconsistent _pad_token_id "
+                    f"in batch: item 0 has {pad_id}, item {i} has "
+                    f"{item.get('_pad_token_id')!r}"
+                )
+        return pad_id
 
     def _default_pad_token_id(self) -> int:
-        """Default pad token ID. Override per model family."""
-        return 0
+        """Deprecated — pad token must come from the batch."""
+        raise RuntimeError(
+            f"{self.profile.key}: _default_pad_token_id() should not "
+            f"be called. Pad token must come from the batch items."
+        )
 
     def _sequence_indexed_keys_in_batch(
         self, batch: list[dict[str, Any]],
@@ -422,6 +445,21 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
             keys.add("mm_token_type_ids")
         return keys
 
+    def _sequence_indexed_keys_for_scoring(
+        self, prefix: dict[str, Any],
+    ) -> set[str]:
+        """Return sequence-indexed tensor keys in a single prefix dict.
+
+        Used by :meth:`append_candidate` to know which tensors need
+        extending with candidate tokens.  Default: ``mm_token_type_ids``
+        if present.  Override for models with different text-aligned
+        tensors.
+        """
+        keys: set[str] = set()
+        if "mm_token_type_ids" in prefix:
+            keys.add("mm_token_type_ids")
+        return keys
+
     def _collate_visual_tensors(
         self,
         batch: list[dict[str, Any]],
@@ -430,26 +468,17 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
     ) -> None:
         """Concatenate visual tensors from batch items into *result*.
 
-        Default: concatenate ``pixel_values`` along dim 0 (tile/image),
-        and ``image_grid_thw`` / ``image_sizes`` if present.
+        Uses :meth:`image_indexed_keys` to determine which keys are
+        image-indexed and should be concatenated along dim 0.
         """
-        # pixel_values
-        pv_list = [item["pixel_values"] for item in batch
-                    if "pixel_values" in item]
-        if len(pv_list) == batch_size and all(torch.is_tensor(p) for p in pv_list):
-            result["pixel_values"] = torch.cat(pv_list, dim=0)
-
-        # image_grid_thw
-        ig_list = [item["image_grid_thw"] for item in batch
-                    if "image_grid_thw" in item]
-        if len(ig_list) == batch_size:
-            result["image_grid_thw"] = torch.cat(ig_list, dim=0)
-
-        # image_sizes
-        is_list = [item["image_sizes"] for item in batch
-                    if "image_sizes" in item]
-        if len(is_list) == batch_size:
-            result["image_sizes"] = torch.cat(is_list, dim=0)
+        for key in sorted(self.image_indexed_keys()):
+            tensor_list = [
+                item[key] for item in batch if key in item
+            ]
+            if len(tensor_list) == batch_size and all(
+                torch.is_tensor(t) for t in tensor_list
+            ):
+                result[key] = torch.cat(tensor_list, dim=0)
 
     def _validate_batch_keys(self, batch: list[dict[str, Any]]) -> None:
         required = {"input_ids", "attention_mask", "labels"}
@@ -500,7 +529,7 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
         }
 
         # Extend sequence-indexed text tensors
-        for key in ("mm_token_type_ids",):
+        for key in self._sequence_indexed_keys_for_scoring(prefix):
             if key in prefix:
                 prefix_mm = prefix[key]
                 cand_mm = torch.zeros_like(cand_ids, dtype=prefix_mm.dtype)
@@ -517,9 +546,15 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
         return forward
 
     def _visual_tensor_keys(self, prefix: dict[str, Any]) -> list[str]:
-        """Return the visual tensor keys present in *prefix*."""
+        """Return the visual tensor keys present in *prefix*.
+
+        Uses :meth:`image_indexed_keys` to determine which keys are
+        visual/image-indexed, plus any additional tensor keys that are
+        not text-aligned.
+        """
+        img_keys = self.image_indexed_keys()
         keys: list[str] = []
-        for k in ("pixel_values", "image_sizes", "image_grid_thw"):
+        for k in sorted(img_keys):
             if k in prefix:
                 keys.append(k)
         return keys

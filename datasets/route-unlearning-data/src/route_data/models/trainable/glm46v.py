@@ -20,58 +20,30 @@ from typing import Any
 
 import torch
 
-from .base import ModelFamilyProfile, TrainableVLMAdapter
+from .base import ModelFamilyProfile
 from .hf_chat import HuggingFaceChatAdapter
-from .registry import register_adapter
+from .registry import register_adapter_family, register_model_key
 
 logger = logging.getLogger(__name__)
 
-_GLM46V_PROFILE = ModelFamilyProfile(
-    key="glm46v_flash",
-    model_id="zai-org/GLM-4.6V-Flash",
-    revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    processor_id="zai-org/GLM-4.6V-Flash",
-    processor_revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    adapter_name="glm46v",
-    trust_remote_code=False,
-    dtype="bfloat16",
-    attn_implementation="sdpa",
-    candidate_positive="Yes",
-    candidate_negative="No",
-    lora_rank=8,
-    lora_alpha=16,
-    lora_dropout=0.05,
-    lora_scope="language_attention_only",
-    lora_target_leaf_names=("q_proj", "k_proj", "v_proj", "o_proj"),
-    lora_scope_regex="<DISCOVER_ON_REAL_MODEL_AND_FREEZE>",
-    r2mu_candidate_layers=(),
-    r2mu_n_select_layers=0,
-    supports_prompting=False,
-    supports_candidate_margin=False,
-    supports_ga=False,
-    supports_gd=False,
-    supports_kl=False,
-    supports_npo=False,
-    supports_mmunlearner=False,
-    supports_manu=False,
-    supports_r2mu=False,
-    min_transformers_version="5.0.0rc0",
-    tested_transformers_version="5.14.1",
-    requires_hf_auth=False,
-)
 
-
+@register_adapter_family("glm46v")
 class GLM46VAdapter(HuggingFaceChatAdapter):
     """Trainable adapter for GLM-4.6V-Flash (stub).
 
     Inherits standard HF chat-template operations from
     :class:`HuggingFaceChatAdapter`.  Structural methods require
     real-model discovery before they can be implemented.
+
+    The profile is **required** and must come from a YAML file.
     """
+
+    def __init__(self, profile: ModelFamilyProfile):
+        self._profile = profile
 
     @property
     def profile(self) -> ModelFamilyProfile:
-        return _GLM46V_PROFILE
+        return self._profile
 
     # ------------------------------------------------------------------ #
     # GLM-specific hooks
@@ -123,6 +95,4 @@ class GLM46VAdapter(HuggingFaceChatAdapter):
         )
 
 
-@register_adapter("glm46v_flash")
-def _create_glm46v() -> TrainableVLMAdapter:
-    return GLM46VAdapter()
+register_model_key("glm46v_flash", "glm46v")

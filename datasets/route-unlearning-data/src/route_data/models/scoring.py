@@ -205,6 +205,8 @@ def compute_candidate_margin(
     yes_token_ids: list[int],
     no_token_ids: list[int],
     expected_answer: bool,
+    *,
+    adapter: Any | None = None,
 ) -> torch.Tensor:
     """Compute the candidate margin for forget loss.
 
@@ -220,6 +222,10 @@ def compute_candidate_margin(
         Token IDs for "No" (dynamically resolved, not hard-coded).
     expected_answer:
         True if the expected answer is "Yes", False if "No".
+    adapter:
+        Optional trainable adapter for model-agnostic forward building.
+        When provided, uses ``adapter.append_candidate()`` instead of
+        the legacy hardcoded path.
 
     Returns
     -------
@@ -233,8 +239,12 @@ def compute_candidate_margin(
     - Expected No:  ``M = logP(No) - logP(Yes)``
     - ``L_forget = mean(M)``
     """
-    log_p_yes = score_candidate_sequence_tensor(model, prefix, yes_token_ids)
-    log_p_no = score_candidate_sequence_tensor(model, prefix, no_token_ids)
+    log_p_yes = score_candidate_sequence_tensor(
+        model, prefix, yes_token_ids, adapter=adapter,
+    )
+    log_p_no = score_candidate_sequence_tensor(
+        model, prefix, no_token_ids, adapter=adapter,
+    )
 
     if expected_answer:
         # Expected Yes: margin = logP(Yes) - logP(No)

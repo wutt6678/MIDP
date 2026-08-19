@@ -22,56 +22,28 @@ from typing import Any
 import torch
 
 from .base import ModelFamilyProfile, NeuronSpec, TrainableVLMAdapter
-from .registry import register_adapter
+from .registry import register_adapter_family, register_model_key
 
 logger = logging.getLogger(__name__)
 
-_PHI4MM_PROFILE = ModelFamilyProfile(
-    key="phi4_mm",
-    model_id="microsoft/Phi-4-multimodal-instruct",
-    revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    processor_id="microsoft/Phi-4-multimodal-instruct",
-    processor_revision="<PIN_EXACT_HF_COMMIT_SHA>",
-    adapter_name="phi4mm",
-    trust_remote_code=True,
-    dtype="bfloat16",
-    attn_implementation="sdpa",
-    candidate_positive="Yes",
-    candidate_negative="No",
-    lora_rank=8,
-    lora_alpha=16,
-    lora_dropout=0.05,
-    lora_scope="language_attention_only",
-    lora_target_leaf_names=("qkv_proj", "o_proj"),
-    lora_scope_regex="<DISCOVER_ON_REAL_MODEL_AND_FREEZE>",
-    r2mu_candidate_layers=(),
-    r2mu_n_select_layers=0,
-    supports_prompting=False,
-    supports_candidate_margin=False,
-    supports_ga=False,
-    supports_gd=False,
-    supports_kl=False,
-    supports_npo=False,
-    supports_mmunlearner=False,
-    supports_manu=False,
-    supports_r2mu=False,
-    min_transformers_version="4.47.0",
-    tested_transformers_version="5.14.1",
-    requires_hf_auth=False,
-)
 
-
+@register_adapter_family("phi4mm")
 class Phi4MMAdapter(TrainableVLMAdapter):
     """Trainable adapter for Phi-4-multimodal-instruct (stub).
 
     Does NOT inherit from :class:`HuggingFaceChatAdapter` because Phi
     uses a fundamentally different rendering and batching path.
     All methods are stubs requiring real-model discovery.
+
+    The profile is **required** and must come from a YAML file.
     """
+
+    def __init__(self, profile: ModelFamilyProfile):
+        self._profile = profile
 
     @property
     def profile(self) -> ModelFamilyProfile:
-        return _PHI4MM_PROFILE
+        return self._profile
 
     # ------------------------------------------------------------------ #
     # Multimodal key management (Phi-specific)
@@ -141,6 +113,4 @@ class Phi4MMAdapter(TrainableVLMAdapter):
         raise NotImplementedError("Phi-4-MM eval backend not yet implemented.")
 
 
-@register_adapter("phi4_mm")
-def _create_phi4mm() -> TrainableVLMAdapter:
-    return Phi4MMAdapter()
+register_model_key("phi4_mm", "phi4mm")
