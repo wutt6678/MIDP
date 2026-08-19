@@ -562,4 +562,26 @@ def validate_structural_metadata(
         if len(p.r2mu_candidate_layers) != len(set(p.r2mu_candidate_layers)):
             errors.append("r2mu_candidate_layers contains duplicates")
 
+    # Capability-scoped: R²MU
+    if p.supports_r2mu:
+        if not p.r2mu_candidate_layers:
+            errors.append(
+                "supports_r2mu=true but r2mu_candidate_layers is empty"
+            )
+        elif (
+            isinstance(p.r2mu_n_select_layers, int)
+            and isinstance(p.r2mu_candidate_layers, (list, tuple))
+            and p.r2mu_n_select_layers > len(p.r2mu_candidate_layers)
+        ):
+            errors.append(
+                f"r2mu_n_select_layers ({p.r2mu_n_select_layers}) > "
+                f"number of candidates ({len(p.r2mu_candidate_layers)})"
+            )
+
+    # Capability-scoped: MANU
+    if p.supports_manu and isinstance(p.intermediate_size, int) and p.intermediate_size <= 0:
+        errors.append(
+            "supports_manu=true but intermediate_size is not resolved"
+        )
+
     return errors

@@ -219,9 +219,11 @@ class TestBaselineIdentityValidation:
         )
 
         binding = BaselineBinding(
+            model_key="qwen35_9b",
             model_id="Qwen/Qwen3.5-9B",
             model_revision="a" * 40,
             processor_revision="b" * 40,
+            model_profile_sha256="e" * 64,
         )
         errors = validate_baseline_model_identity(
             binding,
@@ -229,6 +231,7 @@ class TestBaselineIdentityValidation:
             model_id="Qwen/Qwen3.5-9B",
             model_revision="c" * 40,  # MISMATCH
             processor_revision="b" * 40,
+            model_profile_sha256="e" * 64,
         )
         assert len(errors) == 1
         assert "revision" in errors[0]
@@ -241,9 +244,11 @@ class TestBaselineIdentityValidation:
         )
 
         binding = BaselineBinding(
+            model_key="qwen35_9b",
             model_id="Qwen/Qwen3.5-9B",
             model_revision="a" * 40,
             processor_revision="b" * 40,
+            model_profile_sha256="e" * 64,
         )
         errors = validate_baseline_model_identity(
             binding,
@@ -251,6 +256,7 @@ class TestBaselineIdentityValidation:
             model_id="Qwen/Qwen3.5-9B",
             model_revision="a" * 40,
             processor_revision="b" * 40,
+            model_profile_sha256="e" * 64,
         )
         assert errors == []
 
@@ -262,14 +268,17 @@ class TestBaselineIdentityValidation:
         )
 
         binding = BaselineBinding(
+            model_key="glm46v_flash",
             model_id="THUDM/GLM-4.6V-Flash",
             model_revision="d" * 40,
+            model_profile_sha256="f" * 64,
         )
         errors = validate_baseline_model_identity(
             binding,
-            model_key="glm46v_flash",
+            model_key="qwen35_9b",
             model_id="Qwen/Qwen3.5-9B",  # Deliberate mismatch
             model_revision="a" * 40,
+            model_profile_sha256="e" * 64,
         )
         assert len(errors) >= 1
 
@@ -463,10 +472,12 @@ class TestQwenCompositeTopology:
         vision_blocks.append(vis_block)
 
         # Assemble composite structure.
-        model.language_model = nn.Module()
-        model.language_model.layers = lang_layers
-        model.visual = nn.Module()
-        model.visual.blocks = vision_blocks
+        # Qwen3.5 composite: model.model.language_model.layers
+        model.model = nn.Module()
+        model.model.language_model = nn.Module()
+        model.model.language_model.layers = lang_layers
+        model.model.visual = nn.Module()
+        model.model.visual.blocks = vision_blocks
 
         # Build a profile with the expected regex.
         profile = ModelFamilyProfile(
@@ -486,7 +497,7 @@ class TestQwenCompositeTopology:
             lora_dropout=0.05,
             lora_scope="language_attention_only",
             lora_target_leaf_names=("q_proj", "v_proj"),
-            lora_scope_regex=r"^language_model\.layers\.\d+\.self_attn\.",
+            lora_scope_regex=r"^model\.language_model\.layers\.\d+\.self_attn\.",
             r2mu_candidate_layers=(8, 16, 24, 29),
             r2mu_n_select_layers=2,
         )
@@ -503,9 +514,9 @@ class TestQwenCompositeTopology:
 
         # Verify specific targets.
         target_names = set(targets)
-        assert "language_model.layers.0.self_attn.q_proj" in target_names
-        assert "language_model.layers.0.self_attn.v_proj" in target_names
-        assert "visual.blocks.0.attn.q_proj" not in target_names
+        assert "model.language_model.layers.0.self_attn.q_proj" in target_names
+        assert "model.language_model.layers.0.self_attn.v_proj" in target_names
+        assert "model.visual.blocks.0.attn.q_proj" not in target_names
 
 
 # ------------------------------------------------------------------ #

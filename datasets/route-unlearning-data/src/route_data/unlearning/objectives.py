@@ -510,7 +510,8 @@ class NegativePreferenceOptimization:
             prefix_len = prefix_lens[i]
             expected_answer = answer_labels[i]
 
-            # Build prefix dict for this sample
+            # P0-R5: Use visual spans for architecture-safe extraction
+            visual_spans = forget_batch.get("_visual_spans", {})
             prefix: dict[str, torch.Tensor] = {
                 "input_ids": forget_batch["input_ids"][i:i+1, :prefix_len],
                 "attention_mask": forget_batch["attention_mask"][i:i+1, :prefix_len],
@@ -518,12 +519,16 @@ class NegativePreferenceOptimization:
 
             # Add multimodal tensors
             _SEQ_KEYS = {"mm_token_type_ids"}
+            _IMG_KEYS = {"pixel_values", "image_grid_thw", "image_sizes"}
             for key in ("pixel_values", "image_grid_thw", "mm_token_type_ids", "image_sizes"):
                 if key in forget_batch:
                     val = forget_batch[key]
                     if torch.is_tensor(val):
                         if key in _SEQ_KEYS:
                             prefix[key] = val[i:i+1, :prefix_len]
+                        elif key in _IMG_KEYS and key in visual_spans:
+                            start, stop = visual_spans[key][i]
+                            prefix[key] = val[start:stop]
                         else:
                             prefix[key] = val[i:i+1]
                     elif isinstance(val, list) and len(val) > i:

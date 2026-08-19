@@ -22,14 +22,17 @@ lora:
   dropout: 0.05
   scope: language_attention_only
   target_leaf_names: [q_proj, k_proj, v_proj, o_proj]
-  scope_regex: "^model\\.layers\\.\\d+\\.self_attn\\."
+  scope_regex: "^model\\.language_model\\.layers\\.\\d+\\.self_attn\\."
 
 structural:
-  language_layer_path: model.layers
-  language_hidden_size: 3584
-  intermediate_size: 18944
-  num_language_layers: 28
-  r2mu_candidate_layers: [7, 14, 21, 25]
+  language_layer_path: model.language_model.layers
+  language_hidden_size: 4096
+  intermediate_size: 12288
+  num_language_layers: 32
+  # R²MU candidate layers: 0-based indices at ~25%, ~50%, ~75%, ~90%
+  # depth of the 32-layer language stack.
+  # Formula: round(n_layers * fraction) for fraction in {0.25, 0.50, 0.75, 0.90}
+  r2mu_candidate_layers: [8, 16, 24, 29]
   r2mu_n_select_layers: 4
   manu_spec: qwen35_language_mlp_v1
 

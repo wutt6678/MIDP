@@ -1048,31 +1048,32 @@ def main() -> None:
     if model_profile_path:
         resolved_profile = str(Path(model_profile_path).resolve())
         suite_state["model_profile_path"] = resolved_profile
-        # Load profile and populate suite_state provenance.
-        with open(resolved_profile) as _pf:
-            _profile_data = yaml.safe_load(_pf) or {}
-        _profile_sha = _sha256_file(resolved_profile)
-        suite_state["model_key"] = _profile_data.get("key", "")
-        suite_state["model_id"] = _profile_data.get("model_id", "")
-        suite_state["model_revision"] = _profile_data.get("revision", "")
-        suite_state["processor_id"] = _profile_data.get("processor_id", "")
-        suite_state["processor_revision"] = _profile_data.get(
-            "processor_revision", "",
+        # P0-R1: Use the canonical profile loader — do NOT manually
+        # reparse the nested YAML schema here.
+        from route_data.models.trainable.registry import (
+            compute_profile_sha256,
+            load_profile_from_yaml,
         )
+        _profile = load_profile_from_yaml(resolved_profile)
+        _profile_sha = compute_profile_sha256(resolved_profile)
+        suite_state["model_key"] = _profile.key
+        suite_state["model_id"] = _profile.model_id
+        suite_state["model_revision"] = _profile.revision
+        suite_state["processor_id"] = _profile.processor_id
+        suite_state["processor_revision"] = _profile.processor_revision
+        suite_state["adapter_family"] = _profile.adapter_name
         suite_state["model_profile_sha256"] = _profile_sha
         logger.info(
             f"Model profile: {resolved_profile} "
-            f"(key={_profile_data.get('key', '')}, "
-            f"sha={_profile_sha[:16]}...)"
+            f"(key={_profile.key}, sha={_profile_sha[:16]}...)"
         )
         # P0-6: MIDP-CM cross-model handling.
         # Historical Qwen MIDP-CM evidence must not be reused for a
         # non-Qwen model.  midp_cm is disabled for non-Qwen profiles.
-        _adapter_name = _profile_data.get("adapter_name", "")
-        if _adapter_name != "qwen35":
+        if _profile.adapter_name != "qwen35":
             logger.warning(
                 f"MIDP-CM historical binding is Qwen-specific. "
-                f"Disabling midp_cm for adapter={_adapter_name!r}."
+                f"Disabling midp_cm for adapter={_profile.adapter_name!r}."
             )
             methods_to_run = [
                 m for m in methods_to_run if m[0] != "midp_cm"
@@ -1082,11 +1083,9 @@ def main() -> None:
         # _validate_eval_result uses the profile revision, not the
         # Qwen-centric common.yaml revision.
         common_config.setdefault("base_model", {})["revision"] = (
-            _profile_data.get("revision", "")
+            _profile.revision
         )
-        common_config["base_model"]["id"] = _profile_data.get(
-            "model_id", common_config["base_model"].get("id", ""),
-        )
+        common_config["base_model"]["id"] = _profile.model_id
 
     # Run methods in order
     results: list[dict[str, Any]] = []
@@ -1193,6 +1192,7 @@ def main() -> None:
         "model_revision": suite_state.get("model_revision", ""),
         "processor_id": suite_state.get("processor_id", ""),
         "processor_revision": suite_state.get("processor_revision", ""),
+        "adapter_family": suite_state.get("adapter_family", ""),
         "model_profile_sha256": suite_state.get("model_profile_sha256", ""),
         # P0-7/8/9/10/11: Non-vacuous completeness.
         "required_comparison_methods": sorted(required_comparison_methods),

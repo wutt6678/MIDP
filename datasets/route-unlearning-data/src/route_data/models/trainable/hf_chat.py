@@ -470,7 +470,13 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
 
         Uses :meth:`image_indexed_keys` to determine which keys are
         image-indexed and should be concatenated along dim 0.
+
+        Also records ``_visual_spans`` — a dict mapping each visual key
+        to a list of ``(start, stop)`` tuples (one per sample) so that
+        per-sample extraction can use exact spans instead of assuming
+        one visual entry per sample.
         """
+        visual_spans: dict[str, list[tuple[int, int]]] = {}
         for key in sorted(self.image_indexed_keys()):
             tensor_list = [
                 item[key] for item in batch if key in item
@@ -479,6 +485,16 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
                 torch.is_tensor(t) for t in tensor_list
             ):
                 result[key] = torch.cat(tensor_list, dim=0)
+                # Record per-sample spans for architecture-safe extraction
+                spans: list[tuple[int, int]] = []
+                offset = 0
+                for t in tensor_list:
+                    n = t.shape[0]
+                    spans.append((offset, offset + n))
+                    offset += n
+                visual_spans[key] = spans
+        if visual_spans:
+            result["_visual_spans"] = visual_spans
 
     def _validate_batch_keys(self, batch: list[dict[str, Any]]) -> None:
         required = {"input_ids", "attention_mask", "labels"}
@@ -500,6 +516,74 @@ class HuggingFaceChatAdapter(TrainableVLMAdapter):
             assert result[key].shape == (batch_size, seq_len), (
                 f"{key} shape mismatch: {result[key].shape}"
             )
+
+    # ------------------------------------------------------------------ #
+    # Architecture-safe per-sample extraction (P0-R5)
+    # ------------------------------------------------------------------ #
+
+    def extract_sample_prefix(
+        self,
+        batch: dict[str, Any],
+        sample_index: int,
+    ) -> dict[str, Any]:
+        """Extract a single sample's prefix from a collated batch.
+
+        Uses ``_visual_spans`` (recorded during collation) for visual
+        tensors instead of assuming ``val[i:i+1]``.  Sequence-indexed
+        tensors are sliced to the sample's ``_prefix_len``.
+
+        Parameters
+        ----------
+        batch:
+            Collated batch dict (tensors with batch dim 0).
+        sample_index:
+            Index of the sample to extract.
+
+        Returns
+        -------
+        prefix : dict
+            Per-sample prefix dict suitable for :meth:`append_candidate`.
+        """
+        i = sample_index
+        prefix_lens = batch.get("_prefix_len", None)
+        if prefix_lens is not None and isinstance(prefix_lens, list):
+            prefix_len = prefix_lens[i]
+        else:
+            # Fallback: use full attention_mask length
+            prefix_len = int(batch["attention_mask"][i].sum().item())
+
+        img_keys = self.image_indexed_keys()
+        seq_keys = self._sequence_indexed_keys_for_scoring(
+            {k: v for k, v in batch.items() if k != "_visual_spans"},
+        )
+        visual_spans = batch.get("_visual_spans", {})
+
+        prefix: dict[str, Any] = {}
+
+        for key, val in batch.items():
+            if key.startswith("_"):
+                continue
+            if not torch.is_tensor(val):
+                # Metadata list (e.g. _answer_label, _yes_token_ids)
+                if isinstance(val, list) and len(val) > i:
+                    prefix[key] = val[i]
+                continue
+
+            if key in img_keys:
+                # Visual-indexed: use recorded spans
+                if key in visual_spans and i < len(visual_spans[key]):
+                    start, stop = visual_spans[key][i]
+                    prefix[key] = val[start:stop]
+                else:
+                    # Fallback for batches without visual_spans metadata
+                    prefix[key] = val[i:i + 1]
+            elif key in seq_keys:
+                # Sequence-indexed text tensor
+                prefix[key] = val[i:i + 1, :prefix_len]
+            elif key in ("input_ids", "attention_mask", "labels"):
+                prefix[key] = val[i:i + 1, :prefix_len]
+
+        return prefix
 
     # ------------------------------------------------------------------ #
     # Append candidate (for scoring)

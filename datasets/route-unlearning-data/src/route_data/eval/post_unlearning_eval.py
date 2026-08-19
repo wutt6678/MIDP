@@ -107,6 +107,7 @@ class BaselineBinding:
     manifest_path: str = ""
     results_sha256: str = ""
     manifest_sha256: str = ""
+    model_key: str = ""
     model_id: str = ""
     model_revision: str = ""
     processor_revision: str = ""
@@ -174,6 +175,7 @@ def resolve_preunlearning_baseline(
         manifest_path=str(manifest_path),
         results_sha256=provenance.get("results_sha256", ""),
         manifest_sha256=provenance.get("manifest_sha256", ""),
+        model_key=model_section.get("model_key", ""),
         model_id=model_section.get("id", ""),
         model_revision=model_section.get("revision", ""),
         processor_revision=model_section.get("processor_revision", ""),
@@ -188,38 +190,71 @@ def validate_baseline_model_identity(
     model_id: str = "",
     model_revision: str = "",
     processor_revision: str = "",
+    model_profile_sha256: str = "",
 ) -> list[str]:
     """Validate that a baseline binding matches the selected model.
+
+    Strict fail-closed: every non-empty expected field must be present
+    in the binding and must match exactly.  Missing binding fields or
+    mismatches both produce errors.
 
     Returns a list of mismatch descriptions.  An empty list means all
     checks passed.
     """
     errors: list[str] = []
-    if (
-        model_key and binding.model_id and model_id
-        and binding.model_id != model_id
-    ):
-        errors.append(
-            f"Baseline model_id {binding.model_id!r} != "
-            f"selected model_id {model_id!r}"
-        )
-    if (
-        model_revision and binding.model_revision
-        and binding.model_revision != model_revision
-    ):
-        errors.append(
-            f"Baseline revision {binding.model_revision!r} != "
-            f"selected revision {model_revision!r}"
-        )
-    if (
-        processor_revision and binding.processor_revision
-        and binding.processor_revision != processor_revision
-    ):
-        errors.append(
-            f"Baseline processor_revision "
-            f"{binding.processor_revision!r} != "
-            f"selected processor_revision {processor_revision!r}"
-        )
+
+    # model_key
+    if model_key:
+        if not binding.model_key:
+            errors.append("Baseline binding is missing model_key")
+        elif binding.model_key != model_key:
+            errors.append(
+                f"Baseline model_key {binding.model_key!r} != "
+                f"selected model_key {model_key!r}"
+            )
+
+    # model_id
+    if model_id:
+        if not binding.model_id:
+            errors.append("Baseline binding is missing model_id")
+        elif binding.model_id != model_id:
+            errors.append(
+                f"Baseline model_id {binding.model_id!r} != "
+                f"selected model_id {model_id!r}"
+            )
+
+    # model_revision
+    if model_revision:
+        if not binding.model_revision:
+            errors.append("Baseline binding is missing model_revision")
+        elif binding.model_revision != model_revision:
+            errors.append(
+                f"Baseline revision {binding.model_revision!r} != "
+                f"selected revision {model_revision!r}"
+            )
+
+    # processor_revision
+    if processor_revision:
+        if not binding.processor_revision:
+            errors.append("Baseline binding is missing processor_revision")
+        elif binding.processor_revision != processor_revision:
+            errors.append(
+                f"Baseline processor_revision "
+                f"{binding.processor_revision!r} != "
+                f"selected processor_revision {processor_revision!r}"
+            )
+
+    # model_profile_sha256
+    if model_profile_sha256:
+        if not binding.model_profile_sha256:
+            errors.append("Baseline binding is missing model_profile_sha256")
+        elif binding.model_profile_sha256 != model_profile_sha256:
+            errors.append(
+                f"Baseline model_profile_sha256 "
+                f"{binding.model_profile_sha256!r} != "
+                f"selected model_profile_sha256 {model_profile_sha256!r}"
+            )
+
     return errors
 
 

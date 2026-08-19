@@ -158,35 +158,36 @@ def _run_eval(
             f"are empty: {empty_fields}. Check common.yaml provenance."
         )
 
-    # P0-7: Validate baseline/model identity when both baseline manifest
-    # and profile provenance are available.  This prevents cross-model
-    # deltas (e.g. GLM post - Qwen pre).
-    _bl_manifest = Path(post_config.baseline_manifest_path)
-    if _bl_manifest.is_file() and post_config.model_key:
+    # P0-R7: Validate baseline/model identity using the resolver.
+    # This prevents cross-model deltas (e.g. GLM post - Qwen pre).
+    if post_config.model_key:
         from route_data.eval.post_unlearning_eval import (
-            BaselineBinding,
+            resolve_preunlearning_baseline,
             validate_baseline_model_identity,
         )
-        with open(_bl_manifest) as _blf:
-            _bl_data = json.load(_blf)
-        _bl_model = _bl_data.get("model", {})
-        _binding = BaselineBinding(
-            manifest_path=str(_bl_manifest),
-            model_id=_bl_model.get("id", ""),
-            model_revision=_bl_model.get("revision", ""),
-            processor_revision=_bl_model.get("processor_revision", ""),
-        )
-        _id_errors = validate_baseline_model_identity(
-            _binding,
-            model_key=post_config.model_key,
-            model_id=post_config.model_id,
-            model_revision=post_config.model_revision,
-            processor_revision=post_config.processor_revision,
-        )
-        if _id_errors:
-            raise RuntimeError(
-                f"Baseline/model identity mismatch for "
-                f"model_key={post_config.model_key!r}: {_id_errors}"
+        try:
+            _binding = resolve_preunlearning_baseline(
+                post_config.model_key,
+                protocol_version="baseline_v1",
+            )
+            _id_errors = validate_baseline_model_identity(
+                _binding,
+                model_key=post_config.model_key,
+                model_id=post_config.model_id,
+                model_revision=post_config.model_revision,
+                processor_revision=post_config.processor_revision,
+                model_profile_sha256=post_config.model_profile_sha256,
+            )
+            if _id_errors:
+                raise RuntimeError(
+                    f"Baseline/model identity mismatch for "
+                    f"model_key={post_config.model_key!r}: {_id_errors}"
+                )
+        except FileNotFoundError:
+            # Baseline may not exist for baseline-generator methods
+            logger.warning(
+                f"Baseline not found for model_key={post_config.model_key!r}. "
+                f"Skipping identity validation."
             )
 
     logger.info(f"Running common 500-probe evaluation: {method_label}")
@@ -435,24 +436,52 @@ def main() -> None:
         # Store model key in config for downstream use
         config.setdefault("model", {})["key"] = _profile.key
 
-        # P0-7: Override baseline paths with model-specific locations.
-        # The pre-unlearning baseline must be per-model to prevent
-        # cross-model deltas (e.g. GLM post - Qwen pre).
-        _baseline_dir = (
-            Path(__file__).resolve().parent.parent
-            / "outputs" / "experiments" / "pre_unlearning"
-            / _profile.key / "baseline_v1"
+        # P0-R7: Use the baseline resolver as the single code path.
+        # Skip for methods that generate the baseline themselves.
+        _method_name = config.get("method", {}).get("name", "")
+        _is_baseline_generator = _method_name in (
+            "pre_unlearning_baseline",
         )
-        _data_cfg = config.setdefault("data", {})
-        _data_cfg["baseline_results_path"] = str(
-            _baseline_dir / "baseline_results.jsonl"
-        )
-        _data_cfg["baseline_manifest_path"] = str(
-            _baseline_dir / "baseline_manifest.json"
-        )
-        logger.info(
-            f"Model-specific baseline: {_baseline_dir}"
-        )
+        if not _is_baseline_generator:
+            from route_data.eval.post_unlearning_eval import (
+                resolve_preunlearning_baseline,
+            )
+            try:
+                _binding = resolve_preunlearning_baseline(
+                    _profile.key,
+                    protocol_version="baseline_v1",
+                )
+                _data_cfg = config.setdefault("data", {})
+                _data_cfg["baseline_results_path"] = _binding.results_path
+                _data_cfg["baseline_manifest_path"] = _binding.manifest_path
+                logger.info(
+                    f"Baseline resolved via resolver: "
+                    f"model_key={_profile.key}, "
+                    f"results={_binding.results_path}"
+                )
+            except FileNotFoundError as exc:
+                raise RuntimeError(
+                    f"P0-R7: Pre-unlearning baseline not found for "
+                    f"model_key={_profile.key!r}. "
+                    f"Run the pre-baseline generation first.\n{exc}"
+                ) from exc
+        else:
+            # Baseline generator: use default paths
+            _baseline_dir = (
+                Path(__file__).resolve().parent.parent
+                / "outputs" / "experiments" / "pre_unlearning"
+                / _profile.key / "baseline_v1"
+            )
+            _data_cfg = config.setdefault("data", {})
+            _data_cfg["baseline_results_path"] = str(
+                _baseline_dir / "baseline_results.jsonl"
+            )
+            _data_cfg["baseline_manifest_path"] = str(
+                _baseline_dir / "baseline_manifest.json"
+            )
+            logger.info(
+                f"Baseline generator mode: {_baseline_dir}"
+            )
 
     # Add code provenance
     config.setdefault("runtime", {})["code_commit"] = _git_commit()
@@ -545,6 +574,19 @@ def main() -> None:
             dtype=training_config.dtype,
             device=training_config.device,
         )
+
+    # P0-R4: Structural validation — must run BEFORE LoRA/training.
+    if _model_adapter is not None:
+        from route_data.models.trainable.registry import (
+            validate_structural_metadata,
+        )
+        _struct_errors = validate_structural_metadata(_model_adapter, model)
+        if _struct_errors:
+            raise RuntimeError(
+                "Structural metadata validation failed:\n"
+                + "\n".join(f"- {e}" for e in _struct_errors)
+            )
+        logger.info("Structural metadata validation passed.")
 
     # Handle special methods that do NOT use BaselineTrainer
     if method_name == "mllmu_prompting":

@@ -529,8 +529,29 @@ class TestQwen35Adapter:
         assert "image_sizes" in keys
 
     def test_pad_token_id(self):
+        """Pad token ID is resolved from processor (P0-R10)."""
+        import types
         adapter = self._make_adapter()
-        assert adapter.pad_token_id(None) == 0
+        processor = types.SimpleNamespace(
+            tokenizer=types.SimpleNamespace(pad_token_id=12345),
+        )
+        assert adapter.pad_token_id(processor) == 12345
+
+    def test_pad_token_id_fail_closed(self):
+        """Pad token ID raises if processor has no pad_token_id (P0-R10)."""
+        import types
+        adapter = self._make_adapter()
+        processor = types.SimpleNamespace(
+            tokenizer=types.SimpleNamespace(),
+        )
+        with pytest.raises(RuntimeError, match="no pad_token_id"):
+            adapter.pad_token_id(processor)
+
+    def test_default_pad_token_id_raises(self):
+        """_default_pad_token_id raises (P0-R10)."""
+        adapter = self._make_adapter()
+        with pytest.raises(RuntimeError, match="must be resolved"):
+            adapter._default_pad_token_id()
 
     def test_required_multimodal_keys(self):
         adapter = self._make_adapter()

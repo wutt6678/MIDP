@@ -800,6 +800,9 @@ def apply_lora_via_adapter(
     The adapter resolves the correct language-scope targets and
     verifies no vision/projector modules are selected.
 
+    P0-R8: Generates and logs the LoRA target inventory before PEFT
+    attachment, including module classification and SHA-256.
+
     Parameters
     ----------
     model:
@@ -822,6 +825,35 @@ def apply_lora_via_adapter(
             f"Check lora_scope_regex and lora_target_leaf_names."
         )
 
+    # P0-R8: Generate LoRA target inventory
+    _inventory = _build_lora_target_inventory(model, adapter, targets)
+    logger.info(
+        f"LoRA target inventory: "
+        f"selected={_inventory['selected_module_count']}, "
+        f"language={_inventory['language_module_count']}, "
+        f"vision={_inventory['vision_module_count']}, "
+        f"projector={_inventory['projector_module_count']}, "
+        f"connector={_inventory['connector_module_count']}, "
+        f"sha={_inventory['inventory_sha256'][:16]}..."
+    )
+
+    # P0-R8: Verify language-only LoRA scope
+    if _inventory["vision_module_count"] > 0:
+        raise RuntimeError(
+            f"LoRA scope violation: {_inventory['vision_module_count']} "
+            f"vision modules selected. Expected language-only."
+        )
+    if _inventory["projector_module_count"] > 0:
+        raise RuntimeError(
+            f"LoRA scope violation: {_inventory['projector_module_count']} "
+            f"projector modules selected. Expected language-only."
+        )
+    if _inventory["connector_module_count"] > 0:
+        raise RuntimeError(
+            f"LoRA scope violation: {_inventory['connector_module_count']} "
+            f"connector modules selected. Expected language-only."
+        )
+
     lora_config = LoraConfig(
         r=p.lora_rank,
         lora_alpha=p.lora_alpha,
@@ -832,11 +864,89 @@ def apply_lora_via_adapter(
     )
 
     model = get_peft_model(model, lora_config)
+
+    # P0-R8: Log trainable parameter stats after PEFT
+    _trainable_params = sum(
+        p.numel() for p in model.parameters() if p.requires_grad
+    )
+    _total_params = sum(p.numel() for p in model.parameters())
     logger.info(
         f"Applied LoRA via adapter {p.key}: r={p.lora_rank}, "
-        f"alpha={p.lora_alpha}, targets={len(targets)} modules"
+        f"alpha={p.lora_alpha}, targets={len(targets)} modules, "
+        f"trainable={_trainable_params}, "
+        f"fraction={_trainable_params / max(_total_params, 1):.6f}"
     )
     return model
+
+
+def _build_lora_target_inventory(
+    model: Any,
+    adapter: Any,
+    targets: list[str],
+) -> dict[str, Any]:
+    """Build a LoRA target inventory with module classification.
+
+    P0-R8: Classifies each selected module as language, vision,
+    projector, connector, or other.  Computes SHA-256 of the
+    deterministic serialization.
+    """
+    import hashlib
+    import json
+
+    p = adapter.profile
+
+    # Classify modules by path prefix
+    language_count = 0
+    vision_count = 0
+    projector_count = 0
+    connector_count = 0
+    other_count = 0
+
+    for name in targets:
+        if "language_model" in name or "text_model" in name:
+            language_count += 1
+        elif "visual" in name or "vision" in name:
+            vision_count += 1
+        elif "projector" in name or "multi_modal_projector" in name:
+            projector_count += 1
+        elif "connector" in name:
+            connector_count += 1
+        else:
+            other_count += 1
+
+    # Count total parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    selected_params = 0
+    for name in targets:
+        module = dict(model.named_modules()).get(name)
+        if module is not None:
+            selected_params += sum(p.numel() for p in module.parameters())
+
+    inventory = {
+        "model_key": p.key,
+        "model_id": p.model_id,
+        "model_revision": p.revision,
+        "adapter_family": p.adapter_name,
+        "scope_regex": p.lora_scope_regex,
+        "target_leaf_names": list(p.lora_target_leaf_names),
+        "selected_module_count": len(targets),
+        "selected_modules": sorted(targets),
+        "language_module_count": language_count,
+        "vision_module_count": vision_count,
+        "projector_module_count": projector_count,
+        "connector_module_count": connector_count,
+        "other_module_count": other_count,
+        "selected_parameter_count": selected_params,
+        "total_parameter_count": total_params,
+    }
+
+    # Deterministic serialization for SHA-256
+    _serialized = json.dumps(inventory, sort_keys=True, separators=(",", ":"))
+    inventory["inventory_sha256"] = hashlib.sha256(
+        _serialized.encode()
+    ).hexdigest()
+
+    return inventory
 
 
 # --------------------------------------------------------------------------- #
@@ -958,6 +1068,36 @@ def qwen_collate_fn(
 # Loss functions
 # --------------------------------------------------------------------------- #
 
+def _extract_prefix_legacy(
+    batch: dict[str, Any],
+    sample_index: int,
+    prefix_len: int,
+    image_keys: frozenset[str],
+) -> dict[str, Any]:
+    """Legacy per-sample prefix extraction with manual slicing.
+
+    Kept as a fallback for code paths that do not have a trainable
+    adapter with :meth:`extract_sample_prefix`.
+    """
+    i = sample_index
+    prefix: dict[str, Any] = {
+        "input_ids": batch["input_ids"][i:i + 1, :prefix_len],
+        "attention_mask": batch["attention_mask"][i:i + 1, :prefix_len],
+    }
+    for key, val in batch.items():
+        if key.startswith("_") or key in ("input_ids", "attention_mask", "labels"):
+            continue
+        if not torch.is_tensor(val):
+            if isinstance(val, list) and len(val) > i:
+                prefix[key] = val[i]
+            continue
+        if key in image_keys:
+            prefix[key] = val[i:i + 1]
+        else:
+            prefix[key] = val[i:i + 1, :prefix_len]
+    return prefix
+
+
 def compute_forget_loss(
     model: Any,
     batch: dict[str, torch.Tensor],
@@ -1006,27 +1146,12 @@ def compute_forget_loss(
     for i in range(batch_size):
         prefix_len = prefix_lens[i]
 
-        # Build prefix dict for this sample (up to prefix_len, not padded)
-        prefix: dict[str, torch.Tensor] = {
-            "input_ids": batch["input_ids"][i:i+1, :prefix_len],
-            "attention_mask": batch["attention_mask"][i:i+1, :prefix_len],
-        }
-
-        # Add multimodal tensors using adapter-aware key classification
-        for key, val in batch.items():
-            if key.startswith("_") or key in ("input_ids", "attention_mask", "labels"):
-                continue
-            if not torch.is_tensor(val):
-                # Metadata list (e.g. _prefix_len already handled)
-                if isinstance(val, list) and len(val) > i:
-                    prefix[key] = val[i]
-                continue
-            if key in image_keys:
-                # Image-indexed: pass full (model handles alignment)
-                prefix[key] = val[i:i+1]
-            else:
-                # Sequence-indexed: slice to prefix_len
-                prefix[key] = val[i:i+1, :prefix_len]
+        # P0-R5: Use architecture-safe extraction when adapter available
+        if adapter is not None and hasattr(adapter, "extract_sample_prefix"):
+            prefix = adapter.extract_sample_prefix(batch, i)
+        else:
+            # Legacy fallback: manual slicing
+            prefix = _extract_prefix_legacy(batch, i, prefix_len, image_keys)
 
         expected_answer = answer_labels[i]
 

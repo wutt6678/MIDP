@@ -10,10 +10,11 @@ Key Qwen-specific behaviours:
   thinking block.
 - Image-indexed keys: ``image_grid_thw``, ``image_sizes``, ``pixel_values``.
 - ``mm_token_type_ids`` is a sequence-indexed text tensor.
-- Pad token ID is 0.
-- Language tower lives at ``model.model.layers`` with self-attention
-  projections ``q_proj``, ``k_proj``, ``v_proj``, ``o_proj``.
-- Language config may live at ``model.config.text_config`` (composite model)
+- Pad token ID is resolved from the processor (not hard-coded).
+- Language tower lives at ``model.model.language_model.layers`` (composite
+  multimodal model) with self-attention projections
+  ``q_proj``, ``k_proj``, ``v_proj``, ``o_proj``.
+- Language config lives at ``model.config.text_config`` (composite model)
   or ``model.config`` (standalone).  The adapter resolves both.
 """
 
@@ -75,11 +76,18 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
     # ------------------------------------------------------------------ #
 
     def pad_token_id(self, processor: Any) -> int:
-        """Qwen pad token ID is 0."""
-        return 0
+        """Resolve pad token ID from the processor (fail-closed)."""
+        tokenizer = getattr(processor, "tokenizer", processor)
+        pad_id = getattr(tokenizer, "pad_token_id", None)
+        if pad_id is None:
+            raise RuntimeError("Qwen processor has no pad_token_id")
+        return int(pad_id)
 
     def _default_pad_token_id(self) -> int:
-        return 0
+        """Fail-closed: pad token must come from processor."""
+        raise RuntimeError(
+            "pad_token_id must be resolved from processor"
+        )
 
     # ------------------------------------------------------------------ #
     # Sequence-indexed keys (for collation)
@@ -120,9 +128,9 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
     ) -> list[str]:
         """Resolve language-tower attention targets for Qwen3.5.
 
-        The Qwen3.5 language model structure is::
+        The Qwen3.5 composite language model structure is::
 
-            model.model.layers.{i}.self_attn.{q,k,v,o}_proj
+            model.model.language_model.layers.{i}.self_attn.{q,k,v,o}_proj
 
         The scope regex ensures only language-tower modules are selected.
         """
@@ -142,9 +150,19 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
     ) -> list[torch.nn.Module]:
         """Return the Qwen3.5 language transformer layers.
 
-        Path: ``model.model.layers``.
+        Path: ``model.model.language_model.layers`` (composite multimodal).
         """
-        return list(model.model.layers)
+        language_model = getattr(model.model, "language_model", None)
+        if language_model is None:
+            raise RuntimeError(
+                "Qwen composite model has no model.language_model attribute"
+            )
+        layers = getattr(language_model, "layers", None)
+        if layers is None:
+            raise RuntimeError(
+                "Qwen language_model has no layers attribute"
+            )
+        return list(layers)
 
     def language_hidden_size(
         self,
@@ -156,6 +174,14 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
         """
         cfg = self.language_config(model)
         return cfg.hidden_size
+
+    def language_intermediate_size(
+        self,
+        model: torch.nn.Module,
+    ) -> int:
+        """Return the MLP intermediate dimension of the Qwen3.5 language model."""
+        cfg = self.language_config(model)
+        return int(cfg.intermediate_size)
 
     # ------------------------------------------------------------------ #
     # MANU neuron specifications
@@ -177,7 +203,7 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
 
         specs: list[NeuronSpec] = []
         for i, layer in enumerate(layers):
-            layer_name = f"model.layers.{i}.mlp"
+            layer_name = f"model.language_model.layers.{i}.mlp"
             specs.append(NeuronSpec(
                 layer_name=layer_name,
                 neuron_count=intermediate_size,
