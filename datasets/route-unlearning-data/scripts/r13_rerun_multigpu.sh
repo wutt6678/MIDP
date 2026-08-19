@@ -53,7 +53,7 @@ echo ""
 GPU_ID=3
 
 # Oracle adapter path for NPO (from previous npo_oracle run)
-ORACLE_ADAPTER="${FULL_ROOT}/npo_oracle/checkpoints/adapter_final"
+ORACLE_ADAPTER="/scratch/wutiantong/MIDP/datasets/route-unlearning-data/runtime_outputs/mllmu_baselines/0e2b8083317694936ce8af8dc6857d9160d39f2f/r13_full/npo_oracle/checkpoints/adapter_final"
 
 failed=0
 for method in "${missing_methods[@]}"; do
