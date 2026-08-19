@@ -1,0 +1,57 @@
+# Model profile: Phi-4-multimodal-instruct (independent replication)
+# Priority: 3 — inexpensive independent replication
+key: phi4_mm
+
+model:
+  id: microsoft/Phi-4-multimodal-instruct
+  revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  processor_id: microsoft/Phi-4-multimodal-instruct
+  processor_revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  adapter: phi4mm
+  trust_remote_code: true
+  dtype: bfloat16
+  attn_implementation: sdpa
+
+candidate_protocol:
+  positive: "Yes"
+  negative: "No"
+
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+  scope: language_attention_only
+  # Phi uses fused qkv_proj + o_proj (NOT separate q/k/v)
+  target_leaf_names: [qkv_proj, o_proj]
+  scope_regex: "<DISCOVER_ON_REAL_MODEL_AND_FREEZE>"
+
+structural:
+  language_layer_path: "<DISCOVER_AND_FREEZE>"
+  language_hidden_size: "<DISCOVER_AND_FREEZE>"
+  intermediate_size: "<DISCOVER_AND_FREEZE>"
+  num_language_layers: 32  # per official config
+  r2mu_candidate_layers: "<DISCOVER_AND_FREEZE>"
+  r2mu_n_select_layers: 4
+  # Phi uses fused gate_up_proj + down_proj (NOT gate/up/down)
+  manu_spec: phi4mm_language_mlp_v1
+
+# Phi multimodal fields differ from Qwen:
+# input_image_embeds, image_attention_mask, image_sizes, input_mode
+# These are handled in the phi4mm adapter, not in the generic pipeline.
+
+compatibility:
+  min_transformers: "4.47.0"
+  tested_transformers: "5.14.1"
+
+access:
+  requires_hf_auth: false
+
+supports_prompting: false
+supports_candidate_margin: false
+supports_ga: false
+supports_gd: false
+supports_kl: false
+supports_npo: false
+supports_mmunlearner: false
+supports_manu: false
+supports_r2mu: false

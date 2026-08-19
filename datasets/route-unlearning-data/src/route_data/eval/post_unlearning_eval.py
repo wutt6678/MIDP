@@ -630,6 +630,7 @@ def evaluate_intervention(
     objective_name: str = "",
     model_config_obj: Any = None,
     backend_override: Any = None,
+    trainable_adapter: Any = None,
 ) -> dict[str, Any]:
     """Common evaluation orchestrator for all unlearning methods.
 
@@ -709,25 +710,35 @@ def evaluate_intervention(
         )
 
     # -- Wrap model in a VisionLanguageModel backend -------------------------- #
-    from ..models.qwen import QwenHFBackend
-
     adapter_metadata = None
     if backend_override is not None:
         # P0-7: Use the caller-supplied backend (e.g. _PromptingBackend)
-        # instead of constructing a plain QwenHFBackend.
+        # instead of constructing a fresh backend from the model.
         backend = backend_override
     else:
         if adapter_path is not None:
             adapter_path = Path(adapter_path)
             adapter_metadata = _build_adapter_metadata(adapter_path)
 
-        backend = QwenHFBackend.from_loaded_model(
-            config=model_config_obj,
-            model=model,
-            processor=processor,
-            adapter_metadata=adapter_metadata,
-            resolved_revision=config.model_revision,
-        )
+        if trainable_adapter is not None:
+            # Model-agnostic path: use the trainable adapter to build
+            # the correct eval backend for this model family.
+            backend = trainable_adapter.to_eval_backend(
+                model=model,
+                processor=processor,
+                model_config=model_config_obj,
+                adapter_metadata=adapter_metadata,
+            )
+        else:
+            # Legacy path: hardcoded Qwen backend
+            from ..models.qwen import QwenHFBackend
+            backend = QwenHFBackend.from_loaded_model(
+                config=model_config_obj,
+                model=model,
+                processor=processor,
+                adapter_metadata=adapter_metadata,
+                resolved_revision=config.model_revision,
+            )
 
     # -- Run evaluation ------------------------------------------------------- #
     evaluator = PostUnlearningEvaluator(

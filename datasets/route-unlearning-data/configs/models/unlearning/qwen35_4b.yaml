@@ -1,0 +1,51 @@
+# Model profile: Qwen3.5-4B (scale ablation)
+# Priority: 4 — engineering canary
+key: qwen35_4b
+
+model:
+  id: Qwen/Qwen3.5-4B
+  revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  processor_id: Qwen/Qwen3.5-4B
+  processor_revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  adapter: qwen35
+  trust_remote_code: true
+  dtype: bfloat16
+  attn_implementation: sdpa
+
+candidate_protocol:
+  positive: "Yes"
+  negative: "No"
+
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+  scope: language_attention_only
+  target_leaf_names: [q_proj, k_proj, v_proj, o_proj]
+  scope_regex: "^model\\.layers\\.\\d+\\.self_attn\\."
+
+structural:
+  language_layer_path: model.layers
+  language_hidden_size: "<DISCOVER_AND_FREEZE>"
+  intermediate_size: "<DISCOVER_AND_FREEZE>"
+  num_language_layers: "<DISCOVER_AND_FREEZE>"
+  r2mu_candidate_layers: "<DISCOVER_AND_FREEZE>"
+  r2mu_n_select_layers: 4
+  manu_spec: qwen35_4b_language_mlp_v1
+
+compatibility:
+  min_transformers: "5.0.0rc0"
+  tested_transformers: "5.14.1"
+
+access:
+  requires_hf_auth: false
+
+supports_prompting: true
+supports_candidate_margin: true
+supports_ga: true
+supports_gd: true
+supports_kl: true
+supports_npo: true
+supports_mmunlearner: true
+supports_manu: true
+supports_r2mu: true

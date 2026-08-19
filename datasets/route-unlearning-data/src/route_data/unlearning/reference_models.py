@@ -88,6 +88,49 @@ def load_frozen_reference_model(
     return model, processor
 
 
+def load_frozen_reference_model_via_adapter(
+    adapter: Any,
+    *,
+    device: str = "cuda:0",
+) -> tuple[Any, Any]:
+    """Load a frozen reference model through a trainable adapter.
+
+    Model-agnostic replacement for :func:`load_frozen_reference_model`.
+    Uses the adapter's profile to determine the correct model class,
+    revision, and loading parameters.
+
+    Parameters
+    ----------
+    adapter:
+        A :class:`TrainableVLMAdapter` instance.
+    device:
+        Target device.
+
+    Returns
+    -------
+    model, processor
+        The frozen reference model in eval mode with all params frozen.
+    """
+    model, processor = adapter.load_model_processor(
+        model_id=adapter.profile.model_id,
+        revision=adapter.profile.revision,
+        processor_revision=adapter.profile.processor_revision,
+        dtype=adapter.profile.dtype,
+        device=device,
+        training=False,
+    )
+
+    model.eval()
+    for param in model.parameters():
+        param.requires_grad = False
+
+    logger.info(
+        f"Loaded frozen reference model via adapter {adapter.profile.key}: "
+        f"{adapter.profile.model_id} rev={adapter.profile.revision[:12]}"
+    )
+    return model, processor
+
+
 def load_oracle_model(
     model_id: str,
     revision: str,
@@ -169,6 +212,63 @@ def load_oracle_model(
     logger.info(
         f"Loaded frozen oracle model from {adapter_path} "
         f"(all params frozen)"
+    )
+    return model, processor
+
+
+def load_oracle_model_via_adapter(
+    adapter: Any,
+    adapter_path: str | Path,
+    *,
+    device: str = "cuda:0",
+) -> tuple[Any, Any]:
+    """Load a frozen oracle model through a trainable adapter.
+
+    Model-agnostic replacement for :func:`load_oracle_model`.
+    Uses the adapter to load the base model, then attaches the
+    trained LoRA adapter.
+
+    Parameters
+    ----------
+    adapter:
+        A :class:`TrainableVLMAdapter` instance.
+    adapter_path:
+        Path to the trained LoRA adapter directory.
+    device:
+        Target device.
+
+    Returns
+    -------
+    model, processor
+        The frozen oracle model with LoRA adapter in eval mode.
+    """
+    from peft import PeftModel
+
+    # Load base model through adapter
+    base_model, processor = adapter.load_model_processor(
+        model_id=adapter.profile.model_id,
+        revision=adapter.profile.revision,
+        processor_revision=adapter.profile.processor_revision,
+        dtype=adapter.profile.dtype,
+        device=device,
+        training=False,
+    )
+
+    # Load LoRA adapter
+    model = PeftModel.from_pretrained(
+        base_model,
+        adapter_path,
+        device_map=device,
+    )
+
+    # Freeze all parameters
+    model.eval()
+    for param in model.parameters():
+        param.requires_grad = False
+
+    logger.info(
+        f"Loaded frozen oracle model via adapter {adapter.profile.key} "
+        f"from {adapter_path} (all params frozen)"
     )
     return model, processor
 

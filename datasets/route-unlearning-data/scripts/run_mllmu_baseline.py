@@ -305,6 +305,11 @@ def main() -> None:
         "--output-dir",
         help="Override output directory from config.",
     )
+    parser.add_argument(
+        "--model-profile",
+        help="Path to model profile YAML (e.g. configs/models/unlearning/glm46v_flash.yaml). "
+             "When provided, uses the trainable adapter for model-agnostic dispatch.",
+    )
     args = parser.parse_args()
 
     # Resolve paths relative to project root
@@ -318,6 +323,24 @@ def main() -> None:
     # Override output dir if specified
     if args.output_dir:
         config.setdefault("runtime", {})["output_dir"] = args.output_dir
+
+    # Load trainable adapter if model profile is provided
+    _model_adapter = None
+    if args.model_profile:
+        from route_data.models.trainable.registry import (
+            create_adapter,
+            load_profile_from_yaml,
+        )
+        profile_path = (
+            project_root / args.model_profile
+            if not Path(args.model_profile).is_absolute()
+            else Path(args.model_profile)
+        )
+        profile = load_profile_from_yaml(profile_path)
+        _model_adapter = create_adapter(profile.key)
+        logger.info(f"Model adapter: {profile.key} ({profile.model_id})")
+        # Store model key in config for downstream use
+        config.setdefault("model", {})["key"] = profile.key
 
     # Add code provenance
     config.setdefault("runtime", {})["code_commit"] = _git_commit()
@@ -397,7 +420,6 @@ def main() -> None:
         # aware backend through the common 500-probe evaluator.  There is
         # NO duplicate plain-model evaluation.
         from route_data.config import ModelConfig
-        from route_data.models.qwen import QwenHFBackend
         from route_data.unlearning.baseline_methods import (
             MLLMU_PRIVACY_SYSTEM_PROMPT,
             _PromptingBackend,
@@ -415,13 +437,21 @@ def main() -> None:
             seed=getattr(training_config, "seed", 17),
         )
 
-        # Create the system-prompt-aware backend.
-        inner_backend = QwenHFBackend.from_loaded_model(
-            config=prompting_model_config,
-            model=model,
-            processor=processor,
-            resolved_revision=training_config.model_revision,
-        )
+        # Create the inner backend — use adapter if available, else Qwen
+        if _model_adapter is not None:
+            inner_backend = _model_adapter.to_eval_backend(
+                model=model,
+                processor=processor,
+                model_config=prompting_model_config,
+            )
+        else:
+            from route_data.models.qwen import QwenHFBackend
+            inner_backend = QwenHFBackend.from_loaded_model(
+                config=prompting_model_config,
+                model=model,
+                processor=processor,
+                resolved_revision=training_config.model_revision,
+            )
         prompting_backend = _PromptingBackend(
             inner=inner_backend,
             system_prompt=MLLMU_PRIVACY_SYSTEM_PROMPT,
@@ -545,14 +575,19 @@ def main() -> None:
     if method_name in ("mmunlearner", "manu", "r2mu_adapted"):
         from torch.utils.data import DataLoader
 
-        from route_data.eval.unlearning_harness import qwen_collate_fn
+        # Use adapter collation if available, else fall back to Qwen
+        if _model_adapter is not None:
+            collate_fn = _model_adapter.collate
+        else:
+            from route_data.eval.unlearning_harness import qwen_collate_fn
+            collate_fn = qwen_collate_fn
 
         batch_size = config.get("training", {}).get("batch_size", 1)
         forget_loader = DataLoader(forget_ds, batch_size=batch_size, shuffle=True,
-                                   collate_fn=qwen_collate_fn)
+                                   collate_fn=collate_fn)
         retain_loader = (
             DataLoader(retain_ds, batch_size=batch_size, shuffle=True,
-                       collate_fn=qwen_collate_fn)
+                       collate_fn=collate_fn)
             if retain_ds is not None else None
         )
 

@@ -476,6 +476,191 @@ def build_retain_dataset(
 
 
 # --------------------------------------------------------------------------- #
+# Adapter-aware dataset classes (multi-model support)
+# --------------------------------------------------------------------------- #
+
+class MultimodalForgetDataset(Dataset):
+    """Adapter-aware forget dataset for multi-model unlearning.
+
+    Delegates prefix/supervised-example construction to a
+    :class:`TrainableVLMAdapter` instead of hardcoding Qwen-specific
+    chat template logic.  Preserves the same metadata contract as
+    :class:`ForgetDataset`.
+    """
+
+    def __init__(
+        self,
+        samples: list[dict[str, Any]],
+        processor: Any,
+        adapter: Any,  # TrainableVLMAdapter
+        max_length: int = 8192,
+    ):
+        self.samples = samples
+        self.processor = processor
+        self.adapter = adapter
+        self.max_length = max_length
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        sample = self.samples[idx]
+        image_uri = sample["image_uri"]
+        question = sample["question"]
+        answer_label = sample["answer_label"]
+        answer_text = "Yes" if answer_label else "No"
+
+        from PIL import Image
+        image = Image.open(image_uri).convert("RGB")
+
+        # Delegate to adapter for full supervised example
+        result = self.adapter.build_supervised_example(
+            self.processor,
+            image=image,
+            prompt=question,
+            answer_text=answer_text,
+        )
+
+        # Validate invariants
+        prefix_len = result["_prefix_len"]
+        assert prefix_len > 0, f"_prefix_len must be > 0, got {prefix_len}"
+        assert prefix_len < result["input_ids"].shape[0], (
+            f"_prefix_len ({prefix_len}) must be < seq_len "
+            f"({result['input_ids'].shape[0]})"
+        )
+
+        # Validate required multimodal keys
+        required = self.adapter.required_multimodal_keys()
+        for key in required:
+            if key not in result:
+                raise RuntimeError(
+                    f"Required multimodal tensor {key!r} missing from "
+                    f"adapter output for sample idx={idx}. "
+                    f"Available: {sorted(result.keys())}"
+                )
+
+        return result
+
+
+class MultimodalRetainDataset(Dataset):
+    """Adapter-aware retain dataset for multi-model unlearning.
+
+    Same delegation pattern as :class:`MultimodalForgetDataset` but for
+    retain-identity samples.
+    """
+
+    def __init__(
+        self,
+        samples: list[dict[str, Any]],
+        processor: Any,
+        adapter: Any,  # TrainableVLMAdapter
+        max_length: int = 8192,
+    ):
+        self.samples = samples
+        self.processor = processor
+        self.adapter = adapter
+        self.max_length = max_length
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        sample = self.samples[idx]
+        image_uri = sample["image_uri"]
+        question = sample["question"]
+        answer_label = sample["answer_label"]
+        answer_text = "Yes" if answer_label else "No"
+
+        from PIL import Image
+        image = Image.open(image_uri).convert("RGB")
+
+        # Delegate to adapter
+        result = self.adapter.build_supervised_example(
+            self.processor,
+            image=image,
+            prompt=question,
+            answer_text=answer_text,
+        )
+
+        # Validate invariants
+        prefix_len = result["_prefix_len"]
+        assert prefix_len > 0
+        assert prefix_len < result["input_ids"].shape[0]
+
+        required = self.adapter.required_multimodal_keys()
+        for key in required:
+            if key not in result:
+                raise RuntimeError(
+                    f"Required multimodal tensor {key!r} missing from "
+                    f"adapter output for sample idx={idx}."
+                )
+
+        return result
+
+
+def build_multimodal_forget_dataset(
+    processed_dataset_path: str | Path,
+    target_identity_ids: list[str],
+    processor: Any,
+    adapter: Any,
+    *,
+    max_samples: int | None = None,
+    seed: int = 17,
+) -> MultimodalForgetDataset:
+    """Build an adapter-aware forget dataset."""
+    rng = random.Random(seed)
+    target_set = set(target_identity_ids)
+
+    samples: list[dict[str, Any]] = []
+    with open(processed_dataset_path) as fh:
+        for line in fh:
+            row = json.loads(line)
+            if row["identity_id"] in target_set:
+                samples.append(row)
+
+    rng.shuffle(samples)
+    if max_samples is not None:
+        samples = samples[:max_samples]
+
+    logger.info(
+        f"Multimodal forget dataset ({adapter.profile.key}): "
+        f"{len(samples)} samples from {len(target_set)} identities"
+    )
+    return MultimodalForgetDataset(samples, processor, adapter)
+
+
+def build_multimodal_retain_dataset(
+    processed_dataset_path: str | Path,
+    retain_identity_ids: list[str],
+    processor: Any,
+    adapter: Any,
+    *,
+    max_samples: int | None = None,
+    seed: int = 17,
+) -> MultimodalRetainDataset:
+    """Build an adapter-aware retain dataset."""
+    rng = random.Random(seed)
+    retain_set = set(retain_identity_ids)
+
+    samples: list[dict[str, Any]] = []
+    with open(processed_dataset_path) as fh:
+        for line in fh:
+            row = json.loads(line)
+            if row["identity_id"] in retain_set:
+                samples.append(row)
+
+    rng.shuffle(samples)
+    if max_samples is not None:
+        samples = samples[:max_samples]
+
+    logger.info(
+        f"Multimodal retain dataset ({adapter.profile.key}): "
+        f"{len(samples)} samples from {len(retain_set)} identities"
+    )
+    return MultimodalRetainDataset(samples, processor, adapter)
+
+
+# --------------------------------------------------------------------------- #
 # Model loading and LoRA setup
 # --------------------------------------------------------------------------- #
 
@@ -566,6 +751,91 @@ def apply_lora(
 
     model = get_peft_model(model, lora_config)
     logger.info(f"Applied LoRA: r={r}, alpha={lora_alpha}, targets={target_modules}")
+    return model
+
+
+def load_base_model_via_adapter(
+    adapter: Any,
+    *,
+    device: str = "cuda:0",
+    training: bool = True,
+) -> tuple[Any, Any]:
+    """Load the base model and processor through a trainable adapter.
+
+    This is the model-agnostic replacement for :func:`load_base_model`.
+    The adapter determines the correct auto-model class, revision, and
+    trust_remote_code setting.
+
+    Parameters
+    ----------
+    adapter:
+        A :class:`TrainableVLMAdapter` instance with a frozen profile.
+    device:
+        Target device.
+    training:
+        If True, enable gradient checkpointing for training.
+
+    Returns
+    -------
+    model, processor
+    """
+    p = adapter.profile
+    return adapter.load_model_processor(
+        model_id=p.model_id,
+        revision=p.revision,
+        processor_revision=p.processor_revision,
+        dtype=p.dtype,
+        device=device,
+        training=training,
+    )
+
+
+def apply_lora_via_adapter(
+    model: Any,
+    adapter: Any,
+) -> Any:
+    """Apply language-tower-only LoRA using the adapter's target resolution.
+
+    This is the model-agnostic replacement for :func:`apply_lora`.
+    The adapter resolves the correct language-scope targets and
+    verifies no vision/projector modules are selected.
+
+    Parameters
+    ----------
+    model:
+        The base model.
+    adapter:
+        A :class:`TrainableVLMAdapter` instance.
+
+    Returns
+    -------
+    model : PeftModel
+    """
+    from peft import LoraConfig, get_peft_model
+
+    p = adapter.profile
+    targets = adapter.resolve_lora_targets(model)
+
+    if not targets:
+        raise RuntimeError(
+            f"Adapter {p.key!r} resolved zero LoRA targets. "
+            f"Check lora_scope_regex and lora_target_leaf_names."
+        )
+
+    lora_config = LoraConfig(
+        r=p.lora_rank,
+        lora_alpha=p.lora_alpha,
+        lora_dropout=p.lora_dropout,
+        target_modules=targets,
+        bias="none",
+        task_type=None,
+    )
+
+    model = get_peft_model(model, lora_config)
+    logger.info(
+        f"Applied LoRA via adapter {p.key}: r={p.lora_rank}, "
+        f"alpha={p.lora_alpha}, targets={len(targets)} modules"
+    )
     return model
 
 
@@ -833,6 +1103,7 @@ class UnlearningTrainer:
         forget_dataset: Dataset,
         retain_dataset: Dataset,
         reference_model: Any | None = None,
+        adapter: Any | None = None,
     ):
         self.config = config
         self.model = model
@@ -840,6 +1111,7 @@ class UnlearningTrainer:
         self.forget_dataset = forget_dataset
         self.retain_dataset = retain_dataset
         self.reference_model = reference_model
+        self.adapter = adapter
 
         # Freeze reference if provided
         if self.reference_model is not None:
@@ -858,14 +1130,20 @@ class UnlearningTrainer:
         self.generator = torch.Generator()
         self.generator.manual_seed(seed)
 
-        # Data loaders (seeded generator + Qwen collator)
+        # Collation: use adapter if provided, else fall back to Qwen collator
+        if adapter is not None:
+            collate_fn = adapter.collate
+        else:
+            collate_fn = qwen_collate_fn
+
+        # Data loaders (seeded generator + collator)
         self.forget_loader = DataLoader(
             forget_dataset,
             batch_size=config.batch_size,
             shuffle=True,
             num_workers=0,
             generator=self.generator,
-            collate_fn=qwen_collate_fn,
+            collate_fn=collate_fn,
         )
         self.retain_loader = DataLoader(
             retain_dataset,
@@ -873,7 +1151,7 @@ class UnlearningTrainer:
             shuffle=True,
             num_workers=0,
             generator=self.generator,
-            collate_fn=qwen_collate_fn,
+            collate_fn=collate_fn,
         )
 
         # Optimizer

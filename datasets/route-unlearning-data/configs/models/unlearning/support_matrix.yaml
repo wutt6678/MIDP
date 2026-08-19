@@ -1,0 +1,35 @@
+# Multi-model support matrix for MIDP unlearning pipeline.
+#
+# A model reaches M1 (core) support only when all fine-tuning paths
+# work: pre-baseline, Prompting, candidate-margin, GA, GD, KL, NPO oracle,
+# NPO, LoRA save/reload, common post-evaluation.
+#
+# A model reaches M2 (structural) support only when additionally:
+# MMUnlearner, MANU 5%/10%, R²MU-adapted all pass.
+#
+# Only flip flags after the corresponding acceptance evidence exists.
+# Fail closed for unsupported methods.
+
+qwen35_9b:
+  core: true       # existing primary result
+  structural: true # R12/R13/R14 complete
+
+qwen35_4b:
+  core: false
+  structural: false
+
+glm46v_flash:
+  core: false
+  structural: false
+
+internvl35_8b_hf:
+  core: false
+  structural: false
+
+phi4_mm:
+  core: false
+  structural: false
+
+gemma3_12b:
+  core: false
+  structural: false

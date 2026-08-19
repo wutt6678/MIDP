@@ -15,6 +15,7 @@ backend-specific assumptions so it is unit-testable with synthetic logits.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import torch
 
@@ -81,6 +82,8 @@ def score_candidate_sequence_tensor(
     model: torch.nn.Module,
     prefix: dict[str, torch.Tensor],
     candidate_token_ids: list[int],
+    *,
+    adapter: Any | None = None,
 ) -> torch.Tensor:
     """Differentiable candidate sequence scorer for training and evaluation.
 
@@ -95,9 +98,15 @@ def score_candidate_sequence_tensor(
         Dict containing the multimodal prefix tensors:
         - ``input_ids``: [1, prefix_len]
         - ``attention_mask``: [1, prefix_len]
-        - ``pixel_values``, ``image_grid_thw``, ``mm_token_type_ids``, etc.
+        - Visual tensors (model-specific: ``pixel_values``, etc.)
+        - Sequence-indexed text tensors (e.g. ``mm_token_type_ids``)
     candidate_token_ids:
         List of token IDs for the candidate sequence (e.g., [16484] for "Yes").
+    adapter:
+        Optional :class:`TrainableVLMAdapter` instance.  When provided,
+        the adapter builds the forward dict via ``append_candidate()``,
+        making the scorer model-agnostic.  When ``None``, falls back to
+        the legacy hardcoded Qwen-style visual field handling.
 
     Returns
     -------
@@ -118,40 +127,18 @@ def score_candidate_sequence_tensor(
     if prefix_len == 0:
         raise ValueError("prefix length must be > 0")
 
-    # Convert candidate IDs to tensor
-    cand_ids = torch.tensor(
-        [candidate_token_ids],
-        dtype=prefix_input_ids.dtype,
-        device=prefix_input_ids.device,
-    )
+    # Build the full forward dict (prefix + candidate)
+    if adapter is not None:
+        # Adapter-driven path: model-agnostic
+        forward_kwargs = adapter.append_candidate(prefix, candidate_token_ids)
+    else:
+        # Legacy path: hardcoded visual field handling (backward compat)
+        forward_kwargs = _build_forward_kwargs_legacy(
+            prefix, candidate_token_ids,
+        )
+
+    full_input_ids = forward_kwargs["input_ids"]
     m = len(candidate_token_ids)
-
-    # Build full input: prefix + candidate
-    full_input_ids = torch.cat([prefix_input_ids, cand_ids], dim=1)
-    full_attention_mask = torch.cat(
-        [prefix["attention_mask"], torch.ones_like(cand_ids)],
-        dim=1,
-    )
-
-    # Extend mm_token_type_ids for candidate tokens (text-only, type 0)
-    full_mm_token_type_ids = None
-    if "mm_token_type_ids" in prefix:
-        prefix_mm = prefix["mm_token_type_ids"]
-        cand_mm = torch.zeros_like(cand_ids, dtype=prefix_mm.dtype)
-        full_mm_token_type_ids = torch.cat([prefix_mm, cand_mm], dim=1)
-
-    # Build forward kwargs with all multimodal tensors
-    forward_kwargs: dict[str, torch.Tensor] = {
-        "input_ids": full_input_ids,
-        "attention_mask": full_attention_mask,
-    }
-    # Forward visual tensors from prefix
-    for key in ("pixel_values", "image_sizes", "image_grid_thw"):
-        if key in prefix:
-            forward_kwargs[key] = prefix[key]
-    # Use extended mm_token_type_ids
-    if full_mm_token_type_ids is not None:
-        forward_kwargs["mm_token_type_ids"] = full_mm_token_type_ids
 
     # Forward pass (no inference_mode — must support gradients for training)
     outputs = model(**forward_kwargs)
@@ -169,6 +156,47 @@ def score_candidate_sequence_tensor(
     log_prob = gathered.sum()
 
     return log_prob
+
+
+def _build_forward_kwargs_legacy(
+    prefix: dict[str, torch.Tensor],
+    candidate_token_ids: list[int],
+) -> dict[str, torch.Tensor]:
+    """Build forward kwargs with hardcoded Qwen-style visual fields.
+
+    This is the legacy path used by the Qwen inference backend when
+    no adapter is available.  New code should pass an adapter instead.
+    """
+    prefix_input_ids = prefix["input_ids"]
+    device = prefix_input_ids.device
+    dtype = prefix_input_ids.dtype
+
+    cand_ids = torch.tensor(
+        [candidate_token_ids], dtype=dtype, device=device,
+    )
+
+    full_input_ids = torch.cat([prefix_input_ids, cand_ids], dim=1)
+    full_attention_mask = torch.cat(
+        [prefix["attention_mask"], torch.ones_like(cand_ids)], dim=1,
+    )
+
+    forward_kwargs: dict[str, torch.Tensor] = {
+        "input_ids": full_input_ids,
+        "attention_mask": full_attention_mask,
+    }
+
+    # Extend mm_token_type_ids for candidate tokens (text-only, type 0)
+    if "mm_token_type_ids" in prefix:
+        prefix_mm = prefix["mm_token_type_ids"]
+        cand_mm = torch.zeros_like(cand_ids, dtype=prefix_mm.dtype)
+        forward_kwargs["mm_token_type_ids"] = torch.cat([prefix_mm, cand_mm], dim=1)
+
+    # Forward visual tensors from prefix (legacy hardcoded list)
+    for key in ("pixel_values", "image_sizes", "image_grid_thw"):
+        if key in prefix:
+            forward_kwargs[key] = prefix[key]
+
+    return forward_kwargs
 
 
 def compute_candidate_margin(

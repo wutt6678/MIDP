@@ -1,0 +1,51 @@
+# Model profile: Gemma3-12B-it (larger secondary validation)
+# Priority: 5 — larger secondary validation
+key: gemma3_12b
+
+model:
+  id: google/gemma-3-12b-it
+  revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  processor_id: google/gemma-3-12b-it
+  processor_revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  adapter: gemma3
+  trust_remote_code: false
+  dtype: bfloat16
+  attn_implementation: sdpa
+
+candidate_protocol:
+  positive: "Yes"
+  negative: "No"
+
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+  scope: language_attention_only
+  target_leaf_names: [q_proj, k_proj, v_proj, o_proj]
+  scope_regex: "<DISCOVER_ON_REAL_MODEL_AND_FREEZE>"
+
+structural:
+  language_layer_path: "<DISCOVER_AND_FREEZE>"
+  language_hidden_size: "<DISCOVER_AND_FREEZE>"
+  intermediate_size: "<DISCOVER_AND_FREEZE>"
+  num_language_layers: "<DISCOVER_AND_FREEZE>"
+  r2mu_candidate_layers: "<DISCOVER_AND_FREEZE>"
+  r2mu_n_select_layers: 4
+  manu_spec: gemma3_language_mlp_v1
+
+compatibility:
+  min_transformers: "4.50.0"
+  tested_transformers: "5.14.1"
+
+access:
+  requires_hf_auth: true  # Gemma requires license acceptance
+
+supports_prompting: false
+supports_candidate_margin: false
+supports_ga: false
+supports_gd: false
+supports_kl: false
+supports_npo: false
+supports_mmunlearner: false
+supports_manu: false
+supports_r2mu: false
