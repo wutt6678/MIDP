@@ -32,7 +32,7 @@ echo ""
 
 # -- Check which methods are missing --------------------------------------- #
 missing_methods=()
-for method in kl npo mmunlearner; do
+for method in kl npo mmunlearner manu; do
     if [ -f "${FULL_ROOT}/${method}/eval/eval_results.json" ]; then
         echo "  ${method}: EXISTS (skipping)"
     else
