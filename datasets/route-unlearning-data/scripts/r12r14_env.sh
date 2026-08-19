@@ -25,6 +25,9 @@ if [ -f "${SCRIPT_DIR}/.frozen_env" ]; then
     source "${SCRIPT_DIR}/.frozen_env"
 fi
 
+# -- GPU selection --------------------------------------------------------- #
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-2}"
+
 # -- Paths ----------------------------------------------------------------- #
 # Resolve the route-unlearning-data project root from this file's location.
 export SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
