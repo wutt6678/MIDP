@@ -84,15 +84,21 @@ run_method() {
     local output_root="$2"
     local label="${3:-$method}"
     echo "=== Running ${label} ==="
-    (
-        cd "$SUITE_DIR" || return 1
-        python scripts/run_mllmu_baseline_suite.py \
-            --only "$method" \
-            --expected-code-sha "$CODE_SHA" \
-            --runtime-output-root "$output_root" \
-            2>&1 | tee "${output_root}/${method}.log"
-    ) || { echo "FAILED: ${label}"; return 1; }
-    echo "  ${label} complete  ✓"
+    local cwd
+    cwd="$(pwd)"
+    cd "$SUITE_DIR" || return 1
+    python scripts/run_mllmu_baseline_suite.py \
+        --only "$method" \
+        --expected-code-sha "$CODE_SHA" \
+        --runtime-output-root "$output_root" \
+        2>&1 | tee "${output_root}/${method}.log"
+    local status=$?
+    cd "$cwd"
+    if [ $status -ne 0 ]; then
+        echo "FAILED: ${label}"
+        return 1
+    fi
+    echo "  ${label} complete"
 }
 
 check_preflight_hashes() {
