@@ -192,6 +192,12 @@ class BaselineResult:
     token_overlap: float | None = None
     fuzzy_match: float | None = None
 
+    # -- Generation provenance (name_only only, P1-1) --
+    generated_token_count: int | None = None
+    hit_max_new_tokens: bool | None = None
+    eos_reached: bool | None = None
+    generation_max_new_tokens: int | None = None
+
     # -- Protocol role (P1-2) --
     protocol_role: str = ""  # train | eval | exclude
 
@@ -1232,6 +1238,11 @@ class BaselineRunner:
         normalized_exact_match: float | None = None
         token_overlap_score: float | None = None
         fuzzy_match: float | None = None
+        # Generation provenance (P1-1)
+        generated_token_count: int | None = None
+        hit_max_new_tokens: bool | None = None
+        eos_reached: bool | None = None
+        generation_max_new_tokens: int | None = None
         error: str | None = None
 
         try:
@@ -1265,10 +1276,20 @@ class BaselineRunner:
                 else:
                     error = "backend did not return scores for both candidates"
             else:
-                # name_only: text-only generation
-                resp = self.backend.generate(None, probe.question)
+                # name_only: text-only generation with larger budget (P0-1)
+                _NAME_ONLY_MAX_NEW_TOKENS = 64
+                generation_max_new_tokens = _NAME_ONLY_MAX_NEW_TOKENS
+                resp = self.backend.generate(
+                    None, probe.question,
+                    max_new_tokens=_NAME_ONLY_MAX_NEW_TOKENS,
+                )
                 generated_answer = resp.text or ""
                 parsed_answer = generated_answer.strip()
+                # Extract generation provenance from response metadata (P1-1)
+                gen_meta = resp.metadata or {}
+                generated_token_count = gen_meta.get("generated_token_count")
+                hit_max_new_tokens = gen_meta.get("hit_max_new_tokens")
+                eos_reached = gen_meta.get("eos_reached")
                 if probe.answer_text:
                     exact_match = _compute_exact_match(
                         generated_answer, probe.answer_text
@@ -1282,8 +1303,9 @@ class BaselineRunner:
                     fuzzy_match = _text_match(
                         generated_answer, probe.answer_text
                     )
-                    # Primary metric: normalized exact match
-                    correct = (normalized_exact_match == 1.0)
+                    # Primary metric: token_overlap (P1-3)
+                    # Use token_overlap > 0.5 as the correctness threshold
+                    correct = (token_overlap_score > 0.5)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             log.warning("Probe %s failed: %s", probe.probe_id, error)
@@ -1360,6 +1382,11 @@ class BaselineRunner:
             normalized_exact_match=normalized_exact_match,
             token_overlap=token_overlap_score,
             fuzzy_match=fuzzy_match,
+            # Generation provenance (P1-1)
+            generated_token_count=generated_token_count,
+            hit_max_new_tokens=hit_max_new_tokens,
+            eos_reached=eos_reached,
+            generation_max_new_tokens=generation_max_new_tokens,
             # Protocol role (P0-7)
             protocol_role=role,
             # Provenance

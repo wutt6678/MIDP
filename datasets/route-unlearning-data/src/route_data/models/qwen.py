@@ -240,10 +240,10 @@ class QwenHFBackend(VisionLanguageModel):
         device = self.model.get_input_embeddings().weight.device
         return {k: v.to(device) for k, v in batch.items()}
 
-    def generate(self, image, prompt: str) -> VisionResponse:
-        return self.generate_batch([(image, prompt)])[0]
+    def generate(self, image, prompt: str, *, max_new_tokens: int | None = None) -> VisionResponse:
+        return self.generate_batch([(image, prompt)], max_new_tokens=max_new_tokens)[0]
 
-    def generate_batch(self, items: list[tuple]) -> list[VisionResponse]:
+    def generate_batch(self, items: list[tuple], *, max_new_tokens: int | None = None) -> list[VisionResponse]:
         import torch
 
         images = [x[0] for x in items]
@@ -260,14 +260,34 @@ class QwenHFBackend(VisionLanguageModel):
                     if self.config.generation.do_sample
                     else None
                 ),
-                max_new_tokens=self.config.generation.max_new_tokens,
+                max_new_tokens=(
+                    max_new_tokens
+                    if max_new_tokens is not None
+                    else self.config.generation.max_new_tokens
+                ),
             )
         latency_ms = (time.perf_counter() - started) * 1000.0
         tokenizer = self.processor.tokenizer
         is_text_only = all(image is None for image in images)
+        effective_max_new_tokens = (
+            max_new_tokens
+            if max_new_tokens is not None
+            else self.config.generation.max_new_tokens
+        )
         responses = []
         for row in output:
-            text = tokenizer.decode(row[input_len:], skip_special_tokens=True)
+            new_tokens = row[input_len:]
+            generated_token_count = len(new_tokens)
+            # Check if generation hit the max_new_tokens limit
+            hit_max_new_tokens = generated_token_count >= effective_max_new_tokens
+            # Check if EOS was reached (last token is EOS)
+            eos_token_id = tokenizer.eos_token_id
+            eos_reached = (
+                generated_token_count > 0
+                and eos_token_id is not None
+                and new_tokens[-1].item() == eos_token_id
+            )
+            text = tokenizer.decode(new_tokens, skip_special_tokens=True)
             responses.append(
                 VisionResponse(
                     text=text,
@@ -277,6 +297,9 @@ class QwenHFBackend(VisionLanguageModel):
                             "text_only" if is_text_only else "multimodal"
                         ),
                         "image_present": not is_text_only,
+                        "generated_token_count": generated_token_count,
+                        "hit_max_new_tokens": hit_max_new_tokens,
+                        "eos_reached": eos_reached,
                     },
                 )
             )

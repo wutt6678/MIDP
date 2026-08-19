@@ -142,10 +142,10 @@ class MllamaHFBackend(VisionLanguageModel):
     # Generation
     # ------------------------------------------------------------------ #
 
-    def generate(self, image, prompt: str) -> VisionResponse:
-        return self.generate_batch([(image, prompt)])[0]
+    def generate(self, image, prompt: str, *, max_new_tokens: int | None = None) -> VisionResponse:
+        return self.generate_batch([(image, prompt)], max_new_tokens=max_new_tokens)[0]
 
-    def generate_batch(self, items: list[tuple]) -> list[VisionResponse]:
+    def generate_batch(self, items: list[tuple], *, max_new_tokens: int | None = None) -> list[VisionResponse]:
         import torch
 
         cfg = self.config
@@ -154,20 +154,41 @@ class MllamaHFBackend(VisionLanguageModel):
         inputs = self._prepare(images, prompts, padding_side="left")
         input_len = inputs["input_ids"].shape[1]
         started = time.perf_counter()
+        effective_max_new_tokens = (
+            max_new_tokens
+            if max_new_tokens is not None
+            else cfg.generation.max_new_tokens
+        )
         with torch.inference_mode():
             output = self.model.generate(
                 **inputs,
                 do_sample=cfg.generation.do_sample,
                 temperature=cfg.generation.temperature if cfg.generation.do_sample else None,
-                max_new_tokens=cfg.generation.max_new_tokens,
+                max_new_tokens=effective_max_new_tokens,
             )
         latency_ms = (time.perf_counter() - started) * 1000.0
         responses = []
         for row in output:
             new_tokens = row[input_len:]
+            generated_token_count = len(new_tokens)
+            hit_max_new_tokens = generated_token_count >= effective_max_new_tokens
+            eos_token_id = self.processor.tokenizer.eos_token_id
+            eos_reached = (
+                generated_token_count > 0
+                and eos_token_id is not None
+                and new_tokens[-1].item() == eos_token_id
+            )
             text = self.processor.tokenizer.decode(new_tokens, skip_special_tokens=True)
             responses.append(
-                VisionResponse(text=text, metadata={"latency_ms": latency_ms / len(items)})
+                VisionResponse(
+                    text=text,
+                    metadata={
+                        "latency_ms": latency_ms / len(items),
+                        "generated_token_count": generated_token_count,
+                        "hit_max_new_tokens": hit_max_new_tokens,
+                        "eos_reached": eos_reached,
+                    },
+                )
             )
         return responses
 

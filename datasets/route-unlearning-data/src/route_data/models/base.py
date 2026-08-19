@@ -42,8 +42,17 @@ class RouteHooks:
 
 class VisionLanguageModel(ABC):
     @abstractmethod
-    def generate(self, image, prompt: str) -> VisionResponse:
-        """Deterministic text generation for one image + prompt."""
+    def generate(self, image, prompt: str, *, max_new_tokens: int | None = None) -> VisionResponse:
+        """Deterministic text generation for one image + prompt.
+
+        Parameters
+        ----------
+        max_new_tokens:
+            Optional override for the generation budget.  When *None*
+            the backend's default ``GenerationConfig.max_new_tokens`` is
+            used.  Text-only probe families (e.g. ``name_only``) pass a
+            larger budget (e.g. 64) to avoid artificial truncation.
+        """
 
     @abstractmethod
     def score_candidates(self, image, prompt: str, candidates: list[str]) -> VisionResponse:
@@ -53,9 +62,9 @@ class VisionLanguageModel(ABC):
     def fingerprint(self) -> dict[str, str]:
         """Stable identity used for caching and run manifests."""
 
-    def generate_batch(self, items: list[tuple]) -> list[VisionResponse]:
+    def generate_batch(self, items: list[tuple], *, max_new_tokens: int | None = None) -> list[VisionResponse]:
         """Batched generation; default loops over :meth:`generate`."""
-        return [self.generate(image, prompt) for image, prompt in items]
+        return [self.generate(image, prompt, max_new_tokens=max_new_tokens) for image, prompt in items]
 
     def score_candidates_batch(self, items: list[tuple]) -> list[VisionResponse]:
         """Batched scoring; default loops over :meth:`score_candidates`."""

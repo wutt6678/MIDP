@@ -46,14 +46,20 @@ class StubVisionModel(VisionLanguageModel):
     # Inference
     # ------------------------------------------------------------------ #
 
-    def generate(self, image, prompt: str) -> VisionResponse:
+    def generate(self, image, prompt: str, *, max_new_tokens: int | None = None) -> VisionResponse:
         sig = _image_signature(image)
         p_yes = _unit(self.config.seed, sig, prompt, "yes")
         text = "yes" if p_yes >= 0.5 else "no"
         return VisionResponse(
             text=text,
             candidate_scores=None,
-            metadata={"backend": self.role_name, "p_yes": p_yes},
+            metadata={
+                "backend": self.role_name,
+                "p_yes": p_yes,
+                "generated_token_count": len(text.split()),
+                "hit_max_new_tokens": False,
+                "eos_reached": True,
+            },
         )
 
     def score_candidates(
