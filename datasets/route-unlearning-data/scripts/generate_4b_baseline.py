@@ -109,11 +109,27 @@ def main() -> None:
         default="configs/models/unlearning/qwen35_4b.yaml",
         help="Path to the 4B model profile YAML.",
     )
+    parser.add_argument(
+        "--clear-cache", action="store_true",
+        help="Clear the baseline cache before running.",
+    )
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parent.parent
     output_dir = project_root / args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clear cache if requested
+    if args.clear_cache:
+        import shutil
+        cache_dir = output_dir / ".cache"
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir)
+            logger.info(f"Cleared cache: {cache_dir}")
+        results_file = output_dir / "baseline_results.jsonl"
+        if results_file.exists():
+            results_file.unlink()
+            logger.info(f"Cleared results: {results_file}")
 
     probe_path = project_root / args.probe_path
     profile_path = project_root / args.profile
