@@ -101,6 +101,14 @@ class BaselineTrainingConfig:
     selection_manifest_sha256: str = ""
     code_commit: str = ""
 
+    # Profile-driven provenance (P0-8)
+    model_key: str = ""
+    processor_id: str = ""
+    processor_revision: str = ""
+    model_profile_sha256: str = ""
+    adapter_family: str = ""
+    lora_target_inventory_sha256: str = ""
+
     @property
     def effective_batch_size(self) -> int:
         return self.batch_size * self.gradient_accumulation_steps
@@ -146,6 +154,7 @@ class BaselineTrainer:
         retain_dataset: Any | None = None,
         reference_model: Any | None = None,
         oracle_model: Any | None = None,
+        adapter: Any | None = None,
     ):
         self.config = config
         self.objective = objective
@@ -155,6 +164,13 @@ class BaselineTrainer:
         self.retain_dataset = retain_dataset
         self.reference_model = reference_model
         self.oracle_model = oracle_model
+        self.adapter = adapter
+
+        # Collator selection (P0-1): adapter-aware or legacy Qwen fallback
+        if self.adapter is not None:
+            collate_fn = self.adapter.collate
+        else:
+            collate_fn = qwen_collate_fn
 
         # Freeze reference/oracle models
         if self.reference_model is not None:
@@ -186,7 +202,7 @@ class BaselineTrainer:
                 shuffle=True,
                 num_workers=0,
                 generator=self.generator,
-                collate_fn=qwen_collate_fn,
+                collate_fn=collate_fn,
             )
         else:
             # Retain-only mode: dummy forget loader yielding empty dicts
@@ -200,7 +216,7 @@ class BaselineTrainer:
                 shuffle=True,
                 num_workers=0,
                 generator=self.generator,
-                collate_fn=qwen_collate_fn,
+                collate_fn=collate_fn,
             )
 
         # Optimizer
@@ -462,6 +478,14 @@ class BaselineTrainer:
                 "model_id": self.config.model_id,
                 "revision": self.config.model_revision,
                 "dtype": self.config.dtype,
+            },
+            "model_profile": {
+                "model_key": self.config.model_key,
+                "processor_id": self.config.processor_id,
+                "processor_revision": self.config.processor_revision,
+                "model_profile_sha256": self.config.model_profile_sha256,
+                "adapter_family": self.config.adapter_family,
+                "lora_target_inventory_sha256": self.config.lora_target_inventory_sha256,
             },
             "lora": {
                 "rank": self.config.lora_rank,

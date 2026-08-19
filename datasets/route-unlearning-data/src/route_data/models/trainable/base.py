@@ -53,6 +53,12 @@ class ModelFamilyProfile:
     r2mu_candidate_layers: tuple[int, ...]
     r2mu_n_select_layers: int
 
+    # Structural metadata (P0-5: runtime validation)
+    language_layer_path: str = ""
+    language_hidden_size: int = 0
+    intermediate_size: int = 0
+    num_language_layers: int = 0
+
     # Method support flags
     supports_prompting: bool = True
     supports_candidate_margin: bool = True
@@ -270,6 +276,19 @@ class TrainableVLMAdapter(ABC):
         model: torch.nn.Module,
     ) -> int:
         """Return the hidden dimension of the language transformer."""
+
+    def language_intermediate_size(
+        self,
+        model: torch.nn.Module,
+    ) -> int:
+        """Return the intermediate (MLP) dimension of the language transformer.
+
+        Default raises NotImplementedError; override for models that
+        support structural validation or MANU.
+        """
+        raise NotImplementedError(
+            f"{self.profile.key} does not implement language_intermediate_size"
+        )
 
     def manu_neuron_specs(
         self,

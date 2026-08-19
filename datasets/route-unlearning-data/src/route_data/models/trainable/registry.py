@@ -117,6 +117,14 @@ def create_adapter(
                 f"for model key {key!r}"
             )
 
+        # P0-10: Profile adapter_name must match registered family
+        if profile.adapter_name != family_name:
+            raise ValueError(
+                f"Profile {key!r} has adapter_name={profile.adapter_name!r} "
+                f"but model key is registered to family {family_name!r}. "
+                f"Fix the YAML profile."
+            )
+
         family_cls = _ADAPTER_FAMILIES[family_name]
         adapter = family_cls(profile)
 
@@ -224,6 +232,20 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
             structural.get("r2mu_n_select_layers", 0),
             "structural.r2mu_n_select_layers",
         ),
+        # P0-5: Structural metadata (optional, defaults to empty/zero)
+        language_layer_path=structural.get("language_layer_path", ""),
+        language_hidden_size=_safe_int(
+            structural.get("language_hidden_size", 0),
+            "structural.language_hidden_size",
+        ),
+        intermediate_size=_safe_int(
+            structural.get("intermediate_size", 0),
+            "structural.intermediate_size",
+        ),
+        num_language_layers=_safe_int(
+            structural.get("num_language_layers", 0),
+            "structural.num_language_layers",
+        ),
         supports_prompting=_safe_bool(data.get("supports_prompting", True)),
         supports_candidate_margin=_safe_bool(
             data.get("supports_candidate_margin", True)
@@ -290,15 +312,19 @@ def validate_research_profile(profile: ModelFamilyProfile) -> list[str]:
             f"{profile.lora_scope_regex!r}"
         )
 
-    # --- Capability-consistent validation ---
+    # --- Capability-consistent Validation ---
     any_method_supported = any([
+        profile.supports_prompting,
+        profile.supports_candidate_margin,
         profile.supports_ga,
+        profile.supports_gd,
         profile.supports_kl,
         profile.supports_npo,
-        profile.supports_candidate_margin,
-        profile.supports_prompting,
+        profile.supports_mmunlearner,
+        profile.supports_manu,
+        profile.supports_r2mu,
     ])
-
+    
     if any_method_supported:
         # Must have pinned revisions
         if not _FULL_SHA_RE.fullmatch(profile.revision):
@@ -315,10 +341,38 @@ def validate_research_profile(profile: ModelFamilyProfile) -> list[str]:
             errors.append(
                 "Methods enabled but lora_scope_regex is unresolved"
             )
-
+    
+    # Capability-specific validation
+    _loralike_methods = [
+        profile.supports_ga,
+        profile.supports_gd,
+        profile.supports_kl,
+        profile.supports_npo,
+        profile.supports_mmunlearner,
+    ]
+    if any(_loralike_methods) and not profile.lora_target_leaf_names:
+        errors.append(
+            "LoRA-requiring methods enabled but lora_target_leaf_names is empty"
+        )
+    
+    if profile.supports_manu and not profile.r2mu_candidate_layers:
+        # MANU needs structural layer info
+        errors.append(
+            "supports_manu=true but r2mu_candidate_layers is empty"
+        )
+    
     if profile.supports_r2mu and not profile.r2mu_candidate_layers:
         errors.append(
             "supports_r2mu=true but r2mu_candidate_layers is empty"
+        )
+    if (
+        profile.supports_r2mu
+        and profile.r2mu_candidate_layers
+        and profile.r2mu_n_select_layers > len(profile.r2mu_candidate_layers)
+    ):
+        errors.append(
+            f"r2mu_n_select_layers ({profile.r2mu_n_select_layers}) "
+            f"> len(r2mu_candidate_layers) ({len(profile.r2mu_candidate_layers)})"
         )
 
     # --- Candidate protocol ---
@@ -429,3 +483,83 @@ def _try_import(module_name: str) -> None:
 def clear_cache() -> None:
     """Clear the adapter cache. Useful for testing."""
     _ADAPTER_CACHE.clear()
+
+
+# ------------------------------------------------------------------ #
+# Runtime structural validation (P0-5)
+# ------------------------------------------------------------------ #
+
+def validate_structural_metadata(
+    adapter: Any,
+    model: Any,
+) -> list[str]:
+    """Validate profile structural metadata against the runtime model.
+
+    Must be called after model load, before training begins.
+    Returns a list of error messages.  Empty list means all metadata
+    matches the runtime model.
+
+    Checks
+    ------
+    - ``len(language_layers)`` matches ``profile.num_language_layers``
+    - ``language_hidden_size`` matches ``profile.language_hidden_size``
+    - ``language_intermediate_size`` matches ``profile.intermediate_size``
+    - R²MU candidate indices are in range ``[0, num_language_layers)``
+    """
+    errors: list[str] = []
+    p = adapter.profile
+
+    # Only validate if profile has non-zero structural metadata
+    if p.num_language_layers <= 0:
+        return errors
+
+    # Language layer count
+    try:
+        layers = adapter.language_layers(model)
+        n_layers = len(layers)
+    except (NotImplementedError, AttributeError) as exc:
+        errors.append(f"Cannot validate layer count: {exc}")
+        return errors
+
+    if n_layers != p.num_language_layers:
+        errors.append(
+            f"num_language_layers mismatch: profile={p.num_language_layers}, "
+            f"runtime={n_layers}"
+        )
+
+    # Hidden size
+    if p.language_hidden_size > 0:
+        try:
+            runtime_hidden = adapter.language_hidden_size(model)
+            if runtime_hidden != p.language_hidden_size:
+                errors.append(
+                    f"language_hidden_size mismatch: "
+                    f"profile={p.language_hidden_size}, runtime={runtime_hidden}"
+                )
+        except (NotImplementedError, AttributeError) as exc:
+            errors.append(f"Cannot validate hidden_size: {exc}")
+
+    # Intermediate size
+    if p.intermediate_size > 0:
+        try:
+            runtime_intermediate = adapter.language_intermediate_size(model)
+            if runtime_intermediate != p.intermediate_size:
+                errors.append(
+                    f"intermediate_size mismatch: "
+                    f"profile={p.intermediate_size}, runtime={runtime_intermediate}"
+                )
+        except (NotImplementedError, AttributeError) as exc:
+            errors.append(f"Cannot validate intermediate_size: {exc}")
+
+    # R²MU candidate index range validation
+    if p.r2mu_candidate_layers:
+        for idx in p.r2mu_candidate_layers:
+            if idx < 0 or idx >= n_layers:
+                errors.append(
+                    f"r2mu_candidate_layers index {idx} out of range "
+                    f"[0, {n_layers})"
+                )
+        if len(p.r2mu_candidate_layers) != len(set(p.r2mu_candidate_layers)):
+            errors.append("r2mu_candidate_layers contains duplicates")
+
+    return errors

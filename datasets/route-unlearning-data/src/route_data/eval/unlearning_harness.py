@@ -961,6 +961,8 @@ def qwen_collate_fn(
 def compute_forget_loss(
     model: Any,
     batch: dict[str, torch.Tensor],
+    *,
+    adapter: Any | None = None,
 ) -> torch.Tensor:
     """Candidate-margin forget loss using shared scorer (P0-1).
 
@@ -970,6 +972,17 @@ def compute_forget_loss(
 
     Uses the shared ``score_candidate_sequence_tensor`` from scoring.py to
     ensure training and evaluation use identical scoring logic.
+
+    Parameters
+    ----------
+    model:
+        The language model.
+    batch:
+        Collated batch dict with tensors and metadata.
+    adapter:
+        Optional trainable adapter for model-agnostic scoring.
+        When provided, uses adapter-aware prefix extraction and
+        passes adapter to the scorer.
     """
     from ..models.scoring import score_candidate_sequence_tensor
 
@@ -983,10 +996,15 @@ def compute_forget_loss(
 
     total_margin = torch.tensor(0.0, device=batch["input_ids"].device, dtype=batch["input_ids"].dtype)
 
+    # Determine image-indexed and sequence-indexed keys
+    if adapter is not None:
+        image_keys = adapter.image_indexed_keys()
+    else:
+        image_keys = frozenset({"pixel_values", "image_grid_thw", "image_sizes"})
+
     # Process each sample in the batch
     for i in range(batch_size):
         prefix_len = prefix_lens[i]
-        expected_answer = answer_labels[i]
 
         # Build prefix dict for this sample (up to prefix_len, not padded)
         prefix: dict[str, torch.Tensor] = {
@@ -994,28 +1012,31 @@ def compute_forget_loss(
             "attention_mask": batch["attention_mask"][i:i+1, :prefix_len],
         }
 
-        # Add multimodal tensors
-        # Sequence-indexed tensors (mm_token_type_ids) must be sliced to
-        # prefix_len to match input_ids/attention_mask. Visual tensors
-        # (pixel_values, image_grid_thw, image_sizes) are indexed by image
-        # and passed as-is.
-        _SEQ_KEYS = {"mm_token_type_ids"}
-        for key in ("pixel_values", "image_grid_thw", "mm_token_type_ids", "image_sizes"):
-            if key in batch:
-                val = batch[key]
-                if torch.is_tensor(val):
-                    if key in _SEQ_KEYS:
-                        # Sequence-indexed: slice to prefix_len
-                        prefix[key] = val[i:i+1, :prefix_len]
-                    else:
-                        # Image-indexed: pass full (model handles alignment)
-                        prefix[key] = val[i:i+1]
-                elif isinstance(val, list) and len(val) > i:
+        # Add multimodal tensors using adapter-aware key classification
+        for key, val in batch.items():
+            if key.startswith("_") or key in ("input_ids", "attention_mask", "labels"):
+                continue
+            if not torch.is_tensor(val):
+                # Metadata list (e.g. _prefix_len already handled)
+                if isinstance(val, list) and len(val) > i:
                     prefix[key] = val[i]
+                continue
+            if key in image_keys:
+                # Image-indexed: pass full (model handles alignment)
+                prefix[key] = val[i:i+1]
+            else:
+                # Sequence-indexed: slice to prefix_len
+                prefix[key] = val[i:i+1, :prefix_len]
+
+        expected_answer = answer_labels[i]
 
         # Compute margin using shared scorer
-        log_p_yes = score_candidate_sequence_tensor(model, prefix, yes_token_ids)
-        log_p_no = score_candidate_sequence_tensor(model, prefix, no_token_ids)
+        log_p_yes = score_candidate_sequence_tensor(
+            model, prefix, yes_token_ids, adapter=adapter,
+        )
+        log_p_no = score_candidate_sequence_tensor(
+            model, prefix, no_token_ids, adapter=adapter,
+        )
 
         if expected_answer:
             # Expected Yes: margin = logP(Yes) - logP(No)
@@ -1255,7 +1276,9 @@ class UnlearningTrainer:
                 retain_batch = self._move_batch(retain_batch)
 
                 # Compute losses
-                forget_loss = compute_forget_loss(self.model, forget_batch)
+                forget_loss = compute_forget_loss(
+                    self.model, forget_batch, adapter=self.adapter,
+                )
                 retain_loss = compute_retain_loss(
                     self.model, retain_batch, self.reference_model
                 )

@@ -135,6 +135,12 @@ def main() -> None:
         action="store_true",
         help="Only print failures",
     )
+    parser.add_argument(
+        "--allow-development-profiles",
+        action="store_true",
+        help="Skip profiles marked research_ready: false instead of "
+             "failing.  Research-mode validation (default) is fail-closed.",
+    )
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parent.parent
@@ -157,17 +163,34 @@ def main() -> None:
         return
 
     all_pass = True
+    skipped_dev = 0
     for path in paths:
         if not path.is_file():
             print(f"ERROR: file not found: {path}")
             all_pass = False
             continue
+        # P0-12: Check development/research-ready status.
+        if args.allow_development_profiles:
+            import yaml as _yaml
+            with open(path) as _pf:
+                _raw = _yaml.safe_load(_pf) or {}
+            _status = _raw.get("status", {})
+            if isinstance(_status, dict) and not _status.get(
+                "research_ready", True
+            ):
+                if verbose:
+                    print(f"Skipping (development): {path}")
+                skipped_dev += 1
+                continue
         ok = validate_profile(path, verbose=verbose)
         if not ok:
             all_pass = False
 
     if all_pass:
-        print(f"\nAll {len(paths)} profile(s) valid.")
+        msg = f"All {len(paths)} profile(s) valid."
+        if skipped_dev:
+            msg += f" ({skipped_dev} development profiles skipped.)"
+        print(f"\n{msg}")
     else:
         print("\nSome profiles FAILED validation.")
         sys.exit(1)

@@ -76,9 +76,151 @@ class PostEvalConfig:
     # P0-19/20: Route probe SHA for suite-level verification
     route_probe_sha256: str = ""
 
+    # P0-8: Model profile provenance
+    model_key: str = ""
+    processor_id: str = ""
+    processor_revision: str = ""
+    model_profile_sha256: str = ""
+    adapter_family: str = ""
+
     @property
     def experiment_id(self) -> str:
         return "fiubench_unlearning_pilot_v1"
+
+
+# --------------------------------------------------------------------------- #
+# P0-7: Model-specific pre-unlearning baseline resolver
+# --------------------------------------------------------------------------- #
+
+@dataclass
+class BaselineBinding:
+    """Resolved pre-unlearning baseline for a specific model.
+
+    Each model key has its own baseline directory under
+    ``outputs/experiments/pre_unlearning/<model_key>/``.  This binding
+    captures the exact paths and provenance needed to ensure that
+    post-unlearning evaluation always compares against the correct
+    model-specific pre-baseline.
+    """
+
+    results_path: str = ""
+    manifest_path: str = ""
+    results_sha256: str = ""
+    manifest_sha256: str = ""
+    model_id: str = ""
+    model_revision: str = ""
+    processor_revision: str = ""
+    model_profile_sha256: str = ""
+
+
+def resolve_preunlearning_baseline(
+    model_key: str,
+    protocol_version: str = "baseline_v1",
+    *,
+    project_root: Path | None = None,
+) -> BaselineBinding:
+    """Resolve the model-specific pre-unlearning baseline.
+
+    Parameters
+    ----------
+    model_key:
+        Registered model key (e.g. ``"qwen35_9b"``).
+    protocol_version:
+        Baseline protocol directory name (e.g. ``"baseline_v1"``).
+    project_root:
+        Project root for path resolution.  Defaults to the repository root.
+
+    Returns
+    -------
+    binding : BaselineBinding
+        Resolved paths and provenance for the model-specific baseline.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the baseline results or manifest file does not exist.
+    """
+    if project_root is None:
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+
+    baseline_dir = (
+        project_root / "outputs" / "experiments" / "pre_unlearning"
+        / model_key / protocol_version
+    )
+    results_path = baseline_dir / "baseline_results.jsonl"
+    manifest_path = baseline_dir / "baseline_manifest.json"
+
+    if not results_path.is_file():
+        raise FileNotFoundError(
+            f"Pre-unlearning baseline results not found for "
+            f"model_key={model_key!r} at {results_path}. "
+            f"Run the pre-baseline generation before post-eval."
+        )
+    if not manifest_path.is_file():
+        raise FileNotFoundError(
+            f"Pre-unlearning baseline manifest not found for "
+            f"model_key={model_key!r} at {manifest_path}."
+        )
+
+    # Read manifest for provenance fields.
+    with open(manifest_path) as f:
+        manifest_data = json.load(f)
+
+    model_section = manifest_data.get("model", {})
+    provenance = manifest_data.get("provenance", {})
+
+    return BaselineBinding(
+        results_path=str(results_path),
+        manifest_path=str(manifest_path),
+        results_sha256=provenance.get("results_sha256", ""),
+        manifest_sha256=provenance.get("manifest_sha256", ""),
+        model_id=model_section.get("id", ""),
+        model_revision=model_section.get("revision", ""),
+        processor_revision=model_section.get("processor_revision", ""),
+        model_profile_sha256=model_section.get("model_profile_sha256", ""),
+    )
+
+
+def validate_baseline_model_identity(
+    binding: BaselineBinding,
+    *,
+    model_key: str = "",
+    model_id: str = "",
+    model_revision: str = "",
+    processor_revision: str = "",
+) -> list[str]:
+    """Validate that a baseline binding matches the selected model.
+
+    Returns a list of mismatch descriptions.  An empty list means all
+    checks passed.
+    """
+    errors: list[str] = []
+    if (
+        model_key and binding.model_id and model_id
+        and binding.model_id != model_id
+    ):
+        errors.append(
+            f"Baseline model_id {binding.model_id!r} != "
+            f"selected model_id {model_id!r}"
+        )
+    if (
+        model_revision and binding.model_revision
+        and binding.model_revision != model_revision
+    ):
+        errors.append(
+            f"Baseline revision {binding.model_revision!r} != "
+            f"selected revision {model_revision!r}"
+        )
+    if (
+        processor_revision and binding.processor_revision
+        and binding.processor_revision != processor_revision
+    ):
+        errors.append(
+            f"Baseline processor_revision "
+            f"{binding.processor_revision!r} != "
+            f"selected processor_revision {processor_revision!r}"
+        )
+    return errors
 
 
 # --------------------------------------------------------------------------- #

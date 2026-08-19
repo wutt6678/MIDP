@@ -133,6 +133,12 @@ def _run_eval(
         processed_dataset_path=str(processed_dataset_path),
         model_config_path="",
         route_probe_sha256=route_probe_sha256,
+        # P0-8: Profile provenance
+        model_key=getattr(trainable_adapter.profile, "key", "") if trainable_adapter else getattr(training_config, "model_key", ""),
+        processor_id=getattr(trainable_adapter.profile, "processor_id", "") if trainable_adapter else getattr(training_config, "processor_id", ""),
+        processor_revision=getattr(trainable_adapter.profile, "processor_revision", "") if trainable_adapter else getattr(training_config, "processor_revision", ""),
+        model_profile_sha256=getattr(training_config, "model_profile_sha256", ""),
+        adapter_family=getattr(trainable_adapter.profile, "adapter_name", "") if trainable_adapter else getattr(training_config, "adapter_family", ""),
     )
 
     # P0-1: Fail immediately if any mandatory frozen-contract field is empty.
@@ -151,6 +157,37 @@ def _run_eval(
             f"_run_eval({method_label}): mandatory PostEvalConfig fields "
             f"are empty: {empty_fields}. Check common.yaml provenance."
         )
+
+    # P0-7: Validate baseline/model identity when both baseline manifest
+    # and profile provenance are available.  This prevents cross-model
+    # deltas (e.g. GLM post - Qwen pre).
+    _bl_manifest = Path(post_config.baseline_manifest_path)
+    if _bl_manifest.is_file() and post_config.model_key:
+        from route_data.eval.post_unlearning_eval import (
+            BaselineBinding,
+            validate_baseline_model_identity,
+        )
+        with open(_bl_manifest) as _blf:
+            _bl_data = json.load(_blf)
+        _bl_model = _bl_data.get("model", {})
+        _binding = BaselineBinding(
+            manifest_path=str(_bl_manifest),
+            model_id=_bl_model.get("id", ""),
+            model_revision=_bl_model.get("revision", ""),
+            processor_revision=_bl_model.get("processor_revision", ""),
+        )
+        _id_errors = validate_baseline_model_identity(
+            _binding,
+            model_key=post_config.model_key,
+            model_id=post_config.model_id,
+            model_revision=post_config.model_revision,
+            processor_revision=post_config.processor_revision,
+        )
+        if _id_errors:
+            raise RuntimeError(
+                f"Baseline/model identity mismatch for "
+                f"model_key={post_config.model_key!r}: {_id_errors}"
+            )
 
     logger.info(f"Running common 500-probe evaluation: {method_label}")
     result = evaluate_intervention(
@@ -362,6 +399,7 @@ def main() -> None:
             "mllmu_ga_difference": "supports_gd",
             "mllmu_kl_min": "supports_kl",
             "mllmu_npo": "supports_npo",
+            "npo_oracle": "supports_npo",
             "mmunlearner": "supports_mmunlearner",
             "manu": "supports_manu",
             "r2mu_adapted": "supports_r2mu",
@@ -396,6 +434,25 @@ def main() -> None:
 
         # Store model key in config for downstream use
         config.setdefault("model", {})["key"] = _profile.key
+
+        # P0-7: Override baseline paths with model-specific locations.
+        # The pre-unlearning baseline must be per-model to prevent
+        # cross-model deltas (e.g. GLM post - Qwen pre).
+        _baseline_dir = (
+            Path(__file__).resolve().parent.parent
+            / "outputs" / "experiments" / "pre_unlearning"
+            / _profile.key / "baseline_v1"
+        )
+        _data_cfg = config.setdefault("data", {})
+        _data_cfg["baseline_results_path"] = str(
+            _baseline_dir / "baseline_results.jsonl"
+        )
+        _data_cfg["baseline_manifest_path"] = str(
+            _baseline_dir / "baseline_manifest.json"
+        )
+        logger.info(
+            f"Model-specific baseline: {_baseline_dir}"
+        )
 
     # Add code provenance
     config.setdefault("runtime", {})["code_commit"] = _git_commit()
@@ -449,6 +506,12 @@ def main() -> None:
         training_config.lora_rank = _profile.lora_rank
         training_config.lora_alpha = _profile.lora_alpha
         training_config.lora_dropout = _profile.lora_dropout
+        # P0-8: Bind profile provenance into training config
+        training_config.model_key = _profile.key
+        training_config.processor_id = _profile.processor_id
+        training_config.processor_revision = _profile.processor_revision
+        training_config.model_profile_sha256 = _profile_sha256
+        training_config.adapter_family = _profile.adapter_name
 
     # Apply data config
     data = config.get("data", {})

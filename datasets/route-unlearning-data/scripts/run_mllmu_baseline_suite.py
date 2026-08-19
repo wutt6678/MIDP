@@ -483,6 +483,11 @@ def _run_single_method(
         "--config", tmp_config.name,
     ]
 
+    # P0-6: Propagate --model-profile to every subprocess.
+    _mp = suite_state.get("model_profile_path", "")
+    if _mp:
+        cmd.extend(["--model-profile", _mp])
+
     logger.info(f"{'='*60}")
     logger.info(f"Running: {method}")
     logger.info(f"Command: {' '.join(cmd)}")
@@ -969,6 +974,13 @@ def main() -> None:
         "--runtime-output-root",
         help="Override output root for runtime artefacts (must be git-ignored).",
     )
+    # P0-6: Model profile for multi-model support.
+    parser.add_argument(
+        "--model-profile",
+        help="Path to a model-profile YAML (e.g. "
+             "configs/models/unlearning/qwen35_9b.yaml). "
+             "Propagated to every subprocess via --model-profile.",
+    )
     args = parser.parse_args()
 
     # Determine which methods to run
@@ -1031,6 +1043,50 @@ def main() -> None:
         suite_state["reference_model_path"] = args.reference_model_path
     if args.oracle_adapter_path:
         suite_state["oracle_adapter_path"] = args.oracle_adapter_path
+    # P0-6: Propagate model profile to all subprocesses.
+    model_profile_path = getattr(args, "model_profile", "") or ""
+    if model_profile_path:
+        resolved_profile = str(Path(model_profile_path).resolve())
+        suite_state["model_profile_path"] = resolved_profile
+        # Load profile and populate suite_state provenance.
+        with open(resolved_profile) as _pf:
+            _profile_data = yaml.safe_load(_pf) or {}
+        _profile_sha = _sha256_file(resolved_profile)
+        suite_state["model_key"] = _profile_data.get("key", "")
+        suite_state["model_id"] = _profile_data.get("model_id", "")
+        suite_state["model_revision"] = _profile_data.get("revision", "")
+        suite_state["processor_id"] = _profile_data.get("processor_id", "")
+        suite_state["processor_revision"] = _profile_data.get(
+            "processor_revision", "",
+        )
+        suite_state["model_profile_sha256"] = _profile_sha
+        logger.info(
+            f"Model profile: {resolved_profile} "
+            f"(key={_profile_data.get('key', '')}, "
+            f"sha={_profile_sha[:16]}...)"
+        )
+        # P0-6: MIDP-CM cross-model handling.
+        # Historical Qwen MIDP-CM evidence must not be reused for a
+        # non-Qwen model.  midp_cm is disabled for non-Qwen profiles.
+        _adapter_name = _profile_data.get("adapter_name", "")
+        if _adapter_name != "qwen35":
+            logger.warning(
+                f"MIDP-CM historical binding is Qwen-specific. "
+                f"Disabling midp_cm for adapter={_adapter_name!r}."
+            )
+            methods_to_run = [
+                m for m in methods_to_run if m[0] != "midp_cm"
+            ]
+
+        # P0-6: Override common_config revision/model_id so that
+        # _validate_eval_result uses the profile revision, not the
+        # Qwen-centric common.yaml revision.
+        common_config.setdefault("base_model", {})["revision"] = (
+            _profile_data.get("revision", "")
+        )
+        common_config["base_model"]["id"] = _profile_data.get(
+            "model_id", common_config["base_model"].get("id", ""),
+        )
 
     # Run methods in order
     results: list[dict[str, Any]] = []
@@ -1130,6 +1186,14 @@ def main() -> None:
         "git_dirty_at_start": suite_state["git_dirty_at_start"],
         "git_clean_at_end": git_clean_at_end,
         "per_method_status": per_method_status,
+        # P0-6: Model profile provenance.
+        "model_profile_path": suite_state.get("model_profile_path", ""),
+        "model_key": suite_state.get("model_key", ""),
+        "model_id": suite_state.get("model_id", ""),
+        "model_revision": suite_state.get("model_revision", ""),
+        "processor_id": suite_state.get("processor_id", ""),
+        "processor_revision": suite_state.get("processor_revision", ""),
+        "model_profile_sha256": suite_state.get("model_profile_sha256", ""),
         # P0-7/8/9/10/11: Non-vacuous completeness.
         "required_comparison_methods": sorted(required_comparison_methods),
         "requested_comparison_methods": sorted(requested_comparison_methods),
