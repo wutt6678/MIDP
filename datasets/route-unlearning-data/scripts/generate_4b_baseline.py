@@ -184,13 +184,12 @@ def main() -> None:
 
     # Run evaluation
     logger.info("Running evaluation on probes...")
-    from route_data.eval.post_unlearning_eval import evaluate_intervention
-
-    results_path = output_dir / "baseline_results.jsonl"
-
-    # Build minimal PostEvalConfig
+    from route_data.eval.baseline_runner import BaselineRunner
     from route_data.eval.post_unlearning_eval import PostEvalConfig
-
+    
+    results_path = output_dir / "baseline_results.jsonl"
+    
+    # Build minimal PostEvalConfig
     post_config = PostEvalConfig(
         model_id=profile.model_id,
         model_revision=profile.revision,
@@ -198,8 +197,8 @@ def main() -> None:
         device="cuda:0",
         seed=17,
         probe_path=str(probe_path),
-        baseline_results_path="",
-        baseline_manifest_path="",
+        baseline_results_path=str(results_path),
+        baseline_manifest_path=str(output_dir / "baseline_manifest.json"),
         output_dir=str(output_dir),
         selection_manifest_sha256="",
         selection_manifest_path="",
@@ -215,30 +214,33 @@ def main() -> None:
         model_profile_sha256=profile_sha256,
         adapter_family=profile.adapter_name,
     )
-
-    result = evaluate_intervention(
+    
+    # Use BaselineRunner directly to avoid baseline validation
+    runner = BaselineRunner(
         model=model,
         processor=processor,
-        adapter_path=None,
         probe_dataset_path=str(probe_path),
         output_dir=str(output_dir),
         config=post_config,
-        baseline_results_path="",
+        adapter_path=None,
         method_name="pre_unlearning_baseline",
-        objective_name="pre_unlearning_baseline",
-        backend_override=None,
         trainable_adapter=adapter,
     )
-
-    logger.info(f"Evaluation complete: {result.get('exact_pair_count', 0)} pairs, "
-                f"{result.get('inference_errors', 0)} errors")
+    
+    # Run preflight
+    runner.validate_research_preflight()
+    
+    # Run evaluation
+    results = runner.run_baseline()
+    logger.info(f"Evaluation complete: {len(results)} results")
 
     # Compute results SHA-256
     results_sha256 = _file_sha256(results_path)
     logger.info(f"Results SHA-256: {results_sha256}")
 
-    # Build summary
-    summary = result.get("summary", {})
+    # Build summary from results
+    from route_data.eval.baseline_runner import compute_baseline_summary
+    summary = compute_baseline_summary(results, probes)
 
     # Build manifest
     manifest = {
