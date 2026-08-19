@@ -19,9 +19,6 @@ import argparse
 import hashlib
 import json
 import logging
-import platform
-import subprocess
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,18 +27,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("generate_4b_baseline")
-
-
-def _git_commit() -> str:
-    """Return the current git commit SHA."""
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=False,
-        )
-        return r.stdout.strip() if r.returncode == 0 else ""
-    except FileNotFoundError:
-        return ""
 
 
 def _file_sha256(path: Path) -> str:
@@ -174,7 +159,7 @@ def main() -> None:
     # Compute model fingerprint
     processor_class = type(processor).__name__
     tokenizer_class = type(processor.tokenizer).__name__
-    fingerprint_id, fingerprint_payload = _compute_model_fingerprint(
+    fingerprint_id, _ = _compute_model_fingerprint(
         model_id=profile.model_id,
         model_revision=profile.revision,
         processor_class=processor_class,
@@ -192,154 +177,82 @@ def main() -> None:
 
     logger.info(f"Loaded {len(probes)} probes")
 
-    if args.smoke_only:
-        probes = probes[:50]
-        logger.info(f"Smoke mode: using first {len(probes)} probes")
-
     # Run evaluation
     logger.info("Running evaluation on probes...")
+    smoke_limit = 50 if args.smoke_only else None
+    from route_data.config import GenerationConfig, ModelConfig
     from route_data.eval.baseline_runner import BaselineRunner
-    from route_data.eval.post_unlearning_eval import PostEvalConfig
-    
-    results_path = output_dir / "baseline_results.jsonl"
-    
-    # Build minimal PostEvalConfig
-    post_config = PostEvalConfig(
+    from route_data.models.qwen import QwenHFBackend
+
+    # Build ModelConfig + QwenHFBackend (correct BaselineRunner interface).
+    qwen_config = ModelConfig(
+        backend="qwen_hf",
         model_id=profile.model_id,
-        model_revision=profile.revision,
+        revision=profile.revision,
         dtype=profile.dtype,
-        device="cuda:0",
-        seed=17,
-        probe_path=str(probe_path),
-        baseline_results_path=str(results_path),
-        baseline_manifest_path=str(output_dir / "baseline_manifest.json"),
-        output_dir=str(output_dir),
-        selection_manifest_sha256="",
-        selection_manifest_path="",
-        code_commit=_git_commit(),
-        dataset_manifest_path=str(project_root / "outputs/full_fiubench/evidence/research_dataset_manifest.json"),
-        freeze_verification_path=str(project_root / "outputs/full_fiubench/evidence/final_freeze_verification.json"),
-        processed_dataset_path=str(project_root / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl"),
-        model_config_path="",
-        route_probe_sha256=_file_sha256(probe_path),
-        model_key=profile.key,
-        processor_id=profile.processor_id,
-        processor_revision=profile.processor_revision,
-        model_profile_sha256=profile_sha256,
-        adapter_family=profile.adapter_name,
+        generation=GenerationConfig(do_sample=False),
     )
-    
-    # Use BaselineRunner directly to avoid baseline validation
-    runner = BaselineRunner(
+    backend = QwenHFBackend.from_loaded_model(
+        config=qwen_config,
         model=model,
         processor=processor,
-        probe_dataset_path=str(probe_path),
-        output_dir=str(output_dir),
-        config=post_config,
-        adapter_path=None,
-        method_name="pre_unlearning_baseline",
-        trainable_adapter=adapter,
+        adapter_metadata=None,
+        resolved_revision=profile.revision,
     )
-    
+
+    # model_config namespace for BaselineRunner attribute access (.revision etc.)
+    import types
+    _fp = backend.fingerprint()
+    model_config = types.SimpleNamespace(
+        model_id=profile.model_id,
+        revision=profile.revision,
+        dtype=profile.dtype,
+        backend="qwen_hf",
+        fingerprint_id=_fp.get("fingerprint_id", ""),
+    )
+
+    runner = BaselineRunner(
+        backend=backend,
+        probe_path=str(probe_path),
+        output_dir=str(output_dir),
+        model_config=model_config,
+        resume=True,
+        dataset_manifest_path=str(
+            project_root / "outputs/full_fiubench/evidence/research_dataset_manifest.json"
+        ),
+        model_config_path=str(profile_path),
+        freeze_verification_path=str(
+            project_root / "outputs/full_fiubench/evidence/final_freeze_verification.json"
+        ),
+        processed_dataset_path=str(
+            project_root / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl"
+        ),
+    )
+
     # Run preflight
     runner.validate_research_preflight()
-    
+
     # Run evaluation
-    results = runner.run_baseline()
+    results = runner.run_all(limit=smoke_limit)
     logger.info(f"Evaluation complete: {len(results)} results")
+
+    # Save results to JSONL
+    runner.save_results()
+    results_path = output_dir / "baseline_results.jsonl"
 
     # Compute results SHA-256
     results_sha256 = _file_sha256(results_path)
     logger.info(f"Results SHA-256: {results_sha256}")
 
-    # Build summary from results
-    from route_data.eval.baseline_runner import compute_baseline_summary
-    summary = compute_baseline_summary(results, probes)
+    # Generate summary (writes baseline_summary.json as side effect)
+    runner.generate_summary()
 
-    # Build manifest
-    manifest = {
-        "schema_version": "1.2",
-        "metric_schema_version": "baseline-metrics-v1",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "dataset_provenance": {
-            "probe_file": str(probe_path),
-            "probe_file_sha256": _file_sha256(probe_path),
-            "probe_count": len(probes),
-            "dataset_manifest": "",
-            "dataset_version": "fiubench-route-v1",
-            "dataset_manifest_sha256": "",
-            "freeze_verification": "",
-            "freeze_verification_sha256": "",
-            "route_probe_sha256": _file_sha256(probe_path),
-            "route_probe_count": len(probes),
-            "processed_dataset_path": "",
-            "processed_dataset_sha256": "",
-            "processed_dataset_manifest_sha256": "",
-        },
-        "protocol_sha256": "",
-        "model_identity": {
-            "model_id": profile.model_id,
-            "model_revision": profile.revision,
-            "backend": "qwen_hf",
-            "fingerprint_id": fingerprint_id,
-            "fingerprint_payload": fingerprint_payload,
-            "model_config_sha256": "",
-        },
-        "scoring_config": {
-            "scoring_version": "2",
-            "candidates": ["Yes", "No"],
-            "candidate_protocol": "binary_yes_no",
-            "candidate_protocol_version": "1",
-            "thinking_mode": "disabled",
-            "decision_rule": "p_yes_geq_0.5",
-            "raw_log_margin_definition": "logp_yes_minus_logp_no",
-            "signed_answer_margin_definition": "raw_log_margin_if_target_yes_else_negated_raw_log_margin",
-            "signed_answer_margin_interpretation": "higher_is_better",
-        },
-        "runtime_environment": {
-            "python_version": platform.python_version(),
-            "platform": platform.platform(),
-            "cwd": str(project_root),
-            "torch_version": fingerprint_payload["torch"],
-            "transformers_version": fingerprint_payload["transformers"],
-        },
-        "results": {
-            "results_file": str(results_path),
-            "results_sha256": results_sha256,
-            "summary_file": "",
-            "summary_sha256": "",
-            "validation_report_file": "",
-            "validation_report_sha256": "",
-            "smoke_manifest_file": "",
-            "smoke_manifest_sha256": "",
-            "total_results": len(probes),
-            "summary": summary,
-        },
-        "route_identity_role_counts": summary.get("route_identity_role_counts", {}),
-        "code_provenance": {
-            "git_commit": _git_commit(),
-            "git_dirty": False,
-        },
-    }
-
-    # Save manifest
-    manifest_path = output_dir / "baseline_manifest.json"
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=2)
-    logger.info(f"Manifest saved: {manifest_path}")
-
-    # Save summary
-    summary_path = output_dir / "baseline_summary.json"
-    with open(summary_path, "w") as f:
-        json.dump(summary, f, indent=2)
-    logger.info(f"Summary saved: {summary_path}")
+    logger.info("Baseline evaluation complete. Run generate_4b_baseline_manifest.py to generate the canonical manifest.")
 
     logger.info("=" * 60)
     logger.info("Baseline generation complete!")
     logger.info(f"Total probes: {len(probes)}")
     logger.info(f"Results: {results_path}")
-    logger.info(f"Manifest: {manifest_path}")
-    logger.info(f"Summary: {summary_path}")
     logger.info("=" * 60)
 
 
