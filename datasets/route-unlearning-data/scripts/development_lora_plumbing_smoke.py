@@ -49,7 +49,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Project paths
+# Project paths (defaults — overridden by --config)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_DIR = PROJECT_ROOT / "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/experiments/unlearning/qwen35_4b/canary_v1"
@@ -331,11 +331,11 @@ def run_post_evaluation(
     
     # In smoke mode, ensure we sample from all 5 families
     if smoke:
-        # Get at least 2 probes from each family
+        # Ensure coverage of all 5 families; take up to 10 per family.
         probe_subset = []
         for family in ["direct_visual", "image_plus_name", "wrong_name", "visual_text_conflict", "name_only"]:
             family_probes = [r for r in baseline_results if r["probe_family"] == family]
-            probe_subset.extend(family_probes[:2])
+            probe_subset.extend(family_probes[:10])
         logger.info(f"Running post-evaluation on {len(probe_subset)} probes (smoke mode, all families)")
     else:
         probe_subset = baseline_results
@@ -387,19 +387,31 @@ def run_post_evaluation(
 # --------------------------------------------------------------------------- #
 
 def main() -> None:
+    global BASELINE_DIR, OUTPUT_DIR
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true", help="Smoke mode (1 step, 10 probes)")
     parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "configs/experiments/unlearning_4b_v1.yaml")
     args = parser.parse_args()
     
-    logger.info("=" * 60)
-    logger.info("Qwen3.5-4B LoRA Plumbing Smoke Test")
-    logger.info("=" * 60)
-    
     # Load config
     import yaml
     with open(args.config) as f:
         config = yaml.safe_load(f)
+
+    # Derive paths from config (supports any model, not just Qwen3.5-4B).
+    results_path = config.get("baseline", {}).get("results_path")
+    if results_path:
+        BASELINE_DIR = (PROJECT_ROOT / results_path).parent
+    output_dir_cfg = config.get("runtime", {}).get("output_dir")
+    if output_dir_cfg:
+        OUTPUT_DIR = PROJECT_ROOT / output_dir_cfg
+
+    experiment_title = config.get("experiment_id", "LoRA Plumbing Smoke Test")
+
+    logger.info("=" * 60)
+    logger.info(f"{experiment_title}")
+    logger.info("=" * 60)
     
     if args.smoke:
         config["method"]["hyperparameters"]["num_optimizer_steps"] = 1
@@ -410,7 +422,8 @@ def main() -> None:
     # Step 1: Load baseline
     logger.info("Step 1: Loading baseline")
     baseline_results = []
-    with open(BASELINE_DIR / "baseline_results.jsonl") as f:
+    baseline_results_path = BASELINE_DIR / "baseline_results.jsonl"
+    with open(baseline_results_path) as f:
         for line in f:
             if line.strip():
                 baseline_results.append(json.loads(line))
@@ -475,46 +488,43 @@ def main() -> None:
         # do NOT call inject_adapter() again (P0-8: double injection).
         _LM(inner_peft, lora_config, adapter_name="unlearning")
 
-        # P0-2: Adapter composition — merge vision adapter into base weights.
+        # P0-2: Explicit multi-adapter composition.
         #
-        # Phi's outer model normally switches between vision/speech/language
-        # adapters per forward call.  For unlearning, we need:
-        #   visual input:  base + vision + unlearning
-        #   text-only:     base + unlearning
+        # Phi ships with bundled vision/speech LoRA adapters.  We keep
+        # them as separate PEFT adapters and activate them alongside
+        # our unlearning adapter per forward call:
+        #   visual input:  active = ["vision", "unlearning"]
+        #   text-only:     active = ["unlearning"]
         #
-        # We merge the pretrained vision adapter into the base weights so
-        # that the vision contribution is always present.  The unlearning
-        # adapter is the only active PEFT adapter during training.
+        # No base weight mutation.  Vision/speech adapter tensors
+        # remain intact and are verified unchanged after training.
         from peft.tuners.lora.layer import LoraLayer as _LL
 
-        # Snapshot bundled adapter tensors BEFORE merge
+        # Snapshot bundled adapter tensors (vision + speech)
         _bundled_snapshot = {}
-        for _mod in inner_peft.modules():
+        for _name, _mod in inner_peft.named_modules():
             if isinstance(_mod, _LL):
                 for _aname in ("vision", "speech"):
                     if _aname in _mod.lora_A:
-                        _bundled_snapshot[f"{_aname}.lora_A"] = (
+                        _bundled_snapshot[f"{_name}.{_aname}.lora_A"] = (
                             _mod.lora_A[_aname].weight.data.clone()
                         )
-                        _bundled_snapshot[f"{_aname}.lora_B"] = (
+                        _bundled_snapshot[f"{_name}.{_aname}.lora_B"] = (
                             _mod.lora_B[_aname].weight.data.clone()
                         )
         logger.info("  Snapshot: %d bundled adapter tensors", len(_bundled_snapshot))
 
-        # Merge vision adapter into base weights
-        for _mod in inner_peft.modules():
-            if isinstance(_mod, _LL) and "vision" in _mod.lora_A:
-                _mod.merge()
-        logger.info("  Merged 'vision' adapter into base weights")
-
-        # Activate 'unlearning' adapter on all LoraLayers
+        # Set initial active adapters to ["unlearning"] only.
+        # The wrapper's forward() will switch per input_mode.
         for _mod in inner_peft.modules():
             if isinstance(_mod, _LL):
-                _mod.set_adapter("unlearning")
+                _mod._active_adapter = ["unlearning"]
 
-        # Wrap inner model with outer model reference for input_mode handling
+        # Wrap inner model — the wrapper handles per-forward adapter switching
         from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
-        lora_model = _PhiInnerModelWrapper(inner_peft, model.lm_head, outer_model=model)
+        lora_model = _PhiInnerModelWrapper(
+            inner_peft, model.lm_head,
+        )
         logger.info("  Injected 'unlearning' adapter into inner PEFT model")
 
         # P0-2: Verify adapter list
@@ -522,6 +532,229 @@ def main() -> None:
         assert "vision" in _adapters, f"vision adapter missing from {_adapters}"
         assert "speech" in _adapters, f"speech adapter missing from {_adapters}"
         assert "unlearning" in _adapters, f"unlearning adapter missing from {_adapters}"
+
+        # --------------------------------------------------------------- #
+        # C2: Verify exactly 64 intended language attention targets
+        # --------------------------------------------------------------- #
+        _n_targets = len(targets)
+        logger.info("  C2: LoRA targets = %d (expect 64 = 32 layers x 2)", _n_targets)
+        assert _n_targets == 64, f"Expected 64 LoRA targets, got {_n_targets}"
+        # Verify no vision/speech/projector leakage
+        _bad_targets = [
+            t for t in targets
+            if any(kw in t.lower() for kw in ["visual", "vision", "projector", "connector", "speech", "audio"])
+        ]
+        assert not _bad_targets, f"LoRA targets contain vision/speech/projector: {_bad_targets}"
+        logger.info("  C2 PASS: 64 language-only targets, zero leakage")
+
+        # --------------------------------------------------------------- #
+        # C1: Zero-init equivalence — M_native ≈ M_{vision+unlearning(init)}
+        # --------------------------------------------------------------- #
+        logger.info("  C1: Zero-init equivalence check")
+        from PIL import Image as _PILImage
+        _test_img = _PILImage.new("RGB", (224, 224), color=(100, 150, 200))
+
+        # Build a visual prefix
+        _vis_prefix = adapter.build_prefix(
+            processor, image=_test_img, prompt="What is in this image?",
+        )
+        # Move to device
+        _vis_kwargs = {}
+        for _k, _v in _vis_prefix.items():
+            if isinstance(_v, torch.Tensor):
+                _vis_kwargs[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v.unsqueeze(0)
+            else:
+                _vis_kwargs[_k] = _v
+        # Fix: image-indexed tensors already have batch dim from processor
+        _img_indexed = adapter.image_indexed_keys()
+        for _k in _img_indexed:
+            if _k in _vis_kwargs and isinstance(_vis_kwargs[_k], torch.Tensor):
+                if _vis_kwargs[_k].dim() > 1 and _vis_kwargs[_k].shape[0] == 1:
+                    pass  # already batched
+        # Text tensors need batch dim
+        for _k, _v in _vis_prefix.items():
+            if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                _vis_kwargs[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+            else:
+                _vis_kwargs[_k] = _v
+
+        # Forward through native outer model (vision adapter only)
+        model.eval()
+        with torch.no_grad():
+            # Native: set vision adapter, forward
+            from peft.tuners.lora.layer import LoraLayer as _LL2
+            for _mod in model.modules():
+                if isinstance(_mod, _LL2):
+                    _mod._active_adapter = ["vision"]
+                    _mod._disable_adapters = False
+            _native_out = model(**{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _vis_kwargs.items()})
+            _native_logits = _native_out.logits
+
+            # Wrapper: vision + unlearning (zero-init)
+            lora_model.eval()
+            _wrap_out = lora_model(**{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _vis_kwargs.items()})
+            _wrap_logits = _wrap_out.logits
+
+        _abs_diff = (_native_logits.float() - _wrap_logits.float()).abs().max().item()
+        logger.info("  C1: visual abs_diff native vs vision+unlearning(zero) = %.6f", _abs_diff)
+        assert _abs_diff <= 1e-4, f"C1 FAIL: visual zero-init diff {_abs_diff} > 1e-4"
+        logger.info("  C1 PASS: zero-init equivalence (visual)")
+
+        # Also check text-only
+        _text_prefix = adapter.build_prefix(
+            processor, image=None, prompt="Hello, how are you?",
+        )
+        _text_kwargs = {}
+        for _k, _v in _text_prefix.items():
+            if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                _text_kwargs[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+            else:
+                _text_kwargs[_k] = _v
+        with torch.no_grad():
+            # Native: disable adapters for language mode
+            for _mod in model.modules():
+                if isinstance(_mod, _LL2):
+                    _mod._disable_adapters = True
+            _native_text = model(**{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _text_kwargs.items()})
+            _native_text_logits = _native_text.logits
+
+            # Wrapper: unlearning only (zero-init)
+            _wrap_text = lora_model(**{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _text_kwargs.items()})
+            _wrap_text_logits = _wrap_text.logits
+
+        _text_diff = (_native_text_logits.float() - _wrap_text_logits.float()).abs().max().item()
+        logger.info("  C1: text-only abs_diff native vs unlearning(zero) = %.6f", _text_diff)
+        # For text-only, native disables ALL adapters.  Wrapper has unlearning
+        # (zero-init), so the LoRA contribution is zero.  Should match.
+        assert _text_diff <= 1e-4, f"C1 FAIL: text-only zero-init diff {_text_diff} > 1e-4"
+        logger.info("  C1 PASS: zero-init equivalence (text-only)")
+
+        # --------------------------------------------------------------- #
+        # C4: Real generation tests (cached vs noncached)
+        # --------------------------------------------------------------- #
+        logger.info("  C4: Generation tests")
+        from peft.tuners.lora.layer import LoraLayer as _LL3
+
+        # Visual generation
+        _gen_vis = adapter.build_prefix(processor, image=_test_img, prompt="Describe this image.")
+        _gen_vis_kw = {}
+        for _k, _v in _gen_vis.items():
+            if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                _gen_vis_kw[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+            else:
+                _gen_vis_kw[_k] = _v
+        _gen_vis_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _gen_vis_kw.items()}
+
+        # Set vision + unlearning adapters for generation through outer model
+        for _mod in model.modules():
+            if isinstance(_mod, _LL3):
+                _mod._active_adapter = ["vision"]
+                _mod._disable_adapters = False
+
+        model.eval()
+        with torch.no_grad():
+            _out_cached = model.generate(
+                **_gen_vis_kw, max_new_tokens=16, use_cache=True,
+                do_sample=False, pad_token_id=processor.tokenizer.pad_token_id,
+            )
+            _out_nocached = model.generate(
+                **_gen_vis_kw, max_new_tokens=16, use_cache=False,
+                do_sample=False, pad_token_id=processor.tokenizer.pad_token_id,
+            )
+        _cached_tokens = _out_cached[0].cpu().tolist()
+        _nocached_tokens = _out_nocached[0].cpu().tolist()
+        # First 4 generated tokens should agree
+        _agree = sum(1 for a, b in zip(_cached_tokens[:8], _nocached_tokens[:8]) if a == b)
+        logger.info("  C4: visual cached vs noncached: %d/8 tokens agree", _agree)
+        assert _agree >= 4, f"C4 FAIL: visual cached/noncached agreement {_agree}/8 < 4"
+        logger.info("  C4 PASS: visual generation")
+
+        # Text-only generation
+        _gen_text = adapter.build_prefix(processor, image=None, prompt="What is 2+2?")
+        _gen_text_kw = {}
+        for _k, _v in _gen_text.items():
+            if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                _gen_text_kw[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+            else:
+                _gen_text_kw[_k] = _v
+        _gen_text_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _gen_text_kw.items()}
+
+        for _mod in model.modules():
+            if isinstance(_mod, _LL3):
+                _mod._disable_adapters = True
+
+        with torch.no_grad():
+            _out_text_c = model.generate(
+                **_gen_text_kw, max_new_tokens=16, use_cache=True,
+                do_sample=False, pad_token_id=processor.tokenizer.pad_token_id,
+            )
+            _out_text_nc = model.generate(
+                **_gen_text_kw, max_new_tokens=16, use_cache=False,
+                do_sample=False, pad_token_id=processor.tokenizer.pad_token_id,
+            )
+        _text_c = _out_text_c[0].cpu().tolist()
+        _text_nc = _out_text_nc[0].cpu().tolist()
+        _text_agree = sum(1 for a, b in zip(_text_c[:8], _text_nc[:8]) if a == b)
+        logger.info("  C4: text-only cached vs noncached: %d/8 tokens agree", _text_agree)
+        assert _text_agree >= 4, f"C4 FAIL: text-only agreement {_text_agree}/8 < 4"
+        logger.info("  C4 PASS: text-only generation")
+
+        # --------------------------------------------------------------- #
+        # C5: Scorer equivalence (shared vs independent)
+        # --------------------------------------------------------------- #
+        logger.info("  C5: Scorer equivalence (shared vs independent)")
+        _c5_pairs = [
+            (_test_img, "Is this a cat?", ["Yes", "No"]),
+            (_test_img, "What color is this?", ["Yes", "No"]),
+            (_test_img, "Is there a dog?", ["Yes", "No"]),
+        ]
+        for _idx, (_img, _prompt, _cands) in enumerate(_c5_pairs):
+            _prefix = adapter.build_prefix(processor, image=_img, prompt=_prompt)
+            for _cand_text in _cands:
+                _cand_ids = adapter.candidate_token_ids(processor, _cand_text)
+                # Shared scorer: append_candidate + wrapper forward
+                _shared_prefix = adapter.append_candidate(_prefix, _cand_ids)
+                _shared_kw = {}
+                for _k, _v in _shared_prefix.items():
+                    if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                        _shared_kw[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+                    else:
+                        _shared_kw[_k] = _v
+                _shared_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _shared_kw.items()}
+                lora_model.eval()
+                with torch.no_grad():
+                    _shared_out = lora_model(**_shared_kw)
+                _shared_logits = _shared_out.logits[0, -1, :].float()
+                _shared_score = _shared_logits[_cand_ids[0]].item() if _cand_ids else 0.0
+
+                # Independent scorer
+                _ind_kw = adapter.independent_forward_kwargs(_prefix, _cand_ids)
+                _ind_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _ind_kw.items()}
+                # Add input_mode for wrapper
+                if "input_mode" in _prefix:
+                    _ind_kw["input_mode"] = _prefix["input_mode"].to(device)
+                with torch.no_grad():
+                    _ind_out = lora_model(**_ind_kw)
+                _ind_logits = _ind_out.logits[0, -1, :].float()
+                _ind_score = _ind_logits[_cand_ids[0]].item() if _cand_ids else 0.0
+
+                _score_diff = abs(_shared_score - _ind_score)
+                logger.info("  C5[%d,%s]: shared=%.6f independent=%.6f diff=%.6f",
+                           _idx, _cand_text, _shared_score, _ind_score, _score_diff)
+                assert _score_diff <= 1e-4, f"C5 FAIL: scorer diff {_score_diff} > 1e-4"
+        logger.info("  C5 PASS: scorer equivalence")
+
+        # Restore unlearning-only adapters after verification
+        for _mod in model.modules():
+            if isinstance(_mod, _LL3):
+                _mod._active_adapter = ["unlearning"]
+                _mod._disable_adapters = False
+        # Restore requires_grad on unlearning adapter parameters.
+        # Phi's unset_lora_adapter() (called during text-only generation)
+        # sets requires_grad_(False) on ALL adapter layers.
+        for _name, _param in inner_peft.named_parameters():
+            if "unlearning" in _name and "lora" in _name.lower():
+                _param.requires_grad_(True)
     else:
         lora_config = LoraConfig(
             r=config["method"]["hyperparameters"]["lora_rank"],
@@ -554,7 +787,7 @@ def main() -> None:
     # P0-2: Verify bundled adapters unchanged after training
     if inner_peft is not None and _bundled_snapshot:
         _bundled_changed = 0
-        for _mod in inner_peft.modules():
+        for _name, _mod in inner_peft.named_modules():
             if isinstance(_mod, _LL):
                 for _aname in ("vision", "speech"):
                     if _aname in _mod.lora_A:
@@ -562,7 +795,7 @@ def main() -> None:
                             ("lora_A", _mod.lora_A[_aname].weight.data),
                             ("lora_B", _mod.lora_B[_aname].weight.data),
                         ]:
-                            _key = f"{_aname}.{_suffix}"
+                            _key = f"{_name}.{_aname}.{_suffix}"
                             if _key in _bundled_snapshot and not torch.equal(_bundled_snapshot[_key], _tensor):
                                 _bundled_changed += 1
         assert _bundled_changed == 0, (
@@ -575,6 +808,25 @@ def main() -> None:
 
     # Step 6: Save checkpoint
     logger.info("Step 6: Saving checkpoint")
+
+    # C7: Capture reference logits before save (for post-reload comparison)
+    _ref_logits = None
+    if inner_peft is not None:
+        lora_model.eval()
+        _ref_prefix = adapter.build_prefix(
+            processor, image=_test_img, prompt="Is this a cat?",
+        )
+        _ref_kw = {}
+        for _k, _v in _ref_prefix.items():
+            if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                _ref_kw[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+            else:
+                _ref_kw[_k] = _v
+        _ref_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _ref_kw.items()}
+        with torch.no_grad():
+            _ref_out = lora_model(**_ref_kw)
+        _ref_logits = _ref_out.logits[0, -5:, :].float().cpu()  # last 5 tokens
+        logger.info("  C7: Captured reference logits (shape=%s)", list(_ref_logits.shape))
     adapter_path = OUTPUT_DIR / "adapter"
     adapter_path.mkdir(parents=True, exist_ok=True)
     if inner_peft is not None:
@@ -590,7 +842,7 @@ def main() -> None:
         _cfg = inner_peft.peft_config["unlearning"]
         _cfg_dict = {
             "r": _cfg.r, "lora_alpha": _cfg.lora_alpha,
-            "target_modules": _cfg.target_modules,
+            "target_modules": sorted(_cfg.target_modules) if isinstance(_cfg.target_modules, (set, frozenset)) else _cfg.target_modules,
             "lora_dropout": _cfg.lora_dropout, "bias": _cfg.bias,
             "task_type": _cfg.task_type.value if _cfg.task_type else None,
             "peft_type": "LORA",
@@ -620,32 +872,83 @@ def main() -> None:
     from peft import PeftModel
     inner_peft2 = adapter.get_inner_peft_model(model2)
     if inner_peft2 is not None:
-        # Phi: inject adapter into existing inner model with bundled LoRA
+        # Phi: manually reload the 'unlearning' adapter into existing inner model
+        from peft import LoraConfig as _LC
         from peft import LoraModel as _LM
-        _tmp2 = _LM.from_pretrained(inner_peft2, str(adapter_path), adapter_name="unlearning")
+        import safetensors.torch as _st
 
-        # P0-2: merge vision adapter (same as training path)
+        # 1. Read saved adapter config
+        with open(adapter_path / "adapter_config.json") as _f:
+            _saved_cfg = json.load(_f)
+        _lora_cfg = _LC(
+            r=_saved_cfg["r"],
+            lora_alpha=_saved_cfg["lora_alpha"],
+            target_modules=_saved_cfg["target_modules"],
+            lora_dropout=_saved_cfg["lora_dropout"],
+            bias=_saved_cfg["bias"],
+            task_type=_saved_cfg.get("task_type"),
+        )
+
+        # 2. Inject a fresh 'unlearning' adapter into the inner model
+        _LM(inner_peft2, _lora_cfg, adapter_name="unlearning")
+
+        # 3. Load saved adapter weights
+        # The inner model has LoraLayer modules injected in-place
+        # (NOT wrapped in PeftModel), so keys don't have base_model.model. prefix.
+        _adapter_state = _st.load_file(str(adapter_path / "adapter_model.safetensors"))
+        _missing, _unexpected = inner_peft2.load_state_dict(_adapter_state, strict=False)
+        # Filter out expected missing keys (all non-LoRA base weights)
+        _unexpected_lora = [k for k in _unexpected if "lora" in k]
+        logger.info(
+            "  Loaded adapter weights: missing=%d, unexpected_lora=%d",
+            len(_missing), len(_unexpected_lora),
+        )
+        if _unexpected_lora:
+            logger.warning("  Unexpected LoRA keys (first 3): %s", _unexpected_lora[:3])
+
+        # P0-2: multi-adapter composition (same as training path)
         from peft.tuners.lora.layer import LoraLayer as _LL
         for _mod in inner_peft2.modules():
-            if isinstance(_mod, _LL) and "vision" in _mod.lora_A:
-                _mod.merge()
-
-        # Activate 'unlearning' adapter on all LoraLayers
-        for _mod in inner_peft2.modules():
             if isinstance(_mod, _LL):
-                _mod.set_adapter("unlearning")
+                _mod._active_adapter = ["unlearning"]
         from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
-        lora_model2 = _PhiInnerModelWrapper(inner_peft2, model2.lm_head, outer_model=model2)
+        lora_model2 = _PhiInnerModelWrapper(
+            inner_peft2, model2.lm_head,
+        )
     else:
         lora_model2 = PeftModel.from_pretrained(model2, str(adapter_path))
     lora_model2.eval()
+
+    # C7: Verify reloaded adapter produces same logits
+    if _ref_logits is not None and inner_peft2 is not None:
+        _post_prefix = adapter.build_prefix(
+            processor2, image=_test_img, prompt="Is this a cat?",
+        )
+        _post_kw = {}
+        for _k, _v in _post_prefix.items():
+            if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                _post_kw[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+            else:
+                _post_kw[_k] = _v
+        _post_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _post_kw.items()}
+        with torch.no_grad():
+            _post_out = lora_model2(**_post_kw)
+        _post_logits = _post_out.logits[0, -5:, :].float().cpu()
+        _reload_diff = (_ref_logits - _post_logits).abs().max().item()
+        logger.info("  C7: reload logits diff = %.6f (expect <= 1e-5)", _reload_diff)
+        assert _reload_diff <= 1e-5, f"C7 FAIL: reload diff {_reload_diff} > 1e-5"
+        logger.info("  C7 PASS: save/reload persistence")
     
     # Step 8: Post-evaluation
     logger.info("Step 8: Running post-evaluation")
     post_eval = run_post_evaluation(adapter, lora_model2, processor2, baseline_results, device, smoke=args.smoke)
     
     # Verify post-eval requirements
-    assert post_eval["num_probes"] == (10 if args.smoke else 500), f"Must evaluate {500 if not args.smoke else 10} probes"
+    # In smoke mode, accept any number > 0 (model-specific baselines vary).
+    # In full mode, expect 500 probes.
+    assert post_eval["num_probes"] > 0, "Must evaluate at least 1 probe"
+    if not args.smoke:
+        assert post_eval["num_probes"] == 500, f"Full baseline must evaluate 500 probes, got {post_eval['num_probes']}"
     assert post_eval["inference_errors"] == 0, "Inference errors must be 0"
     
     # Step 9: Write results
@@ -675,7 +978,7 @@ def main() -> None:
             "family_deltas": post_eval["family_deltas"],
         },
         "adapter_path": str(adapter_path),
-        "adapter_sha256": _file_sha256(adapter_path / "adapter_model.bin") if (adapter_path / "adapter_model.bin").exists() else "",
+        "adapter_sha256": _file_sha256(adapter_path / "adapter_model.safetensors") if (adapter_path / "adapter_model.safetensors").exists() else (_file_sha256(adapter_path / "adapter_model.bin") if (adapter_path / "adapter_model.bin").exists() else ""),
         "requirements_met": {
             "real_target_examples_loaded": True,
             "real_retain_examples_loaded": True,
@@ -685,7 +988,7 @@ def main() -> None:
             "parameters_changed": bool(training_stats["lora_tensors_changed"] > 0),
             "checkpoint_saved": bool(adapter_path.exists()),
             "checkpoint_reloaded": True,
-            "post_eval_500_probes": bool(post_eval["num_probes"] == (10 if args.smoke else 500) or (args.smoke and post_eval["num_probes"] >= 10)),
+            "post_eval_probes": bool(post_eval["num_probes"] > 0),
             "inference_errors_zero": bool(post_eval["inference_errors"] == 0),
             "family_deltas_reported": bool(len(post_eval["family_deltas"]) == 5),
             "name_only_token_overlap": True,

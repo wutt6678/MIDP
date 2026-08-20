@@ -61,9 +61,27 @@ class _PhiInnerModelWrapper(torch.nn.Module):
        returns hidden states).
 
     ``input_mode`` is consumed and removed before passing kwargs to
-    the inner model.  The outer model (``Phi4MMForCausalLM``) is
-    needed for its ``set_lora_adapter`` / ``unset_lora_adapter``
-    methods that control the bundled vision/speech adapters.
+    the inner model.
+
+    Multi-adapter composition
+    -------------------------
+    Instead of calling ``outer.set_lora_adapter()`` (which activates
+    only ONE adapter), we set ``_active_adapter`` on every LoraLayer
+    to a *list* of adapters.  PEFT's forward sums contributions from
+    all active adapters::
+
+        result = base(x) + sum(lora_B(lora_A(x)) * scaling
+                               for each active_adapter)
+
+    So for visual input::
+
+        active = ["vision", "unlearning"]
+        → base + vision_LoRA + unlearning_LoRA
+
+    For text-only input::
+
+        active = ["unlearning"]
+        → base + unlearning_LoRA
 
     Invariant
     ---------
@@ -81,12 +99,21 @@ class _PhiInnerModelWrapper(torch.nn.Module):
         self,
         inner_model: torch.nn.Module,
         lm_head: torch.nn.Module,
-        outer_model: torch.nn.Module | None = None,
     ):
         super().__init__()
         self.inner_model = inner_model
         self.lm_head = lm_head
-        self.outer_model = outer_model
+
+    def _set_active_adapters(self, adapter_names: list[str]) -> None:
+        """Set active adapters on all LoraLayers in the inner model.
+
+        Uses ``_active_adapter`` directly (not ``set_adapter()``) to
+        avoid PEFT's unmerge/merge side effects.
+        """
+        from peft.tuners.lora.layer import LoraLayer
+        for mod in self.inner_model.modules():
+            if isinstance(mod, LoraLayer):
+                mod._active_adapter = adapter_names
 
     def forward(self, **kwargs):
         # --- Consume input_mode (P0-1) ---
@@ -98,24 +125,37 @@ class _PhiInnerModelWrapper(torch.nn.Module):
 
             if input_mode in (self._VISION, self._VISION_SPEECH):
                 kwargs["audio_projection_mode"] = "vision"
-                if self.outer_model is not None:
-                    self.outer_model.set_lora_adapter("vision")
+                self._set_active_adapters(["vision", "unlearning"])
             elif input_mode == self._SPEECH:
                 kwargs["audio_projection_mode"] = "speech"
-                if self.outer_model is not None:
-                    self.outer_model.set_lora_adapter("speech")
+                self._set_active_adapters(["speech", "unlearning"])
             elif input_mode == self._LANGUAGE:
                 kwargs["audio_projection_mode"] = "speech"
-                if self.outer_model is not None:
-                    self.outer_model.unset_lora_adapter()
+                self._set_active_adapters(["unlearning"])
         else:
             kwargs.setdefault("audio_projection_mode", "speech")
+            # Default to unlearning-only for text-only input
+            self._set_active_adapters(["unlearning"])
 
         outputs = self.inner_model(**kwargs)
         # Add logits from the LM head (inner model only returns hidden states)
         from transformers.modeling_outputs import CausalLMOutputWithPast
         logits = self.lm_head(outputs[0])
+
+        # Compute loss if labels are provided (replicates the outer
+        # Phi4MMForCausalLM loss computation).
+        loss = None
+        labels = kwargs.get("labels")
+        if labels is not None:
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss = torch.nn.functional.cross_entropy(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1),
+            )
+
         return CausalLMOutputWithPast(
+            loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
@@ -223,8 +263,26 @@ def _patch_vision_attention() -> None:
                         q2 = query_states.transpose(1, 2)
                         k2 = key_states.transpose(1, 2)
                         v2 = value_states.transpose(1, 2)
+
+                        # Pass attention_mask through to SDPA.
+                        # The vision encoder may produce 2D padding masks
+                        # [batch, key_len] or 4D expanded masks.
+                        sdpa_attn_mask = None
+                        if attention_mask is not None and attention_mask.dim() >= 2:
+                            if attention_mask.dim() == 2:
+                                sdpa_attn_mask = attention_mask[:, None, None, :]
+                            elif attention_mask.dim() == 3:
+                                sdpa_attn_mask = attention_mask[:, None, :, :]
+                            elif attention_mask.dim() == 4:
+                                sdpa_attn_mask = attention_mask
+                            # Convert additive masks (0/-inf) to boolean
+                            if sdpa_attn_mask.dtype != torch.bool:
+                                sdpa_attn_mask = sdpa_attn_mask > -1e4
+                            causal = False  # explicit mask supersedes causal
+
                         out = F.scaled_dot_product_attention(
                             q2, k2, v2,
+                            attn_mask=sdpa_attn_mask,
                             dropout_p=dropout, is_causal=causal,
                             scale=softmax_scale,
                         )
@@ -310,6 +368,27 @@ class Phi4MMAdapter(TrainableVLMAdapter):
 
         # Patch vision attention AFTER loading
         _patch_vision_attention()
+
+        # Disable gradient checkpointing on the vision SiglipEncoder.
+        # SiglipEncoder is an nn.Module (NOT PreTrainedModel) that
+        # references _gradient_checkpointing_func in its forward(),
+        # but that method is only provided by PreTrainedModel.
+        # Since we don't train the vision tower, disabling is safe.
+        for _mod in model.modules():
+            if type(_mod).__name__ == "SiglipEncoder":
+                _mod.gradient_checkpointing = False
+                logger.debug("Disabled gradient_checkpointing on SiglipEncoder")
+
+        # Disable gradient checkpointing on the audio processor.
+        # The audio processor uses checkpoint() which breaks the grad
+        # flow when inputs don't require grad (frozen audio tower).
+        for _mod in model.modules():
+            if hasattr(_mod, "gradient_checkpointing_disable") and callable(_mod.gradient_checkpointing_disable):
+                try:
+                    _mod.gradient_checkpointing_disable()
+                    logger.debug("Disabled gradient_checkpointing on %s", type(_mod).__name__)
+                except Exception:
+                    pass
 
         logger.info("Phi-4-MM loaded successfully with SDPA patches")
         return model, processor
