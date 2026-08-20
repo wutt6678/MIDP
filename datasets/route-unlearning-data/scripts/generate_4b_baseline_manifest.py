@@ -169,6 +169,17 @@ def main() -> None:
 
     git_commit = _git_commit()
 
+    # Compute generation protocol hash (same as BaselineRunner._generation_protocol_hash())
+    import json as _json
+    _gen_payload = {
+        "binary_families": {"do_sample": False, "temperature": 0.0, "max_new_tokens": 4},
+        "name_only": {"do_sample": False, "temperature": 0.0, "max_new_tokens": 64},
+        "scoring_version": "2",
+    }
+    protocol_sha256 = hashlib.sha256(
+        _json.dumps(_gen_payload, sort_keys=True).encode()
+    ).hexdigest()
+
     # Build manifest with canonical schema expected by resolve_preunlearning_baseline()
     manifest = {
         # -- Canonical model section (required by resolver) --
@@ -187,6 +198,8 @@ def main() -> None:
             "processed_dataset_sha256": processed_dataset_sha256,
             "code_commit": git_commit,
         },
+        # -- Frozen protocol hash (P1-1) --
+        "protocol_sha256": protocol_sha256,
         # -- Backwards-compatible sections --
         "schema_version": "1.2",
         "metric_schema_version": "baseline-metrics-v1",
