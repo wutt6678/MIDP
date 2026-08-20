@@ -209,6 +209,7 @@ def main() -> None:
         dtype=profile.dtype,
         backend="qwen_hf",
         fingerprint_id=_fp.get("fingerprint_id", ""),
+        generation=GenerationConfig(do_sample=False),
     )
 
     runner = BaselineRunner(
