@@ -106,9 +106,20 @@ class TestManifestSchema:
 
         # Required provenance fields
         prov = manifest["provenance"]
-        for key in ("results_sha256", "manifest_sha256", "route_probe_sha256", "processed_dataset_sha256", "code_commit"):
+        for key in ("results_sha256", "route_probe_sha256", "processed_dataset_sha256", "code_commit"):
             assert key in prov, f"Missing provenance.{key}"
             assert prov[key], f"provenance.{key} must not be empty"
+
+        # Check binding file for manifest_sha256 (avoids self-referential hash)
+        binding_path = (
+            PROJECT_ROOT
+            / "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_binding.json"
+        )
+        assert binding_path.is_file(), "Missing baseline_binding.json"
+        with open(binding_path) as f:
+            binding = json.load(f)
+        assert "manifest_sha256" in binding, "Missing manifest_sha256 in binding file"
+        assert binding["manifest_sha256"], "manifest_sha256 must not be empty"
 
     def test_generation_config_present(self):
         """P1-1: generation_config must be part of the frozen protocol."""
@@ -123,8 +134,8 @@ class TestManifestSchema:
 
         gen_cfg = manifest.get("generation_config", {})
         assert "name_only" in gen_cfg, "Missing generation_config.name_only"
-        assert gen_cfg["name_only"]["max_new_tokens"] == 64, (
-            "name_only max_new_tokens must be 64"
+        assert gen_cfg["name_only"]["max_new_tokens"] == 128, (
+            "name_only max_new tokens must be 128"
         )
 
     def test_name_only_primary_metric_is_token_overlap(self):

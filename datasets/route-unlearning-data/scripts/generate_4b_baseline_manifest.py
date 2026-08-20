@@ -213,7 +213,6 @@ def main() -> None:
         # -- Canonical provenance section (required by resolver) --
         "provenance": {
             "results_sha256": results_sha256,
-            "manifest_sha256": "",  # filled after writing
             "route_probe_sha256": route_probe_sha256,
             "processed_dataset_sha256": processed_dataset_sha256,
             "code_commit": git_commit,
@@ -273,7 +272,7 @@ def main() -> None:
             "name_only": {
                 "do_sample": False,
                 "temperature": 0.0,
-                "max_new_tokens": 64,
+                "max_new_tokens": 128,
             },
         },
         "scoring_config": {
@@ -318,7 +317,7 @@ def main() -> None:
         },
         "code_provenance": {
             "experiment_code_commit": git_commit,
-            "artifact_commit": git_commit,
+            "artifact_commit": "",  # filled after committing artifacts
             "working_tree_dirty_at_execution": False,
         },
     }
@@ -335,12 +334,26 @@ def main() -> None:
         json.dump(summary, f, indent=2)
     print(f"Summary saved: {summary_path}")
 
-    # Update manifest with summary SHA-256 and manifest SHA-256
+    # Update manifest with summary SHA-256
     manifest["results"]["summary_sha256"] = _file_sha256(summary_path)
-    manifest["provenance"]["manifest_sha256"] = _file_sha256(manifest_path)
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
-    print("Manifest updated with summary and manifest SHA-256")
+    print("Manifest updated with summary SHA-256")
+
+    # Write binding file with the final manifest SHA-256
+    # This avoids the self-referential hash problem where embedding manifest_sha256
+    # in the manifest itself would change the hash.
+    binding_path = output_dir / "baseline_binding.json"
+    binding = {
+        "manifest_file": "baseline_manifest.json",
+        "manifest_sha256": _file_sha256(manifest_path),
+        "results_sha256": results_sha256,
+        "route_probe_sha256": route_probe_sha256,
+    }
+    with open(binding_path, "w") as f:
+        json.dump(binding, f, indent=2)
+    print(f"Binding saved: {binding_path}")
+    print(f"Manifest SHA-256: {binding['manifest_sha256']}")
 
     print("\n" + "=" * 60)
     print("Baseline generation complete!")

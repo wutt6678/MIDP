@@ -150,6 +150,7 @@ def resolve_preunlearning_baseline(
     )
     results_path = baseline_dir / "baseline_results.jsonl"
     manifest_path = baseline_dir / "baseline_manifest.json"
+    binding_path = baseline_dir / "baseline_binding.json"
 
     if not results_path.is_file():
         raise FileNotFoundError(
@@ -170,11 +171,23 @@ def resolve_preunlearning_baseline(
     model_section = manifest_data.get("model", {})
     provenance = manifest_data.get("provenance", {})
 
+    # Read manifest_sha256 from binding file (preferred) or fall back to provenance.
+    # The binding file avoids the self-referential hash problem where embedding
+    # manifest_sha256 in the manifest itself would change the hash.
+    manifest_sha256 = ""
+    if binding_path.is_file():
+        with open(binding_path) as f:
+            binding_data = json.load(f)
+        manifest_sha256 = binding_data.get("manifest_sha256", "")
+    else:
+        # Backwards compatibility: old manifests may have manifest_sha256 in provenance.
+        manifest_sha256 = provenance.get("manifest_sha256", "")
+
     return BaselineBinding(
         results_path=str(results_path),
         manifest_path=str(manifest_path),
         results_sha256=provenance.get("results_sha256", ""),
-        manifest_sha256=provenance.get("manifest_sha256", ""),
+        manifest_sha256=manifest_sha256,
         model_key=model_section.get("model_key", ""),
         model_id=model_section.get("id", ""),
         model_revision=model_section.get("revision", ""),

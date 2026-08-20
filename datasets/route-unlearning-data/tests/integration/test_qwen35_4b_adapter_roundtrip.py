@@ -204,6 +204,12 @@ class TestQwen35_4BAdapterRoundtrip:
             if p.requires_grad
         ])
 
+        # Snapshot trained LoRA weights (before save)
+        snap_pre_save = _snapshot_lora_weights(lora_model1)
+
+        # Set model to eval mode for scoring
+        lora_model1.eval()
+
         # --- Phase 4: Score trained model (pre-save) ---
         score_image = Image.new("RGB", (224, 224), color=(64, 64, 64))
         score_prompt = "Is this an image of a dog?"
@@ -229,7 +235,7 @@ class TestQwen35_4BAdapterRoundtrip:
                 processor_revision=adapter.profile.processor_revision,
                 dtype=adapter.profile.dtype,
                 device=device,
-                training=True,
+                training=False,  # Use eval mode for inference
             )
 
             # Load saved adapter
@@ -245,6 +251,24 @@ class TestQwen35_4BAdapterRoundtrip:
             peft_config = lora_model2.peft_config.get("default", {})
             assert peft_config.r == adapter.profile.lora_rank == 8
             assert peft_config.lora_alpha == adapter.profile.lora_alpha == 16
+
+            # Snapshot reloaded LoRA weights and compare
+            snap_post_reload = _snapshot_lora_weights(lora_model2)
+            weights_match, n_cmp, n_diff = _weights_changed(snap_pre_save, snap_post_reload)
+            print(f"\nLoRA weight comparison (pre-save vs post-reload):")
+            print(f"  Tensors compared: {n_cmp}")
+            print(f"  Tensors different: {n_diff}")
+            print(f"  Weights identical: {not weights_match}")
+            if weights_match:
+                # Find which tensors differ
+                for name, val_pre in snap_pre_save.items():
+                    if name in snap_post_reload:
+                        if not torch.equal(val_pre, snap_post_reload[name]):
+                            diff = (val_pre - snap_post_reload[name]).abs().max().item()
+                            print(f"    {name}: max_diff={diff:.6e}")
+
+            # Set model to eval mode for scoring
+            lora_model2.eval()
 
             # --- Phase 7: Score post-reload ---
             yes_post, no_post = _score_candidates(
