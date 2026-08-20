@@ -1,0 +1,104 @@
+baseline_binding:
+  manifest_sha256: 21f74c673bf37fbe083a241bb7e819e29ed718640fb6645696f40e70f791bbfd
+  model_id: microsoft/Phi-4-multimodal-instruct
+  model_key: phi4_mm
+  model_revision: 93f923e1a7727d1c4f446756212d9d3e8fcc5d81
+  results_sha256: dc02479be0ee36919bef7d1c497afd961eb650b87390195c95a41d51f6912ea9
+canary: true
+control_identities:
+- bd9d89b8a1f51955
+- 89d6ff2125fd7ac5
+device: cuda:0
+git_commit: 2fc3c8386b2b22d33d60d6de29385b8f7f9288a2
+git_dirty: true
+lora_alpha: 16
+lora_dropout: 0.05
+lora_rank: 8
+lora_target_count: 64
+lora_targets:
+- model.layers.0.self_attn.o_proj
+- model.layers.0.self_attn.qkv_proj
+- model.layers.1.self_attn.o_proj
+- model.layers.1.self_attn.qkv_proj
+- model.layers.10.self_attn.o_proj
+- model.layers.10.self_attn.qkv_proj
+- model.layers.11.self_attn.o_proj
+- model.layers.11.self_attn.qkv_proj
+- model.layers.12.self_attn.o_proj
+- model.layers.12.self_attn.qkv_proj
+- model.layers.13.self_attn.o_proj
+- model.layers.13.self_attn.qkv_proj
+- model.layers.14.self_attn.o_proj
+- model.layers.14.self_attn.qkv_proj
+- model.layers.15.self_attn.o_proj
+- model.layers.15.self_attn.qkv_proj
+- model.layers.16.self_attn.o_proj
+- model.layers.16.self_attn.qkv_proj
+- model.layers.17.self_attn.o_proj
+- model.layers.17.self_attn.qkv_proj
+- model.layers.18.self_attn.o_proj
+- model.layers.18.self_attn.qkv_proj
+- model.layers.19.self_attn.o_proj
+- model.layers.19.self_attn.qkv_proj
+- model.layers.2.self_attn.o_proj
+- model.layers.2.self_attn.qkv_proj
+- model.layers.20.self_attn.o_proj
+- model.layers.20.self_attn.qkv_proj
+- model.layers.21.self_attn.o_proj
+- model.layers.21.self_attn.qkv_proj
+- model.layers.22.self_attn.o_proj
+- model.layers.22.self_attn.qkv_proj
+- model.layers.23.self_attn.o_proj
+- model.layers.23.self_attn.qkv_proj
+- model.layers.24.self_attn.o_proj
+- model.layers.24.self_attn.qkv_proj
+- model.layers.25.self_attn.o_proj
+- model.layers.25.self_attn.qkv_proj
+- model.layers.26.self_attn.o_proj
+- model.layers.26.self_attn.qkv_proj
+- model.layers.27.self_attn.o_proj
+- model.layers.27.self_attn.qkv_proj
+- model.layers.28.self_attn.o_proj
+- model.layers.28.self_attn.qkv_proj
+- model.layers.29.self_attn.o_proj
+- model.layers.29.self_attn.qkv_proj
+- model.layers.3.self_attn.o_proj
+- model.layers.3.self_attn.qkv_proj
+- model.layers.30.self_attn.o_proj
+- model.layers.30.self_attn.qkv_proj
+- model.layers.31.self_attn.o_proj
+- model.layers.31.self_attn.qkv_proj
+- model.layers.4.self_attn.o_proj
+- model.layers.4.self_attn.qkv_proj
+- model.layers.5.self_attn.o_proj
+- model.layers.5.self_attn.qkv_proj
+- model.layers.6.self_attn.o_proj
+- model.layers.6.self_attn.qkv_proj
+- model.layers.7.self_attn.o_proj
+- model.layers.7.self_attn.qkv_proj
+- model.layers.8.self_attn.o_proj
+- model.layers.8.self_attn.qkv_proj
+- model.layers.9.self_attn.o_proj
+- model.layers.9.self_attn.qkv_proj
+method_config: configs/methods/candidate_margin_v1.yaml
+method_config_sha256: 536c445ae729583767fdc2df514ec9b6db2450adc722d343af14f4a0fc9cbc32
+method_id: candidate_margin_v1
+model_id: microsoft/Phi-4-multimodal-instruct
+model_key: phi4_mm
+model_profile_sha256: 69fe6cd7c5d21c59e4d648b85de8fdcb0eeb8c21e6ba2628ee2cc2bccb243505
+model_revision: 93f923e1a7727d1c4f446756212d9d3e8fcc5d81
+processor_revision: 93f923e1a7727d1c4f446756212d9d3e8fcc5d81
+protected_parameter_count: 2045
+retain_identities:
+- 67218532aba5fc77
+- cbb9f0b7b65140bd
+retain_objective: cross_entropy
+seed: 17
+selection: configs/experiments/common/frozen_identity_selection_v1.yaml
+selection_sha256: 2bb9ab82d31dc6c6bc88499bed3c5a826e81563f14350cf9f4ae4400f15ee83f
+target_identities:
+- 76f35468e0b72c60
+- 14dd102b5288c236
+trainable_parameters: 3670016
+training_families:
+- direct_visual

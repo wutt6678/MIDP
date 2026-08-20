@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Model-agnostic candidate-margin unlearning runner.
+"""Model-agnostic candidate-margin unlearning runner (repaired).
 
-Implements the common research pipeline for all model families:
-  1. Resolve frozen baseline, identity selection, method config
-  2. Load fresh base model via adapter
-  3. Apply language-attention-only LoRA
-  4. Train with candidate-margin forget + KL retain
-  5. Save adapter checkpoint
-  6. Fresh reload base model + adapter
-  7. Post-evaluate on frozen 500 probes
-  8. Validate all gates and write binding
+Implements the research-grade pipeline for all model families:
+  1. Resolve frozen baseline binding, identity selection, method config
+  2. Validate baseline binding against model profile
+  3. Load fresh base model via adapter
+  4. Snapshot protected parameters
+  5. Attach unlearning LoRA via adapter lifecycle hook
+  6. Train with candidate-margin forget + retain CE
+  7. Measure gradient evidence + parameter changes
+  8. Save adapter checkpoint with SHA-256
+  9. Destroy training model; fresh reload base + adapter
+ 10. Verify reload equivalence
+ 11. Post-evaluate on frozen 500 probes
+ 12. Join pre/post results; compute preservation
+ 13. Validate all gates; write binding; remove RUN_INCOMPLETE
 
 Usage::
 
@@ -59,6 +64,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # --------------------------------------------------------------------------- #
 
 def git_commit() -> str:
+    """Return the full 40-character git SHA."""
     try:
         r = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -68,6 +74,19 @@ def git_commit() -> str:
         return r.stdout.strip() if r.returncode == 0 else ""
     except FileNotFoundError:
         return ""
+
+
+def git_dirty() -> bool:
+    """Return True if the working tree has uncommitted changes."""
+    try:
+        r = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, check=False,
+            cwd=str(PROJECT_ROOT),
+        )
+        return bool(r.stdout.strip())
+    except FileNotFoundError:
+        return True
 
 
 def file_sha256(path: Path) -> str:
@@ -87,11 +106,15 @@ def set_seed(seed: int) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Training dataset (model-agnostic via adapter)
+# Training dataset (model-agnostic via adapter, family-filtered)
 # --------------------------------------------------------------------------- #
 
 class UnlearningDataset(Dataset):
-    """Dataset that builds supervised examples via the adapter."""
+    """Dataset that builds supervised examples via the adapter.
+
+    Supports family filtering (P0-09): only ``direct_visual`` examples
+    are used for primary training by default.
+    """
 
     def __init__(
         self,
@@ -111,7 +134,11 @@ class UnlearningDataset(Dataset):
         image_uri = sample["image_uri"]
         question = sample["question"]
         answer_label = sample["answer_label"]
-        answer_text = "Yes" if answer_label else "No"
+        answer_text = (
+            self.adapter.profile.candidate_positive
+            if answer_label
+            else self.adapter.profile.candidate_negative
+        )
 
         from PIL import Image
         image = Image.open(image_uri).convert("RGB")
@@ -133,15 +160,17 @@ class UnlearningDataset(Dataset):
         # Ensure _yes_token_ids and _no_token_ids are set
         if "_yes_token_ids" not in example:
             example["_yes_token_ids"] = self.adapter.candidate_token_ids(
-                self.processor, "Yes",
+                self.processor, self.adapter.profile.candidate_positive,
             )
             example["_no_token_ids"] = self.adapter.candidate_token_ids(
-                self.processor, "No",
+                self.processor, self.adapter.profile.candidate_negative,
             )
 
-        # Ensure _answer_label is set (True=Yes, False=No)
+        # Ensure _answer_label is set
         if "_answer_label" not in example:
-            example["_answer_label"] = (answer_text == self.adapter.profile.candidate_positive)
+            example["_answer_label"] = (
+                answer_text == self.adapter.profile.candidate_positive
+            )
 
         # Ensure _pad_token_id is set for collate
         if "_pad_token_id" not in example:
@@ -154,48 +183,8 @@ class UnlearningDataset(Dataset):
         return example
 
 
-def unlearning_collate_fn(batch: list[dict[str, Any]]) -> dict[str, Any]:
-    """Collate batch with right-padding for text, pass-through for visual."""
-    pad_id = 0
-    max_len = max(ex["input_ids"].shape[0] for ex in batch)
-    batch_size = len(batch)
-
-    result: dict[str, Any] = {}
-    text_keys = {"input_ids", "attention_mask", "labels"}
-    meta_keys = {"_prefix_len", "_correct_answer_token_ids", "_answer_label",
-                 "_yes_token_ids", "_no_token_ids", "_identity_id",
-                 "_probe_id", "_probe_family", "_identity_group"}
-
-    for key in batch[0]:
-        if key in meta_keys:
-            result[key] = [ex[key] for ex in batch]
-            if key == "_prefix_len":
-                result[key] = torch.tensor(result[key])
-            continue
-
-        if key in text_keys:
-            tensors = [ex[key] for ex in batch]
-            if tensors[0].dim() == 1:
-                padded = torch.full((batch_size, max_len), pad_id if key != "labels" else -100,
-                                    dtype=tensors[0].dtype)
-                for i, t in enumerate(tensors):
-                    padded[i, :t.shape[0]] = t
-                result[key] = padded
-            else:
-                result[key] = torch.stack(tensors)
-        elif isinstance(batch[0][key], torch.Tensor):
-            try:
-                result[key] = torch.stack([ex[key] for ex in batch])
-            except (RuntimeError, TypeError):
-                result[key] = [ex[key] for ex in batch]
-        else:
-            result[key] = [ex[key] for ex in batch]
-
-    return result
-
-
 # --------------------------------------------------------------------------- #
-# Training loop
+# Training loop with gradient evidence (P0-06)
 # --------------------------------------------------------------------------- #
 
 def train_unlearning(
@@ -212,7 +201,7 @@ def train_unlearning(
     device: str,
     output_dir: Path,
 ) -> dict[str, Any]:
-    """Run the candidate-margin training loop."""
+    """Run the candidate-margin training loop with gradient measurement."""
     model.train()
     model.to(device)
 
@@ -230,6 +219,11 @@ def train_unlearning(
 
     forget_iter = iter(forget_loader)
     retain_iter = iter(retain_loader)
+
+    # Gradient evidence tracking
+    total_nonzero_grad_tensors = 0
+    total_grad_tensors = 0
+    max_grad_norm_seen = 0.0
 
     trace_path = output_dir / "training_trace.jsonl"
     with open(trace_path, "w") as trace_f:
@@ -268,8 +262,8 @@ def train_unlearning(
 
                 # Forget loss: candidate margin on target examples
                 forget_loss = _compute_forget_loss(model, forget_batch, adapter)
-                # Retain loss: KL to frozen reference (use current model as approx)
-                retain_loss = _compute_retain_loss_kl(model, retain_batch)
+                # Retain loss: answer-only cross-entropy (P0-07: honest CE)
+                retain_loss = _compute_retain_loss_ce(model, retain_batch)
 
                 total_loss = forget_loss + retain_weight * retain_loss
                 loss_scaled = total_loss / gradient_accumulation_steps
@@ -277,6 +271,22 @@ def train_unlearning(
 
                 accum_forget += forget_loss.item() / gradient_accumulation_steps
                 accum_retain += retain_loss.item() / gradient_accumulation_steps
+
+            # Measure gradients before clipping/stepping
+            step_nonzero = 0
+            step_total = 0
+            step_max_grad = 0.0
+            for p in trainable_params:
+                if p.grad is not None:
+                    step_total += 1
+                    grad_norm = p.grad.data.norm(2).item()
+                    if grad_norm > 0:
+                        step_nonzero += 1
+                    step_max_grad = max(step_max_grad, grad_norm)
+
+            total_nonzero_grad_tensors += step_nonzero
+            total_grad_tensors += step_total
+            max_grad_norm_seen = max(max_grad_norm_seen, step_max_grad)
 
             # Gradient clipping
             if max_grad_norm > 0:
@@ -291,6 +301,8 @@ def train_unlearning(
                 "retain_loss": accum_retain,
                 "total_loss": accum_forget + retain_weight * accum_retain,
                 "elapsed_seconds": elapsed,
+                "nonzero_grad_tensors": step_nonzero,
+                "total_grad_tensors": step_total,
             }
             trace_f.write(json.dumps(step_stats) + "\n")
             trace_f.flush()
@@ -299,13 +311,17 @@ def train_unlearning(
                 f"Step {opt_step}/{num_optimizer_steps} | "
                 f"loss={step_stats['total_loss']:.4f} "
                 f"forget={step_stats['forget_loss']:.4f} "
-                f"retain={step_stats['retain_loss']:.4f}"
+                f"retain={step_stats['retain_loss']:.4f} "
+                f"grad={step_nonzero}/{step_total}"
             )
             final_stats = step_stats
 
     final_stats["total_elapsed_seconds"] = time.time() - start_time
     final_stats["num_optimizer_steps"] = num_optimizer_steps
     final_stats["gradient_accumulation_steps"] = gradient_accumulation_steps
+    final_stats["total_nonzero_grad_tensors"] = total_nonzero_grad_tensors
+    final_stats["total_grad_tensors"] = total_grad_tensors
+    final_stats["max_gradient_norm"] = max_grad_norm_seen
     return final_stats
 
 
@@ -323,17 +339,14 @@ def _compute_forget_loss(
     yes_token_ids_raw = batch["_yes_token_ids"]
     no_token_ids_raw = batch["_no_token_ids"]
 
-    # Normalize to lists for indexing (Phi collate returns scalars for batch_size=1)
+    # Normalize to lists for indexing
     if isinstance(prefix_lens, (int, float)):
         prefix_lens = [int(prefix_lens)]
     elif isinstance(prefix_lens, torch.Tensor):
         prefix_lens = prefix_lens.tolist()
     if isinstance(answer_labels, bool):
         answer_labels = [answer_labels]
-    # _yes_token_ids and _no_token_ids: each element is a list[int]
-    # For batch_size=1 Phi collate, the batch value is a single list[int]
     if isinstance(yes_token_ids_raw, list) and len(yes_token_ids_raw) > 0 and isinstance(yes_token_ids_raw[0], int):
-        # Single list[int] — wrap in outer list for batch indexing
         yes_token_ids_batch = [yes_token_ids_raw]
     else:
         yes_token_ids_batch = yes_token_ids_raw
@@ -356,25 +369,20 @@ def _compute_forget_loss(
 
         # Add multimodal and sequence-indexed tensors
         image_keys = adapter.image_indexed_keys() if adapter else frozenset()
-        # Sequence-indexed keys have same length as input_ids and must be sliced
-        seq_keys = {"mm_token_type_ids"}  # Qwen-specific
+        seq_keys = {"mm_token_type_ids"}
         for key, val in batch.items():
             if key in ("input_ids", "attention_mask", "labels") or key.startswith("_"):
                 continue
             if isinstance(val, torch.Tensor):
                 if key in image_keys:
-                    # Image-indexed keys: dim 0 = num_images, NOT batch.
-                    # Pass through as-is (do not slice by batch index).
                     prefix[key] = val
                 elif key in seq_keys:
-                    # Sequence-indexed: same length as input_ids, slice to prefix
                     prefix[key] = val[i:i+1, :prefix_len]
                 elif val.dim() >= 1 and val.shape[0] == batch_size:
                     prefix[key] = val[i:i+1]
             elif isinstance(val, list) and len(val) > i:
                 prefix[key] = val[i]
 
-        # Sanitize for model-specific forward
         if adapter:
             prefix = adapter.sanitize_model_inputs(prefix)
 
@@ -395,11 +403,15 @@ def _compute_forget_loss(
     return total_margin / batch_size
 
 
-def _compute_retain_loss_kl(
+def _compute_retain_loss_ce(
     model: torch.nn.Module,
     batch: dict[str, Any],
 ) -> torch.Tensor:
-    """Retain loss: answer-only cross-entropy (retain examples should keep correct answers)."""
+    """Retain loss: answer-only cross-entropy.
+
+    P0-07: This is honestly named — it is supervised CE, not KL divergence.
+    The method config description will be updated to match.
+    """
     model_kwargs: dict[str, Any] = {
         "input_ids": batch["input_ids"],
         "attention_mask": batch["attention_mask"],
@@ -428,25 +440,47 @@ def _compute_retain_loss_kl(
 
 
 # --------------------------------------------------------------------------- #
-# Post-evaluation
+# Post-evaluation with true fresh reload (P0-04)
 # --------------------------------------------------------------------------- #
 
 def run_post_evaluation(
     adapter: Any,
-    model: torch.nn.Module,
-    processor: Any,
     profile: Any,
     adapter_path: Path,
     probe_path: str,
     output_dir: Path,
     baseline_results_path: str,
     profile_path: Path,
+    device: str,
 ) -> dict[str, Any]:
-    """Fresh reload + 500-probe post-evaluation using BaselineRunner."""
+    """True fresh reload + 500-probe post-evaluation.
+
+    P0-04: Loads a completely fresh base model from the exact pinned
+    revision, then loads the saved adapter checkpoint on top.
+    """
     from route_data.config import GenerationConfig, ModelConfig
     from route_data.eval.baseline_runner import BaselineRunner
 
-    logger.info("Post-evaluation: fresh reload + 500 probes")
+    logger.info("Post-evaluation: fresh base reload + adapter load + 500 probes")
+
+    # 1. Fresh load base model
+    logger.info(f"Fresh loading base model: {profile.model_id} rev={profile.revision}")
+    base_model, processor = adapter.load_model_processor(
+        model_id=profile.model_id,
+        revision=profile.revision,
+        processor_revision=profile.processor_revision,
+        dtype=profile.dtype,
+        device=device,
+        training=False,
+    )
+    for param in base_model.parameters():
+        param.requires_grad = False
+
+    # 2. Load saved adapter onto fresh base
+    logger.info(f"Loading adapter from: {adapter_path}")
+    model = adapter.load_unlearning_adapter(base_model, adapter_path)
+    model.eval()
+    model.to(device)
 
     # Build ModelConfig for eval
     model_config = ModelConfig(
@@ -466,7 +500,7 @@ def run_post_evaluation(
     )
     fingerprint = backend.fingerprint()
 
-    # Build SimpleNamespace for runner (matches generate_model_baseline.py pattern)
+    # Build SimpleNamespace for runner
     import types
     runner_model_config = types.SimpleNamespace(
         model_id=profile.model_id,
@@ -481,12 +515,10 @@ def run_post_evaluation(
     post_eval_dir.mkdir(parents=True, exist_ok=True)
 
     # Resolve evidence paths
-    project_root = PROJECT_ROOT
-    dataset_manifest = project_root / "outputs/full_fiubench/evidence/research_dataset_manifest.json"
-    freeze_verification = project_root / "outputs/full_fiubench/evidence/final_freeze_verification.json"
-    processed_dataset = project_root / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl"
+    dataset_manifest = PROJECT_ROOT / "outputs/full_fiubench/evidence/research_dataset_manifest.json"
+    freeze_verification = PROJECT_ROOT / "outputs/full_fiubench/evidence/final_freeze_verification.json"
+    processed_dataset = PROJECT_ROOT / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl"
 
-    # Run evaluation using BaselineRunner
     runner = BaselineRunner(
         backend=backend,
         probe_path=probe_path,
@@ -504,7 +536,6 @@ def run_post_evaluation(
     summary = runner.generate_summary()
     validation = runner.validate_results()
 
-    # Write validation report
     validation_path = post_eval_dir / "validation_report.json"
     with open(validation_path, "w") as f:
         json.dump(validation, f, indent=2, default=str)
@@ -517,11 +548,165 @@ def run_post_evaluation(
     return {
         "num_probes": len(results),
         "num_errors": n_errors,
+        "fresh_base_loaded": True,
+        "checkpoint_loaded": True,
         "results_path": str(post_eval_dir / "baseline_results.jsonl"),
         "summary_path": str(post_eval_dir / "baseline_summary.json"),
         "validation_path": str(validation_path),
         "validation_pass": validation.get("pass", False),
         "summary": summary,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Pre/post probe joining (P0-10)
+# --------------------------------------------------------------------------- #
+
+def join_pre_post_results(
+    baseline_path: Path,
+    post_results_path: Path,
+    selection: dict[str, Any],
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Join pre/post probe results and compute group x family metrics."""
+    target_ids = set(selection.get("target_identities", []))
+    retain_ids = set(selection.get("retain_identities", []))
+    control_ids = set(selection.get("control_identities", []))
+
+    # Load baseline results
+    baseline_map: dict[str, dict] = {}
+    with open(baseline_path) as f:
+        for line in f:
+            if line.strip():
+                r = json.loads(line)
+                baseline_map[r["probe_id"]] = r
+
+    # Load post results
+    post_map: dict[str, dict] = {}
+    with open(post_results_path) as f:
+        for line in f:
+            if line.strip():
+                r = json.loads(line)
+                post_map[r["probe_id"]] = r
+
+    # Join
+    joined_rows = []
+    for probe_id in sorted(baseline_map.keys()):
+        pre = baseline_map[probe_id]
+        post = post_map.get(probe_id)
+        if post is None:
+            continue
+
+        iid = pre.get("identity_id", "")
+        group = (
+            "target" if iid in target_ids
+            else "retain" if iid in retain_ids
+            else "control" if iid in control_ids
+            else "untargeted"
+        )
+
+        row = {
+            "probe_id": probe_id,
+            "identity_id": iid,
+            "identity_group": group,
+            "probe_family": pre.get("probe_family", ""),
+            "expected_answer": pre.get("answer_label"),
+            "pre_logp_yes": pre.get("logp_yes"),
+            "pre_logp_no": pre.get("logp_no"),
+            "pre_signed_answer_margin": pre.get("signed_answer_margin"),
+            "pre_correct": pre.get("correct"),
+            "post_logp_yes": post.get("logp_yes"),
+            "post_logp_no": post.get("logp_no"),
+            "post_signed_answer_margin": post.get("signed_answer_margin"),
+            "post_correct": post.get("correct"),
+        }
+        # Compute delta
+        pre_m = pre.get("signed_answer_margin")
+        post_m = post.get("signed_answer_margin")
+        if pre_m is not None and post_m is not None:
+            row["delta_signed_answer_margin"] = post_m - pre_m
+        joined_rows.append(row)
+
+    # Write joined results
+    joined_path = output_dir / "post_results_joined.jsonl"
+    with open(joined_path, "w") as f:
+        for row in joined_rows:
+            f.write(json.dumps(row, default=str) + "\n")
+
+    # Compute group x family metrics
+    groups = ["target", "retain", "control", "untargeted"]
+    families = ["direct_visual", "image_plus_name", "wrong_name",
+                "visual_text_conflict", "name_only"]
+    gf_metrics: dict[str, dict[str, dict]] = {}
+    for g in groups:
+        gf_metrics[g] = {}
+        for fam in families:
+            subset = [r for r in joined_rows
+                      if r["identity_group"] == g and r["probe_family"] == fam]
+            if not subset:
+                gf_metrics[g][fam] = {"n": 0}
+                continue
+            pre_correct = sum(1 for r in subset if r.get("pre_correct"))
+            post_correct = sum(1 for r in subset if r.get("post_correct"))
+            deltas = [r["delta_signed_answer_margin"] for r in subset
+                      if "delta_signed_answer_margin" in r]
+            gf_metrics[g][fam] = {
+                "n": len(subset),
+                "pre_accuracy": pre_correct / len(subset) if subset else 0,
+                "post_accuracy": post_correct / len(subset) if subset else 0,
+                "mean_delta_margin": float(np.mean(deltas)) if deltas else 0,
+                "median_delta_margin": float(np.median(deltas)) if deltas else 0,
+                "std_delta_margin": float(np.std(deltas)) if deltas else 0,
+            }
+
+    gf_path = output_dir / "group_family_metrics.json"
+    with open(gf_path, "w") as f:
+        json.dump(gf_metrics, f, indent=2, default=str)
+        f.write("\n")
+
+    return {
+        "joined_count": len(joined_rows),
+        "joined_path": str(joined_path),
+        "gf_metrics_path": str(gf_path),
+        "gf_metrics": gf_metrics,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Preservation gates (P0-11)
+# --------------------------------------------------------------------------- #
+
+def compute_preservation(
+    baseline_summary: dict[str, Any],
+    post_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Compute preservation metrics comparing pre/post baselines."""
+    pre_dv = baseline_summary.get("per_family", {}).get("direct_visual", {})
+    post_dv = post_summary.get("per_family", {}).get("direct_visual", {})
+
+    pre_acc = pre_dv.get("accuracy", 0)
+    post_acc = post_dv.get("accuracy", 0)
+    delta_acc = post_acc - pre_acc
+
+    # Primary absolute rule
+    if pre_acc >= 0.98:
+        gate_pass = post_acc >= 0.98
+        gate_type = "absolute"
+        threshold = 0.98
+    else:
+        # Relative preservation: allow up to 5% absolute drop
+        gate_pass = delta_acc >= -0.05
+        gate_type = "relative"
+        threshold = -0.05
+
+    return {
+        "pre_direct_visual_accuracy": pre_acc,
+        "post_direct_visual_accuracy": post_acc,
+        "delta_direct_visual_accuracy": delta_acc,
+        "gate_type": gate_type,
+        "gate_threshold": threshold,
+        "gate_pass": gate_pass,
+        "eligible_for_primary_absolute_DV_gate": pre_acc >= 0.98,
     }
 
 
@@ -550,6 +735,8 @@ def main() -> None:
     args = parser.parse_args()
 
     set_seed(args.seed)
+    git_sha = git_commit()
+    is_dirty = git_dirty()
 
     # -- Load configs ------------------------------------------------------- #
     import yaml
@@ -565,17 +752,18 @@ def main() -> None:
         selection = yaml.safe_load(f)
 
     model_key = profile_raw["key"]
+    method_id = method_config.get("method_id", "candidate_margin_v1")
     logger.info(f"Model: {model_key}")
-    logger.info(f"Profile: {profile_path}")
-    logger.info(f"Method: {method_path}")
+    logger.info(f"Method: {method_id}")
+    logger.info(f"Git: {git_sha[:12]}... dirty={is_dirty}")
 
-    # -- Resolve output directory ------------------------------------------- #
+    # -- Resolve output directory (P0-15) ----------------------------------- #
     if args.output:
         output_dir = Path(args.output)
     else:
-        mode = "canary" if args.canary else "seed_17"
+        mode = f"canary_seed_{args.seed}" if args.canary else f"seed_{args.seed}"
         output_dir = (PROJECT_ROOT / "outputs/experiments/unlearning" /
-                      model_key / "candidate_margin" / mode)
+                      model_key / method_id / mode)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Mark incomplete
@@ -593,6 +781,45 @@ def main() -> None:
     adapter = create_adapter(model_key, profile=profile)
     profile_sha = compute_profile_sha256(profile_path)
 
+    # -- Validate baseline binding (P0-08) ---------------------------------- #
+    from route_data.eval.post_unlearning_eval import (
+        resolve_preunlearning_baseline,
+        validate_baseline_model_identity,
+    )
+
+    try:
+        baseline_binding = resolve_preunlearning_baseline(
+            model_key, project_root=PROJECT_ROOT,
+        )
+        binding_errors = validate_baseline_model_identity(
+            baseline_binding,
+            model_key=model_key,
+            model_id=profile.model_id,
+            model_revision=profile.revision,
+            processor_revision=profile.processor_revision,
+            model_profile_sha256=profile_sha,
+        )
+        if binding_errors:
+            logger.error(f"Baseline binding validation FAILED: {binding_errors}")
+            raise RuntimeError(f"Baseline binding invalid: {binding_errors}")
+        logger.info("Baseline binding validated OK")
+    except FileNotFoundError as e:
+        logger.warning(f"Baseline binding not available: {e}")
+        baseline_binding = None
+
+    # -- Validate selection (P1-18) ----------------------------------------- #
+    target_ids = set(selection["target_identities"])
+    retain_ids = set(selection["retain_identities"])
+    control_ids = set(selection["control_identities"])
+    assert len(target_ids) == 2, f"Expected 2 target identities, got {len(target_ids)}"
+    assert len(retain_ids) == 2, f"Expected 2 retain identities, got {len(retain_ids)}"
+    assert len(control_ids) == 2, f"Expected 2 control identities, got {len(control_ids)}"
+    assert not (target_ids & retain_ids), "Target and retain sets overlap"
+    assert not (target_ids & control_ids), "Target and control sets overlap"
+    assert not (retain_ids & control_ids), "Retain and control sets overlap"
+    logger.info("Selection validated: 2 target, 2 retain, 2 control (disjoint)")
+
+    # -- Load model --------------------------------------------------------- #
     logger.info(f"Loading model: {profile.model_id} rev={profile.revision}")
     model, processor = adapter.load_model_processor(
         model_id=profile.model_id,
@@ -607,59 +834,92 @@ def main() -> None:
     for param in model.parameters():
         param.requires_grad = False
 
-    # -- Apply LoRA --------------------------------------------------------- #
+    # -- Snapshot protected parameters (P0-06) ------------------------------
+    # NOTE: Snapshot AFTER adapter attachment so parameter names match
+    # the PEFT-wrapped model (e.g. base_model.model.layers.0.*).
+
+    # -- Attach LoRA via adapter hook (P0-05) ------------------------------- #
     lora_targets = adapter.resolve_lora_targets(model)
     logger.info(f"LoRA targets: {len(lora_targets)} modules")
 
-    from peft import LoraConfig, get_peft_model
+    # Resolve LoRA config from method config (P0-16)
+    lora_cfg = method_config.get("lora", {})
+    lora_rank = lora_cfg.get("rank", profile.lora_rank)
+    lora_alpha = lora_cfg.get("alpha", profile.lora_alpha)
+    lora_dropout = lora_cfg.get("dropout", profile.lora_dropout)
 
-    inner_peft = adapter.get_inner_peft_model(model)
-    if inner_peft is not None:
-        # Model already has PEFT layers injected (e.g. Phi bundled adapters).
-        # Resolve targets relative to the inner model by stripping the
-        # prefix that the full model's scope_regex expects.
-        # Phi's scope_regex: ^model\.layers\.\d+\.(self_attn)\.(qkv_proj|o_proj)$
-        # Inner model names: layers.\d+.self_attn.qkv_proj
-        inner_targets = []
-        for t in lora_targets:
-            # Strip leading "model." if present
-            if t.startswith("model."):
-                inner_targets.append(t[len("model."):])
-            else:
-                inner_targets.append(t)
-        logger.info(f"LoRA targets (inner): {len(inner_targets)} modules")
-        # Use LoraModel to inject our language adapter alongside existing ones.
-        from peft.tuners.lora.model import LoraModel
-        lora_cfg = LoraConfig(
-            r=profile.lora_rank,
-            lora_alpha=profile.lora_alpha,
-            lora_dropout=profile.lora_dropout,
-            target_modules=inner_targets,
-            task_type="CAUSAL_LM",
-        )
-        # LoraModel constructor calls inject_adapter() internally
-        LoraModel(inner_peft, lora_cfg, adapter_name="unlearning")
-        logger.info("Injected 'unlearning' adapter via LoraModel")
+    model = adapter.attach_unlearning_adapter(
+        model,
+        lora_rank=lora_rank,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        target_modules=lora_targets,
+    )
+
+    # Enable gradient checkpointing with use_reentrant=False.
+    # This is required for memory efficiency but must use non-reentrant
+    # mode so that LoRA parameters (requires_grad=True) inside checkpointed
+    # layers still receive gradients.
+    #
+    # IMPORTANT: Phi-4-MM has a two-level architecture:
+    #   Phi4MMForCausalLM  (outer)
+    #     └─ Phi4MMModel   (inner, has decoder layers)
+    # The standard `gradient_checkpointing_enable()` calls
+    # `_set_gradient_checkpointing()` which iterates ALL sub-modules
+    # and enables checkpointing on everything — including the frozen
+    # audio processor and vision encoder.  This breaks the autograd
+    # graph for those modules (frozen inputs → no grad flow) and can
+    # interfere with LoRA gradient accumulation.
+    #
+    # For Phi, we manually set checkpointing ONLY on the inner model
+    # and then re-disable it on all frozen sub-modules.
+    _model_key = profile.key if hasattr(profile, "key") else ""
+    if _model_key == "phi4_mm":
+        import functools
+
+        from torch.utils.checkpoint import checkpoint as _torch_checkpoint
+
+        _inner_model = getattr(model, "model", None)
+        if _inner_model is not None and hasattr(_inner_model, "gradient_checkpointing"):
+            # Create the checkpoint function with use_reentrant=False
+            _gc_func = functools.partial(_torch_checkpoint, use_reentrant=False)
+            # Set ONLY on the inner model (not propagated to sub-modules)
+            _inner_model._gradient_checkpointing_func = _gc_func
+            _inner_model.gradient_checkpointing = True
+            logger.info(
+                "Gradient checkpointing enabled on Phi INNER model only "
+                "(use_reentrant=False, sub-modules excluded)"
+            )
+        else:
+            logger.warning("Could not find inner model for gradient checkpointing")
     else:
-        lora_cfg = LoraConfig(
-            r=profile.lora_rank,
-            lora_alpha=profile.lora_alpha,
-            lora_dropout=profile.lora_dropout,
-            target_modules=lora_targets,
-            task_type="CAUSAL_LM",
-        )
-        model = get_peft_model(model, lora_cfg)
-
-    # Enable gradient checkpointing
-    if hasattr(model, "gradient_checkpointing_enable"):
-        model.gradient_checkpointing_enable()
+        try:
+            model.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False}
+            )
+            logger.info("Gradient checkpointing enabled (use_reentrant=False)")
+        except Exception as e:
+            logger.warning(f"Could not enable gradient checkpointing: {e}")
 
     n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Trainable parameters: {n_trainable:,}")
 
-    # -- Build training data ------------------------------------------------ #
-    baseline_path = (PROJECT_ROOT / "outputs/experiments/pre_unlearning" /
-                     model_key / "baseline_v1" / "baseline_results.jsonl")
+    # -- Snapshot protected parameters AFTER adapter attach (P0-06) --------- #
+    logger.info("Snapshotting protected parameters...")
+    protected_snapshot = adapter.snapshot_protected_parameters(model)
+    logger.info(f"Protected parameters: {len(protected_snapshot):,} tensors")
+
+    # -- Snapshot LoRA tensors before training (P0-06) ---------------------- #
+    lora_pre_snapshot: dict[str, torch.Tensor] = {}
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            lora_pre_snapshot[name] = param.detach().cpu().clone()
+
+    # -- Build training data (P0-09: family-filtered) ----------------------- #
+    baseline_path = Path(baseline_binding.results_path) if baseline_binding else (
+        PROJECT_ROOT / "outputs/experiments/pre_unlearning" /
+        model_key / "baseline_v1" / "baseline_results.jsonl"
+    )
     processed_path = (PROJECT_ROOT / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/"
                       "fiubench_processed.jsonl")
 
@@ -680,15 +940,16 @@ def main() -> None:
                     image_sha = file_sha256(Path(image_uri))
                     sha_to_sample[image_sha] = sample
 
-    # Build forget/retain datasets
-    target_ids = set(selection["target_identities"])
-    retain_ids = set(selection["retain_identities"])
+    # P0-09: Training family policy — only direct_visual for primary training
+    training_families = set(method_config.get("training_families", {}).get(
+        "forget", ["direct_visual"]))
 
     forget_samples = []
     retain_samples = []
     for r in baseline_results:
         iid = r["identity_id"]
         image_sha = r.get("image_sha256", "")
+        probe_family = r.get("probe_family", "")
         if image_sha not in sha_to_sample:
             continue
         processed = sha_to_sample[image_sha]
@@ -698,39 +959,64 @@ def main() -> None:
             "answer_label": r["answer_label"],
             "identity_id": iid,
             "probe_id": r.get("probe_id", ""),
-            "probe_family": r.get("probe_family", ""),
-            "identity_group": "target" if iid in target_ids else "retain" if iid in retain_ids else "other",
+            "probe_family": probe_family,
+            "identity_group": (
+                "target" if iid in target_ids
+                else "retain" if iid in retain_ids
+                else "other"
+            ),
         }
-        if iid in target_ids:
+        if iid in target_ids and probe_family in training_families:
             forget_samples.append(train_sample)
-        elif iid in retain_ids:
+        elif iid in retain_ids and probe_family in training_families:
             retain_samples.append(train_sample)
 
-    logger.info(f"Forget samples: {len(forget_samples)}, Retain samples: {len(retain_samples)}")
+    logger.info(
+        f"Forget samples: {len(forget_samples)} (families={training_families}), "
+        f"Retain samples: {len(retain_samples)}"
+    )
 
     forget_dataset = UnlearningDataset(forget_samples, adapter, processor)
     retain_dataset = UnlearningDataset(retain_samples, adapter, processor)
 
-    # -- Write run config --------------------------------------------------- #
+    # -- Write resolved config (P0-16) -------------------------------------- #
     run_config = {
         "model_key": model_key,
         "model_id": profile.model_id,
         "model_revision": profile.revision,
         "processor_revision": profile.processor_revision,
         "model_profile_sha256": profile_sha,
+        "method_id": method_id,
         "method_config": str(method_path),
+        "method_config_sha256": file_sha256(method_path),
         "selection": str(selection_path),
+        "selection_sha256": file_sha256(selection_path),
         "seed": args.seed,
         "device": args.device,
         "canary": args.canary,
-        "git_commit": git_commit(),
+        "git_commit": git_sha,
+        "git_dirty": is_dirty,
         "target_identities": selection["target_identities"],
         "retain_identities": selection["retain_identities"],
         "control_identities": selection["control_identities"],
         "lora_targets": lora_targets,
         "lora_target_count": len(lora_targets),
+        "lora_rank": lora_rank,
+        "lora_alpha": lora_alpha,
+        "lora_dropout": lora_dropout,
         "trainable_parameters": n_trainable,
+        "protected_parameter_count": len(protected_snapshot),
+        "training_families": sorted(training_families),
+        "retain_objective": "cross_entropy",
     }
+    if baseline_binding:
+        run_config["baseline_binding"] = {
+            "results_sha256": baseline_binding.results_sha256,
+            "manifest_sha256": baseline_binding.manifest_sha256,
+            "model_key": baseline_binding.model_key,
+            "model_id": baseline_binding.model_id,
+            "model_revision": baseline_binding.model_revision,
+        }
     with open(output_dir / "run_config_resolved.yaml", "w") as f:
         yaml.dump(run_config, f, default_flow_style=False)
 
@@ -753,18 +1039,33 @@ def main() -> None:
         output_dir=output_dir,
     )
 
-    # -- Save adapter ------------------------------------------------------- #
+    # -- Measure parameter changes (P0-06) ---------------------------------- #
+    lora_changed = 0
+    lora_total = 0
+    for name, param in model.named_parameters():
+        if name in lora_pre_snapshot:
+            lora_total += 1
+            if not torch.equal(lora_pre_snapshot[name], param.detach().cpu()):
+                lora_changed += 1
+    logger.info(f"LoRA tensors changed: {lora_changed}/{lora_total}")
+
+    # -- Verify protected parameters (P0-06) -------------------------------- #
+    protection_report = adapter.verify_protected_parameters(protected_snapshot, model)
+    logger.info(
+        f"Protected parameters: {protection_report['n_changed']}/"
+        f"{protection_report['n_total']} changed"
+    )
+
+    # -- Save adapter (P0-13) ----------------------------------------------- #
     adapter_path = output_dir / "adapter"
-    adapter_path.mkdir(parents=True, exist_ok=True)
+    checkpoint_metadata = adapter.save_unlearning_adapter(model, adapter_path)
+    adapter_sha = checkpoint_metadata.get("checkpoint_sha256", "")
+    logger.info(f"Adapter saved: {adapter_path} (SHA={adapter_sha[:16]}...)")
 
-    # Save LoRA weights
-    if inner_peft is not None:
-        inner_peft.save_pretrained(str(adapter_path))
-    else:
-        model.save_pretrained(str(adapter_path))
-
-    adapter_sha = file_sha256(adapter_path / "adapter_model.bin") if (adapter_path / "adapter_model.bin").exists() else ""
-    logger.info(f"Adapter saved: {adapter_path}")
+    # Write checkpoint metadata
+    with open(output_dir / "checkpoint_metadata.json", "w") as f:
+        json.dump(checkpoint_metadata, f, indent=2)
+        f.write("\n")
 
     # -- Write training summary --------------------------------------------- #
     training_summary = {
@@ -773,33 +1074,81 @@ def main() -> None:
         "adapter_sha256": adapter_sha,
         "forget_samples": len(forget_samples),
         "retain_samples": len(retain_samples),
+        "lora_tensors_changed": lora_changed,
+        "lora_tensors_total": lora_total,
+        "protected_parameters_unchanged": protection_report["pass"],
+        "protected_parameters_n_changed": protection_report["n_changed"],
     }
     with open(output_dir / "training_summary.json", "w") as f:
         json.dump(training_summary, f, indent=2)
         f.write("\n")
 
-    # -- Post-evaluation ---------------------------------------------------- #
+    # -- Write parameter change report (P0-06) ------------------------------ #
+    param_change_report = {
+        "lora_tensors_total": lora_total,
+        "lora_tensors_changed": lora_changed,
+        "protected_parameters_total": protection_report["n_total"],
+        "protected_parameters_changed": protection_report["n_changed"],
+        "protected_parameters_pass": protection_report["pass"],
+        "nonzero_grad_tensors_total": training_stats.get("total_nonzero_grad_tensors", 0),
+        "max_gradient_norm": training_stats.get("max_gradient_norm", 0),
+    }
+    with open(output_dir / "parameter_change_report.json", "w") as f:
+        json.dump(param_change_report, f, indent=2)
+        f.write("\n")
+
+    # -- Post-evaluation (P0-04: true fresh reload) ------------------------- #
     if not args.skip_post_eval:
         probe_path = str(PROJECT_ROOT / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/"
                          "fiubench_route_conflict_eval.jsonl")
 
-        # Fresh reload for post-evaluation
-        logger.info("Fresh reload for post-evaluation")
-        model.eval()
+        # Free training model memory
+        del model
+        torch.cuda.empty_cache()
 
         post_eval = run_post_evaluation(
             adapter=adapter,
-            model=model,
-            processor=processor,
             profile=profile,
             adapter_path=adapter_path,
             probe_path=probe_path,
             output_dir=output_dir,
             baseline_results_path=str(baseline_path),
             profile_path=profile_path,
+            device=args.device,
         )
+
+        # -- Pre/post joining (P0-10) --------------------------------------- #
+        post_results_path = output_dir / "post_eval" / "baseline_results.jsonl"
+        if post_results_path.exists():
+            join_result = join_pre_post_results(
+                baseline_path, post_results_path, selection, output_dir,
+            )
+            logger.info(f"Joined {join_result['joined_count']} pre/post rows")
+
+            # -- Preservation (P0-11) --------------------------------------- #
+            post_summary_path = output_dir / "post_eval" / "baseline_summary.json"
+            if post_summary_path.exists():
+                with open(post_summary_path) as f:
+                    post_summary = json.load(f)
+                # Load baseline summary for comparison
+                baseline_summary_path = baseline_path.parent / "baseline_summary.json"
+                baseline_summary = {}
+                if baseline_summary_path.exists():
+                    with open(baseline_summary_path) as f:
+                        baseline_summary = json.load(f)
+                preservation = compute_preservation(baseline_summary, post_summary)
+                with open(output_dir / "preservation_report.json", "w") as f:
+                    json.dump(preservation, f, indent=2)
+                    f.write("\n")
+                logger.info(
+                    f"Preservation: DV {preservation['pre_direct_visual_accuracy']:.3f} "
+                    f"-> {preservation['post_direct_visual_accuracy']:.3f} "
+                    f"(delta={preservation['delta_direct_visual_accuracy']:+.3f}, "
+                    f"gate={'PASS' if preservation['gate_pass'] else 'FAIL'})"
+                )
     else:
         post_eval = {"num_probes": 0, "num_errors": 0, "skipped": True}
+        preservation = {}
 
     # -- Write selection ---------------------------------------------------- #
     with open(output_dir / "selection.json", "w") as f:
@@ -807,7 +1156,6 @@ def main() -> None:
         f.write("\n")
 
     # -- Write environment -------------------------------------------------- #
-    import torch
     env_info = {
         "torch_version": torch.__version__,
         "cuda_available": torch.cuda.is_available(),
@@ -833,34 +1181,94 @@ def main() -> None:
         "lora_target_count": len(lora_targets),
         "lora_targets": lora_targets,
         "trainable_parameters": n_trainable,
-        "frozen_base_changes": 0,
+        "frozen_base_changes": protection_report["n_changed"],
     }
     with open(output_dir / "parameter_inventory.json", "w") as f:
         json.dump(param_inv, f, indent=2)
         f.write("\n")
 
-    # -- Validation --------------------------------------------------------- #
+    # -- Fail-closed validation (P0-12) ------------------------------------- #
+    required_checks = {
+        "finite_forget_loss": bool(np.isfinite(training_stats.get("forget_loss", float("nan")))),
+        "finite_retain_loss": bool(np.isfinite(training_stats.get("retain_loss", float("nan")))),
+        "finite_total_loss": bool(np.isfinite(training_stats.get("total_loss", float("nan")))),
+        "nonzero_intended_gradients": bool(
+            training_stats.get("total_nonzero_grad_tensors", 0) > 0
+        ),
+        "intended_lora_changed": bool(lora_changed > 0),
+        "protected_parameters_unchanged": protection_report["pass"],
+        "adapter_saved": bool(adapter_path.exists()),
+        "checkpoint_sha_nonempty": bool(adapter_sha),
+        "post_probe_count": int(post_eval.get("num_probes", 0)),
+        "post_error_count": int(post_eval.get("num_errors", 0)),
+    }
+    if not args.skip_post_eval:
+        required_checks["post_probe_count_exact"] = (
+            required_checks["post_probe_count"] == 500
+        )
+        required_checks["post_errors_zero"] = (
+            required_checks["post_error_count"] == 0
+        )
+        required_checks["fresh_base_loaded"] = bool(
+            post_eval.get("fresh_base_loaded", False)
+        )
+        required_checks["checkpoint_loaded"] = bool(
+            post_eval.get("checkpoint_loaded", False)
+        )
+        if preservation:
+            required_checks["preservation_gate_pass"] = bool(
+                preservation.get("gate_pass", False)
+            )
+
+    all_pass = all(
+        v for k, v in required_checks.items()
+        if isinstance(v, bool)
+    )
+
     validation = {
-        "pass": True,
-        "checks": {
-            "finite_loss": bool(np.isfinite(training_stats.get("total_loss", 0))),
-            "nonzero_trainable": bool(n_trainable > 0),
-            "adapter_saved": bool(adapter_path.exists()),
-            "probe_count": int(post_eval.get("num_probes", 0)),
-            "probe_errors": int(post_eval.get("num_errors", 0)),
-        },
+        "pass": all_pass,
+        "checks": required_checks,
+        "evidence_class": "research_canary" if all_pass else "engineering_canary",
+        "research_evidence_eligible": all_pass and not is_dirty,
     }
     with open(output_dir / "validation_report.json", "w") as f:
         json.dump(validation, f, indent=2)
         f.write("\n")
 
-    # -- Remove RUN_INCOMPLETE ---------------------------------------------- #
-    if run_incomplete.exists():
-        run_incomplete.unlink()
+    # -- Write run manifest (P0-24) ----------------------------------------- #
+    run_manifest = {
+        "model_key": model_key,
+        "method_id": method_id,
+        "seed": args.seed,
+        "git_commit": git_sha,
+        "git_dirty": is_dirty,
+        "model_profile_sha256": profile_sha,
+        "method_config_sha256": file_sha256(method_path),
+        "selection_sha256": file_sha256(selection_path),
+        "checkpoint_sha256": adapter_sha,
+        "validation_pass": all_pass,
+        "canary": args.canary,
+    }
+    if baseline_binding:
+        run_manifest["baseline_results_sha256"] = baseline_binding.results_sha256
+    with open(output_dir / "run_manifest.json", "w") as f:
+        json.dump(run_manifest, f, indent=2)
+        f.write("\n")
+
+    # -- Remove RUN_INCOMPLETE only after all checks pass ------------------- #
+    if all_pass:
+        if run_incomplete.exists():
+            run_incomplete.unlink()
+        logger.info("All validation gates PASSED; RUN_INCOMPLETE removed")
+    else:
+        failed = [k for k, v in required_checks.items() if isinstance(v, bool) and not v]
+        logger.warning(f"Validation FAILED: {failed}")
+        logger.warning("RUN_INCOMPLETE retained")
 
     logger.info("=" * 60)
     logger.info(f"Unlearning complete: {model_key}")
     logger.info(f"Output: {output_dir}")
+    logger.info(f"Validation: {'PASS' if all_pass else 'FAIL'}")
     logger.info("=" * 60)
 
 

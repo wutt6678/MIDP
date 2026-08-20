@@ -29,7 +29,19 @@ objective:
   type: candidate_margin
   description: >
     Minimise S(y_correct) - S(y_other) on target examples,
-    with KL retention on retain examples.
+    with retain CE (cross-entropy) on retain examples.
+  retain_objective: cross_entropy
+
+training_families:
+  forget: [direct_visual]
+  retain: [direct_visual]
+
+evaluation_families:
+  - direct_visual
+  - image_plus_name
+  - wrong_name
+  - visual_text_conflict
+  - name_only
 
 evaluation:
   primary_metric: signed_answer_margin

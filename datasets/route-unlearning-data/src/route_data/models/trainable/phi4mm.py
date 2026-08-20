@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -413,16 +414,30 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                 _mod.gradient_checkpointing = False
                 logger.debug("Disabled gradient_checkpointing on SiglipEncoder")
 
-        # Disable gradient checkpointing on the audio processor.
-        # The audio processor uses checkpoint() which breaks the grad
-        # flow when inputs don't require grad (frozen audio tower).
+        # Disable gradient checkpointing on ALL sub-modules.
+        # Phi ships with checkpointing enabled on the audio processor
+        # and potentially the vision encoder.  Since we freeze all
+        # base parameters, checkpointing on these frozen towers
+        # triggers "None of the inputs have requires_grad" warnings
+        # and can interfere with the autograd graph for LoRA params.
+        _disabled_count = 0
         for _mod in model.modules():
+            # Method-based disable (PreTrainedModel subclasses)
             if hasattr(_mod, "gradient_checkpointing_disable") and callable(_mod.gradient_checkpointing_disable):
                 try:
                     _mod.gradient_checkpointing_disable()
-                    logger.debug("Disabled gradient_checkpointing on %s", type(_mod).__name__)
+                    _disabled_count += 1
                 except Exception:
                     pass
+            # Attribute-based disable (raw nn.Module subclasses)
+            if getattr(_mod, "gradient_checkpointing", False):
+                _mod.gradient_checkpointing = False
+                _disabled_count += 1
+        if _disabled_count:
+            logger.info(
+                "Disabled gradient checkpointing on %d sub-modules",
+                _disabled_count,
+            )
 
         logger.info("Phi-4-MM loaded successfully with SDPA patches")
         return model, processor
@@ -651,6 +666,306 @@ class Phi4MMAdapter(TrainableVLMAdapter):
             if peft_config:  # has existing adapters (vision, speech)
                 return inner
         return None
+
+    # ------------------------------------------------------------------ #
+    # Adapter lifecycle overrides (P0-05)
+    # ------------------------------------------------------------------ #
+
+    def attach_unlearning_adapter(
+        self,
+        model: torch.nn.Module,
+        *,
+        lora_rank: int,
+        lora_alpha: int,
+        lora_dropout: float,
+        target_modules: list[str],
+        adapter_name: str = "unlearning",
+    ) -> torch.nn.Module:
+        """Inject unlearning LoRA alongside Phi's bundled vision/speech adapters.
+
+        Strips the ``model.`` prefix from target names since the inner
+        model (``Phi4MMModel``) uses bare ``layers.N.self_attn.*`` names.
+        Uses ``LoraModel`` constructor to inject alongside existing adapters.
+        """
+        from peft import LoraConfig
+        from peft.tuners.lora.model import LoraModel
+
+        inner_peft = self.get_inner_peft_model(model)
+        if inner_peft is None:
+            # Fallback to standard path if no inner PEFT model
+            return super().attach_unlearning_adapter(
+                model,
+                lora_rank=lora_rank,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+                target_modules=target_modules,
+                adapter_name=adapter_name,
+            )
+
+        # Strip "model." prefix for inner model module names
+        inner_targets = []
+        for t in target_modules:
+            if t.startswith("model."):
+                inner_targets.append(t[len("model."):])
+            else:
+                inner_targets.append(t)
+
+        lora_cfg = LoraConfig(
+            r=lora_rank,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            target_modules=inner_targets,
+            task_type="CAUSAL_LM",
+        )
+        LoraModel(inner_peft, lora_cfg, adapter_name=adapter_name)
+
+        # CRITICAL: PEFT's LoraModel injection into a model that already
+        # has existing adapters (vision, speech) does NOT automatically
+        # set requires_grad=True on the new adapter's weights.  We must
+        # explicitly enable gradients for the unlearning adapter params
+        # while keeping all other params frozen.
+        _n_enabled = 0
+        for name, param in inner_peft.named_parameters():
+            if adapter_name in name:
+                param.requires_grad = True
+                _n_enabled += 1
+        logger.info(
+            f"Injected '{adapter_name}' adapter via LoraModel "
+            f"({len(inner_targets)} inner targets, "
+            f"{_n_enabled} params set to requires_grad=True)"
+        )
+
+        # CRITICAL: Phi's forward() calls set_lora_adapter('vision') or
+        # unset_lora_adapter() which controls which LoRA adapter is active.
+        # - set_lora_adapter('vision') sets active adapter to 'vision' only
+        # - unset_lora_adapter() disables ALL adapters + sets requires_grad=False
+        # Both bypass our 'unlearning' adapter.  We monkey-patch these
+        # methods to also activate the unlearning adapter and preserve
+        # its requires_grad=True.
+        _unlearning_name = adapter_name
+
+        _original_set = model.set_lora_adapter
+        _original_unset = model.unset_lora_adapter
+
+        def _patched_set(adapter_name):
+            _original_set(adapter_name)
+            # Also activate the unlearning adapter on all LoraLayers
+            from peft.tuners.lora.layer import LoraLayer
+            for module in model.modules():
+                if isinstance(module, LoraLayer) and _unlearning_name in module.lora_A:
+                    # Add unlearning to active adapters (don't replace)
+                    current = list(module.active_adapters)
+                    if _unlearning_name not in current:
+                        module.set_adapter(current + [_unlearning_name])
+                    module._disable_adapters = False
+
+        def _patched_unset():
+            # Instead of fully disabling adapters, keep the unlearning
+            # adapter active so it participates in the forward pass.
+            from peft.tuners.lora.layer import LoraLayer
+            for module in model.modules():
+                if isinstance(module, LoraLayer) and _unlearning_name in module.lora_A:
+                    module.set_adapter([_unlearning_name])
+                    module._disable_adapters = False
+                    # Ensure requires_grad stays True for unlearning
+                    for ln in module.adapter_layer_names:
+                        layer = getattr(module, ln)
+                        if hasattr(layer, _unlearning_name):
+                            sub = getattr(layer, _unlearning_name)
+                            if hasattr(sub, "weight"):
+                                sub.weight.requires_grad = True
+                elif isinstance(module, LoraLayer):
+                    # Modules without unlearning adapter: disable normally
+                    module._disable_adapters = True
+
+        model.set_lora_adapter = _patched_set
+        model.unset_lora_adapter = _patched_unset
+        logger.info(
+            "Patched set_lora_adapter/unset_lora_adapter to include "
+            "'%s' adapter",
+            _unlearning_name,
+        )
+
+        return model
+
+    def save_unlearning_adapter(
+        self,
+        model: torch.nn.Module,
+        output_dir,
+    ) -> dict:
+        """Save only the unlearning adapter from Phi's inner PEFT model.
+
+        Phi's inner model has multiple adapters (vision, speech, unlearning).
+        We save only the unlearning adapter weights and config.
+        """
+        import hashlib
+        import json as _json
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        inner_peft = self.get_inner_peft_model(model)
+        if inner_peft is not None:
+            # Extract only the unlearning adapter weights
+            adapter_state = {}
+            adapter_cfg = None
+            for name, param in inner_peft.named_parameters():
+                if "unlearning" in name:
+                    adapter_state[name] = param.detach().cpu()
+
+            # Save adapter config
+            peft_config = getattr(inner_peft, "peft_config", {})
+            if "unlearning" in peft_config:
+                cfg = peft_config["unlearning"]
+                adapter_cfg = {
+                    "adapter_name": "unlearning",
+                    "r": getattr(cfg, "r", 8),
+                    "lora_alpha": getattr(cfg, "lora_alpha", 16),
+                    "lora_dropout": getattr(cfg, "lora_dropout", 0.0),
+                    "target_modules": list(getattr(cfg, "target_modules", [])),
+                    "task_type": getattr(cfg, "task_type", "CAUSAL_LM"),
+                    "peft_type": str(getattr(cfg, "peft_type", "LORA")),
+                }
+            # Fallback: collect target modules from the adapter layers
+            if adapter_cfg and not adapter_cfg.get("target_modules"):
+                targets = set()
+                from peft.tuners.lora import LoraLayer
+                for name, mod in inner_peft.named_modules():
+                    if isinstance(mod, LoraLayer) and "unlearning" in mod.lora_A:
+                        # Extract base module name (strip .lora_A.unlearning etc)
+                        base = name.rsplit(".lora_A", 1)[0] if ".lora_A" in name else name
+                        leaf = base.split(".")[-1]
+                        targets.add(leaf)
+                adapter_cfg["target_modules"] = sorted(targets)
+
+            if adapter_cfg:
+                with open(output_dir / "adapter_config.json", "w") as f:
+                    _json.dump(adapter_cfg, f, indent=2)
+                    f.write("\n")
+
+            if adapter_state:
+                from safetensors.torch import save_file
+                save_file(adapter_state, str(output_dir / "adapter_model.safetensors"))
+            logger.info(
+                f"Saved unlearning adapter: {len(adapter_state)} params, "
+                f"{len(adapter_cfg.get('target_modules', []))} targets"
+            )
+        else:
+            model.save_pretrained(str(output_dir))
+
+        # Compute SHA-256 of checkpoint files
+        metadata: dict = {"files": []}
+        total_sha = hashlib.sha256()
+        for fname in sorted(output_dir.iterdir()):
+            if fname.is_file() and fname.suffix in (".safetensors", ".bin", ".json"):
+                fhash = hashlib.sha256()
+                with open(fname, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192), b""):
+                        fhash.update(chunk)
+                file_sha = fhash.hexdigest()
+                total_sha.update(file_sha.encode())
+                metadata["files"].append({
+                    "name": fname.name,
+                    "sha256": file_sha,
+                    "size": fname.stat().st_size,
+                })
+        metadata["checkpoint_sha256"] = total_sha.hexdigest()
+        return metadata
+
+    def load_unlearning_adapter(
+        self,
+        base_model: torch.nn.Module,
+        checkpoint_dir,
+        *,
+        adapter_name: str = "unlearning",
+    ) -> torch.nn.Module:
+        """Load unlearning adapter onto a fresh Phi base model.
+
+        The fresh Phi base already has bundled vision/speech adapters.
+        We load our unlearning adapter alongside them using LoraModel.
+        """
+        import json as _json
+        from pathlib import Path as _Path
+
+        checkpoint_dir = _Path(checkpoint_dir)
+        inner_peft = self.get_inner_peft_model(base_model)
+
+        if inner_peft is not None:
+            # Read adapter config to get target modules
+            config_path = checkpoint_dir / "adapter_config.json"
+            if config_path.is_file():
+                with open(config_path) as f:
+                    adapter_cfg = _json.load(f)
+                target_modules = adapter_cfg.get("target_modules", [])
+            else:
+                target_modules = []
+
+            if target_modules:
+                from peft import LoraConfig
+                from peft.tuners.lora.model import LoraModel
+
+                lora_cfg = LoraConfig(
+                    r=adapter_cfg.get("r", 8),
+                    lora_alpha=adapter_cfg.get("lora_alpha", 16),
+                    lora_dropout=adapter_cfg.get("lora_dropout", 0.0),
+                    target_modules=target_modules,
+                    task_type="CAUSAL_LM",
+                )
+                LoraModel(inner_peft, lora_cfg, adapter_name=adapter_name)
+
+                # Load the saved weights
+                from peft.utils import load_peft_weights
+                state_dict = load_peft_weights(str(checkpoint_dir))
+                from peft.tuners.lora import LoraLayer
+                for name, module in inner_peft.named_modules():
+                    if isinstance(module, LoraLayer) and adapter_name in module.lora_A:
+                        for param_name, param in module.lora_A[adapter_name].named_parameters():
+                            key = f"base_model.model.{name}.lora_A.{adapter_name}.{param_name}"
+                            if key in state_dict:
+                                param.data.copy_(state_dict[key])
+                        for param_name, param in module.lora_B[adapter_name].named_parameters():
+                            key = f"base_model.model.{name}.lora_B.{adapter_name}.{param_name}"
+                            if key in state_dict:
+                                param.data.copy_(state_dict[key])
+
+                logger.info(
+                    f"Loaded '{adapter_name}' adapter from {checkpoint_dir} "
+                    f"onto fresh Phi base ({len(target_modules)} targets)"
+                )
+                return base_model
+
+        # Fallback to standard PeftModel loading
+        from peft import PeftModel
+        return PeftModel.from_pretrained(
+            base_model, str(checkpoint_dir), adapter_name=adapter_name,
+        )
+
+    def snapshot_protected_parameters(
+        self,
+        model: torch.nn.Module,
+    ) -> dict[str, torch.Tensor]:
+        """Snapshot protected parameters for Phi.
+
+        For Phi, we specifically snapshot the vision and speech LoRA
+        adapter parameters (which must remain unchanged) plus all
+        base model parameters.
+        """
+        snapshot: dict[str, torch.Tensor] = {}
+        inner_peft = self.get_inner_peft_model(model)
+
+        for name, param in model.named_parameters():
+            if not param.requires_grad:
+                snapshot[name] = param.detach().cpu().clone()
+
+        # Also snapshot native vision/speech LoRA parameters specifically
+        if inner_peft is not None:
+            for name, param in inner_peft.named_parameters():
+                if "vision" in name or "speech" in name:
+                    full_name = f"model.{name}"
+                    if full_name not in snapshot:
+                        snapshot[full_name] = param.detach().cpu().clone()
+
+        return snapshot
 
     # ------------------------------------------------------------------ #
     # Structural metadata

@@ -93,4 +93,4 @@ python scripts/run_model_unlearning.py \
     ${SKIP_POST_EVAL}
 
 echo ""
-echo "Done. Output: outputs/experiments/unlearning/${MODEL}/candidate_margin/"
+echo "Done. Output: outputs/experiments/unlearning/${MODEL}/candidate_margin_v1/"

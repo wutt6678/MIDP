@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -299,6 +300,147 @@ class TrainableVLMAdapter(ABC):
         PEFT wrapping (the default).
         """
         return None
+
+    # ------------------------------------------------------------------ #
+    # Adapter lifecycle hooks (P0-05)
+    # ------------------------------------------------------------------ #
+
+    def attach_unlearning_adapter(
+        self,
+        model: torch.nn.Module,
+        *,
+        lora_rank: int,
+        lora_alpha: int,
+        lora_dropout: float,
+        target_modules: list[str],
+        adapter_name: str = "unlearning",
+    ) -> torch.nn.Module:
+        """Attach the unlearning LoRA adapter to the model.
+
+        Default implementation uses ``peft.get_peft_model()`` for standard
+        models.  Override for models with bundled adapters (e.g. Phi-4-MM).
+
+        Returns the model with the unlearning adapter attached.
+        """
+        from peft import LoraConfig, get_peft_model
+
+        lora_cfg = LoraConfig(
+            r=lora_rank,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            target_modules=target_modules,
+            task_type="CAUSAL_LM",
+        )
+        return get_peft_model(model, lora_cfg, adapter_name=adapter_name)
+
+    def save_unlearning_adapter(
+        self,
+        model: torch.nn.Module,
+        output_dir: Path,
+    ) -> dict[str, Any]:
+        """Save only the unlearning adapter checkpoint.
+
+        Saves adapter_config.json and adapter_model.safetensors directly
+        in output_dir (not in a named subdirectory).
+
+        Returns metadata dict with checkpoint file list, SHA-256, etc.
+        """
+        import hashlib
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Use PEFT's save_pretrained but handle the subdirectory structure
+        model.save_pretrained(str(output_dir))
+
+        # PEFT may save into a subdirectory named after the adapter.
+        # Move files to the top level if needed.
+        for sub in output_dir.iterdir():
+            if sub.is_dir() and (sub / "adapter_config.json").exists():
+                for f in sub.iterdir():
+                    dest = output_dir / f.name
+                    if not dest.exists():
+                        f.rename(dest)
+                sub.rmdir()
+                break
+
+        # Compute SHA-256 of checkpoint files
+        metadata: dict[str, Any] = {"files": []}
+        total_sha = hashlib.sha256()
+        for fname in sorted(output_dir.iterdir()):
+            if fname.is_file() and fname.suffix in (".safetensors", ".bin", ".json"):
+                fhash = hashlib.sha256()
+                with open(fname, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192), b""):
+                        fhash.update(chunk)
+                file_sha = fhash.hexdigest()
+                total_sha.update(file_sha.encode())
+                metadata["files"].append({
+                    "name": fname.name,
+                    "sha256": file_sha,
+                    "size": fname.stat().st_size,
+                })
+        metadata["checkpoint_sha256"] = total_sha.hexdigest()
+        return metadata
+
+    def load_unlearning_adapter(
+        self,
+        base_model: torch.nn.Module,
+        checkpoint_dir: Path,
+        *,
+        adapter_name: str = "unlearning",
+    ) -> torch.nn.Module:
+        """Load a saved unlearning adapter onto a fresh base model.
+
+        Default uses ``PeftModel.from_pretrained()``.  Override for
+        models with bundled adapters (e.g. Phi-4-MM).
+        """
+        from peft import PeftModel
+
+        return PeftModel.from_pretrained(
+            base_model, str(checkpoint_dir), adapter_name=adapter_name,
+        )
+
+    def snapshot_protected_parameters(
+        self,
+        model: torch.nn.Module,
+    ) -> dict[str, torch.Tensor]:
+        """Snapshot protected (non-trainable) parameters before training.
+
+        Returns a dict mapping parameter names to detached CPU copies.
+        Default: all parameters with ``requires_grad=False``.
+        """
+        snapshot: dict[str, torch.Tensor] = {}
+        for name, param in model.named_parameters():
+            if not param.requires_grad:
+                snapshot[name] = param.detach().cpu().clone()
+        return snapshot
+
+    def verify_protected_parameters(
+        self,
+        snapshot: dict[str, torch.Tensor],
+        model: torch.nn.Module,
+    ) -> dict[str, Any]:
+        """Verify protected parameters are bitwise unchanged after training.
+
+        Returns a report dict with ``pass`` (bool), ``n_changed`` (int),
+        and ``changed_names`` (list[str]).
+        """
+        changed: list[str] = []
+        for name, old_val in snapshot.items():
+            param = dict(model.named_parameters()).get(name)
+            if param is None:
+                changed.append(name)
+                continue
+            new_val = param.detach().cpu()
+            if not torch.equal(old_val, new_val):
+                changed.append(name)
+        return {
+            "pass": len(changed) == 0,
+            "n_total": len(snapshot),
+            "n_changed": len(changed),
+            "changed_names": changed[:20],  # cap for readability
+        }
 
     # ------------------------------------------------------------------ #
     # Language layer access (for R2MU, MANU)
