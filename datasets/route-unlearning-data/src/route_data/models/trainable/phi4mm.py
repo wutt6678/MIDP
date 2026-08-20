@@ -113,7 +113,10 @@ class _PhiInnerModelWrapper(torch.nn.Module):
         applied (the canary temporarily sets this to True during
         native text-only comparisons).
         """
-        from peft.tuners.lora.layer import LoraLayer
+        try:
+            from peft.tuners.lora.layer import LoraLayer
+        except ImportError:
+            return  # no peft → no LoraLayers to configure
         for mod in self.inner_model.modules():
             if isinstance(mod, LoraLayer):
                 mod._active_adapter = list(adapter_names)
