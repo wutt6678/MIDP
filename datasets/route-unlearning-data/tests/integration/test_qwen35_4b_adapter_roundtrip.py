@@ -1,20 +1,28 @@
 """Adapter save/reload persistence test for Qwen3.5-4B.
 
-After one update:
-1. Save adapter
-2. Release the trained model object
-3. Load a fresh base model at the exact pinned revision
-4. Load the saved adapter
-5. Rerun deterministic scoring
+Full round-trip with real training:
+
+1. Attach LoRA
+2. Snapshot initial LoRA weights
+3. Compute real training loss (supervised forward)
+4. backward()
+5. optimizer.step()
+6. Verify LoRA tensors changed (differ from initialization)
+7. Score (trained, pre-save)
+8. Save adapter
+9. Release trained model
+10. Load fresh base model at exact pinned revision
+11. Reload adapter
+12. Score again (post-reload)
 
 Verifies:
+- Trained LoRA weights differ from initialization
+- Trained pre-save and post-reload margins match within tolerance
+- Yes/No decisions are identical pre-save vs post-reload
 - Base model revision is exact
 - Processor revision is exact
 - Adapter config contains rank 8 / alpha 16 / dropout 0.05
 - Reloaded LoRA module set equals pre-save module set
-- Reloaded LoRA inventory SHA matches
-- Candidate margins match pre-save values within frozen tolerance
-- Yes/No decisions are identical
 
 Run with::
 
@@ -71,6 +79,30 @@ def _score_candidates(adapter, model, processor, image, prompt, device):
     return log_p_yes.item(), log_p_no.item()
 
 
+def _snapshot_lora_weights(model) -> dict[str, torch.Tensor]:
+    """Clone all trainable LoRA parameters into a snapshot dict."""
+    return {
+        name: p.data.clone()
+        for name, p in model.named_parameters()
+        if p.requires_grad and "lora" in name.lower()
+    }
+
+
+def _weights_changed(
+    snap_before: dict[str, torch.Tensor],
+    snap_after: dict[str, torch.Tensor],
+) -> tuple[bool, int, int]:
+    """Return (any_changed, n_compared, n_changed)."""
+    n_changed = 0
+    n_compared = 0
+    for name, val_before in snap_before.items():
+        if name in snap_after:
+            n_compared += 1
+            if not torch.equal(val_before, snap_after[name]):
+                n_changed += 1
+    return n_changed > 0, n_compared, n_changed
+
+
 @pytest.fixture(scope="module")
 def profile():
     from route_data.models.trainable.registry import load_profile_from_yaml
@@ -84,15 +116,16 @@ def adapter(profile):
 
 
 class TestQwen35_4BAdapterRoundtrip:
-    """Adapter save/reload persistence test."""
+    """Adapter save/reload persistence test with real training."""
 
     def test_adapter_roundtrip(self, adapter):
-        """Save adapter, reload on fresh model, verify scoring matches."""
+        """Train LoRA, save, reload on fresh model, verify scoring matches."""
         from peft import LoraConfig, get_peft_model
+        from PIL import Image
 
         device = os.environ.get("QWEN35_4B_DEVICE", "cuda:0")
 
-        # --- Phase 1: Load model, apply LoRA, score ---
+        # --- Phase 1: Load model, apply LoRA ---
         model1, processor = adapter.load_model_processor(
             model_id=adapter.profile.model_id,
             revision=adapter.profile.revision,
@@ -113,15 +146,57 @@ class TestQwen35_4BAdapterRoundtrip:
         )
         lora_model1 = get_peft_model(model1, lora_config)
 
-        # Record pre-save scores
-        from PIL import Image
-        test_image = Image.new("RGB", (224, 224), color=(128, 128, 128))
-        test_prompt = "Is this an image of a cat?"
+        # Snapshot initial LoRA weights (before training)
+        snap_init = _snapshot_lora_weights(lora_model1)
 
-        yes_pre, no_pre = _score_candidates(
-            adapter, lora_model1, processor, test_image, test_prompt, device,
+        # --- Phase 2: Real training step ---
+        # Build a supervised training example.
+        test_image = Image.new("RGB", (224, 224), color=(128, 128, 128))
+        train_prompt = "Is this an image of a cat?"
+        train_answer = "No"
+
+        example = adapter.build_supervised_example(
+            processor,
+            image=test_image,
+            prompt=train_prompt,
+            answer_text=train_answer,
         )
-        margin_pre = yes_pre - no_pre
+        batch = adapter.collate([example])
+        # Move batch to device.
+        batch_device = {}
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                batch_device[k] = v.to(device)
+            else:
+                batch_device[k] = v
+
+        # Forward pass to compute loss.
+        outputs = lora_model1(**batch_device)
+        loss = outputs.loss
+        assert loss is not None, "Model forward did not return a loss"
+        assert torch.isfinite(loss), f"Non-finite training loss: {loss.item()}"
+        train_loss = loss.item()
+
+        # Collect only LoRA parameters for the optimizer.
+        lora_params = [
+            p for n, p in lora_model1.named_parameters()
+            if p.requires_grad and "lora" in n.lower()
+        ]
+        assert len(lora_params) > 0, "No trainable LoRA parameters found"
+
+        optimizer = torch.optim.AdamW(lora_params, lr=1e-4)
+
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        # --- Phase 3: Verify LoRA tensors changed ---
+        snap_trained = _snapshot_lora_weights(lora_model1)
+        changed, n_compared, n_changed = _weights_changed(snap_init, snap_trained)
+        assert changed, (
+            f"LoRA weights did not change after training step "
+            f"({n_changed}/{n_compared} tensors changed)"
+        )
 
         # Record LoRA module names
         lora_modules_pre = sorted([
@@ -129,12 +204,21 @@ class TestQwen35_4BAdapterRoundtrip:
             if p.requires_grad
         ])
 
-        # Save adapter
+        # --- Phase 4: Score trained model (pre-save) ---
+        score_image = Image.new("RGB", (224, 224), color=(64, 64, 64))
+        score_prompt = "Is this an image of a dog?"
+
+        yes_pre, no_pre = _score_candidates(
+            adapter, lora_model1, processor, score_image, score_prompt, device,
+        )
+        margin_pre = yes_pre - no_pre
+
+        # --- Phase 5: Save adapter ---
         with tempfile.TemporaryDirectory() as tmpdir:
             adapter_path = Path(tmpdir) / "adapter"
             lora_model1.save_pretrained(str(adapter_path))
 
-            # --- Phase 2: Release model, load fresh, reload adapter ---
+            # --- Phase 6: Release model, load fresh, reload adapter ---
             del lora_model1, model1
             torch.cuda.empty_cache()
 
@@ -162,9 +246,9 @@ class TestQwen35_4BAdapterRoundtrip:
             assert peft_config.r == adapter.profile.lora_rank == 8
             assert peft_config.lora_alpha == adapter.profile.lora_alpha == 16
 
-            # Record post-reload scores
+            # --- Phase 7: Score post-reload ---
             yes_post, no_post = _score_candidates(
-                adapter, lora_model2, processor2, test_image, test_prompt, device,
+                adapter, lora_model2, processor2, score_image, score_prompt, device,
             )
             margin_post = yes_post - no_post
 
@@ -180,7 +264,7 @@ class TestQwen35_4BAdapterRoundtrip:
             "LoRA module sets differ after reload"
         )
 
-        # Scores match within tolerance
+        # Trained pre-save and post-reload margins match
         atol = 1e-3
         assert abs(yes_pre - yes_post) < atol, (
             f"Yes score mismatch: {yes_pre:.6f} vs {yes_post:.6f}"
@@ -207,6 +291,10 @@ class TestQwen35_4BAdapterRoundtrip:
             "lora_rank": adapter.profile.lora_rank,
             "lora_alpha": adapter.profile.lora_alpha,
             "lora_dropout": adapter.profile.lora_dropout,
+            "training_loss": train_loss,
+            "lora_tensors_compared": n_compared,
+            "lora_tensors_changed": n_changed,
+            "lra_weights_changed_after_training": changed,
             "lora_modules_match": lora_modules_pre == lora_modules_post,
             "yes_score_pre": yes_pre,
             "yes_score_post": yes_post,
