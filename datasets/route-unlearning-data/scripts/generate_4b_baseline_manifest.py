@@ -146,29 +146,6 @@ def main() -> None:
                          "generated_token_counts")
         }
 
-    summary = {
-        "total_probes": len(results),
-        "total_correct": total_correct,
-        "mixed_task_overall_accuracy": overall_accuracy,
-        "visual_family_accuracy": visual_accuracy,
-        "visual_family_correct": visual_correct,
-        "visual_family_count": visual_count,
-        "name_only_status": "valid_rerun_with_64_token_budget",
-        "per_family": per_family_output,
-        "model_fingerprint": "01306df4d620e651",
-        "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
-        "scoring_version": "2",
-    }
-
-    # Compute SHA-256 hashes
-    results_sha256 = _file_sha256(results_path)
-    route_probe_sha256 = _file_sha256(probe_path)
-    processed_dataset_sha256 = _file_sha256(
-        Path("outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl")
-    )
-
-    git_commit = _git_commit()
-
     # Compute generation protocol hash (same as BaselineRunner._generation_protocol_hash())
     import json as _json
     _gen_payload = {
@@ -179,6 +156,49 @@ def main() -> None:
     protocol_sha256 = hashlib.sha256(
         _json.dumps(_gen_payload, sort_keys=True).encode()
     ).hexdigest()
+
+    # Compute direct-visual accuracy
+    dv_stats = per_family.get("direct_visual", {})
+    direct_visual_accuracy = (
+        dv_stats["correct"] / dv_stats["count"]
+        if dv_stats.get("count", 0) > 0
+        else None
+    )
+
+    # Compute name_only top-level metrics
+    no_stats = per_family.get("name_only", {})
+    name_only_cap_hits = no_stats.get("hit_max_new_tokens_count", 0)
+    name_only_count = no_stats.get("count", 0)
+
+    summary = {
+        "total_probes": len(results),
+        "total_correct": total_correct,
+        "mixed_task_overall_accuracy": overall_accuracy,
+        "visual_accuracy": visual_accuracy,
+        "visual_correct": visual_correct,
+        "visual_total": visual_count,
+        "direct_visual_accuracy": direct_visual_accuracy,
+        "name_only_mean_token_overlap": no_stats.get("mean_token_overlap"),
+        "name_only_normalized_exact_match": no_stats.get("mean_normalized_exact_match"),
+        "name_only_fuzzy_match": no_stats.get("mean_fuzzy_match"),
+        "name_only_cap_hit_rate": (
+            name_only_cap_hits / name_only_count if name_only_count > 0 else None
+        ),
+        "per_family": per_family_output,
+        "model_fingerprint": "01306df4d620e651",
+        "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+        "scoring_version": "2",
+        "generation_protocol_sha256": protocol_sha256,
+    }
+
+    # Compute SHA-256 hashes
+    results_sha256 = _file_sha256(results_path)
+    route_probe_sha256 = _file_sha256(probe_path)
+    processed_dataset_sha256 = _file_sha256(
+        Path("outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl")
+    )
+
+    git_commit = _git_commit()
 
     # Build manifest with canonical schema expected by resolve_preunlearning_baseline()
     manifest = {

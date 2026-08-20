@@ -8,15 +8,15 @@
   },
   "provenance": {
     "results_sha256": "973088cc9a864ff469c3935ee5ba545cc8e7df9a1b323b700774ae891565ac28",
-    "manifest_sha256": "471cf8f6ef00466c735fb4bab32e6a5a64f02b1c8bff4afd1929ae2464d378d2",
+    "manifest_sha256": "202b47997c1d64a2de6b1027350c8d9bd8551d2c93f870e4d261d006c99083fd",
     "route_probe_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
     "processed_dataset_sha256": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1",
-    "code_commit": "f9984825459984b00f0e9009b2ea1a985575b652"
+    "code_commit": "25f79fd81df4ddd93d9da5271d102f83b569b81c"
   },
   "protocol_sha256": "c66932835e40a674b8716c93d145b74611e21f623786ab2d4095f67f10800127",
   "schema_version": "1.2",
   "metric_schema_version": "baseline-metrics-v1",
-  "generated_at": "2026-08-20T01:41:07.791032+00:00",
+  "generated_at": "2026-08-20T01:46:47.186745+00:00",
   "dataset_provenance": {
     "probe_file": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
     "probe_file_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
@@ -91,9 +91,9 @@
     "results_file": "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_results.jsonl",
     "results_sha256": "973088cc9a864ff469c3935ee5ba545cc8e7df9a1b323b700774ae891565ac28",
     "summary_file": "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_summary.json",
-    "summary_sha256": "3af4a21c6d483c5fd555c5aa53ad29f694119b4b1defd70478df9301a77646da",
+    "summary_sha256": "1964b013dd8dbd764d7d523bd07672d9d6ab78c2f70051b0925596e607251621",
     "validation_report_file": "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/validation_report.json",
-    "validation_report_sha256": "d4ad099c3e87d3c9e47a4b1381c592c16e93a917bf8e4886b923ba82203dbd99",
+    "validation_report_sha256": "6b4c42456946baf95c571f33f90a4f7d2fdb4a2a6e7d62d0e2d1e499605925af",
     "smoke_manifest_file": "",
     "smoke_manifest_sha256": "",
     "total_results": 500,
@@ -101,10 +101,14 @@
       "total_probes": 500,
       "total_correct": 395,
       "mixed_task_overall_accuracy": 0.79,
-      "visual_family_accuracy": 0.9825,
-      "visual_family_correct": 393,
-      "visual_family_count": 400,
-      "name_only_status": "valid_rerun_with_64_token_budget",
+      "visual_accuracy": 0.9825,
+      "visual_correct": 393,
+      "visual_total": 400,
+      "direct_visual_accuracy": 0.99,
+      "name_only_mean_token_overlap": 0.16301781261038886,
+      "name_only_normalized_exact_match": 0.0,
+      "name_only_fuzzy_match": 0.36841083099906635,
+      "name_only_cap_hit_rate": 0.06,
       "per_family": {
         "direct_visual": {
           "count": 100,
@@ -160,7 +164,8 @@
       },
       "model_fingerprint": "01306df4d620e651",
       "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
-      "scoring_version": "2"
+      "scoring_version": "2",
+      "generation_protocol_sha256": "c66932835e40a674b8716c93d145b74611e21f623786ab2d4095f67f10800127"
     }
   },
   "route_identity_role_counts": {
@@ -169,8 +174,8 @@
     "exclude": 40
   },
   "code_provenance": {
-    "experiment_code_commit": "f9984825459984b00f0e9009b2ea1a985575b652",
-    "artifact_commit": "f9984825459984b00f0e9009b2ea1a985575b652",
+    "experiment_code_commit": "25f79fd81df4ddd93d9da5271d102f83b569b81c",
+    "artifact_commit": "25f79fd81df4ddd93d9da5271d102f83b569b81c",
     "working_tree_dirty_at_execution": false
   }
 }
