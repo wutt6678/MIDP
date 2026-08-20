@@ -257,6 +257,11 @@ def main() -> None:
         training=False,  # Freeze base model
     )
     
+    # Enable gradient checkpointing to reduce memory
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
+        logger.info("Enabled gradient checkpointing to reduce memory")
+    
     # Freeze all base model parameters
     for param in model.parameters():
         param.requires_grad = False
@@ -271,6 +276,10 @@ def main() -> None:
         task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, lora_config)
+    
+    # Enable gradient checkpointing on PEFT model
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
     
     logger.info(f"Applied LoRA: rank={unlearn_config.lora_rank}, alpha={unlearn_config.lora_alpha}")
     logger.info(f"Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
@@ -288,7 +297,8 @@ def main() -> None:
     logger.info("Step 7: Saving checkpoint")
     adapter_path = OUTPUT_DIR / "adapter"
     adapter_path.mkdir(parents=True, exist_ok=True)
-    trainer.save_adapter(str(adapter_path))
+    model.save_pretrained(str(adapter_path))
+    logger.info(f"Saved adapter to {adapter_path}")
     
     # Step 8: Post-evaluation (placeholder for now)
     logger.info("Step 8: Post-evaluation")
