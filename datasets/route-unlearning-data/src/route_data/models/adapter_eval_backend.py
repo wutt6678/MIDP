@@ -84,12 +84,25 @@ class AdapterEvalBackend(VisionLanguageModel):
 
         Delegates to ``adapter.build_prefix()`` which handles model-specific
         chat template rendering and multimodal tensor construction.
+        The result is unsqueezed to batch dim=1 for scoring compatibility.
         """
         prefix = self._adapter.build_prefix(self._processor, image=image, prompt=prompt)
 
-        # Move tensors to model device.
+        # Move tensors to model device and unsqueeze text tensors to batch dim.
+        # build_prefix() squeezes batch dim for training; scoring needs 2D.
         device = self._model.get_input_embeddings().weight.device
-        return {k: v.to(device) if torch.is_tensor(v) else v for k, v in prefix.items()}
+        image_indexed = self._adapter.image_indexed_keys()
+        result: dict[str, Any] = {}
+        for k, v in prefix.items():
+            if k.startswith("_"):
+                result[k] = v
+                continue
+            if torch.is_tensor(v):
+                v = v.to(device)
+                if k not in image_indexed and v.dim() == 1:
+                    v = v.unsqueeze(0)
+            result[k] = v
+        return result
 
     # ------------------------------------------------------------------ #
     # Generation (delegates to adapter for prefix, shared path for generate)
