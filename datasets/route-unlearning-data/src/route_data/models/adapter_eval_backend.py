@@ -125,7 +125,10 @@ class AdapterEvalBackend(VisionLanguageModel):
         responses: list[VisionResponse] = []
         for image, prompt in zip(images, prompts):
             prefix = self._build_prefix(image, prompt)
-            input_len = prefix["input_ids"].shape[1]
+            # Filter out metadata keys (starting with '_') before passing
+            # to model.generate() — the model doesn't accept them.
+            model_inputs = {k: v for k, v in prefix.items() if not k.startswith("_")}
+            input_len = model_inputs["input_ids"].shape[1]
 
             effective_max_new_tokens = (
                 max_new_tokens
@@ -136,7 +139,7 @@ class AdapterEvalBackend(VisionLanguageModel):
             started = time.perf_counter()
             with torch.inference_mode():
                 output = self._model.generate(
-                    **prefix,
+                    **model_inputs,
                     do_sample=getattr(self._config.generation, "do_sample", False),
                     temperature=(
                         getattr(self._config.generation, "temperature", 0.0)
