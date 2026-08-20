@@ -1,48 +1,93 @@
-2026-08-20 10:59:05 [INFO] ============================================================
-2026-08-20 10:59:05 [INFO] Qwen3.5-4B Unlearning Canary
-2026-08-20 10:59:05 [INFO] ============================================================
-2026-08-20 10:59:05 [INFO] Output directory: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/canary_v1
-2026-08-20 10:59:05 [INFO] Step 1: Loading baseline
-2026-08-20 10:59:05 [INFO] Loaded 500 baseline results
-2026-08-20 10:59:05 [INFO] Step 2: Selecting identities
-2026-08-20 10:59:05 [INFO] Selected identities:
-2026-08-20 10:59:05 [INFO]   Target (forget): ['76f35468e0b72c60', '14dd102b5288c236']
-2026-08-20 10:59:05 [INFO]   Retain: ['67218532aba5fc77', 'cbb9f0b7b65140bd']
-2026-08-20 10:59:05 [INFO]   Control: ['bd9d89b8a1f51955', '89d6ff2125fd7ac5']
-2026-08-20 10:59:05 [INFO] Untargeted identities: 94
-2026-08-20 10:59:05 [INFO] Step 3: Loading model and attaching LoRA
-Fetching 14 files:   0%|          | 0/14 [00:00<?, ?it/s]Fetching 14 files: 100%|██████████| 14/14 [00:00<00:00, 1459.36it/s]
+2026-08-20 11:06:31 [INFO] ============================================================
+2026-08-20 11:06:31 [INFO] Qwen3.5-4B Unlearning Canary
+2026-08-20 11:06:31 [INFO] ============================================================
+2026-08-20 11:06:31 [INFO] Output directory: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/canary_v1
+2026-08-20 11:06:31 [INFO] Step 1: Loading baseline
+2026-08-20 11:06:31 [INFO] Loaded 500 baseline results
+2026-08-20 11:06:31 [INFO] Step 2: Selecting identities
+2026-08-20 11:06:31 [INFO] Selected identities:
+2026-08-20 11:06:31 [INFO]   Target (forget): ['76f35468e0b72c60', '14dd102b5288c236']
+2026-08-20 11:06:31 [INFO]   Retain: ['67218532aba5fc77', 'cbb9f0b7b65140bd']
+2026-08-20 11:06:31 [INFO]   Control: ['bd9d89b8a1f51955', '89d6ff2125fd7ac5']
+2026-08-20 11:06:31 [INFO] Untargeted identities: 94
+2026-08-20 11:06:31 [INFO] Step 3: Loading model and attaching LoRA
+Fetching 14 files:   0%|          | 0/14 [00:00<?, ?it/s]Fetching 14 files: 100%|██████████| 14/14 [00:00<00:00, 1381.78it/s]
 [transformers] `torch_dtype` is deprecated! Use `dtype` instead!
 [transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
-Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights:   2%|▏         | 11/723 [00:00<00:06, 109.40it/s]Loading weights:   4%|▍         | 31/723 [00:00<00:04, 162.50it/s]Loading weights:   7%|▋         | 48/723 [00:00<00:04, 163.76it/s]Loading weights:  10%|█         | 75/723 [00:00<00:03, 202.82it/s]Loading weights:  13%|█▎        | 96/723 [00:00<00:03, 195.65it/s]Loading weights:  16%|█▋        | 118/723 [00:00<00:03, 198.36it/s]Loading weights:  20%|█▉        | 142/723 [00:00<00:02, 208.55it/s]Loading weights:  23%|██▎       | 163/723 [00:00<00:02, 206.29it/s]Loading weights:  26%|██▌       | 186/723 [00:00<00:02, 213.03it/s]Loading weights:  29%|██▉       | 208/723 [00:01<00:02, 204.96it/s]Loading weights:  32%|███▏      | 233/723 [00:01<00:02, 213.91it/s]Loading weights:  36%|███▌      | 260/723 [00:01<00:02, 229.53it/s]Loading weights:  40%|████      | 290/723 [00:01<00:01, 249.79it/s]Loading weights:  44%|████▎     | 316/723 [00:01<00:01, 241.43it/s]Loading weights:  48%|████▊     | 345/723 [00:01<00:01, 253.92it/s]Loading weights:  51%|█████▏    | 371/723 [00:01<00:01, 247.56it/s]Loading weights:  55%|█████▌    | 399/723 [00:01<00:01, 256.17it/s]Loading weights:  59%|█████▉    | 425/723 [00:01<00:01, 252.29it/s]Loading weights:  79%|███████▊  | 568/723 [00:01<00:00, 591.60it/s]Loading weights:  98%|█████████▊| 708/723 [00:02<00:00, 826.87it/s]Loading weights: 100%|██████████| 723/723 [00:02<00:00, 340.64it/s]
-2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/generation_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:12 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:12 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:12 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/chat_template.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:12 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:13 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:13 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:13 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:13 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a?recursive=true&expand=false "HTTP/1.1 200 OK"
-2026-08-20 10:59:14 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B "HTTP/1.1 200 OK"
-2026-08-20 10:59:15 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:15 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 10:59:15 [INFO] Loaded qwen35_4b: Qwen/Qwen3.5-4B rev=851bf6e806ef
-2026-08-20 10:59:15 [INFO] Step 4: Building training dataset
-2026-08-20 10:59:15 [INFO] UnlearningDataset: 20 samples
-2026-08-20 10:59:15 [INFO]   Target samples: 10
-2026-08-20 10:59:15 [INFO]   Retain samples: 10
-2026-08-20 10:59:15 [INFO] Step 5: Training
-2026-08-20 10:59:15 [INFO] Trainable LoRA parameters: 64
-2026-08-20 10:59:15 [INFO] Starting training: 1 steps, grad_accum=4
-2026-08-20 10:59:15 [INFO] Step 0/1, loss=0.5000, grads_nonzero=0
-2026-08-20 10:59:15 [INFO] Training complete: 0/64 LoRA tensors changed
-Traceback (most recent call last):
-  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/scripts/run_4b_unlearning_canary.py", line 566, in <module>
-    main()
-  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/scripts/run_4b_unlearning_canary.py", line 456, in main
-    assert training_stats["gradients_nonzero_total"] > 0, "Gradients must be nonzero"
-AssertionError: Gradients must be nonzero
+Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights:   2%|▏         | 14/723 [00:00<00:05, 136.20it/s]Loading weights:   5%|▌         | 39/723 [00:00<00:03, 199.39it/s]Loading weights:   8%|▊         | 59/723 [00:00<00:03, 189.95it/s]Loading weights:  11%|█▏        | 82/723 [00:00<00:03, 200.80it/s]Loading weights:  14%|█▍        | 104/723 [00:00<00:03, 197.26it/s]Loading weights:  18%|█▊        | 132/723 [00:00<00:02, 216.76it/s]Loading weights:  21%|██▏       | 154/723 [00:00<00:02, 201.90it/s]Loading weights:  25%|██▍       | 178/723 [00:00<00:02, 199.39it/s]Loading weights:  28%|██▊       | 205/723 [00:01<00:02, 210.16it/s]Loading weights:  33%|███▎      | 235/723 [00:01<00:02, 232.47it/s]Loading weights:  36%|███▌      | 259/723 [00:01<00:02, 207.69it/s]Loading weights:  39%|███▉      | 285/723 [00:01<00:01, 221.31it/s]Loading weights:  43%|████▎     | 308/723 [00:01<00:01, 216.84it/s]Loading weights:  46%|████▌     | 331/723 [00:01<00:01, 217.07it/s]Loading weights:  49%|████▉     | 355/723 [00:01<00:01, 222.59it/s]Loading weights:  52%|█████▏    | 378/723 [00:01<00:01, 222.28it/s]Loading weights:  55%|█████▌    | 401/723 [00:01<00:01, 208.34it/s]Loading weights:  59%|█████▊    | 423/723 [00:02<00:01, 209.63it/s]Loading weights:  70%|██████▉   | 506/723 [00:02<00:00, 380.60it/s]Loading weights:  84%|████████▍ | 610/723 [00:02<00:00, 566.65it/s]Loading weights: 100%|██████████| 723/723 [00:02<00:00, 727.64it/s]Loading weights: 100%|██████████| 723/723 [00:02<00:00, 311.74it/s]
+2026-08-20 11:06:38 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:38 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:38 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:39 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:39 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:39 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:39 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:40 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:40 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:40 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:40 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:41 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-20 11:06:41 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B "HTTP/1.1 200 OK"
+2026-08-20 11:06:42 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:42 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:06:42 [INFO] Loaded qwen35_4b: Qwen/Qwen3.5-4B rev=851bf6e806ef
+2026-08-20 11:06:42 [INFO] Step 4: Building training dataset
+2026-08-20 11:06:42 [INFO] UnlearningDataset: 20 samples
+2026-08-20 11:06:42 [INFO]   Target samples: 10
+2026-08-20 11:06:42 [INFO]   Retain samples: 10
+2026-08-20 11:06:42 [INFO] Step 5: Training
+2026-08-20 11:06:42 [INFO] Trainable LoRA parameters: 64
+2026-08-20 11:06:42 [INFO] Starting training: 50 steps, grad_accum=4
+[transformers] `use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`.
+2026-08-20 11:06:44 [INFO] Step 0/50, loss=3.1326, grads_nonzero=32
+2026-08-20 11:06:55 [INFO] Step 10/50, loss=0.0105, grads_nonzero=64
+2026-08-20 11:07:02 [INFO] Step 20/50, loss=0.0010, grads_nonzero=64
+2026-08-20 11:07:09 [INFO] Step 30/50, loss=0.0003, grads_nonzero=64
+2026-08-20 11:07:17 [INFO] Step 40/50, loss=0.0002, grads_nonzero=64
+2026-08-20 11:07:24 [INFO] Step 49/50, loss=0.0001, grads_nonzero=64
+2026-08-20 11:07:24 [INFO] Training complete: 64/64 LoRA tensors changed
+2026-08-20 11:07:24 [INFO] Step 6: Saving checkpoint
+2026-08-20 11:07:24 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-20 11:07:24 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-4B/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json "HTTP/1.1 200 OK"
+2026-08-20 11:07:24 [INFO] Saved adapter to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/canary_v1/adapter
+2026-08-20 11:07:24 [INFO] Step 7: Reloading on fresh base model
+Fetching 14 files:   0%|          | 0/14 [00:00<?, ?it/s]Fetching 14 files: 100%|██████████| 14/14 [00:00<00:00, 1441.77it/s]
+Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights:   3%|▎         | 25/723 [00:00<00:02, 242.04it/s]Loading weights:   7%|▋         | 50/723 [00:00<00:03, 195.99it/s]Loading weights:  10%|█         | 74/723 [00:00<00:03, 209.51it/s]Loading weights:  13%|█▎        | 96/723 [00:00<00:03, 208.64it/s]Loading weights:  16%|█▋        | 119/723 [00:00<00:02, 207.37it/s]Loading weights:  20%|█▉        | 143/723 [00:00<00:02, 203.59it/s]Loading weights:  23%|██▎       | 167/723 [00:00<00:02, 206.59it/s]Loading weights:  27%|██▋       | 198/723 [00:00<00:02, 234.41it/s]Loading weights:  31%|███       | 222/723 [00:01<00:02, 222.37it/s]Loading weights:  34%|███▍      | 245/723 [00:01<00:02, 212.24it/s]Loading weights:  37%|███▋      | 267/723 [00:01<00:02, 209.75it/s]Loading weights:  40%|████      | 291/723 [00:01<00:02, 215.35it/s]Loading weights:  43%|████▎     | 313/723 [00:01<00:02, 202.38it/s]Loading weights:  47%|████▋     | 341/723 [00:01<00:01, 222.55it/s]Loading weights:  50%|█████     | 364/723 [00:01<00:01, 200.65it/s]Loading weights:  54%|█████▍    | 393/723 [00:01<00:01, 219.93it/s]Loading weights:  58%|█████▊    | 416/723 [00:01<00:01, 212.10it/s]Loading weights:  66%|██████▋   | 480/723 [00:02<00:00, 326.80it/s]Loading weights:  79%|███████▉  | 572/723 [00:02<00:00, 487.35it/s]Loading weights:  93%|█████████▎| 671/723 [00:02<00:00, 626.58it/s]Loading weights: 100%|██████████| 723/723 [00:02<00:00, 310.42it/s]
+2026-08-20 11:07:27 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:27 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:27 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:28 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:28 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:28 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:28 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:29 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:29 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:29 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:29 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:30 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-20 11:07:31 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B "HTTP/1.1 200 OK"
+2026-08-20 11:07:31 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:31 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 11:07:31 [INFO] Loaded qwen35_4b: Qwen/Qwen3.5-4B rev=851bf6e806ef
+2026-08-20 11:07:31 [INFO] Step 8: Running post-evaluation
+2026-08-20 11:07:31 [INFO] Running post-evaluation on 500 probes
+2026-08-20 11:07:31 [INFO] Step 9: Writing results
+2026-08-20 11:07:31 [INFO] ============================================================
+2026-08-20 11:07:31 [INFO] Canary complete!
+2026-08-20 11:07:31 [INFO] Report: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/canary_v1/canary_report.json
+2026-08-20 11:07:31 [INFO] ============================================================
+2026-08-20 11:07:31 [INFO] 
+Canary Summary:
+2026-08-20 11:07:31 [INFO]   Target identities: ['76f35468e0b72c60', '14dd102b5288c236']
+2026-08-20 11:07:31 [INFO]   Retain identities: ['67218532aba5fc77', 'cbb9f0b7b65140bd']
+2026-08-20 11:07:31 [INFO]   Control identities: ['bd9d89b8a1f51955', '89d6ff2125fd7ac5']
+2026-08-20 11:07:31 [INFO]   Training steps: 50
+2026-08-20 11:07:31 [INFO]   Final loss: 0.0001
+2026-08-20 11:07:31 [INFO]   LoRA tensors changed: 64/64
+2026-08-20 11:07:31 [INFO]   Post-eval probes: 500
+2026-08-20 11:07:31 [INFO]   Inference errors: 0
+2026-08-20 11:07:31 [INFO]   direct_visual: delta=0.0000 (baseline=7.2244, post=7.2244)
+2026-08-20 11:07:31 [INFO]   image_plus_name: delta=0.0000 (baseline=6.0613, post=6.0613)
+2026-08-20 11:07:31 [INFO]   wrong_name: delta=0.0000 (baseline=6.1506, post=6.1506)
+2026-08-20 11:07:31 [INFO]   visual_text_conflict: delta=0.0000 (baseline=5.9675, post=5.9675)
+2026-08-20 11:07:31 [INFO]   name_only: delta=0.0000 (baseline=0.1630, post=0.1630)
