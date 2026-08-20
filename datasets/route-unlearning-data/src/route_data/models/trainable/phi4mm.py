@@ -108,12 +108,16 @@ class _PhiInnerModelWrapper(torch.nn.Module):
         """Set active adapters on all LoraLayers in the inner model.
 
         Uses ``_active_adapter`` directly (not ``set_adapter()``) to
-        avoid PEFT's unmerge/merge side effects.
+        avoid PEFT's unmerge/merge side effects.  Also ensures
+        ``_disable_adapters = False`` so the adapters are actually
+        applied (the canary temporarily sets this to True during
+        native text-only comparisons).
         """
         from peft.tuners.lora.layer import LoraLayer
         for mod in self.inner_model.modules():
             if isinstance(mod, LoraLayer):
-                mod._active_adapter = adapter_names
+                mod._active_adapter = list(adapter_names)
+                mod._disable_adapters = False
 
     def forward(self, **kwargs):
         # --- Consume input_mode (P0-1) ---
@@ -161,6 +165,33 @@ class _PhiInnerModelWrapper(torch.nn.Module):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+
+def _to_sdpa_bool_mask(mask: torch.Tensor) -> torch.Tensor:
+    """Convert an attention mask to a boolean SDPA mask.
+
+    Handles three mask formats:
+
+    1. Already boolean — returned as-is.
+    2. Integer / long (tokenizer output): 0 = masked, 1 = visible.
+       Detected via ``not is_floating_point``.
+    3. Floating-point binary: values in [0, 1].  Converted via ``> 0``.
+    4. Additive mask: 0 = visible, large negative = masked.
+       Converted via ``> -1e4``.
+    """
+    if mask.dtype == torch.bool:
+        return mask
+
+    # Integer mask from tokenizer/processor: 0 = masked, nonzero = visible
+    if not torch.is_floating_point(mask):
+        return mask != 0
+
+    # Floating-point binary mask (e.g. after expansion)
+    if mask.min() >= 0 and mask.max() <= 1:
+        return mask > 0
+
+    # Additive attention mask: 0 = visible, large negative = masked
+    return mask > -1e4
 
 
 def _apply_sdpa_patches() -> None:
@@ -216,9 +247,9 @@ def _apply_sdpa_patches() -> None:
             elif attention_mask.dim() == 4:
                 sdpa_attn_mask = attention_mask
 
-            # Convert additive masks (0/-inf) to boolean for SDPA
+            # Convert to boolean mask for SDPA
             if sdpa_attn_mask is not None and sdpa_attn_mask.dtype != torch.bool:
-                sdpa_attn_mask = sdpa_attn_mask > -1e4
+                sdpa_attn_mask = _to_sdpa_bool_mask(sdpa_attn_mask)
 
             # If causal + mask, combine: where mask is True, still apply causal
             if is_causal and sdpa_attn_mask is not None:
@@ -275,9 +306,9 @@ def _patch_vision_attention() -> None:
                                 sdpa_attn_mask = attention_mask[:, None, :, :]
                             elif attention_mask.dim() == 4:
                                 sdpa_attn_mask = attention_mask
-                            # Convert additive masks (0/-inf) to boolean
+                            # Convert to boolean mask for SDPA
                             if sdpa_attn_mask.dtype != torch.bool:
-                                sdpa_attn_mask = sdpa_attn_mask > -1e4
+                                sdpa_attn_mask = _to_sdpa_bool_mask(sdpa_attn_mask)
                             causal = False  # explicit mask supersedes causal
 
                         out = F.scaled_dot_product_attention(

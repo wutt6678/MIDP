@@ -661,12 +661,16 @@ def main() -> None:
                 **_gen_vis_kw, max_new_tokens=16, use_cache=False,
                 do_sample=False, pad_token_id=processor.tokenizer.pad_token_id,
             )
-        _cached_tokens = _out_cached[0].cpu().tolist()
-        _nocached_tokens = _out_nocached[0].cpu().tolist()
-        # First 4 generated tokens should agree
-        _agree = sum(1 for a, b in zip(_cached_tokens[:8], _nocached_tokens[:8]) if a == b)
-        logger.info("  C4: visual cached vs noncached: %d/8 tokens agree", _agree)
-        assert _agree >= 4, f"C4 FAIL: visual cached/noncached agreement {_agree}/8 < 4"
+        # P0-2: Compare GENERATED tokens only, not prompt prefix.
+        # generate() returns [input_prefix] + [generated_continuation].
+        _vis_input_len = _gen_vis_kw["input_ids"].shape[1]
+        _n_compare = min(8, _out_cached.shape[1] - _vis_input_len)
+        _cached_gen = _out_cached[0, _vis_input_len:_vis_input_len + _n_compare].cpu()
+        _nocached_gen = _out_nocached[0, _vis_input_len:_vis_input_len + _n_compare].cpu()
+        _vis_match = torch.equal(_cached_gen, _nocached_gen)
+        logger.info("  C4: visual cached vs noncached: %d/%d generated tokens match",
+                    _cached_gen.eq(_nocached_gen).sum().item(), _n_compare)
+        assert _vis_match, f"C4 FAIL: visual generated tokens differ"
         logger.info("  C4 PASS: visual generation")
 
         # Text-only generation
@@ -692,27 +696,52 @@ def main() -> None:
                 **_gen_text_kw, max_new_tokens=16, use_cache=False,
                 do_sample=False, pad_token_id=processor.tokenizer.pad_token_id,
             )
-        _text_c = _out_text_c[0].cpu().tolist()
-        _text_nc = _out_text_nc[0].cpu().tolist()
-        _text_agree = sum(1 for a, b in zip(_text_c[:8], _text_nc[:8]) if a == b)
-        logger.info("  C4: text-only cached vs noncached: %d/8 tokens agree", _text_agree)
-        assert _text_agree >= 4, f"C4 FAIL: text-only agreement {_text_agree}/8 < 4"
+        # P0-2: Compare GENERATED tokens only
+        _text_input_len = _gen_text_kw["input_ids"].shape[1]
+        _n_compare_t = min(8, _out_text_c.shape[1] - _text_input_len)
+        _text_c_gen = _out_text_c[0, _text_input_len:_text_input_len + _n_compare_t].cpu()
+        _text_nc_gen = _out_text_nc[0, _text_input_len:_text_input_len + _n_compare_t].cpu()
+        _text_match = torch.equal(_text_c_gen, _text_nc_gen)
+        logger.info("  C4: text-only cached vs noncached: %d/%d generated tokens match",
+                    _text_c_gen.eq(_text_nc_gen).sum().item(), _n_compare_t)
+        assert _text_match, f"C4 FAIL: text-only generated tokens differ"
         logger.info("  C4 PASS: text-only generation")
 
         # --------------------------------------------------------------- #
         # C5: Scorer equivalence (shared vs independent)
+        # P0-3: Use correct logits row (prefix_len - 1) and logP.
         # --------------------------------------------------------------- #
-        logger.info("  C5: Scorer equivalence (shared vs independent)")
+        logger.info("  C5: Scorer equivalence (shared vs independent, logP)")
         _c5_pairs = [
             (_test_img, "Is this a cat?", ["Yes", "No"]),
             (_test_img, "What color is this?", ["Yes", "No"]),
             (_test_img, "Is there a dog?", ["Yes", "No"]),
         ]
+
+        def _compute_logp(model_ref, fwd_kwargs, prefix_len, cand_ids):
+            """Compute sum of logP(candidate | prefix) using correct logits rows."""
+            with torch.no_grad():
+                _out = model_ref(**fwd_kwargs)
+            _logits = _out.logits[0].float()  # [seq_len, vocab]
+            m = len(cand_ids)
+            # Prediction rows: prefix_len-1 predicts first cand token,
+            # prefix_len-1+i predicts (i+1)th cand token.
+            _pred_rows = _logits[prefix_len - 1 : prefix_len - 1 + m, :]
+            _log_probs = torch.nn.functional.log_softmax(_pred_rows, dim=-1)
+            # Target tokens are the candidate token IDs
+            _targets = torch.tensor(cand_ids, dtype=torch.long, device=_pred_rows.device)
+            _score = _log_probs.gather(-1, _targets.unsqueeze(-1)).squeeze(-1).sum()
+            return _score.item()
+
         for _idx, (_img, _prompt, _cands) in enumerate(_c5_pairs):
             _prefix = adapter.build_prefix(processor, image=_img, prompt=_prompt)
+            _prefix_len = _prefix["input_ids"].shape[0]  # unsqueezed seq len
+
             for _cand_text in _cands:
                 _cand_ids = adapter.candidate_token_ids(processor, _cand_text)
-                # Shared scorer: append_candidate + wrapper forward
+                m = len(_cand_ids)
+
+                # --- Shared scorer path (append_candidate) ---
                 _shared_prefix = adapter.append_candidate(_prefix, _cand_ids)
                 _shared_kw = {}
                 for _k, _v in _shared_prefix.items():
@@ -722,27 +751,46 @@ def main() -> None:
                         _shared_kw[_k] = _v
                 _shared_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _shared_kw.items()}
                 lora_model.eval()
-                with torch.no_grad():
-                    _shared_out = lora_model(**_shared_kw)
-                _shared_logits = _shared_out.logits[0, -1, :].float()
-                _shared_score = _shared_logits[_cand_ids[0]].item() if _cand_ids else 0.0
+                _shared_score = _compute_logp(lora_model, _shared_kw, _prefix_len, _cand_ids)
 
-                # Independent scorer
+                # --- Independent scorer path ---
                 _ind_kw = adapter.independent_forward_kwargs(_prefix, _cand_ids)
                 _ind_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _ind_kw.items()}
-                # Add input_mode for wrapper
                 if "input_mode" in _prefix:
                     _ind_kw["input_mode"] = _prefix["input_mode"].to(device)
-                with torch.no_grad():
-                    _ind_out = lora_model(**_ind_kw)
-                _ind_logits = _ind_out.logits[0, -1, :].float()
-                _ind_score = _ind_logits[_cand_ids[0]].item() if _cand_ids else 0.0
+                _ind_score = _compute_logp(lora_model, _ind_kw, _prefix_len, _cand_ids)
 
                 _score_diff = abs(_shared_score - _ind_score)
-                logger.info("  C5[%d,%s]: shared=%.6f independent=%.6f diff=%.6f",
+                logger.info("  C5[%d,%s]: shared=%.4f independent=%.4f diff=%.6f",
                            _idx, _cand_text, _shared_score, _ind_score, _score_diff)
                 assert _score_diff <= 1e-4, f"C5 FAIL: scorer diff {_score_diff} > 1e-4"
-        logger.info("  C5 PASS: scorer equivalence")
+
+        # Also test text-only scorer equivalence
+        _text_prefix = adapter.build_prefix(processor, image=None, prompt="Hello?")
+        _text_prefix_len = _text_prefix["input_ids"].shape[0]
+        for _cand_text in ["Yes", "No"]:
+            _cand_ids = adapter.candidate_token_ids(processor, _cand_text)
+            # Shared
+            _sp = adapter.append_candidate(_text_prefix, _cand_ids)
+            _skw = {}
+            for _k, _v in _sp.items():
+                if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                    _skw[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+                else:
+                    _skw[_k] = _v
+            _skw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _skw.items()}
+            _s_score = _compute_logp(lora_model, _skw, _text_prefix_len, _cand_ids)
+            # Independent
+            _ikw = adapter.independent_forward_kwargs(_text_prefix, _cand_ids)
+            _ikw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _ikw.items()}
+            if "input_mode" in _text_prefix:
+                _ikw["input_mode"] = _text_prefix["input_mode"].to(device)
+            _i_score = _compute_logp(lora_model, _ikw, _text_prefix_len, _cand_ids)
+            _sd = abs(_s_score - _i_score)
+            logger.info("  C5[text,%s]: shared=%.4f independent=%.4f diff=%.6f",
+                       _cand_text, _s_score, _i_score, _sd)
+            assert _sd <= 1e-4, f"C5 FAIL: text scorer diff {_sd} > 1e-4"
+        logger.info("  C5 PASS: scorer equivalence (logP, visual + text-only)")
 
         # Restore unlearning-only adapters after verification
         for _mod in model.modules():
@@ -805,6 +853,62 @@ def main() -> None:
             "  P0-2 verified: %d bundled adapter tensors unchanged",
             len(_bundled_snapshot),
         )
+
+    # Nonzero adapter composition test: after training, f(vision+unlearning) != f(vision only)
+    if inner_peft is not None:
+        logger.info("  Nonzero composition: f(vision+unlearning) != f(vision only)")
+        _comp_prefix = adapter.build_prefix(
+            processor, image=_test_img, prompt="Is this a cat?",
+        )
+        _comp_kw = {}
+        for _k, _v in _comp_prefix.items():
+            if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
+                _comp_kw[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
+            else:
+                _comp_kw[_k] = _v
+        _comp_kw = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in _comp_kw.items()}
+
+        # Bypass wrapper — call inner model + lm_head directly to control adapters
+        inner_peft.eval()
+
+        def _inner_forward(kw):
+            """Forward through inner_peft + lm_head."""
+            _filtered = {k: v for k, v in kw.items() if k != "input_mode"}
+            # Phi needs audio_projection_mode set for visual inputs
+            if "audio_projection_mode" not in _filtered:
+                _filtered["audio_projection_mode"] = "vision"
+            _hidden = inner_peft(**_filtered)
+            return model.lm_head(_hidden[0])
+
+        # Forward with vision + unlearning
+        for _mod in inner_peft.modules():
+            if isinstance(_mod, _LL):
+                _mod._active_adapter = ["vision", "unlearning"]
+                _mod._disable_adapters = False
+        with torch.no_grad():
+            _logits_both = _inner_forward(_comp_kw)[0, -1, :].float()
+
+        # Forward with vision only
+        for _mod in inner_peft.modules():
+            if isinstance(_mod, _LL):
+                _mod._active_adapter = ["vision"]
+                _mod._disable_adapters = False
+        with torch.no_grad():
+            _logits_vision = _inner_forward(_comp_kw)[0, -1, :].float()
+
+        _comp_diff = (_logits_both - _logits_vision).abs().max().item()
+        logger.info("  Nonzero composition: max logit diff = %.6f", _comp_diff)
+        assert _comp_diff > 1e-6, (
+            f"Nonzero composition FAIL: f(vision+unlearning) == f(vision) "
+            f"after training (diff={_comp_diff}). Unlearning adapter had no effect."
+        )
+        logger.info("  Nonzero composition PASS: unlearning adapter changes output")
+
+        # Restore unlearning-only adapters
+        for _mod in inner_peft.modules():
+            if isinstance(_mod, _LL):
+                _mod._active_adapter = ["unlearning"]
+                _mod._disable_adapters = False
 
     # Step 6: Save checkpoint
     logger.info("Step 6: Saving checkpoint")

@@ -22,12 +22,17 @@ from pathlib import Path
 import torch
 
 
-def _batch_prefix(prefix: dict, device: str = "cpu") -> dict:
-    """Ensure prefix tensors are batched (1, ...) and on the correct device."""
+def _batch_prefix(prefix: dict, device: str = "cpu", adapter=None) -> dict:
+    """Ensure prefix tensors are batched (1, ...) and on the correct device.
+
+    For adapters with ``image_indexed_keys`` (e.g. Phi), those keys are
+    NOT unsqueezed (they already have the correct batch dimension).
+    """
+    img_indexed = adapter.image_indexed_keys() if adapter and hasattr(adapter, "image_indexed_keys") else frozenset()
     batched = {}
     for key, val in prefix.items():
         if isinstance(val, torch.Tensor):
-            if val.dim() == 1:
+            if val.dim() == 1 and key not in img_indexed:
                 val = val.unsqueeze(0)
             val = val.to(device)
         batched[key] = val
@@ -44,45 +49,27 @@ def independent_reference_score(
     """Independent teacher-forced reference scorer.
 
     This scorer does NOT call ``score_candidate_sequence_tensor``.
-    It builds the forward kwargs manually and computes the sum of
-    log-probabilities for the candidate tokens.
+    It uses the adapter's ``independent_forward_kwargs`` to build the
+    forward dict (handling model-specific fields like Phi's
+    ``input_image_embeds``), then computes the sum of log-probabilities.
     """
+    # Use adapter method to build forward kwargs (handles all model-specific fields)
+    forward_kwargs = adapter.independent_forward_kwargs(prefix, candidate_token_ids)
+
+    # Add input_mode if present (for Phi's wrapper)
+    if "input_mode" in prefix:
+        forward_kwargs["input_mode"] = prefix["input_mode"]
+
+    # Compute prefix_len from input_ids if not explicitly set
     prefix_input_ids = prefix["input_ids"]
-    prefix_len = prefix_input_ids.shape[1]
-    device = prefix_input_ids.device
-    dtype = prefix_input_ids.dtype
+    prefix_len = prefix.get("_prefix_len", prefix_input_ids.shape[-1])
 
-    cand_ids = torch.tensor(
-        [candidate_token_ids], dtype=dtype, device=device,
-    )
-
-    # Build forward kwargs manually (not through adapter.append_candidate)
-    full_input_ids = torch.cat([prefix_input_ids, cand_ids], dim=1)
-    full_attention_mask = torch.cat(
-        [prefix["attention_mask"], torch.ones_like(cand_ids)], dim=1,
-    )
-
-    forward_kwargs = {
-        "input_ids": full_input_ids,
-        "attention_mask": full_attention_mask,
-    }
-
-    # Extend mm_token_type_ids for candidate tokens (text-only, type 0)
-    if "mm_token_type_ids" in prefix:
-        prefix_mm = prefix["mm_token_type_ids"]
-        cand_mm = torch.zeros_like(cand_ids, dtype=prefix_mm.dtype)
-        forward_kwargs["mm_token_type_ids"] = torch.cat([prefix_mm, cand_mm], dim=1)
-
-    # Forward visual tensors from prefix
-    for key in ("pixel_values", "image_sizes", "image_grid_thw"):
-        if key in prefix:
-            forward_kwargs[key] = prefix[key]
-
-    # Run model directly
+    # Run model
     outputs = model(**forward_kwargs)
     logits = outputs.logits  # [1, full_len, vocab]
 
     m = len(candidate_token_ids)
+    full_input_ids = forward_kwargs["input_ids"]
 
     # Extract prediction rows for candidate tokens
     pred_rows = logits[0, prefix_len - 1: prefix_len - 1 + m, :]
@@ -157,8 +144,8 @@ def main() -> None:
         processor, image=dummy_image, prompt=test_prompt,
     )
     # Ensure prefix tensors are batched (1, ...) for the scorer
-    prefix = _batch_prefix(prefix, device=args.device)
-    prefix_len = prefix["_prefix_len"]
+    prefix = _batch_prefix(prefix, device=args.device, adapter=adapter)
+    prefix_len = prefix.get("_prefix_len", prefix["input_ids"].shape[-1])
     print(f"  prefix_len = {prefix_len}")
     print(f"  input_ids shape = {prefix['input_ids'].shape}")
     print(f"  keys = {sorted(k for k in prefix if not k.startswith('_'))}")
@@ -178,7 +165,7 @@ def main() -> None:
         processor, image=dummy_image, prompt=test_prompt,
         answer_text="Yes",
     )
-    sup_prefix_len = supervised["_prefix_len"]
+    sup_prefix_len = supervised.get("_prefix_len", supervised["input_ids"].shape[-1])
     print(f"  supervised prefix_len = {sup_prefix_len}")
     print(f"  input_ids shape = {supervised['input_ids'].shape}")
     print(f"  labels shape = {supervised['labels'].shape}")

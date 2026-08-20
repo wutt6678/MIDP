@@ -542,33 +542,108 @@ class TestPhiInnerModelWrapperInputMode:
         assert call_kwargs.get("audio_projection_mode") == "speech"
 
 
-class TestSDPALanguageMask:
-    """D1: Language SDPA shim must handle 2D padding masks."""
+class TestToSDPABoolMask:
+    """Test the _to_sdpa_bool_mask helper for correct mask conversion."""
 
-    def test_2d_padding_mask_converted_to_bool(self):
-        """2D padding mask [batch, key_len] should be expanded and converted to bool."""
+    def test_integer_binary_mask(self):
+        """Integer 0/1 mask: 0 = masked, 1 = visible."""
+        from route_data.models.trainable.phi4mm import _to_sdpa_bool_mask
+        mask = torch.tensor([[1, 1, 1, 0, 0]])
+        result = _to_sdpa_bool_mask(mask)
+        expected = torch.tensor([[True, True, True, False, False]])
+        assert torch.equal(result, expected)
+
+    def test_float_binary_mask(self):
+        """Float mask in [0,1]: 0.0 = masked, 1.0 = visible."""
+        from route_data.models.trainable.phi4mm import _to_sdpa_bool_mask
+        mask = torch.tensor([[1.0, 1.0, 0.0, 0.0]])
+        result = _to_sdpa_bool_mask(mask)
+        expected = torch.tensor([[True, True, False, False]])
+        assert torch.equal(result, expected)
+
+    def test_additive_mask(self):
+        """Additive mask: 0 = visible, large negative = masked."""
+        from route_data.models.trainable.phi4mm import _to_sdpa_bool_mask
+        mask = torch.tensor([[0.0, 0.0, -1e9, -1e9]])
+        result = _to_sdpa_bool_mask(mask)
+        expected = torch.tensor([[True, True, False, False]])
+        assert torch.equal(result, expected)
+
+    def test_bool_mask_passthrough(self):
+        """Already-bool mask returned as-is."""
+        from route_data.models.trainable.phi4mm import _to_sdpa_bool_mask
+        mask = torch.tensor([[True, True, False, False]])
+        result = _to_sdpa_bool_mask(mask)
+        assert result is mask  # same object, no copy
+
+
+class TestSDPALanguageMask:
+    """D1: Language SDPA shim must handle 2D padding masks numerically."""
+
+    def test_2d_padding_mask_affects_output(self):
+        """2D padding mask must change output (padded positions excluded)."""
         import torch.nn.functional as F
         from route_data.models.trainable.phi4mm import _apply_sdpa_patches
 
-        # Apply patches to get the SDPA function
         _apply_sdpa_patches()
         import transformers.modeling_flash_attention_utils as mfa
         sdpa_fn = mfa._flash_attention_forward
 
+        torch.manual_seed(42)
         batch, heads, seq_len, head_dim = 2, 4, 8, 16
-        # Shim expects [batch, seq, heads, dim] format
         q = torch.randn(batch, seq_len, heads, head_dim)
         k = torch.randn(batch, seq_len, heads, head_dim)
         v = torch.randn(batch, seq_len, heads, head_dim)
 
-        # 2D padding mask: [batch, key_len], last 2 positions padded
+        # 2D padding mask: last 2 positions padded for batch 0
         mask_2d = torch.ones(batch, seq_len, dtype=torch.long)
-        mask_2d[0, -2:] = 0  # pad last 2 positions of first sequence
+        mask_2d[0, -2:] = 0
 
-        # Call the SDPA shim (query_length=seq_len for prefill)
-        out = sdpa_fn(q, k, v, attention_mask=mask_2d, query_length=seq_len)
-        # Output is [batch, seq, heads, dim]
-        assert out.shape == (batch, seq_len, heads, head_dim)
+        # With padding mask (shim disables causal when mask is provided)
+        out_masked = sdpa_fn(q, k, v, attention_mask=mask_2d, query_length=seq_len)
+
+        # Reference: all-ones mask (same causal=False behavior, no actual masking)
+        mask_allones = torch.ones(batch, seq_len, dtype=torch.long)
+        out_allones = sdpa_fn(q, k, v, attention_mask=mask_allones, query_length=seq_len)
+
+        # Batch 0 must differ (has real padding)
+        assert not torch.allclose(
+            out_masked[0], out_allones[0], atol=1e-5
+        ), "Padding mask had no effect on output!"
+        # Batch 1 has all-ones mask in both cases — should match
+        assert torch.allclose(
+            out_masked[1], out_allones[1], atol=1e-5
+        ), "All-ones mask should produce same output in both calls"
+
+    def test_2d_mask_matches_reference_bool(self):
+        """Integer 0/1 mask must produce same output as equivalent bool mask."""
+        from route_data.models.trainable.phi4mm import _apply_sdpa_patches
+
+        _apply_sdpa_patches()
+        import transformers.modeling_flash_attention_utils as mfa
+        sdpa_fn = mfa._flash_attention_forward
+
+        torch.manual_seed(123)
+        batch, heads, seq_len, head_dim = 1, 2, 6, 8
+        q = torch.randn(batch, seq_len, heads, head_dim)
+        k = torch.randn(batch, seq_len, heads, head_dim)
+        v = torch.randn(batch, seq_len, heads, head_dim)
+
+        # Integer mask: last 2 positions masked
+        mask_int = torch.tensor([[1, 1, 1, 1, 0, 0]], dtype=torch.long)
+        out_int = sdpa_fn(q, k, v, attention_mask=mask_int, query_length=seq_len)
+
+        # Equivalent bool mask via SDPA directly
+        mask_bool = torch.tensor([[[[True, True, True, True, False, False]]]], dtype=torch.bool)
+        import torch.nn.functional as F
+        q4 = q.transpose(1, 2)
+        k4 = k.transpose(1, 2)
+        v4 = v.transpose(1, 2)
+        ref = F.scaled_dot_product_attention(q4, k4, v4, attn_mask=mask_bool, is_causal=False)
+        ref = ref.transpose(1, 2)
+
+        assert torch.allclose(out_int, ref, atol=1e-5), \
+            "Integer mask output doesn't match reference bool mask output"
 
     def test_none_mask_uses_causal(self):
         """When attention_mask is None, should use causal attention."""
@@ -599,31 +674,42 @@ class TestSDPALanguageMask:
 
 
 class TestSDPAVisionMask:
-    """D2: Vision SDPA shim must handle attention masks."""
+    """D2: Vision SDPA shim must handle attention masks numerically."""
 
-    def test_vision_sdpa_with_2d_mask(self):
-        """Vision SDPA should accept 2D padding mask and convert to bool."""
+    def test_vision_2d_mask_affects_output(self):
+        """Vision 2D mask must change output (padded positions excluded)."""
+        from route_data.models.trainable.phi4mm import _to_sdpa_bool_mask
         import torch.nn.functional as F
 
+        torch.manual_seed(42)
         batch, heads, seq_len, head_dim = 2, 4, 12, 16
         q = torch.randn(batch, heads, seq_len, head_dim)
         k = torch.randn(batch, heads, seq_len, head_dim)
         v = torch.randn(batch, heads, seq_len, head_dim)
 
-        # 2D mask: [batch, key_len]
+        # 2D mask: last 3 positions padded for batch 0
         mask_2d = torch.ones(batch, seq_len, dtype=torch.long)
-        mask_2d[0, -3:] = 0  # pad last 3 positions
+        mask_2d[0, -3:] = 0
 
-        # Simulate the vision SDPA logic
+        # Convert using the actual helper
         sdpa_attn_mask = mask_2d[:, None, None, :]
-        sdpa_attn_mask = sdpa_attn_mask > 0  # convert to bool
+        sdpa_attn_mask = _to_sdpa_bool_mask(sdpa_attn_mask)
 
-        out = F.scaled_dot_product_attention(
-            q, k, v,
-            attn_mask=sdpa_attn_mask,
-            dropout_p=0.0, is_causal=False,
+        out_masked = F.scaled_dot_product_attention(
+            q, k, v, attn_mask=sdpa_attn_mask, dropout_p=0.0, is_causal=False,
         )
-        assert out.shape == (batch, heads, seq_len, head_dim)
+        out_unmasked = F.scaled_dot_product_attention(
+            q, k, v, dropout_p=0.0, is_causal=False,
+        )
+
+        # Batch 0 must differ (has padding)
+        assert not torch.allclose(
+            out_masked[0], out_unmasked[0], atol=1e-5
+        ), "Vision padding mask had no effect!"
+        # Batch 1 (all-ones) should match
+        assert torch.allclose(
+            out_masked[1], out_unmasked[1], atol=1e-5
+        ), "All-ones vision mask should match no-mask"
 
     def test_vision_sdpa_without_mask(self):
         """Vision SDPA should work without mask (causal mode)."""
