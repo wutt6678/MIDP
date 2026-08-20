@@ -8,15 +8,15 @@
   },
   "provenance": {
     "results_sha256": "caf3823267916b1b0305dd7147ebaa873d3033acd95a44d2bd6d6b63c8211657",
-    "manifest_sha256": "aebc62a6155bba6720ef0f6dd3670e11e135df3f5a570e23aa1dd77a3766186b",
+    "manifest_sha256": "6a475ca36cba0159f647aabd34e76a0d1ecbc28267a1455003883aa4e1a1a9c1",
     "route_probe_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
     "processed_dataset_sha256": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1",
-    "code_commit": "910ac8e315ee99ff24fc3d625d01b1c7aaf48eab"
+    "code_commit": "23fab6fe278947470471bca9d8cf550db6313501"
   },
   "protocol_sha256": "d217c03fda63fe152fef8e5107ca035d450d0451b579a9e85c8f9917072e9a5b",
   "schema_version": "1.2",
   "metric_schema_version": "baseline-metrics-v1",
-  "generated_at": "2026-08-20T01:14:47.097149+00:00",
+  "generated_at": "2026-08-20T01:21:27.729911+00:00",
   "dataset_provenance": {
     "probe_file": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
     "probe_file_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
@@ -91,9 +91,9 @@
     "results_file": "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_results.jsonl",
     "results_sha256": "caf3823267916b1b0305dd7147ebaa873d3033acd95a44d2bd6d6b63c8211657",
     "summary_file": "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_summary.json",
-    "summary_sha256": "b1469786190591071c81049f60ad791c23b4fc48ffb75c181b66ea489aa99344",
+    "summary_sha256": "4778676ff1dcd6f32d86f3594d7a45c30acaf015060f8bb876d0387a889f44a6",
     "validation_report_file": "outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/validation_report.json",
-    "validation_report_sha256": "a82b703415dcc0ed02177341930b0e8ac5f98ea935837eec2b30bed6b4be0fb6",
+    "validation_report_sha256": "d4ad099c3e87d3c9e47a4b1381c592c16e93a917bf8e4886b923ba82203dbd99",
     "smoke_manifest_file": "",
     "smoke_manifest_sha256": "",
     "total_results": 500,
@@ -101,66 +101,75 @@
       "total_probes": 500,
       "total_correct": 395,
       "mixed_task_overall_accuracy": 0.79,
-      "visual_family_accuracy": 0.9825,
-      "visual_family_correct": 393,
-      "visual_family_count": 400,
-      "name_only_status": "valid_rerun_with_64_token_budget",
+      "visual_accuracy": 0.9825,
+      "visual_correct": 393,
+      "visual_total": 400,
+      "direct_visual_accuracy": 0.99,
+      "name_only_mean_token_overlap": 0.17138515464595386,
+      "name_only_normalized_exact_match": 0.0,
+      "name_only_fuzzy_match": 0.3404822595704949,
+      "name_only_cap_hit_rate": 0.61,
       "per_family": {
         "direct_visual": {
           "count": 100,
           "errors": 0,
           "correct": 99,
+          "accuracy": 0.99,
           "hit_max_new_tokens_count": 0,
           "mean_signed_answer_margin": 7.224375013558893,
           "median_signed_answer_margin": 6.937500115483999,
-          "mean_p_yes": 0.2628101428450395,
-          "accuracy": 0.99
-        },
-        "name_only": {
-          "count": 100,
-          "errors": 0,
-          "correct": 2,
-          "hit_max_new_tokens_count": 61,
-          "mean_token_overlap": 0.17138515464595383,
-          "mean_normalized_exact_match": 0.0,
-          "mean_fuzzy_match": 0.3404822595704948,
-          "mean_generated_token_count": 57.27,
-          "accuracy": 0.02
+          "mean_p_yes": 0.26281014284503945
         },
         "image_plus_name": {
           "count": 100,
           "errors": 0,
           "correct": 99,
+          "accuracy": 0.99,
           "hit_max_new_tokens_count": 0,
           "mean_signed_answer_margin": 6.061250030098018,
           "median_signed_answer_margin": 6.125000141561031,
-          "mean_p_yes": 0.25125279704483083,
-          "accuracy": 0.99
+          "mean_p_yes": 0.25125279704483083
         },
-        "wrong_name": {
+        "name_only": {
           "count": 100,
           "errors": 0,
-          "correct": 98,
-          "hit_max_new_tokens_count": 0,
-          "mean_signed_answer_margin": 6.150624975240789,
-          "median_signed_answer_margin": 6.250000037252903,
-          "mean_p_yes": 0.24603629128950127,
-          "accuracy": 0.98
+          "correct": 2,
+          "normalized_exact_match_rate": 0.0,
+          "mean_token_overlap": 0.17138515464595386,
+          "mean_fuzzy_match": 0.3404822595704949,
+          "cap_hit_rate": 0.61,
+          "generation_max_new_tokens": 64
         },
         "visual_text_conflict": {
           "count": 100,
           "errors": 0,
           "correct": 97,
+          "accuracy": 0.97,
           "hit_max_new_tokens_count": 0,
           "mean_signed_answer_margin": 5.967500006346963,
           "median_signed_answer_margin": 6.4999998807907104,
-          "mean_p_yes": 0.22184301977698964,
-          "accuracy": 0.97
+          "mean_p_yes": 0.22184301977698961
+        },
+        "wrong_name": {
+          "count": 100,
+          "errors": 0,
+          "correct": 98,
+          "accuracy": 0.98,
+          "hit_max_new_tokens_count": 0,
+          "mean_signed_answer_margin": 6.150624975240789,
+          "median_signed_answer_margin": 6.250000037252903,
+          "mean_p_yes": 0.24603629128950125
         }
       },
-      "model_fingerprint": "01306df4d620e651",
+      "route_identity_role_counts": {
+        "train": 250,
+        "eval": 50,
+        "exclude": 200
+      },
+      "model_fingerprint": "0aa4b07beef60384",
       "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
-      "scoring_version": "2"
+      "scoring_version": "2",
+      "generation_protocol_sha256": "d217c03fda63fe152fef8e5107ca035d450d0451b579a9e85c8f9917072e9a5b"
     }
   },
   "route_identity_role_counts": {
@@ -169,8 +178,8 @@
     "exclude": 40
   },
   "code_provenance": {
-    "experiment_code_commit": "910ac8e315ee99ff24fc3d625d01b1c7aaf48eab",
-    "artifact_commit": "910ac8e315ee99ff24fc3d625d01b1c7aaf48eab",
-    "working_tree_dirty_at_execution": false
+    "execution_code_commit": "23fab6fe278947470471bca9d8cf550db6313501",
+    "artifact_commit": "23fab6fe278947470471bca9d8cf550db6313501",
+    "working_tree_dirty": false
   }
 }
