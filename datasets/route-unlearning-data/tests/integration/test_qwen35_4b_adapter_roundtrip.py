@@ -254,18 +254,29 @@ class TestQwen35_4BAdapterRoundtrip:
 
             # Snapshot reloaded LoRA weights and compare
             snap_post_reload = _snapshot_lora_weights(lora_model2)
-            weights_match, n_cmp, n_diff = _weights_changed(snap_pre_save, snap_post_reload)
+            reloaded_weights_changed, n_cmp, n_diff = _weights_changed(snap_pre_save, snap_post_reload)
             print(f"\nLoRA weight comparison (pre-save vs post-reload):")
             print(f"  Tensors compared: {n_cmp}")
             print(f"  Tensors different: {n_diff}")
-            print(f"  Weights identical: {not weights_match}")
-            if weights_match:
+            print(f"  Weights identical: {not reloaded_weights_changed}")
+            if reloaded_weights_changed:
                 # Find which tensors differ
                 for name, val_pre in snap_pre_save.items():
                     if name in snap_post_reload:
                         if not torch.equal(val_pre, snap_post_reload[name]):
                             diff = (val_pre - snap_post_reload[name]).abs().max().item()
                             print(f"    {name}: max_diff={diff:.6e}")
+
+            # Assert reloaded weights are identical to pre-save
+            assert n_cmp == len(snap_pre_save), (
+                f"Expected {len(snap_pre_save)} tensors compared, got {n_cmp}"
+            )
+            assert n_diff == 0, (
+                f"Expected 0 tensors different after reload, got {n_diff}"
+            )
+            assert not reloaded_weights_changed, (
+                "Reloaded LoRA weights differ from pre-save weights"
+            )
 
             # Set model to eval mode for scoring
             lora_model2.eval()
@@ -318,7 +329,10 @@ class TestQwen35_4BAdapterRoundtrip:
             "training_loss": train_loss,
             "lora_tensors_compared": n_compared,
             "lora_tensors_changed": n_changed,
-            "lra_weights_changed_after_training": changed,
+            "lora_weights_changed_after_training": changed,
+            "reload_tensors_compared": n_cmp,
+            "reload_tensors_different": n_diff,
+            "reload_weights_exact_match": not reloaded_weights_changed,
             "lora_modules_match": lora_modules_pre == lora_modules_post,
             "yes_score_pre": yes_pre,
             "yes_score_post": yes_post,
