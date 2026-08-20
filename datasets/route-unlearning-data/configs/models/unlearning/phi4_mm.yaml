@@ -4,13 +4,13 @@ key: phi4_mm
 
 model:
   id: microsoft/Phi-4-multimodal-instruct
-  revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  revision: "93f923e1a7727d1c4f446756212d9d3e8fcc5d81"
   processor_id: microsoft/Phi-4-multimodal-instruct
-  processor_revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  processor_revision: "93f923e1a7727d1c4f446756212d9d3e8fcc5d81"
   adapter: phi4mm
   trust_remote_code: true
   dtype: bfloat16
-  attn_implementation: sdpa
+  attn_implementation: eager  # requires SDPA shim (no flash_attn available)
 
 candidate_protocol:
   positive: "Yes"
@@ -21,27 +21,32 @@ lora:
   alpha: 16
   dropout: 0.05
   scope: language_attention_only
-  # Phi uses fused qkv_proj + o_proj (NOT separate q/k/v)
-  target_leaf_names: [qkv_proj, o_proj]
-  scope_regex: "<DISCOVER_ON_REAL_MODEL_AND_FREEZE>"
+  # Phi uses fused qkv_proj + o_proj (NOT separate q/k/v).
+  # IMPORTANT: Do NOT include .base_layer — Phi wraps these in PEFT LoraLayer
+  # for vision/speech; targeting the LoraLayer name triggers update_layer().
+  scope_regex: "^model\\.layers\\.\\d+\\.(self_attn)\\.(qkv_proj|o_proj)$"
 
 structural:
-  language_layer_path: "<DISCOVER_AND_FREEZE>"
-  language_hidden_size: "<DISCOVER_AND_FREEZE>"
-  intermediate_size: "<DISCOVER_AND_FREEZE>"
-  num_language_layers: 32  # per official config
-  r2mu_candidate_layers: "<DISCOVER_AND_FREEZE>"
+  language_layer_path: "model.layers"
+  language_hidden_size: 3072
+  intermediate_size: 8192
+  num_language_layers: 32
+  r2mu_candidate_layers: [8, 16, 24, 30]
   r2mu_n_select_layers: 4
-  # Phi uses fused gate_up_proj + down_proj (NOT gate/up/down)
+  # Phi uses fused gate_up_proj + down_proj MLP
   manu_spec: phi4mm_language_mlp_v1
 
-# Phi multimodal fields differ from Qwen:
+# Phi multimodal fields:
 # input_image_embeds, image_attention_mask, image_sizes, input_mode
-# These are handled in the phi4mm adapter, not in the generic pipeline.
+# Image token: <|endoftext10|> (ID 200010)
 
 compatibility:
   min_transformers: "4.47.0"
-  tested_transformers: "5.14.1"
+  tested_transformers: "4.48.3"
+  # REQUIRES: transformers 4.47.x + SDPA monkey-patches
+  # (PreTrainedModel._check_and_enable_flash_attn_2 noop,
+  #  modeling_flash_attention_utils._flash_attention_forward -> SDPA,
+  #  vision_siglip_navit.SiglipFlashAttention2._flash_attention_forward -> SDPA)
 
 access:
   requires_hf_auth: false
@@ -57,5 +62,5 @@ supports_manu: false
 supports_r2mu: false
 
 status:
-  implementation: scaffold
+  implementation: discovery_complete
   research_ready: false

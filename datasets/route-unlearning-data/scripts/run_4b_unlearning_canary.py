@@ -456,14 +456,48 @@ def main() -> None:
     )
     
     targets = adapter.resolve_lora_targets(model)
-    lora_config = LoraConfig(
-        r=config["method"]["hyperparameters"]["lora_rank"],
-        lora_alpha=config["method"]["hyperparameters"]["lora_alpha"],
-        lora_dropout=config["method"]["hyperparameters"]["lora_dropout"],
-        target_modules=targets,
-        bias="none",
-    )
-    lora_model = get_peft_model(model, lora_config)
+
+    # Check if the model already has an inner PeftModel (e.g. Phi-4-MM
+    # ships with bundled vision/speech LoRA adapters).
+    inner_peft = adapter.get_inner_peft_model(model)
+    if inner_peft is not None:
+        # Use short (leaf) module names — PEFT suffix matching handles
+        # the full path inside the inner model with injected LoRA layers.
+        short_targets = sorted({t.split(".")[-1] for t in targets})
+        logger.info("  Inner PEFT model detected; using short targets: %s", short_targets)
+        from peft import LoraConfig as _LC
+        from peft import LoraModel as _LM
+        lora_config = _LC(
+            r=config["method"]["hyperparameters"]["lora_rank"],
+            lora_alpha=config["method"]["hyperparameters"]["lora_alpha"],
+            lora_dropout=config["method"]["hyperparameters"]["lora_dropout"],
+            target_modules=short_targets,
+            bias="none",
+        )
+        # Phi stores peft_config directly on the inner model (no PeftModel
+        # wrapper).  Create a temporary LoraModel to inject our adapter.
+        _tmp = _LM(inner_peft, lora_config, adapter_name="unlearning")
+        _tmp.inject_adapter(inner_peft, "unlearning")
+
+        # Activate 'unlearning' adapter on all LoraLayers
+        from peft.tuners.lora.layer import LoraLayer as _LL
+        for _mod in inner_peft.modules():
+            if isinstance(_mod, _LL):
+                _mod.set_adapter("unlearning")
+
+        # Wrap inner model to handle audio_projection_mode default + lm_head
+        from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
+        lora_model = _PhiInnerModelWrapper(inner_peft, model.lm_head)
+        logger.info("  Injected 'unlearning' adapter into inner PEFT model")
+    else:
+        lora_config = LoraConfig(
+            r=config["method"]["hyperparameters"]["lora_rank"],
+            lora_alpha=config["method"]["hyperparameters"]["lora_alpha"],
+            lora_dropout=config["method"]["hyperparameters"]["lora_dropout"],
+            target_modules=targets,
+            bias="none",
+        )
+        lora_model = get_peft_model(model, lora_config)
     
     # Step 4: Build dataset
     logger.info("Step 4: Building training dataset")
@@ -488,8 +522,31 @@ def main() -> None:
     logger.info("Step 6: Saving checkpoint")
     adapter_path = OUTPUT_DIR / "adapter"
     adapter_path.mkdir(parents=True, exist_ok=True)
-    lora_model.save_pretrained(str(adapter_path))
-    logger.info(f"Saved adapter to {adapter_path}")
+    if inner_peft is not None:
+        # Phi: manually save the 'unlearning' adapter weights + config
+        import safetensors.torch as _st
+        _state = inner_peft.state_dict()
+        _adapter_state = {
+            k.replace("base_model.model.", ""): v
+            for k, v in _state.items()
+            if "unlearning" in k
+        }
+        _st.save_file(_adapter_state, str(adapter_path / "adapter_model.safetensors"))
+        _cfg = inner_peft.peft_config["unlearning"]
+        _cfg_dict = {
+            "r": _cfg.r, "lora_alpha": _cfg.lora_alpha,
+            "target_modules": _cfg.target_modules,
+            "lora_dropout": _cfg.lora_dropout, "bias": _cfg.bias,
+            "task_type": _cfg.task_type.value if _cfg.task_type else None,
+            "peft_type": "LORA",
+        }
+        import json as _json
+        with open(adapter_path / "adapter_config.json", "w") as _f:
+            _json.dump(_cfg_dict, _f, indent=2)
+        logger.info(f"Saved 'unlearning' adapter to {adapter_path}")
+    else:
+        lora_model.save_pretrained(str(adapter_path))
+        logger.info(f"Saved adapter to {adapter_path}")
     
     # Step 7: Reload on fresh base
     logger.info("Step 7: Reloading on fresh base model")
@@ -506,7 +563,20 @@ def main() -> None:
     )
     
     from peft import PeftModel
-    lora_model2 = PeftModel.from_pretrained(model2, str(adapter_path))
+    inner_peft2 = adapter.get_inner_peft_model(model2)
+    if inner_peft2 is not None:
+        # Phi: inject adapter into existing inner model with bundled LoRA
+        from peft import LoraModel as _LM
+        _tmp2 = _LM.from_pretrained(inner_peft2, str(adapter_path), adapter_name="unlearning")
+        # Activate 'unlearning' adapter on all LoraLayers
+        from peft.tuners.lora.layer import LoraLayer as _LL
+        for _mod in inner_peft2.modules():
+            if isinstance(_mod, _LL):
+                _mod.set_adapter("unlearning")
+        from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
+        lora_model2 = _PhiInnerModelWrapper(inner_peft2, model2.lm_head)
+    else:
+        lora_model2 = PeftModel.from_pretrained(model2, str(adapter_path))
     lora_model2.eval()
     
     # Step 8: Post-evaluation

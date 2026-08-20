@@ -1,22 +1,39 @@
-"""Phi-4-multimodal-instruct trainable adapter stub.
+"""Phi-4-multimodal-instruct trainable adapter.
 
-Dedicated adapter required — Phi does NOT follow the standard
-``AutoModelForImageTextToText`` loading path.
+Independent replication model.  Structural metadata discovered from
+the real pinned checkpoint (revision 93f923e1a7727d1c4f446756212d9d3e8fcc5d81).
 
-Key differences from Qwen/GLM/InternVL:
+Official loading path: ``AutoModelForCausalLM`` (NOT image-text-to-text)
+with ``trust_remote_code=True``.
+
+**Environment requirements:**
+
+- ``transformers >= 4.47, < 4.49`` (custom code incompatible with 5.x).
+- SDPA monkey-patches (no flash_attn available on this system):
+  1. ``PreTrainedModel._check_and_enable_flash_attn_2`` → noop.
+  2. ``modeling_flash_attention_utils._flash_attention_forward`` → SDPA.
+  3. ``vision_siglip_navit.SiglipFlashAttention2._flash_attention_forward``
+     → SDPA.
+
+Phi-specific behaviour:
 
 - Loads with ``AutoModelForCausalLM`` (not image-text-to-text).
 - Custom multimodal fields: ``input_image_embeds``,
   ``image_attention_mask``, ``image_sizes``, ``input_mode``.
 - Fused ``qkv_proj`` + ``o_proj`` (not separate q/k/v/o).
 - Fused ``gate_up_proj`` + ``down_proj`` MLP (not gate/up/down).
-- Bundled vision/speech LoRA structures must be detected and avoided.
-- Official: Transformers 4.47–4.48; MIDP env uses 5.14 — compatibility P0.
+- Bundled vision/speech LoRA structures: target LoraLayer wrappers directly
+  (NOT ``.base_layer``); PEFT ``update_layer()`` adds our adapter alongside.
+- Image token: ``<|endoftext10|>`` (ID 200010).
+- Language tower: 32 layers, hidden_size=3072, intermediate_size=8192.
+- Expected LoRA target count: 32 × 2 = 64 (language attention only).
+- pad_token_id=199999, eos_token_id=199999.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import torch
@@ -26,16 +43,122 @@ from .registry import register_adapter_family, register_model_key
 
 logger = logging.getLogger(__name__)
 
+# Image token for Phi-4-MM
+PHI_IMAGE_TOKEN = "<|endoftext10|>"
+PHI_IMAGE_TOKEN_ID = 200010
+
+
+class _PhiInnerModelWrapper(torch.nn.Module):
+    """Thin wrapper around Phi's inner model for unlearning.
+
+    Handles the ``audio_projection_mode`` default that the outer
+    ``Phi4MMForCausalLM`` normally sets based on ``input_mode``.
+    Also adds the ``lm_head`` to produce logits (the inner model
+    only returns hidden states).
+    """
+
+    def __init__(self, inner_model: torch.nn.Module, lm_head: torch.nn.Module):
+        super().__init__()
+        self.inner_model = inner_model
+        self.lm_head = lm_head
+
+    def forward(self, **kwargs):
+        kwargs.setdefault("audio_projection_mode", "speech")
+        outputs = self.inner_model(**kwargs)
+        # Add logits from the LM head (inner model only returns hidden states)
+        from transformers.modeling_outputs import CausalLMOutputWithPast
+        logits = self.lm_head(outputs[0])
+        return CausalLMOutputWithPast(
+            logits=logits,
+            past_key_values=outputs.past_key_values,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+        )
+
+
+def _apply_sdpa_patches() -> None:
+    """Monkey-patch transformers to use SDPA instead of flash_attn.
+
+    Required because Phi-4-MM's custom code forces flash_attention_2
+    but flash_attn is not installable on this system (CUDA version
+    mismatch).  These patches redirect all flash attention calls to
+    PyTorch's native ``scaled_dot_product_attention``.
+    """
+    import torch.nn.functional as F
+    from transformers.modeling_utils import PreTrainedModel
+
+    # 1. Skip flash attention availability check
+    @classmethod
+    def _noop_fa2(cls, config, **kwargs):  # type: ignore[misc]
+        return config
+
+    PreTrainedModel._check_and_enable_flash_attn_2 = _noop_fa2
+
+    # 2. Replace language model's _flash_attention_forward with SDPA
+    import transformers.modeling_flash_attention_utils as mfa
+
+    def _sdpa_flash(
+        query_states, key_states, value_states,
+        attention_mask, query_length,
+        dropout=0.0, softmax_scale=None, sliding_window=None, **kwargs,
+    ):
+        q2 = query_states.transpose(1, 2)
+        k2 = key_states.transpose(1, 2)
+        v2 = value_states.transpose(1, 2)
+        out = F.scaled_dot_product_attention(
+            q2, k2, v2,
+            dropout_p=dropout, is_causal=True, scale=softmax_scale,
+        )
+        return out.transpose(1, 2)
+
+    mfa._flash_attention_forward = _sdpa_flash
+
+
+def _patch_vision_attention() -> None:
+    """Patch the vision encoder's flash attention to use SDPA.
+
+    Must be called AFTER the model is loaded (the vision module is
+    only imported during model loading with ``trust_remote_code=True``).
+    """
+    import sys
+
+    import torch.nn.functional as F
+
+    for mod_name, mod in list(sys.modules.items()):
+        if mod is not None and "vision_siglip_navit" in mod_name:
+            for attr_name in dir(mod):
+                attr = getattr(mod, attr_name)
+                if isinstance(attr, type) and hasattr(attr, "_flash_attention_forward"):
+
+                    def _sdpa_vision(
+                        self,
+                        query_states, key_states, value_states,
+                        attention_mask, query_length,
+                        dropout=0.0, softmax_scale=None,
+                    ):
+                        causal = self.is_causal and query_length != 1
+                        q2 = query_states.transpose(1, 2)
+                        k2 = key_states.transpose(1, 2)
+                        v2 = value_states.transpose(1, 2)
+                        out = F.scaled_dot_product_attention(
+                            q2, k2, v2,
+                            dropout_p=dropout, is_causal=causal,
+                            scale=softmax_scale,
+                        )
+                        return out.transpose(1, 2)
+
+                    attr._flash_attention_forward = _sdpa_vision
+                    logger.debug("Patched %s._flash_attention_forward → SDPA", attr_name)
+                    break
+            break
+
 
 @register_adapter_family("phi4mm")
 class Phi4MMAdapter(TrainableVLMAdapter):
-    """Trainable adapter for Phi-4-multimodal-instruct (stub).
+    """Trainable adapter for Phi-4-multimodal-instruct.
 
     Does NOT inherit from :class:`HuggingFaceChatAdapter` because Phi
     uses a fundamentally different rendering and batching path.
-    All methods are stubs requiring real-model discovery.
-
-    The profile is **required** and must come from a YAML file.
     """
 
     def __init__(self, profile: ModelFamilyProfile):
@@ -50,64 +173,279 @@ class Phi4MMAdapter(TrainableVLMAdapter):
     # ------------------------------------------------------------------ #
 
     def required_multimodal_keys(self) -> frozenset[str]:
-        """Phi uses ``input_image_embeds`` instead of ``pixel_values``."""
-        return frozenset({"input_image_embeds"})
+        return frozenset({"input_image_embeds", "image_attention_mask", "image_sizes"})
 
     def image_indexed_keys(self) -> frozenset[str]:
         return frozenset({"input_image_embeds", "image_attention_mask", "image_sizes"})
 
     # ------------------------------------------------------------------ #
-    # All abstract methods — stubs
+    # Model loading
     # ------------------------------------------------------------------ #
 
     def load_model_processor(self, **kwargs) -> tuple[Any, Any]:
-        raise NotImplementedError(
-            "Phi-4-MM requires AutoModelForCausalLM loading path. "
-            "Implement after environment compatibility is verified."
+        """Load Phi-4-MM with SDPA patches.
+
+        Applies monkey-patches to bypass flash_attn requirement before
+        loading, then patches vision attention after loading.
+        """
+        from transformers import AutoModelForCausalLM, AutoProcessor
+
+        model_id = kwargs.get("model_id", self._profile.model_id)
+        revision = kwargs.get("revision", self._profile.revision)
+        processor_revision = kwargs.get("processor_revision", self._profile.processor_revision)
+        dtype_str = kwargs.get("dtype", self._profile.dtype)
+        device = kwargs.get("device", "cuda:0")
+
+        dtype = getattr(torch, dtype_str, torch.bfloat16)
+
+        # Apply SDPA patches BEFORE loading
+        _apply_sdpa_patches()
+
+        logger.info("Loading Phi-4-MM processor (revision %s)...", processor_revision)
+        processor = AutoProcessor.from_pretrained(
+            model_id, revision=processor_revision, trust_remote_code=True,
         )
 
-    def build_prefix(self, processor, *, image, prompt) -> dict[str, Any]:
-        raise NotImplementedError("Phi-4-MM prefix building not yet implemented.")
+        logger.info("Loading Phi-4-MM model (revision %s)...", revision)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, revision=revision, torch_dtype=dtype,
+            trust_remote_code=True, device_map=device,
+        )
+
+        # Patch vision attention AFTER loading
+        _patch_vision_attention()
+
+        logger.info("Phi-4-MM loaded successfully with SDPA patches")
+        return model, processor
+
+    # ------------------------------------------------------------------ #
+    # Prefix building
+    # ------------------------------------------------------------------ #
+
+    def build_prefix(
+        self, processor: Any, *, image: Any, prompt: str,
+    ) -> dict[str, Any]:
+        """Build multimodal prefix using Phi's processor.
+
+        Uses ``<|endoftext10|>`` as the image token and the standard
+        Phi chat template: ``<|user|>\\n<image>\\n<prompt><|end|><|assistant|>\\n``.
+        """
+        chat = [
+            {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
+        ]
+        prompt_text = processor.tokenizer.apply_chat_template(
+            chat, tokenize=False, add_generation_prompt=True,
+        )
+
+        inputs = processor(
+            text=prompt_text, images=[image], return_tensors="pt",
+        )
+        # Squeeze batch dim for text tensors (consistent with other adapters).
+        # Keep image-indexed tensors and 1-D tensors (like ``input_mode``)
+        # unsqueezed — the inner model expects them with their batch dim.
+        image_indexed = self.image_indexed_keys()
+        result = {}
+        for k, v in inputs.items():
+            if torch.is_tensor(v) and k not in image_indexed and v.dim() > 1 and v.shape[0] == 1:
+                result[k] = v.squeeze(0)
+            else:
+                result[k] = v
+        # Strip keys the inner model does not accept.
+        # ``input_mode`` is consumed by the outer Phi4MMForCausalLM to
+        # decide which LoRA adapter to activate; the inner model has no
+        # such parameter and would raise on an unexpected kwarg.
+        result.pop("input_mode", None)
+        return result
 
     def build_supervised_example(
-        self, processor, *, image, prompt, answer_text,
+        self, processor: Any, *, image: Any, prompt: str, answer_text: str,
     ) -> dict[str, Any]:
-        raise NotImplementedError("Phi-4-MM supervised example not yet implemented.")
+        """Build a supervised training example with labels."""
+        chat = [
+            {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
+            {"role": "assistant", "content": answer_text},
+        ]
+        full_text = processor.tokenizer.apply_chat_template(
+            chat, tokenize=False, add_generation_prompt=False,
+        )
+        inputs = processor(
+            text=full_text, images=[image], return_tensors="pt",
+        )
+        result = {}
+        image_indexed = self.image_indexed_keys()
+        for k, v in inputs.items():
+            if torch.is_tensor(v) and k not in image_indexed and v.dim() > 1 and v.shape[0] == 1:
+                result[k] = v.squeeze(0)
+            else:
+                result[k] = v
+        result.pop("input_mode", None)
 
-    def candidate_token_ids(self, processor, text: str) -> list[int]:
-        raise NotImplementedError("Phi-4-MM candidate token resolution not yet implemented.")
+        # Build labels: mask out the prompt portion
+        input_ids = result["input_ids"]
+        # Find where the assistant response starts
+        prompt_chat = [
+            {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
+        ]
+        prompt_text = processor.tokenizer.apply_chat_template(
+            prompt_chat, tokenize=False, add_generation_prompt=True,
+        )
+        prompt_ids = processor.tokenizer.encode(prompt_text, add_special_tokens=False)
+        prompt_len = len(prompt_ids)
+
+        labels = input_ids.clone()
+        labels[:prompt_len] = -100
+        result["labels"] = labels
+        return result
+
+    def candidate_token_ids(self, processor: Any, text: str) -> list[int]:
+        """Resolve candidate text to token IDs."""
+        return processor.tokenizer.encode(text, add_special_tokens=False)
 
     def collate(self, batch: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
-        raise NotImplementedError(
-            "Phi-4-MM requires a dedicated collator modeled on "
-            "the official vision fine-tuning semantics."
-        )
+        """Collate a batch of training examples."""
+        if len(batch) == 1:
+            return {k: v.unsqueeze(0) if torch.is_tensor(v) else v for k, v in batch[0].items()}
+        raise NotImplementedError("Phi-4-MM batching > 1 not yet supported")
 
     def append_candidate(
         self, prefix: dict[str, Any], candidate_token_ids: list[int],
     ) -> dict[str, torch.Tensor]:
-        raise NotImplementedError("Phi-4-MM candidate append not yet implemented.")
+        """Append candidate tokens to the prefix for scoring."""
+        input_ids = prefix["input_ids"]
+        candidate_ids = torch.tensor(
+            candidate_token_ids, dtype=input_ids.dtype, device=input_ids.device,
+        )
+        # Match batch dimensions: input_ids is [batch, seq], candidate needs [batch, n]
+        if input_ids.dim() == 2:
+            candidate_ids = candidate_ids.unsqueeze(0)
+        new_ids = torch.cat([input_ids, candidate_ids], dim=-1)
+        result = dict(prefix)
+        result["input_ids"] = new_ids
+
+        # Extend attention_mask if present
+        if "attention_mask" in result:
+            mask = result["attention_mask"]
+            if mask.dim() == 2:
+                new_mask = torch.ones(
+                    mask.shape[0], len(candidate_token_ids),
+                    dtype=mask.dtype, device=mask.device,
+                )
+            else:
+                new_mask = torch.ones(
+                    len(candidate_token_ids),
+                    dtype=mask.dtype, device=mask.device,
+                )
+            result["attention_mask"] = torch.cat([mask, new_mask], dim=-1)
+
+        return result
+
+    # ------------------------------------------------------------------ #
+    # LoRA target resolution
+    # ------------------------------------------------------------------ #
 
     def resolve_lora_targets(self, model: torch.nn.Module) -> list[str]:
-        raise NotImplementedError(
-            "Phi-4-MM uses fused qkv_proj. Must inspect runtime module tree "
-            "and verify no bundled vision/speech LoRA structures conflict."
-        )
+        """Resolve LoRA target modules.
+
+        Phi ships with bundled vision/speech LoRA adapters that wrap
+        ``qkv_proj`` and ``o_proj`` in PEFT ``LoraLayer`` instances.
+        We target these LoraLayer wrappers directly (NOT ``.base_layer``).
+        PEFT's ``update_layer()`` multi-adapter path adds our adapter
+        alongside the existing vision/speech adapters.
+        """
+        scope_regex = self._profile.lora_scope_regex
+        targets = []
+        for name, mod in model.named_modules():
+            # Skip sub-modules inside existing LoRA adapters
+            if ".lora_A." in name or ".lora_B." in name or ".base_layer" in name:
+                continue
+            # Accept nn.Linear or PEFT LoraLayer (already-wrapped modules)
+            is_linear = isinstance(mod, torch.nn.Linear)
+            is_lora_layer = False
+            try:
+                from peft.tuners.lora import LoraLayer
+                is_lora_layer = isinstance(mod, LoraLayer)
+            except ImportError:
+                pass
+            if (is_linear or is_lora_layer) and re.match(scope_regex, name):
+                targets.append(name)
+        targets.sort()
+
+        # Post-discovery assertion: no vision/projector targets
+        vision_targets = [
+            t for t in targets
+            if "visual" in t.lower() or "vision" in t.lower()
+            or "projector" in t.lower() or "connector" in t.lower()
+            or "speech" in t.lower()
+        ]
+        if vision_targets:
+            raise RuntimeError(
+                f"Phi LoRA scope matched {len(vision_targets)} "
+                f"vision/speech/projector targets: {vision_targets[:5]}"
+            )
+
+        return targets
+
+    def get_inner_peft_model(self, model: torch.nn.Module) -> torch.nn.Module | None:
+        """Return the inner model with injected PEFT layers.
+
+        Phi-4-MM internally calls ``get_peft_model(self.model, ...)`` during
+        ``__init__`` to attach vision and speech LoRA adapters, then stores
+        the ``peft_config`` directly on ``self.model`` (a ``Phi4MMModel``)
+        without keeping the ``PeftModel`` wrapper.
+
+        The returned model has ``peft_config`` with existing adapters
+        (``vision``, ``speech``) and LoraLayer wrappers on attention modules.
+        Use ``LoraModel.inject_adapter()`` to add our language adapter.
+        """
+        inner = getattr(model, "model", None)
+        if inner is not None and hasattr(inner, "peft_config"):
+            peft_config = getattr(inner, "peft_config", {})
+            if peft_config:  # has existing adapters (vision, speech)
+                return inner
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Structural metadata
+    # ------------------------------------------------------------------ #
 
     def language_layers(self, model: torch.nn.Module) -> list[torch.nn.Module]:
-        raise NotImplementedError(
-            "Phi-4-MM language layer path requires runtime inspection. "
-            "Expected 32 language layers."
-        )
+        """Return the language model's transformer layers."""
+        layers = []
+        for name, mod in model.named_modules():
+            if re.match(r"^model\.layers\.\d+$", name):
+                layers.append((name, mod))
+        layers.sort(key=lambda x: int(x[0].split(".")[-1]))
+        return [mod for _, mod in layers]
 
     def language_hidden_size(self, model: torch.nn.Module) -> int:
-        raise NotImplementedError("Phi-4-MM hidden size requires runtime inspection.")
+        return self._profile.hidden_size
+
+    def language_intermediate_size(self, model: torch.nn.Module) -> int:
+        return self._profile.intermediate_size
 
     def manu_neuron_specs(self, model: torch.nn.Module) -> list[NeuronSpec]:
-        raise NotImplementedError(
-            "Phi-4-MM uses fused gate_up_proj + down_proj. "
-            "Write dedicated indexing logic."
-        )
+        """MANU specs for Phi language MLP (fused gate_up_proj + down_proj)."""
+        layers = self.language_layers(model)
+        _hidden_size = self.language_hidden_size(model)
+        intermediate_size = self.language_intermediate_size(model)
+
+        specs: list[NeuronSpec] = []
+        for i, layer in enumerate(layers):
+            mlp = getattr(layer, "mlp", None)
+            if mlp is None:
+                continue
+            if hasattr(mlp, "gate_up_proj") and hasattr(mlp, "down_proj"):
+                specs.append(NeuronSpec(
+                    layer_index=i,
+                    layer_path=f"model.layers.{i}",
+                    mlp_path=f"model.layers.{i}.mlp",
+                    up_proj_name="gate_up_proj",
+                    down_proj_name="down_proj",
+                    hidden_size=_hidden_size,
+                    intermediate_size=intermediate_size,
+                    is_fused_up=True,
+                ))
+        return specs
 
     def to_eval_backend(self, **kwargs) -> Any:
         """Convert to a generic :class:`AdapterEvalBackend`."""

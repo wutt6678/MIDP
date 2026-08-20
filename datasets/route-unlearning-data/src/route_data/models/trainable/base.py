@@ -259,6 +259,20 @@ class TrainableVLMAdapter(ABC):
             Module names for LoRA attachment.
         """
 
+    def get_inner_peft_model(self, model: torch.nn.Module) -> torch.nn.Module | None:
+        """Return the inner PEFT model if the model already has LoRA adapters.
+
+        Some model families (e.g. Phi-4-MM) ship with bundled LoRA adapters
+        for non-language modalities.  In that case, ``get_peft_model()``
+        cannot be called again; instead, ``add_adapter()`` must be called on
+        the existing PeftModel to add our language adapter alongside the
+        bundled ones.
+
+        Returns ``None`` for model families that do not have pre-existing
+        PEFT wrapping (the default).
+        """
+        return None
+
     # ------------------------------------------------------------------ #
     # Language layer access (for R2MU, MANU)
     # ------------------------------------------------------------------ #
