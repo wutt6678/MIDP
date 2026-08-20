@@ -65,7 +65,7 @@ ALL_FAMILIES = _IMAGE_FAMILIES | _TEXT_ONLY_FAMILIES
 METRIC_SCHEMA_VERSION = "baseline-metrics-v1"
 
 # Frozen generation budget for name_only (P0-1).
-_NAME_ONLY_MAX_NEW_TOKENS = 64
+_NAME_ONLY_MAX_NEW_TOKENS = 128
 
 
 # --------------------------------------------------------------------------- #
@@ -1140,6 +1140,33 @@ class BaselineRunner:
         raw = json.dumps(payload, sort_keys=True)
         return hashlib.sha256(raw.encode()).hexdigest()
 
+    def _family_generation_hash(self, probe_family: str) -> str:
+        """SHA-256 of generation settings for a specific probe family.
+
+        Unlike ``_generation_protocol_hash`` (which covers all families),
+        this returns a hash covering only the settings relevant to
+        *probe_family*.  This allows changing name_only budget without
+        invalidating cached binary results (and vice versa).
+        """
+        if probe_family in _TEXT_ONLY_FAMILIES:
+            payload = {
+                "family": probe_family,
+                "do_sample": False,
+                "temperature": 0.0,
+                "max_new_tokens": _NAME_ONLY_MAX_NEW_TOKENS,
+                "scoring_version": SCORING_VERSION,
+            }
+        else:
+            payload = {
+                "family": probe_family,
+                "do_sample": False,
+                "temperature": 0.0,
+                "max_new_tokens": self.model_config.generation.max_new_tokens,
+                "scoring_version": SCORING_VERSION,
+            }
+        raw = json.dumps(payload, sort_keys=True)
+        return hashlib.sha256(raw.encode()).hexdigest()
+
     def _cache_key(self, probe: BaselineProbe) -> str:
         """Composite cache key for deterministic resumption.
 
@@ -1160,9 +1187,11 @@ class BaselineRunner:
         route_sha = self._route_probe_sha()
         parts.append(route_sha)
         parts.append(self._model_config_sha)  # full 64-char SHA
-        # P0-1 final: generation protocol hash prevents old 4-token
-        # results from being silently reused after the budget change.
-        parts.append(self._generation_protocol_hash())
+        # P0-1 final: family-specific generation settings prevent old
+        # results from being silently reused after a budget change.
+        # Using per-family settings (not the full protocol hash) ensures
+        # that changing name_only budget does not invalidate binary results.
+        parts.append(self._family_generation_hash(probe.probe_family))
         raw = "|".join(parts)
         return hashlib.sha256(raw.encode()).hexdigest()
 

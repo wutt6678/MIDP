@@ -173,7 +173,7 @@ def main() -> None:
     import json as _json
     _gen_payload = {
         "binary_families": {"do_sample": False, "temperature": 0.0, "max_new_tokens": 4},
-        "name_only": {"do_sample": False, "temperature": 0.0, "max_new_tokens": 64},
+        "name_only": {"do_sample": False, "temperature": 0.0, "max_new_tokens": 128},
         "scoring_version": "2",
     }
     protocol_sha256 = hashlib.sha256(
