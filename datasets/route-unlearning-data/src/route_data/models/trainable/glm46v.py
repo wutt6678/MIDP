@@ -89,10 +89,10 @@ class GLM46VAdapter(HuggingFaceChatAdapter):
         )
 
     def to_eval_backend(self, **kwargs) -> Any:
-        raise NotImplementedError(
-            "GLM-4.6V eval backend not yet implemented. "
-            "Requires a VisionLanguageModel backend for GLM."
-        )
+        """Convert to a generic :class:`AdapterEvalBackend`."""
+        from ..adapter_eval_backend import AdapterEvalBackend
+
+        return AdapterEvalBackend(adapter=self, **kwargs)
 
 
 register_model_key("glm46v_flash", "glm46v")

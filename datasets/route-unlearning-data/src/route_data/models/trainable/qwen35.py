@@ -226,14 +226,21 @@ class Qwen35Adapter(HuggingFaceChatAdapter):
         model_config: Any,
         adapter_metadata: dict[str, Any] | None = None,
     ) -> Any:
-        """Convert to a :class:`QwenHFBackend` for post-unlearning evaluation."""
-        from ..qwen import QwenHFBackend
+        """Convert to an :class:`AdapterEvalBackend` for evaluation.
 
-        backend = QwenHFBackend(model_config)
-        backend._model = model
-        backend._processor = processor
-        backend._adapter_metadata = adapter_metadata
-        return backend
+        Uses the generic adapter-backed backend (§1.2 of multi-model plan)
+        which delegates prefix construction and candidate tokenization to
+        this adapter, ensuring model-agnostic evaluation.
+        """
+        from ..adapter_eval_backend import AdapterEvalBackend
+
+        return AdapterEvalBackend(
+            adapter=self,
+            model=model,
+            processor=processor,
+            model_config=model_config,
+            adapter_metadata=adapter_metadata,
+        )
 
 
 # Register model keys that share the qwen35 adapter family

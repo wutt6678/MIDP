@@ -79,9 +79,10 @@ class Gemma3Adapter(HuggingFaceChatAdapter):
         )
 
     def to_eval_backend(self, **kwargs) -> Any:
-        raise NotImplementedError(
-            "Gemma3 eval backend not yet implemented."
-        )
+        """Convert to a generic :class:`AdapterEvalBackend`."""
+        from ..adapter_eval_backend import AdapterEvalBackend
+
+        return AdapterEvalBackend(adapter=self, **kwargs)
 
 
 register_model_key("gemma3_12b", "gemma3")

@@ -110,7 +110,10 @@ class Phi4MMAdapter(TrainableVLMAdapter):
         )
 
     def to_eval_backend(self, **kwargs) -> Any:
-        raise NotImplementedError("Phi-4-MM eval backend not yet implemented.")
+        """Convert to a generic :class:`AdapterEvalBackend`."""
+        from ..adapter_eval_backend import AdapterEvalBackend
+
+        return AdapterEvalBackend(adapter=self, **kwargs)
 
 
 register_model_key("phi4_mm", "phi4mm")
