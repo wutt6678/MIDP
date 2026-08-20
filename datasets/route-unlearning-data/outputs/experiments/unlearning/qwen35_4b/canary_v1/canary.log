@@ -1,0 +1,48 @@
+2026-08-20 10:59:05 [INFO] ============================================================
+2026-08-20 10:59:05 [INFO] Qwen3.5-4B Unlearning Canary
+2026-08-20 10:59:05 [INFO] ============================================================
+2026-08-20 10:59:05 [INFO] Output directory: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/canary_v1
+2026-08-20 10:59:05 [INFO] Step 1: Loading baseline
+2026-08-20 10:59:05 [INFO] Loaded 500 baseline results
+2026-08-20 10:59:05 [INFO] Step 2: Selecting identities
+2026-08-20 10:59:05 [INFO] Selected identities:
+2026-08-20 10:59:05 [INFO]   Target (forget): ['76f35468e0b72c60', '14dd102b5288c236']
+2026-08-20 10:59:05 [INFO]   Retain: ['67218532aba5fc77', 'cbb9f0b7b65140bd']
+2026-08-20 10:59:05 [INFO]   Control: ['bd9d89b8a1f51955', '89d6ff2125fd7ac5']
+2026-08-20 10:59:05 [INFO] Untargeted identities: 94
+2026-08-20 10:59:05 [INFO] Step 3: Loading model and attaching LoRA
+Fetching 14 files:   0%|          | 0/14 [00:00<?, ?it/s]Fetching 14 files: 100%|██████████| 14/14 [00:00<00:00, 1459.36it/s]
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
+Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights:   2%|▏         | 11/723 [00:00<00:06, 109.40it/s]Loading weights:   4%|▍         | 31/723 [00:00<00:04, 162.50it/s]Loading weights:   7%|▋         | 48/723 [00:00<00:04, 163.76it/s]Loading weights:  10%|█         | 75/723 [00:00<00:03, 202.82it/s]Loading weights:  13%|█▎        | 96/723 [00:00<00:03, 195.65it/s]Loading weights:  16%|█▋        | 118/723 [00:00<00:03, 198.36it/s]Loading weights:  20%|█▉        | 142/723 [00:00<00:02, 208.55it/s]Loading weights:  23%|██▎       | 163/723 [00:00<00:02, 206.29it/s]Loading weights:  26%|██▌       | 186/723 [00:00<00:02, 213.03it/s]Loading weights:  29%|██▉       | 208/723 [00:01<00:02, 204.96it/s]Loading weights:  32%|███▏      | 233/723 [00:01<00:02, 213.91it/s]Loading weights:  36%|███▌      | 260/723 [00:01<00:02, 229.53it/s]Loading weights:  40%|████      | 290/723 [00:01<00:01, 249.79it/s]Loading weights:  44%|████▎     | 316/723 [00:01<00:01, 241.43it/s]Loading weights:  48%|████▊     | 345/723 [00:01<00:01, 253.92it/s]Loading weights:  51%|█████▏    | 371/723 [00:01<00:01, 247.56it/s]Loading weights:  55%|█████▌    | 399/723 [00:01<00:01, 256.17it/s]Loading weights:  59%|█████▉    | 425/723 [00:01<00:01, 252.29it/s]Loading weights:  79%|███████▊  | 568/723 [00:01<00:00, 591.60it/s]Loading weights:  98%|█████████▊| 708/723 [00:02<00:00, 826.87it/s]Loading weights: 100%|██████████| 723/723 [00:02<00:00, 340.64it/s]
+2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:11 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:12 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:12 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:12 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:12 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:13 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:13 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:13 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:13 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-20 10:59:14 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B "HTTP/1.1 200 OK"
+2026-08-20 10:59:15 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:15 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-20 10:59:15 [INFO] Loaded qwen35_4b: Qwen/Qwen3.5-4B rev=851bf6e806ef
+2026-08-20 10:59:15 [INFO] Step 4: Building training dataset
+2026-08-20 10:59:15 [INFO] UnlearningDataset: 20 samples
+2026-08-20 10:59:15 [INFO]   Target samples: 10
+2026-08-20 10:59:15 [INFO]   Retain samples: 10
+2026-08-20 10:59:15 [INFO] Step 5: Training
+2026-08-20 10:59:15 [INFO] Trainable LoRA parameters: 64
+2026-08-20 10:59:15 [INFO] Starting training: 1 steps, grad_accum=4
+2026-08-20 10:59:15 [INFO] Step 0/1, loss=0.5000, grads_nonzero=0
+2026-08-20 10:59:15 [INFO] Training complete: 0/64 LoRA tensors changed
+Traceback (most recent call last):
+  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/scripts/run_4b_unlearning_canary.py", line 566, in <module>
+    main()
+  File "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/scripts/run_4b_unlearning_canary.py", line 456, in main
+    assert training_stats["gradients_nonzero_total"] > 0, "Gradients must be nonzero"
+AssertionError: Gradients must be nonzero

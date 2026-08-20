@@ -1,0 +1,84 @@
+# Stage 3 — Qwen3.5-4B Unlearning Experiment (v1)
+#
+# This config defines the unlearning experiment for Qwen3.5-4B.
+# Goal: Selectively alter behaviour associated with specific identities
+#       while preserving general visual capability.
+#
+# Scale:  2 target identities (+ matched retain & control)
+# Method: LoRA-based targeted candidate margin
+# Seed:   17
+#
+# Baseline: qwen35_4b baseline_v1 (500 probes, 128-token name_only budget)
+
+experiment_id: fiubench_unlearning_4b_v1
+
+base_model:
+  model_id: Qwen/Qwen3.5-4B
+  revision: "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+  processor_revision: "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+  backend: qwen_hf
+  dtype: bfloat16
+  fingerprint_id: "01306df4d620e651"
+  model_config_path: configs/models/unlearning/qwen35_4b.yaml
+
+baseline:
+  model_key: qwen35_4b
+  protocol_version: baseline_v1
+  manifest_path: outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_manifest.json
+  binding_path: outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_binding.json
+  results_path: outputs/experiments/pre_unlearning/qwen35_4b/baseline_v1/baseline_results.jsonl
+  # SHA-256 hashes are read from binding file at runtime
+
+dataset:
+  route_probe_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl
+  route_probe_sha256: aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864
+  processed_dataset_path: outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl
+  research_manifest_path: outputs/full_fiubench/evidence/research_dataset_manifest.json
+  freeze_verification_path: outputs/full_fiubench/evidence/final_freeze_verification.json
+
+selection:
+  target_identity_count: 2
+  retain_identity_count: 2
+  control_identity_count: 2
+  seed: 17
+  matching_criteria:
+    - same-protocol-role
+    - baseline-margin-matched
+    - attribute-diverse-retain-control
+  preferred_role: train
+
+method:
+  name: lora_targeted_candidate_margin
+  hyperparameters:
+    lora_rank: 8
+    lora_alpha: 16
+    lora_dropout: 0.05
+    learning_rate: 1.0e-4
+    num_optimizer_steps: 50
+    retain_weight: 0.1
+    train_batch_size: 1
+    gradient_accumulation_steps: 4
+
+evaluation:
+  reuse_frozen_500_probes: true
+  primary_metric: signed_answer_margin
+  preserve_visual_capability: true
+  direct_visual_accuracy_gate: 0.98
+  generation_config:
+    binary_families:
+      do_sample: false
+      temperature: 0.0
+      max_new_tokens: 4
+    name_only:
+      do_sample: false
+      temperature: 0.0
+      max_new_tokens: 128
+
+runtime:
+  seed: 17
+  output_dir: outputs/experiments/unlearning/qwen35_4b/v1
+  device: cuda:0
+  training_mode: true
+
+# code_provenance is recorded at runtime in pipeline_provenance.json.
+# Do not hard-code a git_commit here; it becomes stale immediately.
