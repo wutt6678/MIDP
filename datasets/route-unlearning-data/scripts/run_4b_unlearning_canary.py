@@ -335,10 +335,17 @@ def run_post_evaluation(
     """Run post-unlearning evaluation on frozen 500 probes."""
     lora_model.eval()
     
-    num_probes = 10 if smoke else len(baseline_results)
-    probe_subset = baseline_results[:num_probes]
-    
-    logger.info(f"Running post-evaluation on {num_probes} probes")
+    # In smoke mode, ensure we sample from all 5 families
+    if smoke:
+        # Get at least 2 probes from each family
+        probe_subset = []
+        for family in ["direct_visual", "image_plus_name", "wrong_name", "visual_text_conflict", "name_only"]:
+            family_probes = [r for r in baseline_results if r["probe_family"] == family]
+            probe_subset.extend(family_probes[:2])
+        logger.info(f"Running post-evaluation on {len(probe_subset)} probes (smoke mode, all families)")
+    else:
+        probe_subset = baseline_results
+        logger.info(f"Running post-evaluation on {len(probe_subset)} probes")
     
     # TODO: Implement real scoring for each probe
     # For now, return placeholder results
@@ -549,7 +556,7 @@ def main() -> None:
             "parameters_changed": bool(training_stats["lora_tensors_changed"] > 0),
             "checkpoint_saved": bool(adapter_path.exists()),
             "checkpoint_reloaded": True,
-            "post_eval_500_probes": bool(post_eval["num_probes"] == (10 if args.smoke else 500)),
+            "post_eval_500_probes": bool(post_eval["num_probes"] == (10 if args.smoke else 500) or (args.smoke and post_eval["num_probes"] >= 10)),
             "inference_errors_zero": bool(post_eval["inference_errors"] == 0),
             "family_deltas_reported": bool(len(post_eval["family_deltas"]) == 5),
             "name_only_token_overlap": True,
