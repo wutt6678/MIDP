@@ -97,9 +97,8 @@ class GLM46VAdapter(HuggingFaceChatAdapter):
         scope_regex = self._profile.lora_scope_regex
         targets = []
         for name, mod in model.named_modules():
-            if isinstance(mod, torch.nn.Linear):
-                if re.match(scope_regex, name):
-                    targets.append(name)
+            if isinstance(mod, torch.nn.Linear) and re.match(scope_regex, name):
+                targets.append(name)
         targets.sort()
 
         # Post-discovery assertion: vision/projector/connector count = 0.
@@ -146,7 +145,7 @@ class GLM46VAdapter(HuggingFaceChatAdapter):
         if not layers:
             raise RuntimeError("No language layers found")
 
-        hidden_size = self.language_hidden_size(model)
+        _hidden_size = self.language_hidden_size(model)
         intermediate_size = self.language_intermediate_size(model)
 
         specs: list[NeuronSpec] = []

@@ -40,7 +40,6 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-import torch
 import yaml
 
 logging.basicConfig(
@@ -117,11 +116,12 @@ def select_identities(config: dict, baseline_results: list[dict]) -> dict:
 
 def load_model_and_attach_lora(config: dict) -> tuple:
     """Load base model and attach LoRA adapter."""
+    from peft import LoraConfig, get_peft_model
+
     from route_data.models.trainable.registry import (
         create_adapter,
         load_profile_from_yaml,
     )
-    from peft import LoraConfig, get_peft_model
     
     model_config_path = Path(config["base_model"]["model_config_path"])
     profile = load_profile_from_yaml(str(model_config_path))

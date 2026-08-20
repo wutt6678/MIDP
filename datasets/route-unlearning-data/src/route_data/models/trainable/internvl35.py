@@ -76,9 +76,8 @@ class InternVL35Adapter(HuggingFaceChatAdapter):
         scope_regex = self._profile.lora_scope_regex
         targets = []
         for name, mod in model.named_modules():
-            if isinstance(mod, torch.nn.Linear):
-                if re.match(scope_regex, name):
-                    targets.append(name)
+            if isinstance(mod, torch.nn.Linear) and re.match(scope_regex, name):
+                targets.append(name)
         targets.sort()
 
         vision_targets = [
@@ -113,7 +112,7 @@ class InternVL35Adapter(HuggingFaceChatAdapter):
     def manu_neuron_specs(self, model: torch.nn.Module) -> list[NeuronSpec]:
         """MANU specs for InternVL language MLP (standard gate/up/down)."""
         layers = self.language_layers(model)
-        hidden_size = self.language_hidden_size(model)
+        _hidden_size = self.language_hidden_size(model)
         intermediate_size = self.language_intermediate_size(model)
 
         specs: list[NeuronSpec] = []

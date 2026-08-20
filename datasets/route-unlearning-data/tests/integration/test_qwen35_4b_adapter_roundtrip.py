@@ -255,17 +255,16 @@ class TestQwen35_4BAdapterRoundtrip:
             # Snapshot reloaded LoRA weights and compare
             snap_post_reload = _snapshot_lora_weights(lora_model2)
             reloaded_weights_changed, n_cmp, n_diff = _weights_changed(snap_pre_save, snap_post_reload)
-            print(f"\nLoRA weight comparison (pre-save vs post-reload):")
+            print("\nLoRA weight comparison (pre-save vs post-reload):")
             print(f"  Tensors compared: {n_cmp}")
             print(f"  Tensors different: {n_diff}")
             print(f"  Weights identical: {not reloaded_weights_changed}")
             if reloaded_weights_changed:
                 # Find which tensors differ
                 for name, val_pre in snap_pre_save.items():
-                    if name in snap_post_reload:
-                        if not torch.equal(val_pre, snap_post_reload[name]):
-                            diff = (val_pre - snap_post_reload[name]).abs().max().item()
-                            print(f"    {name}: max_diff={diff:.6e}")
+                    if name in snap_post_reload and not torch.equal(val_pre, snap_post_reload[name]):
+                        diff = (val_pre - snap_post_reload[name]).abs().max().item()
+                        print(f"    {name}: max_diff={diff:.6e}")
 
             # Assert reloaded weights are identical to pre-save
             assert n_cmp == len(snap_pre_save), (

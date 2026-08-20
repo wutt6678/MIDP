@@ -14,10 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-from collections import defaultdict
 from pathlib import Path
-
-import torch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,7 +55,7 @@ def score_probes_with_adapter(
     adapter = create_adapter(profile.key, profile=profile)
     
     # Load base model
-    model, processor = adapter.load_model_processor(
+    model, _processor = adapter.load_model_processor(
         model_id="Qwen/Qwen3.5-4B",
         revision="851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
         processor_revision="851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
@@ -167,8 +164,7 @@ def main() -> None:
     
     # Save results
     with open(output_dir / "post_eval_results.jsonl", "w") as f:
-        for r in post_results:
-            f.write(json.dumps(r) + "\n")
+        f.writelines(json.dumps(r) + "\n" for r in post_results)
     
     # Save summary
     summary = {

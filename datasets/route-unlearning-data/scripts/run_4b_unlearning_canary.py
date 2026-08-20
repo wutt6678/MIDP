@@ -38,15 +38,13 @@ import json
 import logging
 import random
 import subprocess
-import sys
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 logging.basicConfig(
     level=logging.INFO,
@@ -134,7 +132,7 @@ def select_identities(baseline_results: list[dict], seed: int = 17) -> dict:
     random.shuffle(eval_identities)
     control_ids = eval_identities[:2]
     
-    logger.info(f"Selected identities:")
+    logger.info("Selected identities:")
     logger.info(f"  Target (forget): {target_ids}")
     logger.info(f"  Retain: {retain_ids}")
     logger.info(f"  Control: {control_ids}")
@@ -235,7 +233,7 @@ def train_unlearning(
     
     num_steps = config["method"]["hyperparameters"]["num_optimizer_steps"]
     grad_accum = config["method"]["hyperparameters"]["gradient_accumulation_steps"]
-    retain_weight = config["method"]["hyperparameters"]["retain_weight"]
+    _retain_weight = config["method"]["hyperparameters"]["retain_weight"]
     
     losses = []
     gradients_nonzero = 0
@@ -304,8 +302,8 @@ def train_unlearning(
     }
     
     weights_changed = 0
-    for name in snap_init:
-        if not torch.equal(snap_init[name], snap_final[name]):
+    for _name, _val in snap_init.items():
+        if not torch.equal(_val, snap_final[_name]):
             weights_changed += 1
     
     logger.info(f"Training complete: {weights_changed}/{len(snap_init)} LoRA tensors changed")
@@ -434,14 +432,15 @@ def main() -> None:
     
     # Count untargeted (not in any selected group)
     all_selected = set(identities["all_selected"])
-    all_identities = set(r["identity_id"] for r in baseline_results)
+    all_identities = {r["identity_id"] for r in baseline_results}
     untargeted_ids = all_identities - all_selected
     logger.info(f"Untargeted identities: {len(untargeted_ids)}")
     
     # Step 3: Load model and attach LoRA
     logger.info("Step 3: Loading model and attaching LoRA")
-    from route_data.models.trainable.registry import create_adapter, load_profile_from_yaml
     from peft import LoraConfig, get_peft_model
+
+    from route_data.models.trainable.registry import create_adapter, load_profile_from_yaml
     
     profile = load_profile_from_yaml(str(PROJECT_ROOT / config["base_model"]["model_config_path"]))
     adapter = create_adapter(profile.key, profile=profile)
@@ -523,8 +522,7 @@ def main() -> None:
     
     # Save post-eval results
     with open(OUTPUT_DIR / "post_eval_results.jsonl", "w") as f:
-        for r in post_eval["results"]:
-            f.write(json.dumps(r) + "\n")
+        f.writelines(json.dumps(r) + "\n" for r in post_eval["results"])
     
     # Write canary report
     report = {

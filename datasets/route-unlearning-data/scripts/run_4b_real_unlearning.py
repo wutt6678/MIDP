@@ -29,7 +29,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import torch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,7 +117,7 @@ def select_identities(baseline_results: list[dict], seed: int = 17) -> dict:
     random.shuffle(eval_identities)
     control_ids = eval_identities[:2]
     
-    logger.info(f"Selected identities:")
+    logger.info("Selected identities:")
     logger.info(f"  Target (forget): {target_ids}")
     logger.info(f"  Retain: {retain_ids}")
     logger.info(f"  Control: {control_ids}")
@@ -214,10 +213,10 @@ def main() -> None:
     # Step 5: Load model and setup unlearning
     logger.info("Step 5: Loading model and setting up unlearning")
     from route_data.eval.unlearning_harness import (
-        UnlearningConfig,
-        UnlearningTrainer,
         ForgetDataset,
         RetainDataset,
+        UnlearningConfig,
+        UnlearningTrainer,
     )
     from route_data.models.trainable.registry import create_adapter, load_profile_from_yaml
     

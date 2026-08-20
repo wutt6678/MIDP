@@ -79,9 +79,8 @@ class Gemma3Adapter(HuggingFaceChatAdapter):
         scope_regex = self._profile.lora_scope_regex
         targets = []
         for name, mod in model.named_modules():
-            if isinstance(mod, torch.nn.Linear):
-                if re.match(scope_regex, name):
-                    targets.append(name)
+            if isinstance(mod, torch.nn.Linear) and re.match(scope_regex, name):
+                targets.append(name)
         targets.sort()
 
         vision_targets = [

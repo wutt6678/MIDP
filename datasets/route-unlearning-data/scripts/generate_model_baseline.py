@@ -80,9 +80,6 @@ def select_balanced_smoke_probes(
     first *per_family*.  Returns exactly ``per_family * 5`` probes.
     Works with both dict and BaselineProbe dataclass inputs.
     """
-    import random
-    rng = random.Random(seed)
-
     def _get(p, key):
         if isinstance(p, dict):
             return p[key]
@@ -264,7 +261,7 @@ def _validate_final_binding(
     if not all_pass:
         failed = [k for k, v in checks.items() if not v]
         raise RuntimeError(
-            f"Final binding validation FAILED:\n  " + "\n  ".join(failed)
+            "Final binding validation FAILED:\n  " + "\n  ".join(failed)
         )
 
     return report
@@ -452,13 +449,13 @@ def main() -> None:
     # Step 3: Save results
     # ================================================================== #
     logger.info("Step 3: Saving results...")
-    results_path = runner.save_results()
+    runner.save_results()
 
     # ================================================================== #
     # Step 4: Generate summary
     # ================================================================== #
     logger.info("Step 4: Generating summary...")
-    summary = runner.generate_summary()
+    runner.generate_summary()
 
     # ================================================================== #
     # Step 5: Validate results
@@ -480,7 +477,7 @@ def main() -> None:
     # ================================================================== #
     if not args.smoke_only:
         logger.info("Step 6-7: Generating manifest...")
-        manifest = runner.generate_baseline_manifest()
+        runner.generate_baseline_manifest()
     else:
         logger.info("Step 6-7: Skipping manifest (smoke mode)")
 
