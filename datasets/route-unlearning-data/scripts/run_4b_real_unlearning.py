@@ -247,15 +247,33 @@ def main() -> None:
         output_dir=str(OUTPUT_DIR),
     )
     
-    # Load model
+    # Load model (frozen base, only LoRA will be trainable)
     model, processor = adapter.load_model_processor(
         model_id=unlearn_config.model_id,
         revision=unlearn_config.model_revision,
         processor_revision=config["base_model"]["processor_revision"],
         dtype=profile.dtype,
         device=device,
-        training=True,
+        training=False,  # Freeze base model
     )
+    
+    # Freeze all base model parameters
+    for param in model.parameters():
+        param.requires_grad = False
+    
+    # Apply LoRA (this will make only LoRA parameters trainable)
+    from peft import LoraConfig, get_peft_model
+    lora_config = LoraConfig(
+        r=unlearn_config.lora_rank,
+        lora_alpha=unlearn_config.lora_alpha,
+        lora_dropout=unlearn_config.lora_dropout,
+        target_modules=unlearn_config.lora_target_modules,
+        task_type="CAUSAL_LM",
+    )
+    model = get_peft_model(model, lora_config)
+    
+    logger.info(f"Applied LoRA: rank={unlearn_config.lora_rank}, alpha={unlearn_config.lora_alpha}")
+    logger.info(f"Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     
     # Build datasets
     forget_dataset = ForgetDataset(forget_samples, processor)
