@@ -229,17 +229,26 @@ class Phi4MMAdapter(TrainableVLMAdapter):
 
         Uses ``<|endoftext10|>`` as the image token and the standard
         Phi chat template: ``<|user|>\\n<image>\\n<prompt><|end|><|assistant|>\\n``.
-        """
-        chat = [
-            {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
-        ]
-        prompt_text = processor.tokenizer.apply_chat_template(
-            chat, tokenize=False, add_generation_prompt=True,
-        )
 
-        inputs = processor(
-            text=prompt_text, images=[image], return_tensors="pt",
-        )
+        When ``image is None`` (name_only probes), the image token is
+        omitted and the processor is called without ``images=``.
+        """
+        if image is None:
+            chat = [{"role": "user", "content": prompt}]
+            prompt_text = processor.tokenizer.apply_chat_template(
+                chat, tokenize=False, add_generation_prompt=True,
+            )
+            inputs = processor(text=prompt_text, return_tensors="pt")
+        else:
+            chat = [
+                {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
+            ]
+            prompt_text = processor.tokenizer.apply_chat_template(
+                chat, tokenize=False, add_generation_prompt=True,
+            )
+            inputs = processor(
+                text=prompt_text, images=[image], return_tensors="pt",
+            )
         # Squeeze batch dim for text tensors (consistent with other adapters).
         # Keep image-indexed tensors and 1-D tensors (like ``input_mode``)
         # unsqueezed — the inner model expects them with their batch dim.
@@ -260,17 +269,31 @@ class Phi4MMAdapter(TrainableVLMAdapter):
     def build_supervised_example(
         self, processor: Any, *, image: Any, prompt: str, answer_text: str,
     ) -> dict[str, Any]:
-        """Build a supervised training example with labels."""
-        chat = [
-            {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
-            {"role": "assistant", "content": answer_text},
-        ]
-        full_text = processor.tokenizer.apply_chat_template(
-            chat, tokenize=False, add_generation_prompt=False,
-        )
-        inputs = processor(
-            text=full_text, images=[image], return_tensors="pt",
-        )
+        """Build a supervised training example with labels.
+
+        When ``image is None`` (name_only probes), the image token is
+        omitted and the processor is called without ``images=``.
+        """
+        if image is None:
+            chat = [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": answer_text},
+            ]
+            full_text = processor.tokenizer.apply_chat_template(
+                chat, tokenize=False, add_generation_prompt=False,
+            )
+            inputs = processor(text=full_text, return_tensors="pt")
+        else:
+            chat = [
+                {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
+                {"role": "assistant", "content": answer_text},
+            ]
+            full_text = processor.tokenizer.apply_chat_template(
+                chat, tokenize=False, add_generation_prompt=False,
+            )
+            inputs = processor(
+                text=full_text, images=[image], return_tensors="pt",
+            )
         result = {}
         image_indexed = self.image_indexed_keys()
         for k, v in inputs.items():
@@ -283,9 +306,12 @@ class Phi4MMAdapter(TrainableVLMAdapter):
         # Build labels: mask out the prompt portion
         input_ids = result["input_ids"]
         # Find where the assistant response starts
-        prompt_chat = [
-            {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
-        ]
+        if image is None:
+            prompt_chat = [{"role": "user", "content": prompt}]
+        else:
+            prompt_chat = [
+                {"role": "user", "content": f"{PHI_IMAGE_TOKEN}\n{prompt}"},
+            ]
         prompt_text = processor.tokenizer.apply_chat_template(
             prompt_chat, tokenize=False, add_generation_prompt=True,
         )
@@ -302,9 +328,23 @@ class Phi4MMAdapter(TrainableVLMAdapter):
         return processor.tokenizer.encode(text, add_special_tokens=False)
 
     def collate(self, batch: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
-        """Collate a batch of training examples."""
+        """Collate a batch of training examples.
+
+        Image-indexed tensors (``input_image_embeds``,
+        ``image_attention_mask``, ``image_sizes``) already carry the
+        correct leading dimension and must NOT be unsqueezed again.
+        Only sequence tensors that were deliberately squeezed in
+        ``build_prefix()`` need the batch dim restored.
+        """
         if len(batch) == 1:
-            return {k: v.unsqueeze(0) if torch.is_tensor(v) else v for k, v in batch[0].items()}
+            image_indexed = self.image_indexed_keys()
+            result = {}
+            for k, v in batch[0].items():
+                if torch.is_tensor(v) and k not in image_indexed:
+                    result[k] = v.unsqueeze(0)
+                else:
+                    result[k] = v
+            return result
         raise NotImplementedError("Phi-4-MM batching > 1 not yet supported")
 
     def append_candidate(
@@ -418,7 +458,7 @@ class Phi4MMAdapter(TrainableVLMAdapter):
         return [mod for _, mod in layers]
 
     def language_hidden_size(self, model: torch.nn.Module) -> int:
-        return self._profile.hidden_size
+        return self._profile.language_hidden_size
 
     def language_intermediate_size(self, model: torch.nn.Module) -> int:
         return self._profile.intermediate_size
@@ -436,16 +476,60 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                 continue
             if hasattr(mlp, "gate_up_proj") and hasattr(mlp, "down_proj"):
                 specs.append(NeuronSpec(
-                    layer_index=i,
-                    layer_path=f"model.layers.{i}",
-                    mlp_path=f"model.layers.{i}.mlp",
-                    up_proj_name="gate_up_proj",
-                    down_proj_name="down_proj",
-                    hidden_size=_hidden_size,
-                    intermediate_size=intermediate_size,
+                    layer_name=f"model.layers.{i}",
+                    neuron_count=intermediate_size,
+                    input_projection_names=("gate_up_proj",),
+                    output_projection_name="down_proj",
+                    input_axis=1,   # down_proj: intermediate -> hidden
+                    output_axis=0,  # down_proj: intermediate -> hidden
                     is_fused_up=True,
+                    fused_up_input_axis=0,   # gate_up_proj: hidden -> intermediate
+                    fused_up_output_axis=1,  # gate_up_proj: hidden -> intermediate
                 ))
         return specs
+
+    def independent_forward_kwargs(
+        self,
+        prefix: dict[str, Any],
+        candidate_token_ids: list[int],
+    ) -> dict[str, torch.Tensor]:
+        """Build forward kwargs independently from ``append_candidate``.
+
+        Explicitly constructs the full forward dict with Phi-specific
+        fields (``input_image_embeds``, ``image_attention_mask``,
+        ``image_sizes``) passed through verbatim.  Used for P0-5 scorer
+        equivalence verification.
+        """
+        input_ids = prefix["input_ids"]
+        device = input_ids.device
+        dtype = input_ids.dtype
+
+        cand_ids = torch.tensor(
+            [candidate_token_ids], dtype=dtype, device=device,
+        )
+        full_input_ids = torch.cat([input_ids.unsqueeze(0) if input_ids.dim() == 1 else input_ids, cand_ids], dim=1)
+
+        forward_kwargs: dict[str, Any] = {"input_ids": full_input_ids}
+
+        # Attention mask
+        if "attention_mask" in prefix:
+            mask = prefix["attention_mask"]
+            if mask.dim() == 1:
+                mask = mask.unsqueeze(0)
+            new_mask = torch.ones(
+                mask.shape[0], len(candidate_token_ids),
+                dtype=mask.dtype, device=device,
+            )
+            forward_kwargs["attention_mask"] = torch.cat([mask, new_mask], dim=1)
+        else:
+            forward_kwargs["attention_mask"] = torch.ones_like(full_input_ids)
+
+        # Phi-specific multimodal fields — pass through verbatim
+        for key in ("input_image_embeds", "image_attention_mask", "image_sizes"):
+            if key in prefix:
+                forward_kwargs[key] = prefix[key]
+
+        return forward_kwargs
 
     def to_eval_backend(self, **kwargs) -> Any:
         """Convert to a generic :class:`AdapterEvalBackend`."""

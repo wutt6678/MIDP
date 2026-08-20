@@ -258,6 +258,7 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
         supports_manu=_safe_bool(data.get("supports_manu", True)),
         supports_r2mu=_safe_bool(data.get("supports_r2mu", True)),
         min_transformers_version=compat.get("min_transformers"),
+        max_transformers_version_exclusive=compat.get("max_transformers_exclusive"),
         tested_transformers_version=compat.get("tested_transformers", ""),
         requires_hf_auth=_safe_bool(access.get("requires_hf_auth", False)),
     )
@@ -384,6 +385,57 @@ def validate_research_profile(profile: ModelFamilyProfile) -> list[str]:
         errors.append(
             "candidate_positive and candidate_negative are identical"
         )
+
+    return errors
+
+
+def validate_environment_compatibility(
+    profile: ModelFamilyProfile,
+) -> list[str]:
+    """Validate that the current runtime environment matches the profile.
+
+    Checks ``transformers`` version against the profile's
+    ``min_transformers_version`` and
+    ``max_transformers_version_exclusive`` fields.
+
+    Returns a list of error messages.  Empty list means the current
+    environment is compatible with the profile.
+    """
+    errors: list[str] = []
+
+    try:
+        import transformers
+        current_version = transformers.__version__
+    except ImportError:
+        errors.append("transformers is not installed")
+        return errors
+
+    from packaging.version import Version
+
+    try:
+        current = Version(current_version)
+    except Exception:
+        # Dev versions like '5.14.1.dev0' — strip .dev suffix
+        base = current_version.split(".dev")[0]
+        current = Version(base)
+
+    if profile.min_transformers_version:
+        min_ver = Version(profile.min_transformers_version)
+        if current < min_ver:
+            errors.append(
+                f"transformers {current_version} < "
+                f"min required {profile.min_transformers_version} "
+                f"for {profile.key}"
+            )
+
+    if profile.max_transformers_version_exclusive:
+        max_ver = Version(profile.max_transformers_version_exclusive)
+        if current >= max_ver:
+            errors.append(
+                f"transformers {current_version} >= "
+                f"max exclusive {profile.max_transformers_version_exclusive} "
+                f"for {profile.key}"
+            )
 
     return errors
 

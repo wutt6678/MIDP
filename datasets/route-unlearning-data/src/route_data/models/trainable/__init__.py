@@ -24,6 +24,7 @@ from .registry import (
     load_profile_from_yaml,
     register_adapter_family,
     register_model_key,
+    validate_environment_compatibility,
     validate_research_profile,
     validate_structural_metadata,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "load_profile_from_yaml",
     "register_adapter_family",
     "register_model_key",
+    "validate_environment_compatibility",
     "validate_research_profile",
     "validate_structural_metadata",
 ]

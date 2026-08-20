@@ -10,7 +10,7 @@ model:
   adapter: phi4mm
   trust_remote_code: true
   dtype: bfloat16
-  attn_implementation: eager  # requires SDPA shim (no flash_attn available)
+  attn_implementation: phi_sdpa_shim_v1  # SDPA shim (no flash_attn available)
 
 candidate_protocol:
   positive: "Yes"
@@ -25,6 +25,7 @@ lora:
   # IMPORTANT: Do NOT include .base_layer — Phi wraps these in PEFT LoraLayer
   # for vision/speech; targeting the LoraLayer name triggers update_layer().
   scope_regex: "^model\\.layers\\.\\d+\\.(self_attn)\\.(qkv_proj|o_proj)$"
+  target_leaf_names: [qkv_proj, o_proj]
 
 structural:
   language_layer_path: "model.layers"
@@ -42,7 +43,10 @@ structural:
 
 compatibility:
   min_transformers: "4.47.0"
+  max_transformers_exclusive: "4.49.0"
   tested_transformers: "4.48.3"
+  tested_torch: "2.6.0"
+  tested_peft: "0.13.2"
   # REQUIRES: transformers 4.47.x + SDPA monkey-patches
   # (PreTrainedModel._check_and_enable_flash_attn_2 noop,
   #  modeling_flash_attention_utils._flash_attention_forward -> SDPA,

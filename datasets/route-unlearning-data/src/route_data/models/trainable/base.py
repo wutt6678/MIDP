@@ -72,6 +72,7 @@ class ModelFamilyProfile:
 
     # Environment
     min_transformers_version: str | None = None
+    max_transformers_version_exclusive: str | None = None
     tested_transformers_version: str = ""
     requires_hf_auth: bool = False
 
@@ -96,6 +97,11 @@ class NeuronSpec:
 
     Describes a language-backbone MLP layer with explicit axis information
     so that neuron pruning can be performed without model-specific hacks.
+
+    For fused up-projections (e.g. Phi's ``gate_up_proj``), set
+    ``is_fused_up=True`` and provide ``fused_up_input_axis`` /
+    ``fused_up_output_axis``.  The standard ``input_axis`` /
+    ``output_axis`` fields still describe the *down* projection.
     """
 
     layer_name: str
@@ -104,6 +110,10 @@ class NeuronSpec:
     output_projection_name: str
     input_axis: int
     output_axis: int
+    # Optional fused up-projection support (e.g. Phi gate_up_proj)
+    is_fused_up: bool = False
+    fused_up_input_axis: int = 0
+    fused_up_output_axis: int = 0
 
 
 class TrainableVLMAdapter(ABC):
@@ -238,6 +248,23 @@ class TrainableVLMAdapter(ABC):
         Returns a dict suitable for ``model(**prepared)``. Text tensors
         are extended; visual tensors are passed through unchanged.
         """
+
+    def independent_forward_kwargs(
+        self,
+        prefix: dict[str, Any],
+        candidate_token_ids: list[int],
+    ) -> dict[str, torch.Tensor]:
+        """Build forward kwargs independently from ``append_candidate``.
+
+        Used for P0-5 scorer equivalence verification: the shared scorer
+        (via ``append_candidate``) is compared against this independent
+        construction to ensure both produce identical results.
+
+        Default implementation delegates to ``append_candidate``. Override
+        for models that need explicit field pass-through verification
+        (e.g. Phi's ``input_image_embeds``, ``image_attention_mask``).
+        """
+        return self.append_candidate(prefix, candidate_token_ids)
 
     # ------------------------------------------------------------------ #
     # LoRA target resolution

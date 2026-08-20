@@ -1,33 +1,29 @@
 #!/usr/bin/env python3
-"""End-to-end unlearning canary for Qwen3.5-4B.
+"""Development LoRA plumbing smoke test for Qwen3.5-4B.
 
-This script runs a complete unlearning experiment with real training data,
-real GD optimization, and full 500-probe post-evaluation.
+**NOT a real unlearning canary.** This script tests LoRA attachment,
+forward pass, optimizer step, checkpoint save/reload plumbing with
+synthetic data. It does NOT perform real unlearning.
 
-Requirements verified:
-1. Real target/forget examples loaded
-2. Real retain examples loaded
-3. Forget/retain identities match frozen selection
-4. Loss remains finite
-5. LoRA gradients nonzero
-6. LoRA parameters change
-7. Checkpoint saved
-8. Checkpoint loads on fresh pinned base
-9. Post-eval produces exactly 500/500 matched probe IDs
-10. Inference errors = 0
-11. DV/IPN/WN/VTC deltas reported separately
-12. name_only uses token-overlap deltas
-13. Target/retain/control/untargeted counts = 2/2/2/94
-14. Baseline identity validation passes
-15. No unexpected DV collapse
+The dataset returns placeholder examples, the training loop uses a
+synthetic gray image, and post-evaluation copies baseline scores
+instead of running real inference. Do NOT use outputs from this
+script as scientific evidence.
+
+For a true adapter-driven model-agnostic unlearning canary, see the
+planned ``run_model_agnostic_unlearning_canary.py`` (not yet implemented).
+
+What this script verifies:
+
+1. LoRA attachment succeeds
+2. Forward pass produces finite loss
+3. Backward pass produces nonzero gradients
+4. Optimizer step changes LoRA parameters
+5. Checkpoint saves and reloads
 
 Usage::
 
-    # Smoke canary (1 step, 10 probes)
-    python scripts/run_4b_unlearning_canary.py --smoke
-
-    # Full canary (50 steps, 500 probes)
-    python scripts/run_4b_unlearning_canary.py
+    python scripts/development_lora_plumbing_smoke.py --smoke
 """
 
 from __future__ import annotations
@@ -397,7 +393,7 @@ def main() -> None:
     args = parser.parse_args()
     
     logger.info("=" * 60)
-    logger.info("Qwen3.5-4B Unlearning Canary")
+    logger.info("Qwen3.5-4B LoRA Plumbing Smoke Test")
     logger.info("=" * 60)
     
     # Load config
@@ -475,9 +471,9 @@ def main() -> None:
             bias="none",
         )
         # Phi stores peft_config directly on the inner model (no PeftModel
-        # wrapper).  Create a temporary LoraModel to inject our adapter.
-        _tmp = _LM(inner_peft, lora_config, adapter_name="unlearning")
-        _tmp.inject_adapter(inner_peft, "unlearning")
+        # wrapper).  LoraModel constructor calls inject_adapter() internally;
+        # do NOT call inject_adapter() again (P0-8: double injection).
+        _LM(inner_peft, lora_config, adapter_name="unlearning")
 
         # Activate 'unlearning' adapter on all LoraLayers
         from peft.tuners.lora.layer import LoraLayer as _LL

@@ -254,3 +254,80 @@ def compute_candidate_margin(
         margin = log_p_no - log_p_yes
 
     return margin
+
+
+def verify_scorer_equivalence(
+    model: torch.nn.Module,
+    prefix: dict[str, torch.Tensor],
+    candidate_token_ids: list[int],
+    adapter: Any,
+    *,
+    tolerance: float = 1e-4,
+) -> dict[str, Any]:
+    """Verify shared scorer matches independent forward construction.
+
+    Compares the log-probability from the shared scorer (via
+    ``adapter.append_candidate()``) against an independent forward
+    pass using ``adapter.independent_forward_kwargs()``.
+
+    Returns a dict with::
+
+        {
+            "shared_score": float,
+            "independent_score": float,
+            "abs_diff": float,
+            "passed": bool,
+            "tolerance": float,
+        }
+
+    Raises
+    ------
+    AssertionError
+        If ``abs(shared_score - independent_score) > tolerance``.
+    """
+    # Shared scorer path
+    shared_log_prob = score_candidate_sequence_tensor(
+        model, prefix, candidate_token_ids, adapter=adapter,
+    )
+    shared_score = float(shared_log_prob.item())
+
+    # Independent forward path
+    independent_kwargs = adapter.independent_forward_kwargs(
+        prefix, candidate_token_ids,
+    )
+    with torch.inference_mode():
+        outputs = model(**independent_kwargs)
+    logits = outputs.logits  # [1, full_len, vocab]
+
+    full_input_ids = independent_kwargs["input_ids"]
+    m = len(candidate_token_ids)
+    prefix_len = prefix["input_ids"].shape[1]
+
+    pred_rows = logits[0, prefix_len - 1: prefix_len - 1 + m, :]
+    target_ids = full_input_ids[0, prefix_len: prefix_len + m]
+    log_probs = torch.log_softmax(pred_rows.float(), dim=-1)
+    gathered = log_probs.gather(
+        -1, target_ids.to(log_probs.device).unsqueeze(-1),
+    ).squeeze(-1)
+    independent_score = float(gathered.sum().item())
+
+    abs_diff = abs(shared_score - independent_score)
+    passed = abs_diff <= tolerance
+
+    result = {
+        "shared_score": shared_score,
+        "independent_score": independent_score,
+        "abs_diff": abs_diff,
+        "passed": passed,
+        "tolerance": tolerance,
+    }
+
+    if not passed:
+        raise AssertionError(
+            f"Scorer equivalence FAILED: "
+            f"shared={shared_score:.6f}, "
+            f"independent={independent_score:.6f}, "
+            f"abs_diff={abs_diff:.6f} > tolerance={tolerance}"
+        )
+
+    return result
