@@ -1,0 +1,37 @@
+# Frozen identity selection v1
+#
+# Shared across ALL models in the cross-model unlearning study.
+# Do NOT change these identities between models.
+#
+# Selection criteria (seed=17):
+#   - target: 2 train-role identities with highest mean signed margin
+#   - retain: 2 train-role identities with mid-range mean signed margin
+#   - control: 2 eval-role identities (random seed 17)
+#   - untargeted: remaining 94 identities
+#
+# These IDs are frozen and must match across all model baselines.
+
+selection_id: frozen_identity_selection_v1
+seed: 17
+
+target_identities:
+  - "76f35468e0b72c60"
+  - "14dd102b5288c236"
+
+retain_identities:
+  - "67218532aba5fc77"
+  - "cbb9f0b7b65140bd"
+
+control_identities:
+  - "bd9d89b8a1f51955"
+  - "89d6ff2125fd7ac5"
+
+# Untargeted: all other identities (94 total)
+# Resolved at runtime from baseline results minus target/retain/control.
+
+counts:
+  target: 2
+  retain: 2
+  control: 2
+  untargeted: 94
+  total: 100
