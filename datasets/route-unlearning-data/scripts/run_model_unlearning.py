@@ -34,13 +34,9 @@ import argparse
 import hashlib
 import json
 import logging
-import os
 import random
 import subprocess
-import sys
 import time
-from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -217,8 +213,6 @@ def train_unlearning(
     output_dir: Path,
 ) -> dict[str, Any]:
     """Run the candidate-margin training loop."""
-    from route_data.models.scoring import score_candidate_sequence_tensor
-
     model.train()
     model.to(device)
 
@@ -238,78 +232,77 @@ def train_unlearning(
     retain_iter = iter(retain_loader)
 
     trace_path = output_dir / "training_trace.jsonl"
-    trace_f = open(trace_path, "w")
+    with open(trace_path, "w") as trace_f:
 
-    start_time = time.time()
-    final_stats: dict[str, Any] = {}
-
-    logger.info(
-        f"Training for {num_optimizer_steps} optimizer steps "
-        f"(grad_accum={gradient_accumulation_steps})"
-    )
-
-    for opt_step in range(1, num_optimizer_steps + 1):
-        optimizer.zero_grad()
-        accum_forget = 0.0
-        accum_retain = 0.0
-
-        for _micro in range(gradient_accumulation_steps):
-            try:
-                forget_batch = next(forget_iter)
-            except StopIteration:
-                forget_iter = iter(forget_loader)
-                forget_batch = next(forget_iter)
-
-            try:
-                retain_batch = next(retain_iter)
-            except StopIteration:
-                retain_iter = iter(retain_loader)
-                retain_batch = next(retain_iter)
-
-            # Move to device
-            forget_batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v
-                           for k, v in forget_batch.items()}
-            retain_batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v
-                           for k, v in retain_batch.items()}
-
-            # Forget loss: candidate margin on target examples
-            forget_loss = _compute_forget_loss(model, forget_batch, adapter)
-            # Retain loss: KL to frozen reference (use current model as approx)
-            retain_loss = _compute_retain_loss_kl(model, retain_batch)
-
-            total_loss = forget_loss + retain_weight * retain_loss
-            loss_scaled = total_loss / gradient_accumulation_steps
-            loss_scaled.backward()
-
-            accum_forget += forget_loss.item() / gradient_accumulation_steps
-            accum_retain += retain_loss.item() / gradient_accumulation_steps
-
-        # Gradient clipping
-        if max_grad_norm > 0:
-            torch.nn.utils.clip_grad_norm_(trainable_params, max_grad_norm)
-
-        optimizer.step()
-
-        elapsed = time.time() - start_time
-        step_stats = {
-            "step": opt_step,
-            "forget_loss": accum_forget,
-            "retain_loss": accum_retain,
-            "total_loss": accum_forget + retain_weight * accum_retain,
-            "elapsed_seconds": elapsed,
-        }
-        trace_f.write(json.dumps(step_stats) + "\n")
-        trace_f.flush()
+        start_time = time.time()
+        final_stats: dict[str, Any] = {}
 
         logger.info(
-            f"Step {opt_step}/{num_optimizer_steps} | "
-            f"loss={step_stats['total_loss']:.4f} "
-            f"forget={step_stats['forget_loss']:.4f} "
-            f"retain={step_stats['retain_loss']:.4f}"
+            f"Training for {num_optimizer_steps} optimizer steps "
+            f"(grad_accum={gradient_accumulation_steps})"
         )
-        final_stats = step_stats
 
-    trace_f.close()
+        for opt_step in range(1, num_optimizer_steps + 1):
+            optimizer.zero_grad()
+            accum_forget = 0.0
+            accum_retain = 0.0
+
+            for _micro in range(gradient_accumulation_steps):
+                try:
+                    forget_batch = next(forget_iter)
+                except StopIteration:
+                    forget_iter = iter(forget_loader)
+                    forget_batch = next(forget_iter)
+
+                try:
+                    retain_batch = next(retain_iter)
+                except StopIteration:
+                    retain_iter = iter(retain_loader)
+                    retain_batch = next(retain_iter)
+
+                # Move to device
+                forget_batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v
+                               for k, v in forget_batch.items()}
+                retain_batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v
+                               for k, v in retain_batch.items()}
+
+                # Forget loss: candidate margin on target examples
+                forget_loss = _compute_forget_loss(model, forget_batch, adapter)
+                # Retain loss: KL to frozen reference (use current model as approx)
+                retain_loss = _compute_retain_loss_kl(model, retain_batch)
+
+                total_loss = forget_loss + retain_weight * retain_loss
+                loss_scaled = total_loss / gradient_accumulation_steps
+                loss_scaled.backward()
+
+                accum_forget += forget_loss.item() / gradient_accumulation_steps
+                accum_retain += retain_loss.item() / gradient_accumulation_steps
+
+            # Gradient clipping
+            if max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(trainable_params, max_grad_norm)
+
+            optimizer.step()
+
+            elapsed = time.time() - start_time
+            step_stats = {
+                "step": opt_step,
+                "forget_loss": accum_forget,
+                "retain_loss": accum_retain,
+                "total_loss": accum_forget + retain_weight * accum_retain,
+                "elapsed_seconds": elapsed,
+            }
+            trace_f.write(json.dumps(step_stats) + "\n")
+            trace_f.flush()
+
+            logger.info(
+                f"Step {opt_step}/{num_optimizer_steps} | "
+                f"loss={step_stats['total_loss']:.4f} "
+                f"forget={step_stats['forget_loss']:.4f} "
+                f"retain={step_stats['retain_loss']:.4f}"
+            )
+            final_stats = step_stats
+
     final_stats["total_elapsed_seconds"] = time.time() - start_time
     final_stats["num_optimizer_steps"] = num_optimizer_steps
     final_stats["gradient_accumulation_steps"] = gradient_accumulation_steps
@@ -412,9 +405,12 @@ def _compute_retain_loss_kl(
         "attention_mask": batch["attention_mask"],
     }
     for key, val in batch.items():
-        if key not in ("input_ids", "attention_mask", "labels") and not key.startswith("_"):
-            if isinstance(val, torch.Tensor):
-                model_kwargs[key] = val
+        if (
+            key not in ("input_ids", "attention_mask", "labels")
+            and not key.startswith("_")
+            and isinstance(val, torch.Tensor)
+        ):
+            model_kwargs[key] = val
 
     outputs = model(**model_kwargs)
     logits = outputs.logits
@@ -447,8 +443,8 @@ def run_post_evaluation(
     profile_path: Path,
 ) -> dict[str, Any]:
     """Fresh reload + 500-probe post-evaluation using BaselineRunner."""
-    from route_data.eval.baseline_runner import BaselineRunner
     from route_data.config import GenerationConfig, ModelConfig
+    from route_data.eval.baseline_runner import BaselineRunner
 
     logger.info("Post-evaluation: fresh reload + 500 probes")
 
@@ -588,9 +584,9 @@ def main() -> None:
 
     # -- Load adapter and model --------------------------------------------- #
     from route_data.models.trainable.registry import (
+        compute_profile_sha256,
         create_adapter,
         load_profile_from_yaml,
-        compute_profile_sha256,
     )
 
     profile = load_profile_from_yaml(profile_path)
