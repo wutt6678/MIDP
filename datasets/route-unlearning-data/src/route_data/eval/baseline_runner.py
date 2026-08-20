@@ -64,6 +64,9 @@ ALL_FAMILIES = _IMAGE_FAMILIES | _TEXT_ONLY_FAMILIES
 # Metric schema version for baseline-manifest provenance (P1-2).
 METRIC_SCHEMA_VERSION = "baseline-metrics-v1"
 
+# Frozen generation budget for name_only (P0-1).
+_NAME_ONLY_MAX_NEW_TOKENS = 64
+
 
 # --------------------------------------------------------------------------- #
 # Data classes
@@ -1114,13 +1117,37 @@ class BaselineRunner:
     def _cache_path(self) -> Path:
         return self._cache_dir / "baseline_cache.jsonl"
 
+    def _generation_protocol_hash(self) -> str:
+        """SHA-256 of the frozen generation protocol.
+
+        Incorporates both the binary-family and name_only generation
+        settings so that any change (e.g. max_new_tokens 4→64)
+        produces a distinct protocol hash and invalidates the cache.
+        """
+        payload = {
+            "binary_families": {
+                "do_sample": False,
+                "temperature": 0.0,
+                "max_new_tokens": self.model_config.generation.max_new_tokens,
+            },
+            "name_only": {
+                "do_sample": False,
+                "temperature": 0.0,
+                "max_new_tokens": _NAME_ONLY_MAX_NEW_TOKENS,
+            },
+            "scoring_version": SCORING_VERSION,
+        }
+        raw = json.dumps(payload, sort_keys=True)
+        return hashlib.sha256(raw.encode()).hexdigest()
+
     def _cache_key(self, probe: BaselineProbe) -> str:
         """Composite cache key for deterministic resumption.
 
         The key includes the probe identity, model revision, prompt hash,
-        image hash, scoring version, and — when available — the route-probe
-        SHA from the dataset manifest and the model-config SHA so that any
-        change to the dataset or model config invalidates the cache.
+        image hash, scoring version, generation protocol hash, and — when
+        available — the route-probe SHA from the dataset manifest and the
+        model-config SHA so that any change to the dataset, model config,
+        or generation settings invalidates the cache.
         """
         parts = [
             probe.probe_id,
@@ -1133,6 +1160,9 @@ class BaselineRunner:
         route_sha = self._route_probe_sha()
         parts.append(route_sha)
         parts.append(self._model_config_sha)  # full 64-char SHA
+        # P0-1 final: generation protocol hash prevents old 4-token
+        # results from being silently reused after the budget change.
+        parts.append(self._generation_protocol_hash())
         raw = "|".join(parts)
         return hashlib.sha256(raw.encode()).hexdigest()
 
@@ -1277,7 +1307,6 @@ class BaselineRunner:
                     error = "backend did not return scores for both candidates"
             else:
                 # name_only: text-only generation with larger budget (P0-1)
-                _NAME_ONLY_MAX_NEW_TOKENS = 64
                 generation_max_new_tokens = _NAME_ONLY_MAX_NEW_TOKENS
                 resp = self.backend.generate(
                     None, probe.question,
@@ -1540,11 +1569,20 @@ class BaselineRunner:
                     for r in fam_results
                     if r.token_overlap is not None
                 ]
+                fm_vals = [
+                    r.fuzzy_match
+                    for r in fam_results
+                    if r.fuzzy_match is not None
+                ]
                 n_correct = sum(1 for r in fam_results if r.correct is True)
                 non_empty = sum(
                     1
                     for r in fam_results
                     if r.generated_answer.strip()
+                )
+                # P1-1: cap hit rate (fraction hitting max_new_tokens)
+                cap_hits = sum(
+                    1 for r in fam_results if r.hit_max_new_tokens is True
                 )
                 entry["correct"] = n_correct
                 entry["normalized_exact_match_rate"] = (
@@ -1553,13 +1591,53 @@ class BaselineRunner:
                 entry["mean_token_overlap"] = (
                     sum(to_vals) / len(to_vals) if to_vals else None
                 )
+                entry["mean_fuzzy_match"] = (
+                    sum(fm_vals) / len(fm_vals) if fm_vals else None
+                )
                 entry["answer_non_empty_rate"] = (
                     non_empty / n if n else None
                 )
+                entry["cap_hit_rate"] = (
+                    cap_hits / n if n else None
+                )
+                entry["generation_max_new_tokens"] = _NAME_ONLY_MAX_NEW_TOKENS
             per_family[fam] = entry
 
         total = len(results)
         total_correct = sum(1 for r in results if r.correct is True)
+
+        # Top-level visual-family accuracy (excluding name_only).
+        visual_correct = sum(
+            1 for r in results
+            if r.probe_family in _IMAGE_FAMILIES and r.correct is True
+        )
+        visual_total = sum(1 for r in results if r.probe_family in _IMAGE_FAMILIES)
+        visual_accuracy = visual_correct / visual_total if visual_total else None
+
+        # Direct-visual accuracy (single family).
+        dv_results = by_family.get("direct_visual", [])
+        dv_correct = sum(1 for r in dv_results if r.correct is True)
+        direct_visual_accuracy = (
+            dv_correct / len(dv_results) if dv_results else None
+        )
+
+        # Name-only top-level metrics (P1-3: token_overlap is primary).
+        no_results = by_family.get("name_only", [])
+        no_to = [
+            r.token_overlap for r in no_results
+            if r.token_overlap is not None
+        ]
+        no_nem = [
+            r.normalized_exact_match for r in no_results
+            if r.normalized_exact_match is not None
+        ]
+        no_fm = [
+            r.fuzzy_match for r in no_results
+            if r.fuzzy_match is not None
+        ]
+        no_cap = sum(
+            1 for r in no_results if r.hit_max_new_tokens is True
+        )
 
         # Per-protocol-role counts (P0-9).
         role_counts: dict[str, int] = {"train": 0, "eval": 0, "exclude": 0}
@@ -1582,12 +1660,29 @@ class BaselineRunner:
             "total_probes": total,
             "total_correct": total_correct,
             "mixed_task_overall_accuracy": total_correct / total if total else None,
+            "visual_accuracy": visual_accuracy,
+            "visual_correct": visual_correct,
+            "visual_total": visual_total,
+            "direct_visual_accuracy": direct_visual_accuracy,
+            "name_only_mean_token_overlap": (
+                sum(no_to) / len(no_to) if no_to else None
+            ),
+            "name_only_normalized_exact_match": (
+                sum(no_nem) / len(no_nem) if no_nem else None
+            ),
+            "name_only_fuzzy_match": (
+                sum(no_fm) / len(no_fm) if no_fm else None
+            ),
+            "name_only_cap_hit_rate": (
+                no_cap / len(no_results) if no_results else None
+            ),
             "per_family": per_family,
             "per_protocol_role": per_protocol_role,
             "route_identity_role_counts": route_identity_role_counts,
             "model_fingerprint": self._fingerprint_id,
             "model_revision": self.model_config.revision,
             "scoring_version": SCORING_VERSION,
+            "generation_protocol_sha256": self._generation_protocol_hash(),
         }
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -2010,14 +2105,10 @@ class BaselineRunner:
                 .get("sha256", "")
             )
 
-        # Protocol SHA from frozen manifest (P1-4).
-        protocol_sha256 = ""
-        if self._dataset_manifest:
-            protocol_sha256 = (
-                self._dataset_manifest
-                .get("protocol", {})
-                .get("protocol_sha256", "")
-            )
+        # Protocol SHA: computed from the frozen generation config (P1-1).
+        # This incorporates binary + name_only generation settings so that
+        # any future change to max_new_tokens etc. produces a distinct hash.
+        protocol_sha256 = self._generation_protocol_hash()
 
         # Route identity role counts (P1-5): unique frozen route identities.
         route_identity_role_counts = self._route_identity_role_counts()
