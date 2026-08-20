@@ -544,16 +544,16 @@ def main() -> None:
             "real_target_examples_loaded": True,
             "real_retain_examples_loaded": True,
             "identities_match_selection": True,
-            "loss_finite": np.isfinite(training_stats["final_loss"]),
-            "gradients_nonzero": training_stats["gradients_nonzero_total"] > 0,
-            "parameters_changed": training_stats["lora_tensors_changed"] > 0,
-            "checkpoint_saved": adapter_path.exists(),
+            "loss_finite": bool(np.isfinite(training_stats["final_loss"])),
+            "gradients_nonzero": bool(training_stats["gradients_nonzero_total"] > 0),
+            "parameters_changed": bool(training_stats["lora_tensors_changed"] > 0),
+            "checkpoint_saved": bool(adapter_path.exists()),
             "checkpoint_reloaded": True,
-            "post_eval_500_probes": post_eval["num_probes"] == (10 if args.smoke else 500),
-            "inference_errors_zero": post_eval["inference_errors"] == 0,
-            "family_deltas_reported": len(post_eval["family_deltas"]) == 5,
+            "post_eval_500_probes": bool(post_eval["num_probes"] == (10 if args.smoke else 500)),
+            "inference_errors_zero": bool(post_eval["inference_errors"] == 0),
+            "family_deltas_reported": bool(len(post_eval["family_deltas"]) == 5),
             "name_only_token_overlap": True,
-            "identity_counts_correct": (
+            "identity_counts_correct": bool(
                 len(identities["target_ids"]) == 2
                 and len(identities["retain_ids"]) == 2
                 and len(identities["control_ids"]) == 2
