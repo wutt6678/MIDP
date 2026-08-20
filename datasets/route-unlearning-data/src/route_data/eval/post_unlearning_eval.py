@@ -119,6 +119,7 @@ def resolve_preunlearning_baseline(
     protocol_version: str = "baseline_v1",
     *,
     project_root: Path | None = None,
+    verify_hashes: bool = True,
 ) -> BaselineBinding:
     """Resolve the model-specific pre-unlearning baseline.
 
@@ -130,6 +131,9 @@ def resolve_preunlearning_baseline(
         Baseline protocol directory name (e.g. ``"baseline_v1"``).
     project_root:
         Project root for path resolution.  Defaults to the repository root.
+    verify_hashes:
+        When *True* (default), verify all binding hashes against actual
+        files on disk.  Fail closed on any mismatch (§1.4).
 
     Returns
     -------
@@ -140,6 +144,8 @@ def resolve_preunlearning_baseline(
     ------
     FileNotFoundError
         If the baseline results or manifest file does not exist.
+    RuntimeError
+        If hash verification fails (when *verify_hashes* is True).
     """
     if project_root is None:
         project_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -171,14 +177,17 @@ def resolve_preunlearning_baseline(
     model_section = manifest_data.get("model", {})
     provenance = manifest_data.get("provenance", {})
 
-    # Read manifest_sha256 from binding file (preferred) or fall back to provenance.
-    # The binding file avoids the self-referential hash problem where embedding
-    # manifest_sha256 in the manifest itself would change the hash.
+    # Read binding file for strict hash verification (§1.4).
     manifest_sha256 = ""
+    binding_data: dict = {}
     if binding_path.is_file():
         with open(binding_path) as f:
             binding_data = json.load(f)
         manifest_sha256 = binding_data.get("manifest_sha256", "")
+
+        # Strict hash verification: compare binding hashes against actual files.
+        if verify_hashes:
+            _verify_binding_hashes(baseline_dir, binding_data)
     else:
         # Backwards compatibility: old manifests may have manifest_sha256 in provenance.
         manifest_sha256 = provenance.get("manifest_sha256", "")
@@ -186,14 +195,57 @@ def resolve_preunlearning_baseline(
     return BaselineBinding(
         results_path=str(results_path),
         manifest_path=str(manifest_path),
-        results_sha256=provenance.get("results_sha256", ""),
+        results_sha256=binding_data.get("results_sha256", "") or provenance.get("results_sha256", ""),
         manifest_sha256=manifest_sha256,
-        model_key=model_section.get("model_key", ""),
-        model_id=model_section.get("id", ""),
-        model_revision=model_section.get("revision", ""),
-        processor_revision=model_section.get("processor_revision", ""),
-        model_profile_sha256=model_section.get("model_profile_sha256", ""),
+        model_key=binding_data.get("model_key", "") or model_section.get("model_key", ""),
+        model_id=binding_data.get("model_id", "") or model_section.get("id", ""),
+        model_revision=binding_data.get("model_revision", "") or model_section.get("revision", ""),
+        processor_revision=binding_data.get("processor_revision", "") or model_section.get("processor_revision", ""),
+        model_profile_sha256=binding_data.get("model_profile_sha256", "") or model_section.get("model_profile_sha256", ""),
     )
+
+
+def _verify_binding_hashes(
+    baseline_dir: Path,
+    binding_data: dict,
+) -> None:
+    """Verify all binding hashes against actual files on disk (§1.4).
+
+    Fail closed: any missing file or hash mismatch raises RuntimeError.
+    """
+    errors: list[str] = []
+
+    # Map binding keys to (hash_key, file_key, default_filename).
+    hash_checks = [
+        ("manifest_sha256", "manifest_file", "baseline_manifest.json"),
+        ("results_sha256", "results_file", "baseline_results.jsonl"),
+        ("summary_sha256", "summary_file", "baseline_summary.json"),
+    ]
+
+    for hash_key, file_key, default_fname in hash_checks:
+        expected_hash = binding_data.get(hash_key, "")
+        fname = binding_data.get(file_key, default_fname)
+        fpath = baseline_dir / fname
+
+        if not expected_hash:
+            continue  # Field not present in binding — skip (backward compat).
+
+        if not fpath.is_file():
+            errors.append(f"Binding references {fname} but file not found")
+            continue
+
+        actual_hash = _sha256_file(fpath)
+        if actual_hash != expected_hash:
+            errors.append(
+                f"{hash_key} mismatch for {fname}: "
+                f"binding={expected_hash[:16]}... actual={actual_hash[:16]}..."
+            )
+
+    if errors:
+        raise RuntimeError(
+            f"Baseline binding hash verification FAILED for "
+            f"{baseline_dir}:\n  " + "\n  ".join(errors)
+        )
 
 
 def validate_baseline_model_identity(
