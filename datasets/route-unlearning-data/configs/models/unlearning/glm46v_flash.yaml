@@ -4,9 +4,9 @@ key: glm46v_flash
 
 model:
   id: zai-org/GLM-4.6V-Flash
-  revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  revision: "411bb4d77144a3f03accbf4b780f5acb8b7cde4e"
   processor_id: zai-org/GLM-4.6V-Flash
-  processor_revision: "<PIN_EXACT_HF_COMMIT_SHA>"
+  processor_revision: "411bb4d77144a3f03accbf4b780f5acb8b7cde4e"
   adapter: glm46v
   trust_remote_code: false
   dtype: bfloat16
@@ -22,14 +22,14 @@ lora:
   dropout: 0.05
   scope: language_attention_only
   target_leaf_names: [q_proj, k_proj, v_proj, o_proj]
-  scope_regex: "<DISCOVER_ON_REAL_MODEL_AND_FREEZE>"
+  scope_regex: "^model\\.language_model\\.layers\\.\\d+\\.(self_attn)\\.(q_proj|k_proj|v_proj|o_proj)$"
 
 structural:
-  language_layer_path: "<DISCOVER_AND_FREEZE>"
-  language_hidden_size: "<DISCOVER_AND_FREEZE>"
-  intermediate_size: "<DISCOVER_AND_FREEZE>"
-  num_language_layers: "<DISCOVER_AND_FREEZE>"
-  r2mu_candidate_layers: "<DISCOVER_AND_FREEZE>"
+  language_layer_path: "model.language_model.layers"
+  language_hidden_size: 4096
+  intermediate_size: 13696
+  num_language_layers: 40
+  r2mu_candidate_layers: [10, 20, 30, 36]
   r2mu_n_select_layers: 4
   manu_spec: glm46v_language_mlp_v1
 
@@ -52,5 +52,5 @@ supports_manu: false
 supports_r2mu: false
 
 status:
-  implementation: scaffold
+  implementation: discovery_complete
   research_ready: false
