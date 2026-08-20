@@ -98,6 +98,11 @@ def _make_mock_processor_text_only():
             result["input_image_embeds"] = torch.randn(1, 3, 448, 448)
             result["image_attention_mask"] = torch.ones(1, 256, dtype=torch.long)
             result["image_sizes"] = torch.tensor([[448, 448]])
+            # InputMode.VISION = 1
+            result["input_mode"] = torch.tensor([1], dtype=torch.long)
+        else:
+            # InputMode.LANGUAGE = 0
+            result["input_mode"] = torch.tensor([0], dtype=torch.long)
         return result
 
     processor.side_effect = _processor_call
@@ -145,6 +150,18 @@ class TestPhiNameOnly:
         # Text tensors should be present
         assert "input_ids" in prefix
         assert "attention_mask" in prefix
+
+    def test_build_prefix_preserves_input_mode(self):
+        """input_mode must be PRESERVED for the outer model (P0-1)."""
+        adapter = _make_phi_adapter()
+        processor = _make_mock_processor_text_only()
+
+        # Text-only: input_mode = LANGUAGE (0)
+        prefix = adapter.build_prefix(
+            processor, image=None, prompt="Hello",
+        )
+        assert "input_mode" in prefix
+        assert prefix["input_mode"].item() == 0  # LANGUAGE
 
     def test_build_supervised_example_no_image(self):
         """build_supervised_example(image=None) must work for name_only."""
@@ -385,3 +402,132 @@ class TestPhiTargetLeafNames:
         profile = load_profile_from_yaml(str(yaml_path))
         assert "qkv_proj" in profile.lora_target_leaf_names
         assert "o_proj" in profile.lora_target_leaf_names
+
+
+# ------------------------------------------------------------------ #
+# P0-1 (new): _PhiInnerModelWrapper consumes input_mode
+# ------------------------------------------------------------------ #
+
+class TestPhiInnerModelWrapperInputMode:
+    """P0-1: _PhiInnerModelWrapper must consume input_mode."""
+
+    def test_wrapper_strips_input_mode(self):
+        """The wrapper must remove input_mode before calling inner model."""
+        from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
+
+        inner_model = MagicMock()
+        lm_head = MagicMock()
+
+        # Mock inner model output
+        mock_output = MagicMock()
+        mock_output.__getitem__ = lambda self, idx: torch.randn(1, 5, 3072)
+        mock_output.past_key_values = None
+        mock_output.hidden_states = None
+        mock_output.attentions = None
+        inner_model.return_value = mock_output
+
+        lm_head.return_value = torch.randn(1, 5, 100)
+
+        wrapper = _PhiInnerModelWrapper(inner_model, lm_head)
+
+        # Call with input_mode
+        wrapper(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            input_mode=torch.tensor([1]),  # VISION
+        )
+
+        # Verify inner_model was called WITHOUT input_mode
+        call_kwargs = inner_model.call_args.kwargs
+        assert "input_mode" not in call_kwargs
+
+    def test_wrapper_sets_audio_projection_vision(self):
+        """VISION input_mode should set audio_projection_mode='vision'."""
+        from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
+
+        inner_model = MagicMock()
+        lm_head = MagicMock()
+        mock_output = MagicMock()
+        mock_output.__getitem__ = lambda self, idx: torch.randn(1, 5, 3072)
+        mock_output.past_key_values = None
+        mock_output.hidden_states = None
+        mock_output.attentions = None
+        inner_model.return_value = mock_output
+        lm_head.return_value = torch.randn(1, 5, 100)
+
+        wrapper = _PhiInnerModelWrapper(inner_model, lm_head)
+        wrapper(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            input_mode=torch.tensor([1]),  # VISION
+        )
+
+        call_kwargs = inner_model.call_args.kwargs
+        assert call_kwargs.get("audio_projection_mode") == "vision"
+
+    def test_wrapper_sets_audio_projection_language(self):
+        """LANGUAGE input_mode should set audio_projection_mode='speech'."""
+        from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
+
+        inner_model = MagicMock()
+        lm_head = MagicMock()
+        mock_output = MagicMock()
+        mock_output.__getitem__ = lambda self, idx: torch.randn(1, 5, 3072)
+        mock_output.past_key_values = None
+        mock_output.hidden_states = None
+        mock_output.attentions = None
+        inner_model.return_value = mock_output
+        lm_head.return_value = torch.randn(1, 5, 100)
+
+        wrapper = _PhiInnerModelWrapper(inner_model, lm_head)
+        wrapper(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            input_mode=torch.tensor([0]),  # LANGUAGE
+        )
+
+        call_kwargs = inner_model.call_args.kwargs
+        assert call_kwargs.get("audio_projection_mode") == "speech"
+
+    def test_wrapper_calls_outer_model_set_adapter(self):
+        """VISION input_mode should call outer_model.set_lora_adapter('vision')."""
+        from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
+
+        inner_model = MagicMock()
+        lm_head = MagicMock()
+        outer_model = MagicMock()
+        mock_output = MagicMock()
+        mock_output.__getitem__ = lambda self, idx: torch.randn(1, 5, 3072)
+        mock_output.past_key_values = None
+        mock_output.hidden_states = None
+        mock_output.attentions = None
+        inner_model.return_value = mock_output
+        lm_head.return_value = torch.randn(1, 5, 100)
+
+        wrapper = _PhiInnerModelWrapper(inner_model, lm_head, outer_model=outer_model)
+        wrapper(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            input_mode=torch.tensor([1]),  # VISION
+        )
+
+        outer_model.set_lora_adapter.assert_called_once_with("vision")
+
+    def test_wrapper_calls_outer_model_unset_adapter(self):
+        """LANGUAGE input_mode should call outer_model.unset_lora_adapter()."""
+        from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
+
+        inner_model = MagicMock()
+        lm_head = MagicMock()
+        outer_model = MagicMock()
+        mock_output = MagicMock()
+        mock_output.__getitem__ = lambda self, idx: torch.randn(1, 5, 3072)
+        mock_output.past_key_values = None
+        mock_output.hidden_states = None
+        mock_output.attentions = None
+        inner_model.return_value = mock_output
+        lm_head.return_value = torch.randn(1, 5, 100)
+
+        wrapper = _PhiInnerModelWrapper(inner_model, lm_head, outer_model=outer_model)
+        wrapper(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            input_mode=torch.tensor([0]),  # LANGUAGE
+        )
+
+        outer_model.unset_lora_adapter.assert_called_once()

@@ -49,21 +49,68 @@ PHI_IMAGE_TOKEN_ID = 200010
 
 
 class _PhiInnerModelWrapper(torch.nn.Module):
-    """Thin wrapper around Phi's inner model for unlearning.
+    """Wrapper around Phi's inner model for unlearning.
 
-    Handles the ``audio_projection_mode`` default that the outer
-    ``Phi4MMForCausalLM`` normally sets based on ``input_mode``.
-    Also adds the ``lm_head`` to produce logits (the inner model
-    only returns hidden states).
+    Replicates the outer ``Phi4MMForCausalLM.forward()`` logic that
+    the normal model uses to:
+
+    1. Interpret ``input_mode`` to activate the correct bundled LoRA
+       adapter (vision / speech / language).
+    2. Set ``audio_projection_mode`` accordingly.
+    3. Add the ``lm_head`` to produce logits (the inner model only
+       returns hidden states).
+
+    ``input_mode`` is consumed and removed before passing kwargs to
+    the inner model.  The outer model (``Phi4MMForCausalLM``) is
+    needed for its ``set_lora_adapter`` / ``unset_lora_adapter``
+    methods that control the bundled vision/speech adapters.
+
+    Invariant
+    ---------
+    - Outer Phi model (baseline): ``input_mode`` retained.
+    - Inner unlearning wrapper: ``input_mode`` interpreted, then removed.
     """
 
-    def __init__(self, inner_model: torch.nn.Module, lm_head: torch.nn.Module):
+    # InputMode enum values (from processing_phi4mm.py)
+    _LANGUAGE = 0
+    _VISION = 1
+    _SPEECH = 2
+    _VISION_SPEECH = 3
+
+    def __init__(
+        self,
+        inner_model: torch.nn.Module,
+        lm_head: torch.nn.Module,
+        outer_model: torch.nn.Module | None = None,
+    ):
         super().__init__()
         self.inner_model = inner_model
         self.lm_head = lm_head
+        self.outer_model = outer_model
 
     def forward(self, **kwargs):
-        kwargs.setdefault("audio_projection_mode", "speech")
+        # --- Consume input_mode (P0-1) ---
+        input_mode = kwargs.pop("input_mode", None)
+        if input_mode is not None:
+            if isinstance(input_mode, torch.Tensor):
+                input_mode = input_mode[0].item()
+            input_mode = int(input_mode)
+
+            if input_mode in (self._VISION, self._VISION_SPEECH):
+                kwargs["audio_projection_mode"] = "vision"
+                if self.outer_model is not None:
+                    self.outer_model.set_lora_adapter("vision")
+            elif input_mode == self._SPEECH:
+                kwargs["audio_projection_mode"] = "speech"
+                if self.outer_model is not None:
+                    self.outer_model.set_lora_adapter("speech")
+            elif input_mode == self._LANGUAGE:
+                kwargs["audio_projection_mode"] = "speech"
+                if self.outer_model is not None:
+                    self.outer_model.unset_lora_adapter()
+        else:
+            kwargs.setdefault("audio_projection_mode", "speech")
+
         outputs = self.inner_model(**kwargs)
         # Add logits from the LM head (inner model only returns hidden states)
         from transformers.modeling_outputs import CausalLMOutputWithPast
@@ -102,12 +149,48 @@ def _apply_sdpa_patches() -> None:
         attention_mask, query_length,
         dropout=0.0, softmax_scale=None, sliding_window=None, **kwargs,
     ):
+        # [batch, num_heads, seq_len, head_dim]
         q2 = query_states.transpose(1, 2)
         k2 = key_states.transpose(1, 2)
         v2 = value_states.transpose(1, 2)
+
+        # Determine causal masking:
+        # - Prefill (query_length > 1): causal = True
+        # - Cached decode (query_length == 1): causal = False
+        #   (the single query token attends to all prior keys)
+        is_causal = query_length > 1 if query_length is not None else q2.shape[1] > 1
+
+        # Build SDPA attention mask from the incoming attention_mask.
+        # The incoming mask shape varies:
+        #   [batch, key_length]             (2D padding mask)
+        #   [batch, 1, query_length, key_length]  (4D expanded)
+        #   [batch, query_length, key_length]     (3D)
+        sdpa_attn_mask = None
+        if attention_mask is not None:
+            if attention_mask.dim() == 2:
+                # Padding mask: [batch, key_len] → [batch, 1, 1, key_len]
+                sdpa_attn_mask = attention_mask[:, None, None, :]
+            elif attention_mask.dim() == 3:
+                # [batch, query_len, key_len] → [batch, 1, query_len, key_len]
+                sdpa_attn_mask = attention_mask[:, None, :, :]
+            elif attention_mask.dim() == 4:
+                sdpa_attn_mask = attention_mask
+
+            # Convert additive masks (0/-inf) to boolean for SDPA
+            if sdpa_attn_mask is not None and sdpa_attn_mask.dtype != torch.bool:
+                sdpa_attn_mask = sdpa_attn_mask > -1e4
+
+            # If causal + mask, combine: where mask is True, still apply causal
+            if is_causal and sdpa_attn_mask is not None:
+                # Use the explicit mask (it should already encode causal)
+                is_causal = False
+
         out = F.scaled_dot_product_attention(
             q2, k2, v2,
-            dropout_p=dropout, is_causal=True, scale=softmax_scale,
+            attn_mask=sdpa_attn_mask,
+            dropout_p=dropout,
+            is_causal=is_causal if sdpa_attn_mask is None else False,
+            scale=softmax_scale,
         )
         return out.transpose(1, 2)
 
@@ -187,7 +270,20 @@ class Phi4MMAdapter(TrainableVLMAdapter):
 
         Applies monkey-patches to bypass flash_attn requirement before
         loading, then patches vision attention after loading.
+
+        Fails closed if the current transformers version is outside the
+        supported range ``[min, max_exclusive)``.
         """
+        # P0-3: fail-closed environment check BEFORE loading
+        from .registry import validate_environment_compatibility
+
+        env_errors = validate_environment_compatibility(self._profile)
+        if env_errors:
+            raise RuntimeError(
+                "Incompatible Phi-4-MM environment:\n"
+                + "\n".join(f"  - {e}" for e in env_errors)
+            )
+
         from transformers import AutoModelForCausalLM, AutoProcessor
 
         model_id = kwargs.get("model_id", self._profile.model_id)
@@ -259,11 +355,10 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                 result[k] = v.squeeze(0)
             else:
                 result[k] = v
-        # Strip keys the inner model does not accept.
-        # ``input_mode`` is consumed by the outer Phi4MMForCausalLM to
-        # decide which LoRA adapter to activate; the inner model has no
-        # such parameter and would raise on an unexpected kwarg.
-        result.pop("input_mode", None)
+        # NOTE: ``input_mode`` is PRESERVED (P0-1).
+        # The outer Phi4MMForCausalLM consumes it to activate the correct
+        # bundled LoRA adapter.  The inner _PhiInnerModelWrapper also
+        # consumes it and strips it before calling the inner model.
         return result
 
     def build_supervised_example(
@@ -301,7 +396,7 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                 result[k] = v.squeeze(0)
             else:
                 result[k] = v
-        result.pop("input_mode", None)
+        # NOTE: ``input_mode`` is PRESERVED (P0-1).  See build_prefix().
 
         # Build labels: mask out the prompt portion
         input_ids = result["input_ids"]

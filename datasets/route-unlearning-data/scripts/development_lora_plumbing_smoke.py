@@ -475,16 +475,53 @@ def main() -> None:
         # do NOT call inject_adapter() again (P0-8: double injection).
         _LM(inner_peft, lora_config, adapter_name="unlearning")
 
-        # Activate 'unlearning' adapter on all LoraLayers
+        # P0-2: Adapter composition — merge vision adapter into base weights.
+        #
+        # Phi's outer model normally switches between vision/speech/language
+        # adapters per forward call.  For unlearning, we need:
+        #   visual input:  base + vision + unlearning
+        #   text-only:     base + unlearning
+        #
+        # We merge the pretrained vision adapter into the base weights so
+        # that the vision contribution is always present.  The unlearning
+        # adapter is the only active PEFT adapter during training.
         from peft.tuners.lora.layer import LoraLayer as _LL
+
+        # Snapshot bundled adapter tensors BEFORE merge
+        _bundled_snapshot = {}
+        for _mod in inner_peft.modules():
+            if isinstance(_mod, _LL):
+                for _aname in ("vision", "speech"):
+                    if _aname in _mod.lora_A:
+                        _bundled_snapshot[f"{_aname}.lora_A"] = (
+                            _mod.lora_A[_aname].weight.data.clone()
+                        )
+                        _bundled_snapshot[f"{_aname}.lora_B"] = (
+                            _mod.lora_B[_aname].weight.data.clone()
+                        )
+        logger.info("  Snapshot: %d bundled adapter tensors", len(_bundled_snapshot))
+
+        # Merge vision adapter into base weights
+        for _mod in inner_peft.modules():
+            if isinstance(_mod, _LL) and "vision" in _mod.lora_A:
+                _mod.merge()
+        logger.info("  Merged 'vision' adapter into base weights")
+
+        # Activate 'unlearning' adapter on all LoraLayers
         for _mod in inner_peft.modules():
             if isinstance(_mod, _LL):
                 _mod.set_adapter("unlearning")
 
-        # Wrap inner model to handle audio_projection_mode default + lm_head
+        # Wrap inner model with outer model reference for input_mode handling
         from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
-        lora_model = _PhiInnerModelWrapper(inner_peft, model.lm_head)
+        lora_model = _PhiInnerModelWrapper(inner_peft, model.lm_head, outer_model=model)
         logger.info("  Injected 'unlearning' adapter into inner PEFT model")
+
+        # P0-2: Verify adapter list
+        _adapters = set(inner_peft.peft_config.keys())
+        assert "vision" in _adapters, f"vision adapter missing from {_adapters}"
+        assert "speech" in _adapters, f"speech adapter missing from {_adapters}"
+        assert "unlearning" in _adapters, f"unlearning adapter missing from {_adapters}"
     else:
         lora_config = LoraConfig(
             r=config["method"]["hyperparameters"]["lora_rank"],
@@ -514,6 +551,28 @@ def main() -> None:
     assert training_stats["gradients_nonzero_total"] > 0, "Gradients must be nonzero"
     assert training_stats["lora_tensors_changed"] > 0, "LoRA parameters must change"
     
+    # P0-2: Verify bundled adapters unchanged after training
+    if inner_peft is not None and _bundled_snapshot:
+        _bundled_changed = 0
+        for _mod in inner_peft.modules():
+            if isinstance(_mod, _LL):
+                for _aname in ("vision", "speech"):
+                    if _aname in _mod.lora_A:
+                        for _suffix, _tensor in [
+                            ("lora_A", _mod.lora_A[_aname].weight.data),
+                            ("lora_B", _mod.lora_B[_aname].weight.data),
+                        ]:
+                            _key = f"{_aname}.{_suffix}"
+                            if _key in _bundled_snapshot and not torch.equal(_bundled_snapshot[_key], _tensor):
+                                _bundled_changed += 1
+        assert _bundled_changed == 0, (
+            f"Bundled adapter tensors changed: {_bundled_changed}/{len(_bundled_snapshot)}"
+        )
+        logger.info(
+            "  P0-2 verified: %d bundled adapter tensors unchanged",
+            len(_bundled_snapshot),
+        )
+
     # Step 6: Save checkpoint
     logger.info("Step 6: Saving checkpoint")
     adapter_path = OUTPUT_DIR / "adapter"
@@ -564,13 +623,19 @@ def main() -> None:
         # Phi: inject adapter into existing inner model with bundled LoRA
         from peft import LoraModel as _LM
         _tmp2 = _LM.from_pretrained(inner_peft2, str(adapter_path), adapter_name="unlearning")
-        # Activate 'unlearning' adapter on all LoraLayers
+
+        # P0-2: merge vision adapter (same as training path)
         from peft.tuners.lora.layer import LoraLayer as _LL
+        for _mod in inner_peft2.modules():
+            if isinstance(_mod, _LL) and "vision" in _mod.lora_A:
+                _mod.merge()
+
+        # Activate 'unlearning' adapter on all LoraLayers
         for _mod in inner_peft2.modules():
             if isinstance(_mod, _LL):
                 _mod.set_adapter("unlearning")
         from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
-        lora_model2 = _PhiInnerModelWrapper(inner_peft2, model2.lm_head)
+        lora_model2 = _PhiInnerModelWrapper(inner_peft2, model2.lm_head, outer_model=model2)
     else:
         lora_model2 = PeftModel.from_pretrained(model2, str(adapter_path))
     lora_model2.eval()

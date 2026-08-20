@@ -61,20 +61,22 @@ def _get_versions() -> dict[str, str]:
 
 def _check_compatibility(
     versions: dict[str, str],
-    min_transformers: str | None,
-) -> bool:
-    """Check if the current environment satisfies the profile requirements."""
-    if min_transformers is None:
-        return True
+    profile,
+) -> tuple[bool, list[str]]:
+    """Check if the current environment satisfies the profile requirements.
 
-    try:
-        from packaging.version import Version
-        current = Version(versions.get("transformers", "0.0.0"))
-        minimum = Version(min_transformers)
-        return current >= minimum
-    except Exception:
-        # Fallback: simple string comparison
-        return versions.get("transformers", "0") >= min_transformers
+    Uses the canonical :func:`validate_environment_compatibility` from
+    the trainable model registry — one validation implementation, not two.
+
+    Returns ``(compatible, errors)`` where *errors* lists the specific
+    incompatibilities.
+    """
+    from route_data.models.trainable.registry import (
+        validate_environment_compatibility,
+    )
+
+    errors = validate_environment_compatibility(profile)
+    return (len(errors) == 0, errors)
 
 
 def main() -> None:
@@ -125,17 +127,19 @@ def main() -> None:
             print(f"ERROR loading {profile_path.name}: {e}")
             continue
 
-        compatible = _check_compatibility(
-            versions, profile.min_transformers_version,
-        )
+        compatible, errors = _check_compatibility(versions, profile)
 
         status = "OK" if compatible else "FAIL"
         print(f"[{status}] {profile.key}")
         print(f"  model_id:       {profile.model_id}")
         print(f"  adapter:        {profile.adapter_name}")
         print(f"  min_transformers: {profile.min_transformers_version or 'none'}")
+        print(f"  max_transformers_exclusive: {profile.max_transformers_version_exclusive or 'none'}")
         print(f"  trust_remote_code: {profile.trust_remote_code}")
         print(f"  requires_hf_auth:  {profile.requires_hf_auth}")
+        if errors:
+            for e in errors:
+                print(f"  ERROR: {e}")
         print()
 
 
