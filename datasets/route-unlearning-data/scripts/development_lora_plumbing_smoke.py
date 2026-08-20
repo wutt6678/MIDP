@@ -562,15 +562,11 @@ def main() -> None:
         _vis_kwargs = {}
         for _k, _v in _vis_prefix.items():
             if isinstance(_v, torch.Tensor):
-                _vis_kwargs[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v.unsqueeze(0)
+                _vis_kwargs[_k] = _v.unsqueeze(0) if _v.dim() == 1 else _v
             else:
                 _vis_kwargs[_k] = _v
-        # Fix: image-indexed tensors already have batch dim from processor
+        # Image-indexed tensors already have batch dim from processor
         _img_indexed = adapter.image_indexed_keys()
-        for _k in _img_indexed:
-            if _k in _vis_kwargs and isinstance(_vis_kwargs[_k], torch.Tensor):
-                if _vis_kwargs[_k].dim() > 1 and _vis_kwargs[_k].shape[0] == 1:
-                    pass  # already batched
         # Text tensors need batch dim
         for _k, _v in _vis_prefix.items():
             if isinstance(_v, torch.Tensor) and _k not in _img_indexed:
@@ -670,7 +666,7 @@ def main() -> None:
         _vis_match = torch.equal(_cached_gen, _nocached_gen)
         logger.info("  C4: visual cached vs noncached: %d/%d generated tokens match",
                     _cached_gen.eq(_nocached_gen).sum().item(), _n_compare)
-        assert _vis_match, f"C4 FAIL: visual generated tokens differ"
+        assert _vis_match, "C4 FAIL: visual generated tokens differ"
         logger.info("  C4 PASS: visual generation")
 
         # Text-only generation
@@ -704,7 +700,7 @@ def main() -> None:
         _text_match = torch.equal(_text_c_gen, _text_nc_gen)
         logger.info("  C4: text-only cached vs noncached: %d/%d generated tokens match",
                     _text_c_gen.eq(_text_nc_gen).sum().item(), _n_compare_t)
-        assert _text_match, f"C4 FAIL: text-only generated tokens differ"
+        assert _text_match, "C4 FAIL: text-only generated tokens differ"
         logger.info("  C4 PASS: text-only generation")
 
         # --------------------------------------------------------------- #
@@ -739,7 +735,6 @@ def main() -> None:
 
             for _cand_text in _cands:
                 _cand_ids = adapter.candidate_token_ids(processor, _cand_text)
-                m = len(_cand_ids)
 
                 # --- Shared scorer path (append_candidate) ---
                 _shared_prefix = adapter.append_candidate(_prefix, _cand_ids)
@@ -871,14 +866,14 @@ def main() -> None:
         # Bypass wrapper — call inner model + lm_head directly to control adapters
         inner_peft.eval()
 
-        def _inner_forward(kw):
+        def _inner_forward(kw, _lm_head):
             """Forward through inner_peft + lm_head."""
             _filtered = {k: v for k, v in kw.items() if k != "input_mode"}
             # Phi needs audio_projection_mode set for visual inputs
             if "audio_projection_mode" not in _filtered:
                 _filtered["audio_projection_mode"] = "vision"
             _hidden = inner_peft(**_filtered)
-            return model.lm_head(_hidden[0])
+            return _lm_head(_hidden[0])
 
         # Forward with vision + unlearning
         for _mod in inner_peft.modules():
@@ -886,7 +881,7 @@ def main() -> None:
                 _mod._active_adapter = ["vision", "unlearning"]
                 _mod._disable_adapters = False
         with torch.no_grad():
-            _logits_both = _inner_forward(_comp_kw)[0, -1, :].float()
+            _logits_both = _inner_forward(_comp_kw, model.lm_head)[0, -1, :].float()
 
         # Forward with vision only
         for _mod in inner_peft.modules():
@@ -894,7 +889,7 @@ def main() -> None:
                 _mod._active_adapter = ["vision"]
                 _mod._disable_adapters = False
         with torch.no_grad():
-            _logits_vision = _inner_forward(_comp_kw)[0, -1, :].float()
+            _logits_vision = _inner_forward(_comp_kw, model.lm_head)[0, -1, :].float()
 
         _comp_diff = (_logits_both - _logits_vision).abs().max().item()
         logger.info("  Nonzero composition: max logit diff = %.6f", _comp_diff)
@@ -977,9 +972,9 @@ def main() -> None:
     inner_peft2 = adapter.get_inner_peft_model(model2)
     if inner_peft2 is not None:
         # Phi: manually reload the 'unlearning' adapter into existing inner model
+        import safetensors.torch as _st
         from peft import LoraConfig as _LC
         from peft import LoraModel as _LM
-        import safetensors.torch as _st
 
         # 1. Read saved adapter config
         with open(adapter_path / "adapter_config.json") as _f:

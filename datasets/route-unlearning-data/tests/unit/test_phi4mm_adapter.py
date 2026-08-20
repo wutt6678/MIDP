@@ -489,6 +489,7 @@ class TestPhiInnerModelWrapperInputMode:
     def test_wrapper_sets_vision_unlearning_adapters(self):
         """VISION input_mode should set active adapters to ['vision', 'unlearning']."""
         from unittest.mock import MagicMock
+
         from route_data.models.trainable.phi4mm import _PhiInnerModelWrapper
 
         inner_model = MagicMock()
@@ -582,7 +583,6 @@ class TestSDPALanguageMask:
 
     def test_2d_padding_mask_affects_output(self):
         """2D padding mask must change output (padded positions excluded)."""
-        import torch.nn.functional as F
         from route_data.models.trainable.phi4mm import _apply_sdpa_patches
 
         _apply_sdpa_patches()
@@ -678,8 +678,9 @@ class TestSDPAVisionMask:
 
     def test_vision_2d_mask_affects_output(self):
         """Vision 2D mask must change output (padded positions excluded)."""
-        from route_data.models.trainable.phi4mm import _to_sdpa_bool_mask
         import torch.nn.functional as F
+
+        from route_data.models.trainable.phi4mm import _to_sdpa_bool_mask
 
         torch.manual_seed(42)
         batch, heads, seq_len, head_dim = 2, 4, 12, 16
