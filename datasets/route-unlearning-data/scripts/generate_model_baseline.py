@@ -70,21 +70,27 @@ def _git_is_clean(project_root: Path) -> bool:
 
 
 def select_balanced_smoke_probes(
-    probes: list[dict],
+    probes: list,
     per_family: int = 10,
     seed: int = 17,
-) -> list[dict]:
+) -> list:
     """Select exactly *per_family* probes from each of the 5 families.
 
     Deterministic: sorts by probe_id within each family, then takes the
     first *per_family*.  Returns exactly ``per_family * 5`` probes.
+    Works with both dict and BaselineProbe dataclass inputs.
     """
     import random
     rng = random.Random(seed)
 
-    by_family: dict[str, list[dict]] = defaultdict(list)
+    def _get(p, key):
+        if isinstance(p, dict):
+            return p[key]
+        return getattr(p, key)
+
+    by_family: dict[str, list] = defaultdict(list)
     for p in probes:
-        by_family[p["probe_family"]].append(p)
+        by_family[_get(p, "probe_family")].append(p)
 
     expected_families = {
         "direct_visual", "image_plus_name", "wrong_name",
@@ -94,9 +100,9 @@ def select_balanced_smoke_probes(
     if missing:
         raise RuntimeError(f"Missing probe families: {missing}")
 
-    selected: list[dict] = []
+    selected: list = []
     for fam in sorted(expected_families):
-        fam_probes = sorted(by_family[fam], key=lambda p: p["probe_id"])
+        fam_probes = sorted(by_family[fam], key=lambda p: _get(p, "probe_id"))
         if len(fam_probes) < per_family:
             raise RuntimeError(
                 f"Family {fam!r} has only {len(fam_probes)} probes, "
@@ -107,7 +113,7 @@ def select_balanced_smoke_probes(
     # Verify balance.
     fam_counts = defaultdict(int)
     for p in selected:
-        fam_counts[p["probe_family"]] += 1
+        fam_counts[_get(p, "probe_family")] += 1
     for fam in expected_families:
         assert fam_counts[fam] == per_family, (
             f"Family {fam!r} has {fam_counts[fam]} probes, expected {per_family}"
@@ -430,14 +436,9 @@ def main() -> None:
     if args.smoke_only:
         # Balanced 50-probe smoke (§2).
         logger.info("Step 2: Balanced 50-probe smoke...")
-        smoke_probes = select_balanced_smoke_probes(runner.probes, per_family=10)
-        assert len(smoke_probes) == 50, f"Expected 50 smoke probes, got {len(smoke_probes)}"
+        smoke_probe_objs = select_balanced_smoke_probes(runner.probes, per_family=10)
+        assert len(smoke_probe_objs) == 50, f"Expected 50 smoke probes, got {len(smoke_probe_objs)}"
 
-        from route_data.eval.baseline_runner import BaselineProbe
-        smoke_probe_objs = [
-            p for p in runner.probes
-            if p.probe_id in {sp["probe_id"] for sp in smoke_probes}
-        ]
         results = runner.run_selected(smoke_probe_objs)
         smoke_ids = {p.probe_id for p in smoke_probe_objs}
     else:
