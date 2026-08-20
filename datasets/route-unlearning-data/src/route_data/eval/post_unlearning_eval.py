@@ -276,26 +276,44 @@ def validate_baseline_model_identity(
 # --------------------------------------------------------------------------- #
 
 def load_lora_checkpoint(
-    base_model_id: str,
-    base_revision: str,
-    checkpoint_path: str | Path,
+    base_model_id: str = "",
+    base_revision: str = "",
+    checkpoint_path: str | Path = "",
     dtype: str = "bfloat16",
     device: str = "cuda:0",
+    *,
+    adapter: Any | None = None,
+    profile: Any | None = None,
 ) -> tuple[Any, Any, dict[str, str]]:
     """Load a LoRA adapter checkpoint on top of the frozen base model.
+
+    Supports two calling conventions:
+
+    **Adapter-driven (preferred, model-agnostic):**
+        Pass ``adapter`` (a :class:`TrainableVLMAdapter`) and ``profile``
+        (a :class:`ModelFamilyProfile`).  The adapter handles model-specific
+        loading, processor resolution, and revision pinning.
+
+    **Legacy (Qwen-only, backward compatible):**
+        Pass ``base_model_id``, ``base_revision``, etc.  Uses the hardcoded
+        ``AutoModelForImageTextToText`` path.
 
     Parameters
     ----------
     base_model_id:
-        HuggingFace model ID for the base model.
+        HuggingFace model ID for the base model (legacy path only).
     base_revision:
-        Exact revision of the base model.
+        Exact revision of the base model (legacy path only).
     checkpoint_path:
         Path to the LoRA adapter checkpoint directory.
     dtype:
-        Torch dtype string.
+        Torch dtype string (legacy path only).
     device:
         Device to load the model on.
+    adapter:
+        A :class:`TrainableVLMAdapter` instance (preferred path).
+    profile:
+        A :class:`ModelFamilyProfile` instance (preferred path).
 
     Returns
     -------
@@ -309,12 +327,56 @@ def load_lora_checkpoint(
     import torch
     from huggingface_hub import snapshot_download
     from peft import PeftModel
+
+    checkpoint_path = Path(checkpoint_path)
+
+    if adapter is not None and profile is not None:
+        # ---- Adapter-driven path (model-agnostic) ---- #
+        profile.validate_revision_immutable()
+
+        model_id = profile.model_id
+        revision = profile.revision
+        processor_revision = profile.processor_revision
+
+        snapshot_download(model_id, revision=revision)
+
+        base_model, processor = adapter.load_model_processor(
+            model_id=model_id,
+            revision=revision,
+            processor_revision=processor_revision,
+            dtype=profile.dtype,
+            device=device,
+            training=False,
+        )
+
+        model = PeftModel.from_pretrained(
+            base_model,
+            checkpoint_path,
+            torch_dtype=getattr(torch, profile.dtype),
+        )
+        model.eval()
+
+        adapter_metadata = _build_adapter_metadata(checkpoint_path)
+
+        logger.info(
+            f"Loaded LoRA checkpoint from {checkpoint_path} "
+            f"on base {model_id} revision {revision} "
+            f"(adapter={profile.key})"
+        )
+        return model, processor, adapter_metadata
+
+    # ---- Legacy path (Qwen-only, backward compatible) ---- #
     from transformers import AutoModelForImageTextToText, AutoProcessor
+
+    if not base_model_id or not base_revision:
+        raise ValueError(
+            "load_lora_checkpoint() requires either (adapter, profile) "
+            "or (base_model_id, base_revision)"
+        )
 
     torch_dtype = getattr(torch, dtype)
     snapshot_download(base_model_id, revision=base_revision)
 
-    # Load base model
     base_model = AutoModelForImageTextToText.from_pretrained(
         base_model_id,
         torch_dtype=torch_dtype,
@@ -329,8 +391,6 @@ def load_lora_checkpoint(
         trust_remote_code=True,
     )
 
-    # Load LoRA adapter
-    checkpoint_path = Path(checkpoint_path)
     model = PeftModel.from_pretrained(
         base_model,
         checkpoint_path,
@@ -338,7 +398,6 @@ def load_lora_checkpoint(
     )
     model.eval()
 
-    # Build adapter metadata for the adapter-aware fingerprint (P0-6).
     adapter_metadata = _build_adapter_metadata(checkpoint_path)
 
     logger.info(

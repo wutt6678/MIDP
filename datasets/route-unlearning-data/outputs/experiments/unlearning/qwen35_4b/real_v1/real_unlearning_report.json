@@ -1,0 +1,33 @@
+{
+  "experiment_id": "fiubench_unlearning_4b_v1",
+  "timestamp": "2026-08-20T03:46:22.945310+00:00",
+  "git_commit": "734ca7a75f06c04d241a75a92da3d40f478f6d41",
+  "smoke_mode": false,
+  "identities": {
+    "target_ids": [
+      "76f35468e0b72c60",
+      "14dd102b5288c236"
+    ],
+    "retain_ids": [
+      "67218532aba5fc77",
+      "cbb9f0b7b65140bd"
+    ],
+    "control_ids": [
+      "bd9d89b8a1f51955",
+      "89d6ff2125fd7ac5"
+    ]
+  },
+  "training_samples": {
+    "forget": 8,
+    "retain": 8
+  },
+  "training": {
+    "num_optimizer_steps": 50,
+    "gradient_accumulation_steps": 4,
+    "total_microsteps": 200,
+    "final_loss": -103.19647407531738,
+    "elapsed_seconds": 950.8132212162018,
+    "checkpoints_saved": 4
+  },
+  "adapter_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1/adapter"
+}
