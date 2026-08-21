@@ -41,7 +41,7 @@ access:
   requires_hf_auth: true
 
 supports_prompting: true
-supports_candidate_margin: false  # pending clean canary rerun
+supports_candidate_margin: true  # clean canary PASS, research-eligible
 supports_ga: false
 supports_gd: false
 supports_kl: false
@@ -52,10 +52,10 @@ supports_r2mu: false
 
 status:
   baseline_ready: true
-  candidate_margin_execution_ready: false
-  candidate_margin_last_canary_status: PENDING_RERUN
+  candidate_margin_execution_ready: true
+  candidate_margin_last_canary_status: PASS_VALID_CANARY
   primary_absolute_dv_eligible: false
   relative_preservation_only: true
-  candidate_margin_ready: false  # pending clean canary
+  candidate_margin_ready: true  # research-eligible canary
   m1_core_ready: false
   m2_structural_ready: false
