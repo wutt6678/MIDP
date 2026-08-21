@@ -1,116 +1,0 @@
-2026-08-20 11:30:13 [INFO] ============================================================
-2026-08-20 11:30:13 [INFO] Qwen3.5-4B Real Unlearning Experiment
-2026-08-20 11:30:13 [INFO] ============================================================
-2026-08-20 11:30:13 [INFO] Output directory: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1
-2026-08-20 11:30:13 [INFO] Step 1: Loading baseline
-2026-08-20 11:30:13 [INFO] Step 2: Loading processed dataset
-2026-08-20 11:30:13 [INFO] Loading processed dataset from /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl
-2026-08-20 11:30:21 [INFO] Loaded 573 images from processed dataset
-2026-08-20 11:30:21 [INFO] Step 3: Selecting identities
-2026-08-20 11:30:21 [INFO] Selected identities:
-2026-08-20 11:30:21 [INFO]   Target (forget): ['76f35468e0b72c60', '14dd102b5288c236']
-2026-08-20 11:30:21 [INFO]   Retain: ['67218532aba5fc77', 'cbb9f0b7b65140bd']
-2026-08-20 11:30:21 [INFO]   Control: ['bd9d89b8a1f51955', '89d6ff2125fd7ac5']
-2026-08-20 11:30:21 [INFO] Step 4: Building training data
-2026-08-20 11:30:21 [INFO] Forget samples: 8
-2026-08-20 11:30:21 [INFO] Retain samples: 8
-2026-08-20 11:30:21 [INFO] Step 5: Loading model and setting up unlearning
-Fetching 14 files:   0%|          | 0/14 [00:00<?, ?it/s]Fetching 14 files: 100%|██████████| 14/14 [00:00<00:00, 1463.80it/s]
-[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
-[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
-Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights:   0%|          | 3/723 [00:00<00:25, 28.06it/s]Loading weights:   4%|▍         | 29/723 [00:00<00:04, 158.72it/s]Loading weights:   7%|▋         | 48/723 [00:00<00:03, 172.40it/s]Loading weights:  10%|▉         | 71/723 [00:00<00:03, 187.28it/s]Loading weights:  13%|█▎        | 94/723 [00:00<00:03, 197.17it/s]Loading weights:  16%|█▌        | 115/723 [00:00<00:03, 199.87it/s]Loading weights:  19%|█▉        | 136/723 [00:00<00:03, 189.91it/s]Loading weights:  22%|██▏       | 156/723 [00:00<00:03, 186.89it/s]Loading weights:  25%|██▌       | 181/723 [00:00<00:02, 203.20it/s]Loading weights:  28%|██▊       | 202/723 [00:01<00:02, 193.48it/s]Loading weights:  31%|███       | 224/723 [00:01<00:02, 197.33it/s]Loading weights:  34%|███▍      | 246/723 [00:01<00:02, 198.07it/s]Loading weights:  37%|███▋      | 266/723 [00:01<00:02, 189.45it/s]Loading weights:  40%|███▉      | 288/723 [00:01<00:02, 187.88it/s]Loading weights:  43%|████▎     | 311/723 [00:01<00:02, 194.35it/s]Loading weights:  46%|████▌     | 332/723 [00:01<00:01, 198.62it/s]Loading weights:  49%|████▉     | 357/723 [00:01<00:01, 207.24it/s]Loading weights:  52%|█████▏    | 379/723 [00:01<00:01, 198.68it/s]Loading weights:  55%|█████▌    | 399/723 [00:02<00:01, 193.27it/s]Loading weights:  58%|█████▊    | 419/723 [00:02<00:01, 189.12it/s]Loading weights:  69%|██████▉   | 501/723 [00:02<00:00, 362.27it/s]Loading weights:  82%|████████▏ | 594/723 [00:02<00:00, 518.84it/s]Loading weights:  94%|█████████▍| 682/723 [00:02<00:00, 621.92it/s]Loading weights: 100%|██████████| 723/723 [00:02<00:00, 282.02it/s]
-2026-08-20 11:30:27 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/generation_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:27 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:27 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:28 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:28 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:28 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:28 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/chat_template.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:29 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:29 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:29 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:29 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:30 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B/tree/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a?recursive=true&expand=false "HTTP/1.1 200 OK"
-2026-08-20 11:30:30 [INFO] HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-4B "HTTP/1.1 200 OK"
-2026-08-20 11:30:31 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:31 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/processor_config.json "HTTP/1.1 404 Not Found"
-2026-08-20 11:30:31 [INFO] Loaded qwen35_4b: Qwen/Qwen3.5-4B rev=851bf6e806ef
-2026-08-20 11:30:31 [INFO] Enabled gradient checkpointing to reduce memory
-2026-08-20 11:30:31 [INFO] Applied LoRA: rank=8, alpha=16
-2026-08-20 11:30:31 [INFO] Trainable parameters: 1572864
-2026-08-20 11:30:31 [INFO] Step 6: Training with real forget/retain loss
-2026-08-20 11:30:31 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-20 11:30:31 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-4B/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json "HTTP/1.1 200 OK"
-2026-08-20 11:30:31 [INFO] Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1/checkpoints/optimizer_step_000
-2026-08-20 11:30:31 [INFO] Starting training for 50 optimizer steps (200 microbatches, grad_accum=4)
-[transformers] `use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`.
-2026-08-20 11:30:52 [INFO] Optimizer step 1/50 | loss=3.3883 forget=3.1406 retain=2.4768
-2026-08-20 11:31:14 [INFO] Optimizer step 2/50 | loss=2.7731 forget=2.6288 retain=1.4431
-2026-08-20 11:31:34 [INFO] Optimizer step 3/50 | loss=3.0544 forget=2.9120 retain=1.4247
-2026-08-20 11:31:58 [INFO] Optimizer step 4/50 | loss=2.2482 forget=2.0254 retain=2.2280
-2026-08-20 11:32:15 [INFO] Optimizer step 5/50 | loss=1.7813 forget=1.6374 retain=1.4391
-2026-08-20 11:32:32 [INFO] Optimizer step 6/50 | loss=-0.8298 forget=-0.9497 retain=1.1992
-2026-08-20 11:32:49 [INFO] Optimizer step 7/50 | loss=-1.8547 forget=-1.9563 retain=1.0164
-2026-08-20 11:33:06 [INFO] Optimizer step 8/50 | loss=-3.8557 forget=-3.9364 retain=0.8070
-2026-08-20 11:33:23 [INFO] Optimizer step 9/50 | loss=-5.4387 forget=-5.5494 retain=1.1062
-2026-08-20 11:33:42 [INFO] Optimizer step 10/50 | loss=-7.9088 forget=-8.0785 retain=1.6973
-2026-08-20 11:33:43 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-20 11:33:43 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-4B/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json "HTTP/1.1 200 OK"
-2026-08-20 11:33:43 [INFO] Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1/checkpoints/optimizer_step_010
-2026-08-20 11:34:00 [INFO] Optimizer step 11/50 | loss=-10.5737 forget=-10.7888 retain=2.1512
-2026-08-20 11:34:17 [INFO] Optimizer step 12/50 | loss=-13.5226 forget=-13.9232 retain=4.0059
-2026-08-20 11:34:34 [INFO] Optimizer step 13/50 | loss=-17.6510 forget=-18.1342 retain=4.8318
-2026-08-20 11:34:51 [INFO] Optimizer step 14/50 | loss=-18.9993 forget=-19.6222 retain=6.2299
-2026-08-20 11:35:08 [INFO] Optimizer step 15/50 | loss=-23.6964 forget=-24.4335 retain=7.3712
-2026-08-20 11:35:25 [INFO] Optimizer step 16/50 | loss=-27.1918 forget=-28.0405 retain=8.4877
-2026-08-20 11:35:42 [INFO] Optimizer step 17/50 | loss=-30.3962 forget=-31.2951 retain=8.9885
-2026-08-20 11:35:59 [INFO] Optimizer step 18/50 | loss=-33.5803 forget=-34.6438 retain=10.6346
-2026-08-20 11:36:19 [INFO] Optimizer step 19/50 | loss=-35.9481 forget=-37.0267 retain=10.7861
-2026-08-20 11:36:35 [INFO] Optimizer step 20/50 | loss=-38.1747 forget=-39.3535 retain=11.7875
-2026-08-20 11:36:51 [INFO] Optimizer step 21/50 | loss=-40.6510 forget=-41.8901 retain=12.3911
-2026-08-20 11:37:08 [INFO] Optimizer step 22/50 | loss=-43.4574 forget=-44.7642 retain=13.0679
-2026-08-20 11:37:24 [INFO] Optimizer step 23/50 | loss=-46.1230 forget=-47.5374 retain=14.1433
-2026-08-20 11:37:41 [INFO] Optimizer step 24/50 | loss=-49.0017 forget=-50.4953 retain=14.9367
-2026-08-20 11:37:57 [INFO] Optimizer step 25/50 | loss=-51.1672 forget=-52.7398 retain=15.7254
-2026-08-20 11:37:57 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-20 11:37:57 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-4B/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json "HTTP/1.1 200 OK"
-2026-08-20 11:37:57 [INFO] Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1/checkpoints/optimizer_step_025
-2026-08-20 11:38:19 [INFO] Optimizer step 26/50 | loss=-53.9872 forget=-55.6678 retain=16.8063
-2026-08-20 11:38:41 [INFO] Optimizer step 27/50 | loss=-56.5645 forget=-58.2915 retain=17.2692
-2026-08-20 11:39:01 [INFO] Optimizer step 28/50 | loss=-58.8334 forget=-60.6845 retain=18.5110
-2026-08-20 11:39:21 [INFO] Optimizer step 29/50 | loss=-61.5030 forget=-63.3632 retain=18.6019
-2026-08-20 11:39:42 [INFO] Optimizer step 30/50 | loss=-64.6123 forget=-66.6378 retain=20.2552
-2026-08-20 11:40:02 [INFO] Optimizer step 31/50 | loss=-67.1181 forget=-69.1652 retain=20.4707
-2026-08-20 11:40:22 [INFO] Optimizer step 32/50 | loss=-70.0004 forget=-72.1581 retain=21.5771
-2026-08-20 11:40:44 [INFO] Optimizer step 33/50 | loss=-72.7212 forget=-74.9400 retain=22.1877
-2026-08-20 11:41:07 [INFO] Optimizer step 34/50 | loss=-75.7944 forget=-78.1464 retain=23.5194
-2026-08-20 11:41:34 [INFO] Optimizer step 35/50 | loss=-78.8875 forget=-81.2760 retain=23.8850
-2026-08-20 11:41:57 [INFO] Optimizer step 36/50 | loss=-80.3732 forget=-82.8961 retain=25.2294
-2026-08-20 11:42:18 [INFO] Optimizer step 37/50 | loss=-83.4797 forget=-86.0426 retain=25.6293
-2026-08-20 11:42:44 [INFO] Optimizer step 38/50 | loss=-85.5823 forget=-88.2913 retain=27.0896
-2026-08-20 11:43:03 [INFO] Optimizer step 39/50 | loss=-87.6032 forget=-90.4452 retain=28.4199
-2026-08-20 11:43:20 [INFO] Optimizer step 40/50 | loss=-89.8823 forget=-92.7326 retain=28.5033
-2026-08-20 11:43:36 [INFO] Optimizer step 41/50 | loss=-91.5681 forget=-94.5576 retain=29.8940
-2026-08-20 11:43:53 [INFO] Optimizer step 42/50 | loss=-93.5029 forget=-96.5460 retain=30.4308
-2026-08-20 11:44:11 [INFO] Optimizer step 43/50 | loss=-95.0306 forget=-98.1325 retain=31.0193
-2026-08-20 11:44:27 [INFO] Optimizer step 44/50 | loss=-96.1894 forget=-99.2692 retain=30.7979
-2026-08-20 11:44:44 [INFO] Optimizer step 45/50 | loss=-98.0105 forget=-101.1580 retain=31.4750
-2026-08-20 11:45:00 [INFO] Optimizer step 46/50 | loss=-99.0965 forget=-102.2308 retain=31.3429
-2026-08-20 11:45:18 [INFO] Optimizer step 47/50 | loss=-100.3157 forget=-103.4918 retain=31.7603
-2026-08-20 11:45:42 [INFO] Optimizer step 48/50 | loss=-101.5397 forget=-104.6923 retain=31.5255
-2026-08-20 11:46:05 [INFO] Optimizer step 49/50 | loss=-102.5937 forget=-105.7526 retain=31.5888
-2026-08-20 11:46:22 [INFO] Optimizer step 50/50 | loss=-103.1965 forget=-106.3195 retain=31.2306
-2026-08-20 11:46:22 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-20 11:46:22 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-4B/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json "HTTP/1.1 200 OK"
-2026-08-20 11:46:22 [INFO] Saved checkpoint: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1/checkpoints/optimizer_step_050
-2026-08-20 11:46:22 [INFO] Training complete in 950.8s
-2026-08-20 11:46:22 [INFO] Step 7: Saving checkpoint
-2026-08-20 11:46:22 [INFO] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-4B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-20 11:46:22 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-4B/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json "HTTP/1.1 200 OK"
-2026-08-20 11:46:22 [INFO] Saved adapter to /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1/adapter
-2026-08-20 11:46:22 [INFO] Step 8: Post-evaluation
-2026-08-20 11:46:22 [INFO] Step 9: Writing report
-2026-08-20 11:46:22 [INFO] ============================================================
-2026-08-20 11:46:22 [INFO] Real unlearning complete!
-2026-08-20 11:46:22 [INFO] Report: /scratch/wutiantong/MIDP/datasets/route-unlearning-data/outputs/experiments/unlearning/qwen35_4b/real_v1/real_unlearning_report.json
-2026-08-20 11:46:22 [INFO] ============================================================
