@@ -429,9 +429,50 @@ class TrainableVLMAdapter(ABC):
         """
         from peft import PeftModel
 
-        model = PeftModel.from_pretrained(
-            base_model, str(checkpoint_dir), adapter_name=adapter_name,
-        )
+        ckpt_src = Path(checkpoint_dir)
+        try:
+            # Try loading directly first
+            model = PeftModel.from_pretrained(
+                base_model, str(ckpt_src), adapter_name=adapter_name,
+            )
+        except RuntimeError:
+            # If OOM, load via a temporary copy on CPU
+            logger.info("Retrying adapter load via CPU to avoid GPU OOM")
+            torch.cuda.empty_cache()
+            # Load PEFT weights to CPU manually
+            import json as _json
+
+            from peft import LoraConfig as _LC
+            from peft import get_peft_model
+            from safetensors import safe_open as _sf
+
+            cfg_path = ckpt_src / "adapter_config.json"
+            with open(cfg_path) as _f:
+                _cfg = _json.load(_f)
+            lora_cfg = _LC(
+                r=_cfg.get("r", 8),
+                lora_alpha=_cfg.get("lora_alpha", 16),
+                lora_dropout=_cfg.get("lora_dropout", 0.0),
+                target_modules=_cfg.get("target_modules", []),
+                task_type=_cfg.get("task_type", "CAUSAL_LM"),
+            )
+            model = get_peft_model(base_model, lora_cfg, adapter_name=adapter_name)
+
+            # Manually copy weights from checkpoint
+            ckpt_data = {}
+            with _sf(str(ckpt_src / "adapter_model.safetensors"),
+                     framework="pt", device="cpu") as _f:
+                for _k in list(_f.keys()):
+                    ckpt_data[_k] = _f.get_tensor(_k)
+            live_params = dict(model.named_parameters())
+            for _k, _t in ckpt_data.items():
+                if _k in live_params:
+                    live_params[_k].data.copy_(_t)
+                else:
+                    _remapped = _remap_adapter_key(_k, adapter_name)
+                    if _remapped in live_params:
+                        live_params[_remapped].data.copy_(_t)
+            del ckpt_data
 
         # Verify checkpoint tensors were actually restored.
         # The checkpoint may use keys without the adapter name suffix
@@ -443,7 +484,7 @@ class TrainableVLMAdapter(ABC):
         if ckpt_path.is_file():
             ckpt_data = {}
             with safe_open(str(ckpt_path), framework="pt", device="cpu") as f:
-                for k in list(f.keys()):  # noqa: SIM118
+                for k in list(f.keys()):
                     ckpt_data[k] = f.get_tensor(k)
 
             live_params = dict(model.named_parameters())
