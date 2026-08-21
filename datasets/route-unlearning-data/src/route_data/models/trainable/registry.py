@@ -210,6 +210,16 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
             f"got {type(raw_leaf_names).__name__}"
         )
 
+    # Support both nested compatibility.constraints format and legacy flat format.
+    constraints = compat.get("constraints", {}) if "constraints" in compat else compat
+    min_transformers = constraints.get("min_transformers")
+    max_transformers_exclusive = constraints.get("max_transformers_exclusive")
+    tested_transformers = (
+        compat.get("tested_environment", {}).get("transformers", "")
+        if "tested_environment" in compat
+        else compat.get("tested_transformers", "")
+    )
+
     return ModelFamilyProfile(
         key=data["key"],
         model_id=model["id"],
@@ -258,9 +268,9 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
         supports_mmunlearner=_safe_bool(data.get("supports_mmunlearner", True)),
         supports_manu=_safe_bool(data.get("supports_manu", True)),
         supports_r2mu=_safe_bool(data.get("supports_r2mu", True)),
-        min_transformers_version=compat.get("min_transformers"),
-        max_transformers_version_exclusive=compat.get("max_transformers_exclusive"),
-        tested_transformers_version=compat.get("tested_transformers", ""),
+        min_transformers_version=min_transformers,
+        max_transformers_version_exclusive=max_transformers_exclusive,
+        tested_transformers_version=tested_transformers,
         requires_hf_auth=_safe_bool(access.get("requires_hf_auth", False)),
     )
 

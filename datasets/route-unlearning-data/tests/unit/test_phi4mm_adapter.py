@@ -348,11 +348,11 @@ class TestEnvironmentValidation:
 
 
 # ------------------------------------------------------------------ #
-# P0-7: Fingerprint records phi_sdpa_shim_v1
+# P0-7: Fingerprint records phi_sdpa_shim_v2
 # ------------------------------------------------------------------ #
 
 class TestPhiAttentionFingerprint:
-    """P0-7: attn_implementation must be phi_sdpa_shim_v1."""
+    """P0-7: attn_implementation must be phi_sdpa_shim_v2."""
 
     def test_profile_attn_field(self):
         adapter = _make_phi_adapter()
@@ -372,7 +372,7 @@ class TestPhiAttentionFingerprint:
             pytest.skip("phi4_mm.yaml not found")
 
         profile = load_profile_from_yaml(str(yaml_path))
-        assert profile.attn_implementation == "phi_sdpa_shim_v1"
+        assert profile.attn_implementation == "phi_sdpa_shim_v2"
         assert profile.attn_implementation != "eager"
 
 
