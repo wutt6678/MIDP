@@ -41,7 +41,7 @@ access:
   requires_hf_auth: false
 
 supports_prompting: true
-supports_candidate_margin: false  # until corrected canary rerun
+supports_candidate_margin: false  # no behavioral effect demonstrated
 supports_ga: false
 supports_gd: false
 supports_kl: false
@@ -52,6 +52,10 @@ supports_r2mu: false
 
 status:
   baseline_ready: true
-  candidate_margin_ready: false  # until corrected canary rerun
+  candidate_margin_execution_ready: false
+  candidate_margin_last_canary_status: FAIL_NO_BEHAVIORAL_EFFECT
+  primary_absolute_dv_eligible: false
+  relative_preservation_only: true
+  candidate_margin_ready: false  # no behavioral effect
   m1_core_ready: false
   m2_structural_ready: false

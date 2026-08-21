@@ -579,6 +579,20 @@ def run_post_evaluation(
         processed_dataset_path=str(processed_dataset) if processed_dataset.exists() else None,
     )
 
+    # P0-C06: Run research preflight before first post-eval inference.
+    try:
+        preflight = runner.validate_research_preflight()
+        preflight_path = post_eval_dir / "preflight_report.json"
+        with open(preflight_path, "w") as pf:
+            json.dump(preflight, pf, indent=2, default=str)
+            pf.write("\n")
+        logger.info(
+            f"Post-eval preflight: {'PASS' if preflight.get('pass') else 'FAIL'}"
+        )
+    except RuntimeError as exc:
+        logger.error(f"Post-eval preflight FAILED: {exc}")
+        raise
+
     results = runner.run_all()
     runner.save_results()
     summary = runner.generate_summary()
@@ -943,13 +957,9 @@ def _validate_reload_equivalence(
     reload_scores = _compute_reload_scores(
         reloaded, adapter, proc2, probes, device)
 
-    # Compare
-    # P0-5: margin comparison is the primary gate (scientifically
-    # meaningful).  Tolerance 0.5 accounts for numerical precision
-    # differences in multi-adapter models (Phi) where gradient
-    # checkpointing, eval/train mode, and adapter composition can
-    # shift absolute logP by a small constant.
-    tol = 0.5
+    # Compare — P0-C02: strict default tolerance.
+    # P0-C03: require all three comparisons (logP_yes, logP_no, margin).
+    tol = 1e-4
     max_diff = 0.0
     all_pass = True
     per_probe: list[dict] = []
@@ -957,7 +967,8 @@ def _validate_reload_equivalence(
         diff_yes = abs(trained["logp_yes"] - reload["logp_yes"])
         diff_no = abs(trained["logp_no"] - reload["logp_no"])
         diff_margin = abs(trained["margin"] - reload["margin"])
-        probe_max = diff_margin
+        # P0-C03: all three must pass independently.
+        probe_max = max(diff_yes, diff_no, diff_margin)
         max_diff = max(max_diff, probe_max)
         ok = probe_max <= tol
         if not ok:
@@ -966,6 +977,8 @@ def _validate_reload_equivalence(
             "probe_id": trained["probe_id"],
             "trained_logp_yes": trained["logp_yes"],
             "reload_logp_yes": reload["logp_yes"],
+            "trained_logp_no": trained["logp_no"],
+            "reload_logp_no": reload["logp_no"],
             "trained_margin": trained["margin"],
             "reload_margin": reload["margin"],
             "diff_yes": diff_yes,
@@ -984,6 +997,76 @@ def _validate_reload_equivalence(
         "max_diff": max_diff,
         "n_probes": len(per_probe),
         "per_probe": per_probe,
+        "_reload_scores": reload_scores,
+    }
+
+
+def _validate_behavioral_effect(
+    base_scores: list[dict],
+    trained_scores: list[dict],
+    reload_scores: list[dict],
+    *,
+    effect_tolerance: float = 1e-4,
+    reload_tolerance: float = 1e-4,
+) -> dict:
+    """P0-C01: Base -> trained -> reloaded behavioral-effect gate.
+
+    Requires that the intervention actually changes model behaviour
+    relative to the frozen base, not just LoRA tensor values.
+
+    Gates:
+      - At least one target probe must have
+        abs(trained_margin - base_margin) > effect_tolerance
+      - The same probe must also show
+        abs(reload_margin - base_margin) > effect_tolerance
+      - And abs(reload_margin - trained_margin) <= reload_tolerance
+    """
+    if not base_scores or not trained_scores:
+        return {"pass": False, "reason": "no base or trained scores"}
+
+    per_probe: list[dict] = []
+    any_trained_effect = False
+    any_reload_effect = False
+    reload_consistent = True
+
+    for base, trained, reload in zip(base_scores, trained_scores, reload_scores):
+        trained_minus_base = trained["margin"] - base["margin"]
+        reload_minus_base = reload["margin"] - base["margin"]
+        reload_minus_trained = reload["margin"] - trained["margin"]
+
+        if abs(trained_minus_base) > effect_tolerance:
+            any_trained_effect = True
+        if abs(reload_minus_base) > effect_tolerance:
+            any_reload_effect = True
+        if abs(reload_minus_trained) > reload_tolerance:
+            reload_consistent = False
+
+        per_probe.append({
+            "probe_id": base["probe_id"],
+            "base_logp_yes": base["logp_yes"],
+            "base_logp_no": base["logp_no"],
+            "base_margin": base["margin"],
+            "trained_logp_yes": trained["logp_yes"],
+            "trained_logp_no": trained["logp_no"],
+            "trained_margin": trained["margin"],
+            "reload_logp_yes": reload["logp_yes"],
+            "reload_logp_no": reload["logp_no"],
+            "reload_margin": reload["margin"],
+            "trained_minus_base_margin": trained_minus_base,
+            "reload_minus_base_margin": reload_minus_base,
+            "reload_minus_trained_margin": reload_minus_trained,
+        })
+
+    all_pass = any_trained_effect and any_reload_effect and reload_consistent
+    return {
+        "pass": all_pass,
+        "base_to_trained_effect_nonzero": any_trained_effect,
+        "base_to_reload_effect_nonzero": any_reload_effect,
+        "reload_consistent": reload_consistent,
+        "effect_tolerance": effect_tolerance,
+        "reload_tolerance": reload_tolerance,
+        "n_probes": len(per_probe),
+        "per_probe": per_probe,
     }
 
 
@@ -996,39 +1079,50 @@ def _validate_probe_counts(
     post_results_path: Path,
     join_result: dict,
 ) -> dict:
-    """P1-10: Fail-closed exact probe matching."""
-    def _count_unique(path: Path) -> tuple[int, set]:
-        ids: set[str] = set()
+    """P0-C04/05: Fail-closed exact probe matching.
+
+    Counts physical rows separately from unique IDs.  A file with
+    501 rows and 500 unique IDs is reported as 501 rows / 500 IDs.
+    """
+    def _count_rows_and_ids(path: Path) -> tuple[int, int, set[str]]:
+        """Return (physical_row_count, unique_id_count, id_set)."""
+        ids: list[str] = []
         with open(path) as f:
             for line in f:
                 if line.strip():
                     r = json.loads(line)
-                    ids.add(r["probe_id"])
-        return len(ids), ids
+                    ids.append(r["probe_id"])
+        return len(ids), len(set(ids)), set(ids)
 
-    n_base, base_ids = _count_unique(baseline_path)
-    n_post, post_ids = _count_unique(post_results_path)
+    base_rows, base_unique_n, base_ids = _count_rows_and_ids(baseline_path)
+    post_rows, post_unique_n, post_ids = _count_rows_and_ids(post_results_path)
     joined = join_result.get("joined_count", 0)
-    missing = n_base - len(base_ids & post_ids)
+    missing = len(base_ids - post_ids)
     extra = len(post_ids - base_ids)
+    base_dupes = base_rows - base_unique_n
+    post_dupes = post_rows - post_unique_n
 
     ok = (
-        n_base == 500
-        and n_post == 500
-        and len(base_ids) == 500
-        and len(post_ids) == 500
+        base_rows == 500
+        and base_unique_n == 500
+        and post_rows == 500
+        and post_unique_n == 500
         and missing == 0
         and extra == 0
         and joined == 500
+        and base_dupes == 0
+        and post_dupes == 0
     )
     return {
         "pass": ok,
-        "baseline_rows": n_base,
-        "baseline_unique": len(base_ids),
-        "post_rows": n_post,
-        "post_unique": len(post_ids),
-        "missing": missing,
-        "extra": extra,
+        "baseline_rows": base_rows,
+        "baseline_unique_ids": base_unique_n,
+        "baseline_duplicates": base_dupes,
+        "post_rows": post_rows,
+        "post_unique_ids": post_unique_n,
+        "post_duplicates": post_dupes,
+        "missing_ids": missing,
+        "extra_ids": extra,
         "joined": joined,
     }
 
@@ -1128,6 +1222,13 @@ def main() -> None:
         raise RuntimeError(f"Baseline binding invalid: {binding_errors}")
     logger.info("Baseline binding validated OK")
 
+    # P0-C07: Compute the SHA-256 of the binding file itself.
+    _binding_path = (
+        PROJECT_ROOT / "outputs" / "experiments" / "pre_unlearning"
+        / model_key / "baseline_v1" / "baseline_binding.json"
+    )
+    _binding_file_sha = file_sha256(_binding_path) if _binding_path.is_file() else ""
+
     # -- Validate selection (P1-18) ----------------------------------------- #
     target_ids = set(selection["target_identities"])
     retain_ids = set(selection["retain_identities"])
@@ -1154,6 +1255,38 @@ def main() -> None:
     # Freeze base
     for param in model.parameters():
         param.requires_grad = False
+
+    # -- P0-C01: Behavioral-effect base scores ---------------------------- #
+    # Score fixed probes with the FROZEN BASE model BEFORE attaching LoRA.
+    # After training, compare trained vs base to verify the intervention
+    # actually changes model behavior (not just LoRA tensor values).
+    _behavioural_probes = []
+    _baseline_results_raw = []
+    _behavioural_baseline_path = (
+        PROJECT_ROOT / "outputs" / "experiments" / "pre_unlearning"
+        / model_key / "baseline_v1" / "baseline_results.jsonl"
+    )
+    if _behavioural_baseline_path.is_file():
+        with open(_behavioural_baseline_path) as _bf:
+            for _line in _bf:
+                if _line.strip():
+                    _baseline_results_raw.append(json.loads(_line))
+    if _baseline_results_raw:
+        _behavioural_probes = _select_reload_probes(
+            _baseline_results_raw, target_ids, retain_ids, max_probes=4,
+        )
+    if _behavioural_probes:
+        model.eval()
+        base_scores = _compute_reload_scores(
+            model, adapter, processor, _behavioural_probes, args.device,
+        )
+        logger.info(
+            f"Behavioral-effect: scored {len(base_scores)} probes "
+            f"with frozen BASE model"
+        )
+    else:
+        base_scores = []
+        logger.warning("Behavioral-effect: no probes available for base scoring")
 
     # -- Snapshot protected parameters (P0-06) ------------------------------
     # NOTE: Snapshot AFTER adapter attachment so parameter names match
@@ -1466,6 +1599,24 @@ def main() -> None:
             f"Reload-equivalence: {'PASS' if reload_validation.get('pass') else 'FAIL'}"
         )
 
+        # P0-C01: Behavioral-effect gate.
+        _reload_scores = reload_validation.pop("_reload_scores", [])
+        if base_scores and trained_scores and _reload_scores:
+            behavioural_effect = _validate_behavioral_effect(
+                base_scores, trained_scores, _reload_scores,
+            )
+        else:
+            behavioural_effect = {
+                "pass": False,
+                "reason": "insufficient scores for behavioral-effect check",
+            }
+        with open(output_dir / "behavioral_effect_validation.json", "w") as f:
+            json.dump(behavioural_effect, f, indent=2, default=str)
+            f.write("\n")
+        logger.info(
+            f"Behavioral-effect: {'PASS' if behavioural_effect.get('pass') else 'FAIL'}"
+        )
+
         # -- Pre/post joining (P0-10) --------------------------------------- #
         post_results_path = output_dir / "post_eval" / "baseline_results.jsonl"
         join_result = None
@@ -1474,13 +1625,6 @@ def main() -> None:
                 baseline_path, post_results_path, selection, output_dir,
             )
             logger.info(f"Joined {join_result['joined_count']} pre/post rows")
-
-            # P1-10: Exact probe matching validation.
-            _probe_val = _validate_probe_counts(
-                baseline_path, post_results_path, join_result,
-            )
-            if not _probe_val["pass"]:
-                logger.warning(f"Probe matching validation FAILED: {_probe_val}")
 
             # -- Preservation (P0-11 / P1-12) ------------------------------- #
             post_summary_path = output_dir / "post_eval" / "baseline_summary.json"
@@ -1503,10 +1647,11 @@ def main() -> None:
                     f"gate={'PASS' if preservation['gate_pass'] else 'FAIL'})"
                 )
     else:
-        # P0-8: --skip-post-eval forces engineering_debug.
+        # P0-C10: --skip-post-eval forces engineering_debug.
         post_eval = {"num_probes": 0, "num_errors": 0, "skipped": True}
         preservation = {}
         reload_validation = {"pass": False, "skipped": True}
+        behavioural_effect = {"pass": False, "skipped": True}
         join_result = None
 
     # -- Write selection ---------------------------------------------------- #
@@ -1578,10 +1723,26 @@ def main() -> None:
         required_checks["post_validation_pass"] = bool(
             post_eval.get("validation_pass", False)
         )
-        # P0-5: Include reload-equivalence in required checks.
+        # P0-C02/03: Include reload-equivalence in required checks.
         required_checks["reload_equivalence_pass"] = bool(
             reload_validation.get("pass", False)
         )
+        # P0-C01: Behavioral-effect gates.
+        required_checks["base_to_trained_effect_nonzero"] = bool(
+            behavioural_effect.get("base_to_trained_effect_nonzero", False)
+        )
+        required_checks["base_to_reload_effect_nonzero"] = bool(
+            behavioural_effect.get("base_to_reload_effect_nonzero", False)
+        )
+        # P0-C05: Exact probe matching is a required gate.
+        if join_result is not None:
+            _probe_val = _validate_probe_counts(
+                baseline_path, post_results_path, join_result,
+            )
+            required_checks["exact_probe_match_pass"] = bool(_probe_val["pass"])
+            with open(output_dir / "exact_probe_match.json", "w") as f:
+                json.dump(_probe_val, f, indent=2)
+                f.write("\n")
         if preservation:
             required_checks["preservation_gate_pass"] = bool(
                 preservation.get("gate_pass", False)
@@ -1592,13 +1753,17 @@ def main() -> None:
         if isinstance(v, bool)
     )
 
-    # P0-8: --skip-post-eval forces engineering_debug, never research.
+    # P0-C10: Separate completion logic.
+    # research_complete requires all gates pass + post-eval executed + not debug.
+    post_eval_executed = not args.skip_post_eval and not post_eval.get("skipped", False)
+    research_complete = all_pass and post_eval_executed and not is_dirty
+
     if args.skip_post_eval:
         evidence_class = "engineering_debug"
         research_eligible = False
     else:
         evidence_class = "research_canary" if all_pass else "engineering_canary"
-        research_eligible = all_pass and not is_dirty
+        research_eligible = research_complete
 
     validation = {
         "pass": all_pass,
@@ -1625,8 +1790,8 @@ def main() -> None:
         "method_config_sha256": file_sha256(method_path),
         "selection_sha256": file_sha256(selection_path),
         "checkpoint_sha256": adapter_sha,
-        "baseline_manifest_sha256": getattr(baseline_binding, "manifest_sha256", ""),
-        "baseline_binding_sha256": getattr(baseline_binding, "binding_sha256", ""),
+        "baseline_manifest_sha256": baseline_binding.manifest_sha256,
+        "baseline_binding_sha256": _binding_file_sha,
         "baseline_results_sha256": baseline_binding.results_sha256,
         "environment_sha256": env_sha,
         "validation_pass": all_pass,
@@ -1640,6 +1805,8 @@ def main() -> None:
         ("preservation_report.json", "preservation_report_sha256"),
         ("reload_validation.json", "reload_validation_sha256"),
         ("parameter_inventory.json", "parameter_inventory_sha256"),
+        ("behavioral_effect_validation.json", "behavioral_effect_sha256"),
+        ("exact_probe_match.json", "exact_probe_match_sha256"),
     ]:
         _fpath = output_dir / _fname
         if _fpath.exists():
@@ -1664,11 +1831,18 @@ def main() -> None:
         json.dump(run_binding, f, indent=2)
         f.write("\n")
 
-    # -- Remove RUN_INCOMPLETE only after all checks pass ------------------- #
-    if all_pass:
+    # -- P0-C10: Remove RUN_INCOMPLETE only for research-complete runs ---- #
+    if research_complete:
         if run_incomplete.exists():
             run_incomplete.unlink()
         logger.info("All validation gates PASSED; RUN_INCOMPLETE removed")
+    elif all_pass and not post_eval_executed:
+        # Training passed but post-eval was skipped — DEBUG_COMPLETE
+        if run_incomplete.exists():
+            run_incomplete.unlink()
+        _debug_marker = output_dir / "DEBUG_COMPLETE"
+        _debug_marker.touch()
+        logger.info("Training PASSED but post-eval skipped; DEBUG_COMPLETE written")
     else:
         failed = [k for k, v in required_checks.items() if isinstance(v, bool) and not v]
         logger.warning(f"Validation FAILED: {failed}")
