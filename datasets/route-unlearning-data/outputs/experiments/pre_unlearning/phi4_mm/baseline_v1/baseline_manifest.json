@@ -1,18 +1,41 @@
 {
+  "schema_version": "1.3",
+  "metric_schema_version": "1.0",
+  "generated_at": "2026-08-21T20:00:00Z",
   "dataset_provenance": {
     "probe_file": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
-    "processed_dataset": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl",
-    "num_probes": 500
+    "probe_file_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+    "probe_count": 500,
+    "dataset_version": "fiubench-route-v1",
+    "route_probe_sha256": "aeca4ee889e429ad717afb4d83c265b3990aebd5c1464b8afb4b4a2ad4dfd864",
+    "processed_dataset_path": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl",
+    "processed_dataset_sha256": "7200df4ec361ee52ad8a183b1181271980f35fb3f79690931f17481080c0d8c1"
   },
   "model_identity": {
     "model_key": "phi4_mm",
     "model_id": "microsoft/Phi-4-multimodal-instruct",
     "model_revision": "93f923e1a7727d1c4f446756212d9d3e8fcc5d81",
-    "processor_revision": "93f923e1a7727d1c4f446756212d9d3e8fcc5d81"
+    "processor_revision": "93f923e1a7727d1c4f446756212d9d3e8fcc5d81",
+    "backend": "adapter_eval_backend",
+    "dtype": "bfloat16",
+    "attn_implementation": "phi_sdpa_shim_v2"
   },
   "scoring_config": {
+    "scoring_version": "1.0",
+    "candidate_protocol": "binary_yes_no",
+    "candidate_protocol_version": "1.0",
     "candidate_positive": "Yes",
-    "candidate_negative": "No"
+    "candidate_negative": "No",
+    "decision_rule": "p_yes_geq_0.5"
+  },
+  "runtime_environment": {
+    "python_version": "3.10.20",
+    "torch_version": "2.11.0+cu128",
+    "cuda_version": "12.8",
+    "transformers_version": "4.47.1",
+    "peft_version": "0.20.0",
+    "safetensors_version": "0.8.0",
+    "platform": "Linux-6.17.0-1011-oracle-x86_64-with-glibc2.39"
   },
   "results_summary": {
     "total_probes": 500,
@@ -112,12 +135,16 @@
     "scoring_version": "2",
     "generation_protocol_sha256": "c66932835e40a674b8716c93d145b74611e21f623786ab2d4095f67f10800127"
   },
-  "code_provenance": {
-    "git_commit": "94bf302",
+  "execution_provenance": {
+    "git_commit": "ca9fd8de9fa18d4828048f914690fe0a93b17f7f",
     "git_dirty": false,
-    "model_profile_sha256": "8f4b9d58b8f6cf36f846794c5868d9bc1c0f7cc7168c64c5dcbb551d6b9049fb"
+    "source": "preflight_report"
   },
-  "artifact_shas": {
+  "artifact_provenance": {
+    "manifest_generated_at": "2026-08-21T20:00:00Z",
+    "note": "Packaging commit - execution happened at execution_provenance.git_commit"
+  },
+  "artifact_hashes": {
     "baseline_results.jsonl": "ef9a6978e148f820f77c0ed83675680edcbacab16bb8849c857ae483e56d3643",
     "baseline_summary.json": "62d5afb6b2d83e1278594fc1ef10b4d305a4e9c0a4a9c0df5102983ef829cebd",
     "validation_report.json": "f5fa6beee6de3dc7ac299ebc5b5ee101bf2b6c24307f5dee73b44d58e106646a",

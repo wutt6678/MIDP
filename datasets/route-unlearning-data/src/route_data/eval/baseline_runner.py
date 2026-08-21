@@ -925,6 +925,43 @@ class BaselineRunner:
         log.info("Git state clean: %s", state["git_commit"][:12])
         return state
 
+    def _get_execution_provenance(self) -> dict[str, Any]:
+        """Return immutable execution provenance from preflight report.
+
+        P0-PHI-01/02: The execution git commit is captured at inference
+        time (in preflight_report.json) and must not be overwritten by
+        later packaging commits.  This method reads from the preflight
+        report if available, otherwise falls back to current git state.
+
+        Returns
+        -------
+        dict
+            ``{git_commit, git_dirty, source}`` where source indicates
+            whether the provenance came from preflight or current state.
+        """
+        preflight_path = self.output_dir / "preflight_report.json"
+        if preflight_path.is_file():
+            try:
+                with open(preflight_path) as f:
+                    preflight = json.load(f)
+                # The preflight stores git state under gates.git
+                git_info = preflight.get("gates", {}).get("git", {})
+                if git_info.get("git_commit"):
+                    return {
+                        "git_commit": git_info["git_commit"],
+                        "git_dirty": git_info.get("git_dirty", False),
+                        "source": "preflight_report",
+                    }
+            except (json.JSONDecodeError, KeyError):
+                pass
+        # Fallback: current git state (should not happen for research runs)
+        state = self._get_git_state()
+        return {
+            "git_commit": state["git_commit"],
+            "git_dirty": state["git_dirty"],
+            "source": "current_git_state_fallback",
+        }
+
     # ------------------------------------------------------------------ #
     # Fingerprint validation (P1-9)
     # ------------------------------------------------------------------ #
@@ -2243,9 +2280,15 @@ class BaselineRunner:
                 "summary": summary_data,
             },
             "route_identity_role_counts": route_identity_role_counts,
-            "code_provenance": {
-                "git_commit": git_commit,
-                "git_dirty": git_dirty,
+            # P0-PHI-01/02: Separate execution provenance (immutable, from
+            # preflight at inference time) from artifact provenance (packaging).
+            "execution_provenance": self._get_execution_provenance(),
+            "artifact_provenance": {
+                "packaging_git_commit": git_commit,
+                "packaging_git_dirty": git_dirty,
+                "manifest_generated_at": time.strftime(
+                    "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
+                ),
             },
         }
 

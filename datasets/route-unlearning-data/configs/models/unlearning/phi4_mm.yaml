@@ -10,7 +10,7 @@ model:
   adapter: phi4mm
   trust_remote_code: true
   dtype: bfloat16
-  attn_implementation: phi_sdpa_shim_v1  # SDPA shim (no flash_attn available)
+  attn_implementation: phi_sdpa_shim_v2  # P0-PHI-04: corrected causal masking
 
 candidate_protocol:
   positive: "Yes"
@@ -41,14 +41,17 @@ structural:
 # input_image_embeds, image_attention_mask, image_sizes, input_mode
 # Image token: <|endoftext10|> (ID 200010)
 
+# P1-PHI-01: Separate enforceable constraints from descriptive tested environment
 compatibility:
-  min_transformers: "4.47.0"
-  max_transformers_exclusive: "4.49.0"
-  tested_transformers: "4.47.1"
-  tested_torch: "2.11.0+cu128"
-  tested_peft: "0.20.0"
-  tested_python: "3.10.20"
-  tested_safetensors: "0.8.0"
+  constraints:
+    min_transformers: "4.47.0"
+    max_transformers_exclusive: "4.49.0"
+  tested_environment:
+    transformers: "4.47.1"
+    torch: "2.11.0+cu128"
+    peft: "0.20.0"
+    python: "3.10.20"
+    safetensors: "0.8.0"
   # REQUIRES: transformers 4.47.x + SDPA monkey-patches
   # (PreTrainedModel._check_and_enable_flash_attn_2 noop,
   #  modeling_flash_attention_utils._flash_attention_forward -> SDPA,

@@ -273,8 +273,12 @@ def compute_profile_sha256(path: str | Path) -> str:
     promoting a model from PENDING to PASS does not invalidate its
     frozen baseline binding.
 
+    P1-PHI-01: For ``compatibility``, only ``constraints`` is hashed
+    (enforceable version ranges). ``tested_environment`` is descriptive
+    metadata and does not affect execution semantics.
+
     Included sections: ``key``, ``model``, ``candidate_protocol``,
-    ``lora``, ``structural``, ``compatibility``.
+    ``lora``, ``structural``, ``compatibility.constraints``.
     """
     import yaml
 
@@ -283,10 +287,24 @@ def compute_profile_sha256(path: str | Path) -> str:
 
     # Keep only scientific execution fields.
     _SCIENTIFIC_KEYS = [
-        "key", "model", "candidate_protocol", "lora",
-        "structural", "compatibility",
+        "key", "model", "candidate_protocol", "lora", "structural",
     ]
     canonical = {k: data[k] for k in _SCIENTIFIC_KEYS if k in data}
+
+    # P1-PHI-01: For compatibility, only hash constraints (not tested_environment)
+    compat = data.get("compatibility", {})
+    if compat:
+        # Support both old flat format and new nested format
+        if "constraints" in compat:
+            canonical["compatibility"] = {"constraints": compat["constraints"]}
+        else:
+            # Old format: extract only constraint fields
+            constraint_keys = ["min_transformers", "max_transformers_exclusive",
+                               "min_torch", "max_torch_exclusive",
+                               "min_peft", "max_peft_exclusive"]
+            constraints = {k: compat[k] for k in constraint_keys if k in compat}
+            if constraints:
+                canonical["compatibility"] = {"constraints": constraints}
 
     # Deterministic canonical serialisation.
     blob = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
