@@ -44,9 +44,11 @@ structural:
 compatibility:
   min_transformers: "4.47.0"
   max_transformers_exclusive: "4.49.0"
-  tested_transformers: "4.48.3"
-  tested_torch: "2.6.0"
-  tested_peft: "0.13.2"
+  tested_transformers: "4.47.1"
+  tested_torch: "2.11.0+cu128"
+  tested_peft: "0.20.0"
+  tested_python: "3.10.20"
+  tested_safetensors: "0.8.0"
   # REQUIRES: transformers 4.47.x + SDPA monkey-patches
   # (PreTrainedModel._check_and_enable_flash_attn_2 noop,
   #  modeling_flash_attention_utils._flash_attention_forward -> SDPA,

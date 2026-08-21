@@ -1781,8 +1781,17 @@ def main() -> None:
         evidence_class = "research_canary" if all_pass else "engineering_canary"
         research_eligible = research_complete
 
+    # Derive gate counts programmatically from the required_checks schema.
+    _bool_checks = {
+        k: v for k, v in required_checks.items() if isinstance(v, bool)
+    }
+    _gates_passed = sum(1 for v in _bool_checks.values() if v)
+    _total_gates = len(_bool_checks)
+
     validation = {
         "pass": all_pass,
+        "gates_passed": _gates_passed,
+        "total_gates": _total_gates,
         "checks": required_checks,
         "evidence_class": evidence_class,
         "research_evidence_eligible": research_eligible,
@@ -1867,7 +1876,10 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info(f"Unlearning complete: {model_key}")
     logger.info(f"Output: {output_dir}")
-    logger.info(f"Validation: {'PASS' if all_pass else 'FAIL'}")
+    logger.info(
+        f"Validation: {'PASS' if all_pass else 'FAIL'} "
+        f"({_gates_passed}/{_total_gates} gates)"
+    )
     logger.info("=" * 60)
 
 
