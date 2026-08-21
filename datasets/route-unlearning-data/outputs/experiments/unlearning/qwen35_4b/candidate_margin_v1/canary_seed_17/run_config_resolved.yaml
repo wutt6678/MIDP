@@ -8,8 +8,8 @@ canary: true
 control_identities:
 - bd9d89b8a1f51955
 - 89d6ff2125fd7ac5
-device: cuda:3
-git_commit: 2fc3c8386b2b22d33d60d6de29385b8f7f9288a2
+device: cuda:0
+git_commit: 39f6b5ce9c04320ffeef8955aa2afdea28c37d47
 git_dirty: true
 lora_alpha: 16
 lora_dropout: 0.05
@@ -68,5 +68,7 @@ target_identities:
 - 76f35468e0b72c60
 - 14dd102b5288c236
 trainable_parameters: 1572864
-training_families:
+training_families_forget:
+- direct_visual
+training_families_retain:
 - direct_visual

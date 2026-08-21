@@ -671,6 +671,62 @@ class Phi4MMAdapter(TrainableVLMAdapter):
     # Adapter lifecycle overrides (P0-05)
     # ------------------------------------------------------------------ #
 
+    def _install_unlearning_composition_hooks(
+        self,
+        model: torch.nn.Module,
+        adapter_name: str = "unlearning",
+    ) -> None:
+        """Monkey-patch Phi's adapter switching to include the unlearning adapter.
+
+        Phi's forward() calls ``set_lora_adapter('vision')`` or
+        ``unset_lora_adapter()`` which controls which LoRA adapter is active.
+        - ``set_lora_adapter('vision')`` sets active adapter to 'vision' only
+        - ``unset_lora_adapter()`` disables ALL adapters + sets requires_grad=False
+        Both bypass our 'unlearning' adapter.  We monkey-patch these
+        methods to also activate the unlearning adapter and preserve
+        its requires_grad=True.
+
+        Called from both ``attach_unlearning_adapter()`` (training) and
+        ``load_unlearning_adapter()`` (post-eval reload).
+        """
+        _unlearning_name = adapter_name
+
+        _original_set = model.set_lora_adapter
+        _original_unset = model.unset_lora_adapter
+
+        def _patched_set(adapter_name):
+            _original_set(adapter_name)
+            from peft.tuners.lora.layer import LoraLayer
+            for module in model.modules():
+                if isinstance(module, LoraLayer) and _unlearning_name in module.lora_A:
+                    current = list(module.active_adapters)
+                    if _unlearning_name not in current:
+                        module.set_adapter(current + [_unlearning_name])
+                    module._disable_adapters = False
+
+        def _patched_unset():
+            from peft.tuners.lora.layer import LoraLayer
+            for module in model.modules():
+                if isinstance(module, LoraLayer) and _unlearning_name in module.lora_A:
+                    module.set_adapter([_unlearning_name])
+                    module._disable_adapters = False
+                    for ln in module.adapter_layer_names:
+                        layer = getattr(module, ln)
+                        if hasattr(layer, _unlearning_name):
+                            sub = getattr(layer, _unlearning_name)
+                            if hasattr(sub, "weight"):
+                                sub.weight.requires_grad = True
+                elif isinstance(module, LoraLayer):
+                    module._disable_adapters = True
+
+        model.set_lora_adapter = _patched_set
+        model.unset_lora_adapter = _patched_unset
+        logger.info(
+            "Installed composition hooks: set/unset_lora_adapter "
+            "patched to include '%s' adapter",
+            _unlearning_name,
+        )
+
     def attach_unlearning_adapter(
         self,
         model: torch.nn.Module,
@@ -735,56 +791,9 @@ class Phi4MMAdapter(TrainableVLMAdapter):
             f"{_n_enabled} params set to requires_grad=True)"
         )
 
-        # CRITICAL: Phi's forward() calls set_lora_adapter('vision') or
-        # unset_lora_adapter() which controls which LoRA adapter is active.
-        # - set_lora_adapter('vision') sets active adapter to 'vision' only
-        # - unset_lora_adapter() disables ALL adapters + sets requires_grad=False
-        # Both bypass our 'unlearning' adapter.  We monkey-patch these
-        # methods to also activate the unlearning adapter and preserve
-        # its requires_grad=True.
-        _unlearning_name = adapter_name
-
-        _original_set = model.set_lora_adapter
-        _original_unset = model.unset_lora_adapter
-
-        def _patched_set(adapter_name):
-            _original_set(adapter_name)
-            # Also activate the unlearning adapter on all LoraLayers
-            from peft.tuners.lora.layer import LoraLayer
-            for module in model.modules():
-                if isinstance(module, LoraLayer) and _unlearning_name in module.lora_A:
-                    # Add unlearning to active adapters (don't replace)
-                    current = list(module.active_adapters)
-                    if _unlearning_name not in current:
-                        module.set_adapter(current + [_unlearning_name])
-                    module._disable_adapters = False
-
-        def _patched_unset():
-            # Instead of fully disabling adapters, keep the unlearning
-            # adapter active so it participates in the forward pass.
-            from peft.tuners.lora.layer import LoraLayer
-            for module in model.modules():
-                if isinstance(module, LoraLayer) and _unlearning_name in module.lora_A:
-                    module.set_adapter([_unlearning_name])
-                    module._disable_adapters = False
-                    # Ensure requires_grad stays True for unlearning
-                    for ln in module.adapter_layer_names:
-                        layer = getattr(module, ln)
-                        if hasattr(layer, _unlearning_name):
-                            sub = getattr(layer, _unlearning_name)
-                            if hasattr(sub, "weight"):
-                                sub.weight.requires_grad = True
-                elif isinstance(module, LoraLayer):
-                    # Modules without unlearning adapter: disable normally
-                    module._disable_adapters = True
-
-        model.set_lora_adapter = _patched_set
-        model.unset_lora_adapter = _patched_unset
-        logger.info(
-            "Patched set_lora_adapter/unset_lora_adapter to include "
-            "'%s' adapter",
-            _unlearning_name,
-        )
+        # Install composition hooks so Phi's forward includes the
+        # unlearning adapter alongside vision/speech.
+        self._install_unlearning_composition_hooks(model, adapter_name)
 
         return model
 
@@ -932,6 +941,12 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                     f"Loaded '{adapter_name}' adapter from {checkpoint_dir} "
                     f"onto fresh Phi base ({len(target_modules)} targets)"
                 )
+
+                # P0-4: Re-install composition hooks after reload so that
+                # Phi's forward() activates the unlearning adapter alongside
+                # vision/speech during post-evaluation.
+                self._install_unlearning_composition_hooks(base_model, adapter_name)
+
                 return base_model
 
         # Fallback to standard PeftModel loading

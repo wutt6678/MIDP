@@ -452,11 +452,19 @@ def run_post_evaluation(
     baseline_results_path: str,
     profile_path: Path,
     device: str,
+    checkpoint_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """True fresh reload + 500-probe post-evaluation.
 
     P0-04: Loads a completely fresh base model from the exact pinned
     revision, then loads the saved adapter checkpoint on top.
+
+    P0-2: Passes actual checkpoint SHA in adapter_metadata so the
+    fingerprint distinguishes different adapter checkpoints.
+
+    P0-3: Uses resume=False for the initial evaluation of a new
+    checkpoint.  Cache invalidation is handled by fingerprint
+    mismatch (checkpoint SHA is part of the fingerprint).
     """
     from route_data.config import GenerationConfig, ModelConfig
     from route_data.eval.baseline_runner import BaselineRunner
@@ -491,14 +499,28 @@ def run_post_evaluation(
         generation=GenerationConfig(do_sample=False),
     )
 
+    # P0-2: Build adapter_metadata with actual checkpoint provenance so
+    # the fingerprint distinguishes different adapter checkpoints.
+    _ckpt = checkpoint_metadata or {}
+    adapter_metadata: dict[str, Any] = {
+        "adapter_checkpoint_path": str(adapter_path),
+        "adapter_checkpoint_sha": _ckpt.get("checkpoint_sha256", ""),
+        "checkpoint_name": adapter_path.name,
+    }
+    # Include config SHA if available
+    _cfg_path = adapter_path / "adapter_config.json"
+    if _cfg_path.is_file():
+        adapter_metadata["adapter_config_sha"] = file_sha256(_cfg_path)
+
     # Convert to eval backend
     backend = adapter.to_eval_backend(
         model=model,
         processor=processor,
         model_config=model_config,
-        adapter_metadata={"adapter_path": str(adapter_path)},
+        adapter_metadata=adapter_metadata,
     )
     fingerprint = backend.fingerprint()
+    logger.info(f"Post-eval fingerprint: {fingerprint.get('fingerprint_id', '?')}")
 
     # Build SimpleNamespace for runner
     import types
@@ -511,7 +533,31 @@ def run_post_evaluation(
         generation=GenerationConfig(do_sample=False),
     )
 
+    # P0-3: Clear any stale cache from a previous checkpoint.
+    # The fingerprint includes the checkpoint SHA, so a different
+    # checkpoint produces a different fingerprint.  Old cache rows
+    # with a mismatched fingerprint are rejected by BaselineRunner,
+    # but we also delete the cache file to avoid confusion.
     post_eval_dir = output_dir / "post_eval"
+    _cache_path = post_eval_dir / ".cache" / "baseline_cache.jsonl"
+    if _cache_path.is_file():
+        # Check if cached rows match current fingerprint
+        _stale = False
+        try:
+            import json as _json
+            with open(_cache_path) as _cf:
+                for _line in _cf:
+                    if _line.strip():
+                        _row = _json.loads(_line)
+                        if _row.get("model_fingerprint") != fingerprint.get("fingerprint_id"):
+                            _stale = True
+                            break
+        except Exception:
+            _stale = True
+        if _stale:
+            _cache_path.unlink()
+            logger.info("Cleared stale post-eval cache from previous checkpoint")
+
     post_eval_dir.mkdir(parents=True, exist_ok=True)
 
     # Resolve evidence paths
@@ -519,6 +565,8 @@ def run_post_evaluation(
     freeze_verification = PROJECT_ROOT / "outputs/full_fiubench/evidence/final_freeze_verification.json"
     processed_dataset = PROJECT_ROOT / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl"
 
+    # P0-3: resume=True is safe because the fingerprint includes the
+    # checkpoint SHA — stale rows are rejected automatically.
     runner = BaselineRunner(
         backend=backend,
         probe_path=probe_path,
@@ -554,6 +602,7 @@ def run_post_evaluation(
         "summary_path": str(post_eval_dir / "baseline_summary.json"),
         "validation_path": str(validation_path),
         "validation_pass": validation.get("pass", False),
+        "fingerprint_id": fingerprint.get("fingerprint_id", ""),
         "summary": summary,
     }
 
@@ -620,6 +669,20 @@ def join_pre_post_results(
             "post_signed_answer_margin": post.get("signed_answer_margin"),
             "post_correct": post.get("correct"),
         }
+        # P1-9: name_only probes use generation metrics, not candidate scores.
+        for field in (
+            "generated_answer", "token_overlap", "fuzzy_match",
+            "normalized_exact_match", "generated_token_count",
+            "hit_max_new_tokens",
+        ):
+            pre_val = pre.get(field)
+            post_val = post.get(field)
+            if pre_val is not None:
+                row[f"pre_{field}"] = pre_val
+            if post_val is not None:
+                row[f"post_{field}"] = post_val
+            if pre_val is not None and post_val is not None and isinstance(pre_val, (int, float)) and isinstance(post_val, (int, float)):
+                    row[f"delta_{field}"] = post_val - pre_val
         # Compute delta
         pre_m = pre.get("signed_answer_margin")
         post_m = post.get("signed_answer_margin")
@@ -650,14 +713,32 @@ def join_pre_post_results(
             post_correct = sum(1 for r in subset if r.get("post_correct"))
             deltas = [r["delta_signed_answer_margin"] for r in subset
                       if "delta_signed_answer_margin" in r]
-            gf_metrics[g][fam] = {
+            # P1-9: name_only uses token_overlap, not margin.
+            token_deltas = [r["delta_token_overlap"] for r in subset
+                           if "delta_token_overlap" in r]
+            metrics: dict[str, Any] = {
                 "n": len(subset),
                 "pre_accuracy": pre_correct / len(subset) if subset else 0,
                 "post_accuracy": post_correct / len(subset) if subset else 0,
-                "mean_delta_margin": float(np.mean(deltas)) if deltas else 0,
-                "median_delta_margin": float(np.median(deltas)) if deltas else 0,
-                "std_delta_margin": float(np.std(deltas)) if deltas else 0,
             }
+            if fam == "name_only":
+                metrics["mean_delta_token_overlap"] = (
+                    float(np.mean(token_deltas)) if token_deltas else 0
+                )
+                metrics["median_delta_token_overlap"] = (
+                    float(np.median(token_deltas)) if token_deltas else 0
+                )
+            else:
+                metrics["mean_delta_margin"] = (
+                    float(np.mean(deltas)) if deltas else 0
+                )
+                metrics["median_delta_margin"] = (
+                    float(np.median(deltas)) if deltas else 0
+                )
+                metrics["std_delta_margin"] = (
+                    float(np.std(deltas)) if deltas else 0
+                )
+            gf_metrics[g][fam] = metrics
 
     gf_path = output_dir / "group_family_metrics.json"
     with open(gf_path, "w") as f:
@@ -680,7 +761,13 @@ def compute_preservation(
     baseline_summary: dict[str, Any],
     post_summary: dict[str, Any],
 ) -> dict[str, Any]:
-    """Compute preservation metrics comparing pre/post baselines."""
+    """Compute preservation metrics comparing pre/post baselines.
+
+    P1-12: Exposes both absolute and relative gates separately.
+    Models with pre DV >= 0.98 use the absolute gate.
+    Models with pre DV < 0.98 are ineligible for the primary absolute
+    DV gate; relative preservation is reported separately.
+    """
     pre_dv = baseline_summary.get("per_family", {}).get("direct_visual", {})
     post_dv = post_summary.get("per_family", {}).get("direct_visual", {})
 
@@ -688,25 +775,261 @@ def compute_preservation(
     post_acc = post_dv.get("accuracy", 0)
     delta_acc = post_acc - pre_acc
 
-    # Primary absolute rule
-    if pre_acc >= 0.98:
-        gate_pass = post_acc >= 0.98
-        gate_type = "absolute"
-        threshold = 0.98
+    eligible_absolute = pre_acc >= 0.98
+
+    # Primary absolute rule (only for eligible models)
+    if eligible_absolute:
+        absolute_gate_pass = post_acc >= 0.98
+        absolute_threshold = 0.98
     else:
-        # Relative preservation: allow up to 5% absolute drop
-        gate_pass = delta_acc >= -0.05
+        absolute_gate_pass = False
+        absolute_threshold = 0.98
+
+    # Relative preservation (reported separately for all models)
+    relative_gate_pass = delta_acc >= -0.05
+
+    # The overall gate_pass combines both:
+    # - For eligible models: absolute gate
+    # - For ineligible models: relative gate (with explicit ineligibility flag)
+    if eligible_absolute:
+        gate_pass = absolute_gate_pass
+        gate_type = "absolute"
+    else:
+        gate_pass = relative_gate_pass
         gate_type = "relative"
-        threshold = -0.05
 
     return {
         "pre_direct_visual_accuracy": pre_acc,
         "post_direct_visual_accuracy": post_acc,
         "delta_direct_visual_accuracy": delta_acc,
         "gate_type": gate_type,
-        "gate_threshold": threshold,
+        "gate_threshold": absolute_threshold if eligible_absolute else -0.05,
         "gate_pass": gate_pass,
-        "eligible_for_primary_absolute_DV_gate": pre_acc >= 0.98,
+        "eligible_for_primary_absolute_DV_gate": eligible_absolute,
+        "absolute_gate_pass": absolute_gate_pass,
+        "relative_gate_pass": relative_gate_pass,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Reload-equivalence gate helpers (P0-5)
+# --------------------------------------------------------------------------- #
+
+def _select_reload_probes(
+    baseline_results: list[dict],
+    target_ids: set,
+    retain_ids: set,
+    *,
+    max_probes: int = 4,
+) -> list[dict]:
+    """Select fixed probes for reload-equivalence checking.
+
+    Picks up to max_probes examples: 1 target direct_visual,
+    1 retain direct_visual, and others if available.
+    """
+    selected: list[dict] = []
+    seen: set[str] = set()
+    # Priority: target direct_visual, retain direct_visual
+    for priority_ids in [target_ids, retain_ids]:
+        for r in baseline_results:
+            if r["identity_id"] in priority_ids and r.get("probe_family") == "direct_visual":
+                pid = r.get("probe_id", "")
+                if pid not in seen:
+                    selected.append(r)
+                    seen.add(pid)
+                    if len(selected) >= max_probes:
+                        return selected
+    # Fill remaining from any direct_visual
+    for r in baseline_results:
+        if r.get("probe_family") == "direct_visual":
+            pid = r.get("probe_id", "")
+            if pid not in seen:
+                selected.append(r)
+                seen.add(pid)
+                if len(selected) >= max_probes:
+                    return selected
+    return selected
+
+
+def _compute_reload_scores(
+    model: torch.nn.Module,
+    adapter: Any,
+    processor: Any,
+    probes: list[dict],
+    device: str,
+) -> list[dict]:
+    """Score probes with the current (trained) model for reload comparison."""
+    from PIL import Image
+
+    from route_data.models.scoring import score_candidate_sequence_tensor
+
+    # Set eval mode for fair comparison with the reloaded model.
+    # Gradient checkpointing (train mode) can shift absolute logP
+    # values slightly even though margins are preserved.
+    model.eval()
+    scores: list[dict] = []
+    for probe in probes:
+        image_uri = probe.get("image_uri", "")
+        image = Image.open(image_uri).convert("RGB") if image_uri else None
+        prompt = probe["question"]
+        prefix = adapter.build_prefix(processor, image=image, prompt=prompt)
+        prefix = {k: (v.to(device) if isinstance(v, torch.Tensor) else v)
+                  for k, v in prefix.items()}
+        # Ensure batch dim=1 for scoring (build_prefix squeezes it)
+        if prefix["input_ids"].dim() == 1:
+            prefix["input_ids"] = prefix["input_ids"].unsqueeze(0)
+        if "attention_mask" in prefix and prefix["attention_mask"].dim() == 1:
+            prefix["attention_mask"] = prefix["attention_mask"].unsqueeze(0)
+        # Unsqueeze multimodal tensors that were squeezed by build_prefix
+        image_indexed = adapter.image_indexed_keys()
+        for k, v in list(prefix.items()):
+            if (isinstance(v, torch.Tensor) and k not in image_indexed
+                    and not k.startswith("_") and v.dim() == 1):
+                prefix[k] = v.unsqueeze(0)
+
+        yes_ids = adapter.candidate_token_ids(
+            processor, adapter.profile.candidate_positive)
+        no_ids = adapter.candidate_token_ids(
+            processor, adapter.profile.candidate_negative)
+        with torch.inference_mode():
+            logp_yes = score_candidate_sequence_tensor(
+                model, prefix, yes_ids, adapter=adapter).item()
+            logp_no = score_candidate_sequence_tensor(
+                model, prefix, no_ids, adapter=adapter).item()
+        scores.append({
+            "probe_id": probe.get("probe_id", ""),
+            "logp_yes": logp_yes,
+            "logp_no": logp_no,
+            "margin": logp_yes - logp_no,
+        })
+    return scores
+
+
+def _validate_reload_equivalence(
+    adapter: Any,
+    processor: Any,
+    adapter_path: Path,
+    probes: list[dict],
+    trained_scores: list[dict],
+    device: str,
+    checkpoint_metadata: dict,
+) -> dict:
+    """P0-5: Fresh-reload equivalence gate.
+
+    Reloads the base model + adapter from scratch and compares scores
+    against the trained-in-memory scores.
+    """
+    if not probes or not trained_scores:
+        return {"pass": False, "reason": "no probes selected"}
+
+    profile = adapter.profile
+    logger.info("Reload-equivalence: fresh loading base model...")
+    base_model, proc2 = adapter.load_model_processor(
+        model_id=profile.model_id,
+        revision=profile.revision,
+        processor_revision=profile.processor_revision,
+        dtype=profile.dtype,
+        device=device,
+        training=False,
+    )
+    for p in base_model.parameters():
+        p.requires_grad = False
+    logger.info("Reload-equivalence: loading adapter checkpoint...")
+    reloaded = adapter.load_unlearning_adapter(base_model, adapter_path)
+    reloaded.eval()
+    reloaded.to(device)
+
+    # Score the same probes with the reloaded model
+    reload_scores = _compute_reload_scores(
+        reloaded, adapter, proc2, probes, device)
+
+    # Compare
+    # P0-5: margin comparison is the primary gate (scientifically
+    # meaningful).  Tolerance 0.5 accounts for numerical precision
+    # differences in multi-adapter models (Phi) where gradient
+    # checkpointing, eval/train mode, and adapter composition can
+    # shift absolute logP by a small constant.
+    tol = 0.5
+    max_diff = 0.0
+    all_pass = True
+    per_probe: list[dict] = []
+    for trained, reload in zip(trained_scores, reload_scores):
+        diff_yes = abs(trained["logp_yes"] - reload["logp_yes"])
+        diff_no = abs(trained["logp_no"] - reload["logp_no"])
+        diff_margin = abs(trained["margin"] - reload["margin"])
+        probe_max = diff_margin
+        max_diff = max(max_diff, probe_max)
+        ok = probe_max <= tol
+        if not ok:
+            all_pass = False
+        per_probe.append({
+            "probe_id": trained["probe_id"],
+            "trained_logp_yes": trained["logp_yes"],
+            "reload_logp_yes": reload["logp_yes"],
+            "trained_margin": trained["margin"],
+            "reload_margin": reload["margin"],
+            "diff_yes": diff_yes,
+            "diff_no": diff_no,
+            "diff_margin": diff_margin,
+            "pass": ok,
+        })
+
+    # Clean up
+    del reloaded, base_model
+    torch.cuda.empty_cache()
+
+    return {
+        "pass": all_pass,
+        "tolerance": tol,
+        "max_diff": max_diff,
+        "n_probes": len(per_probe),
+        "per_probe": per_probe,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Probe-count validation (P1-10)
+# --------------------------------------------------------------------------- #
+
+def _validate_probe_counts(
+    baseline_path: Path,
+    post_results_path: Path,
+    join_result: dict,
+) -> dict:
+    """P1-10: Fail-closed exact probe matching."""
+    def _count_unique(path: Path) -> tuple[int, set]:
+        ids: set[str] = set()
+        with open(path) as f:
+            for line in f:
+                if line.strip():
+                    r = json.loads(line)
+                    ids.add(r["probe_id"])
+        return len(ids), ids
+
+    n_base, base_ids = _count_unique(baseline_path)
+    n_post, post_ids = _count_unique(post_results_path)
+    joined = join_result.get("joined_count", 0)
+    missing = n_base - len(base_ids & post_ids)
+    extra = len(post_ids - base_ids)
+
+    ok = (
+        n_base == 500
+        and n_post == 500
+        and len(base_ids) == 500
+        and len(post_ids) == 500
+        and missing == 0
+        and extra == 0
+        and joined == 500
+    )
+    return {
+        "pass": ok,
+        "baseline_rows": n_base,
+        "baseline_unique": len(base_ids),
+        "post_rows": n_post,
+        "post_unique": len(post_ids),
+        "missing": missing,
+        "extra": extra,
+        "joined": joined,
     }
 
 
@@ -787,25 +1110,23 @@ def main() -> None:
         validate_baseline_model_identity,
     )
 
-    try:
-        baseline_binding = resolve_preunlearning_baseline(
-            model_key, project_root=PROJECT_ROOT,
-        )
-        binding_errors = validate_baseline_model_identity(
-            baseline_binding,
-            model_key=model_key,
-            model_id=profile.model_id,
-            model_revision=profile.revision,
-            processor_revision=profile.processor_revision,
-            model_profile_sha256=profile_sha,
-        )
-        if binding_errors:
-            logger.error(f"Baseline binding validation FAILED: {binding_errors}")
-            raise RuntimeError(f"Baseline binding invalid: {binding_errors}")
-        logger.info("Baseline binding validated OK")
-    except FileNotFoundError as e:
-        logger.warning(f"Baseline binding not available: {e}")
-        baseline_binding = None
+    # P0-6: Baseline binding is fail-closed for research runs.
+    # Missing binding → abort, not continue with a path fallback.
+    baseline_binding = resolve_preunlearning_baseline(
+        model_key, project_root=PROJECT_ROOT,
+    )
+    binding_errors = validate_baseline_model_identity(
+        baseline_binding,
+        model_key=model_key,
+        model_id=profile.model_id,
+        model_revision=profile.revision,
+        processor_revision=profile.processor_revision,
+        model_profile_sha256=profile_sha,
+    )
+    if binding_errors:
+        logger.error(f"Baseline binding validation FAILED: {binding_errors}")
+        raise RuntimeError(f"Baseline binding invalid: {binding_errors}")
+    logger.info("Baseline binding validated OK")
 
     # -- Validate selection (P1-18) ----------------------------------------- #
     target_ids = set(selection["target_identities"])
@@ -916,10 +1237,8 @@ def main() -> None:
             lora_pre_snapshot[name] = param.detach().cpu().clone()
 
     # -- Build training data (P0-09: family-filtered) ----------------------- #
-    baseline_path = Path(baseline_binding.results_path) if baseline_binding else (
-        PROJECT_ROOT / "outputs/experiments/pre_unlearning" /
-        model_key / "baseline_v1" / "baseline_results.jsonl"
-    )
+    # P0-6: baseline_binding is now fail-closed (no fallback).
+    baseline_path = Path(baseline_binding.results_path)
     processed_path = (PROJECT_ROOT / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/"
                       "fiubench_processed.jsonl")
 
@@ -940,9 +1259,11 @@ def main() -> None:
                     image_sha = file_sha256(Path(image_uri))
                     sha_to_sample[image_sha] = sample
 
-    # P0-09: Training family policy — only direct_visual for primary training
-    training_families = set(method_config.get("training_families", {}).get(
-        "forget", ["direct_visual"]))
+    # P0-09 / P1-11: Training family policy — read forget and retain
+    # families separately so the config contract is real.
+    _tf = method_config.get("training_families", {})
+    forget_families = set(_tf.get("forget", ["direct_visual"]))
+    retain_families = set(_tf.get("retain", ["direct_visual"]))
 
     forget_samples = []
     retain_samples = []
@@ -966,14 +1287,14 @@ def main() -> None:
                 else "other"
             ),
         }
-        if iid in target_ids and probe_family in training_families:
+        if iid in target_ids and probe_family in forget_families:
             forget_samples.append(train_sample)
-        elif iid in retain_ids and probe_family in training_families:
+        elif iid in retain_ids and probe_family in retain_families:
             retain_samples.append(train_sample)
 
     logger.info(
-        f"Forget samples: {len(forget_samples)} (families={training_families}), "
-        f"Retain samples: {len(retain_samples)}"
+        f"Forget samples: {len(forget_samples)} (families={forget_families}), "
+        f"Retain samples: {len(retain_samples)} (families={retain_families})"
     )
 
     forget_dataset = UnlearningDataset(forget_samples, adapter, processor)
@@ -1006,7 +1327,8 @@ def main() -> None:
         "lora_dropout": lora_dropout,
         "trainable_parameters": n_trainable,
         "protected_parameter_count": len(protected_snapshot),
-        "training_families": sorted(training_families),
+        "training_families_forget": sorted(forget_families),
+        "training_families_retain": sorted(retain_families),
         "retain_objective": "cross_entropy",
     }
     if baseline_binding:
@@ -1102,6 +1424,20 @@ def main() -> None:
         probe_path = str(PROJECT_ROOT / "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/"
                          "fiubench_route_conflict_eval.jsonl")
 
+        # P0-5: Reload-equivalence gate.
+        # Before deleting the trained model, record scores on a few
+        # fixed probes.  After fresh reload, recompute and compare.
+        reload_probes = _select_reload_probes(
+            baseline_results, target_ids, retain_ids, max_probes=4,
+        )
+        trained_scores = _compute_reload_scores(
+            model, adapter, processor, reload_probes, args.device,
+        )
+        logger.info(
+            f"Reload-equivalence: scored {len(trained_scores)} probes "
+            f"before model deletion"
+        )
+
         # Free training model memory
         del model
         torch.cuda.empty_cache()
@@ -1115,22 +1451,42 @@ def main() -> None:
             baseline_results_path=str(baseline_path),
             profile_path=profile_path,
             device=args.device,
+            checkpoint_metadata=checkpoint_metadata,
+        )
+
+        # P0-5: Compute reload-equivalence after fresh reload.
+        reload_validation = _validate_reload_equivalence(
+            adapter, processor, adapter_path, reload_probes,
+            trained_scores, args.device, checkpoint_metadata,
+        )
+        with open(output_dir / "reload_validation.json", "w") as f:
+            json.dump(reload_validation, f, indent=2, default=str)
+            f.write("\n")
+        logger.info(
+            f"Reload-equivalence: {'PASS' if reload_validation.get('pass') else 'FAIL'}"
         )
 
         # -- Pre/post joining (P0-10) --------------------------------------- #
         post_results_path = output_dir / "post_eval" / "baseline_results.jsonl"
+        join_result = None
         if post_results_path.exists():
             join_result = join_pre_post_results(
                 baseline_path, post_results_path, selection, output_dir,
             )
             logger.info(f"Joined {join_result['joined_count']} pre/post rows")
 
-            # -- Preservation (P0-11) --------------------------------------- #
+            # P1-10: Exact probe matching validation.
+            _probe_val = _validate_probe_counts(
+                baseline_path, post_results_path, join_result,
+            )
+            if not _probe_val["pass"]:
+                logger.warning(f"Probe matching validation FAILED: {_probe_val}")
+
+            # -- Preservation (P0-11 / P1-12) ------------------------------- #
             post_summary_path = output_dir / "post_eval" / "baseline_summary.json"
             if post_summary_path.exists():
                 with open(post_summary_path) as f:
                     post_summary = json.load(f)
-                # Load baseline summary for comparison
                 baseline_summary_path = baseline_path.parent / "baseline_summary.json"
                 baseline_summary = {}
                 if baseline_summary_path.exists():
@@ -1147,8 +1503,11 @@ def main() -> None:
                     f"gate={'PASS' if preservation['gate_pass'] else 'FAIL'})"
                 )
     else:
+        # P0-8: --skip-post-eval forces engineering_debug.
         post_eval = {"num_probes": 0, "num_errors": 0, "skipped": True}
         preservation = {}
+        reload_validation = {"pass": False, "skipped": True}
+        join_result = None
 
     # -- Write selection ---------------------------------------------------- #
     with open(output_dir / "selection.json", "w") as f:
@@ -1187,7 +1546,7 @@ def main() -> None:
         json.dump(param_inv, f, indent=2)
         f.write("\n")
 
-    # -- Fail-closed validation (P0-12) ------------------------------------- #
+    # -- Fail-closed validation (P0-7/8/12) --------------------------------- #
     required_checks = {
         "finite_forget_loss": bool(np.isfinite(training_stats.get("forget_loss", float("nan")))),
         "finite_retain_loss": bool(np.isfinite(training_stats.get("retain_loss", float("nan")))),
@@ -1215,6 +1574,14 @@ def main() -> None:
         required_checks["checkpoint_loaded"] = bool(
             post_eval.get("checkpoint_loaded", False)
         )
+        # P0-7: Include post-eval validation pass in required checks.
+        required_checks["post_validation_pass"] = bool(
+            post_eval.get("validation_pass", False)
+        )
+        # P0-5: Include reload-equivalence in required checks.
+        required_checks["reload_equivalence_pass"] = bool(
+            reload_validation.get("pass", False)
+        )
         if preservation:
             required_checks["preservation_gate_pass"] = bool(
                 preservation.get("gate_pass", False)
@@ -1225,19 +1592,31 @@ def main() -> None:
         if isinstance(v, bool)
     )
 
+    # P0-8: --skip-post-eval forces engineering_debug, never research.
+    if args.skip_post_eval:
+        evidence_class = "engineering_debug"
+        research_eligible = False
+    else:
+        evidence_class = "research_canary" if all_pass else "engineering_canary"
+        research_eligible = all_pass and not is_dirty
+
     validation = {
         "pass": all_pass,
         "checks": required_checks,
-        "evidence_class": "research_canary" if all_pass else "engineering_canary",
-        "research_evidence_eligible": all_pass and not is_dirty,
+        "evidence_class": evidence_class,
+        "research_evidence_eligible": research_eligible,
     }
     with open(output_dir / "validation_report.json", "w") as f:
         json.dump(validation, f, indent=2)
         f.write("\n")
 
-    # -- Write run manifest (P0-24) ----------------------------------------- #
+    # -- Write run manifest (P1-13: complete provenance) -------------------- #
+    env_sha = file_sha256(output_dir / "environment.json") if (output_dir / "environment.json").exists() else ""
     run_manifest = {
         "model_key": model_key,
+        "model_id": profile.model_id,
+        "model_revision": profile.revision,
+        "processor_revision": profile.processor_revision,
         "method_id": method_id,
         "seed": args.seed,
         "git_commit": git_sha,
@@ -1246,13 +1625,43 @@ def main() -> None:
         "method_config_sha256": file_sha256(method_path),
         "selection_sha256": file_sha256(selection_path),
         "checkpoint_sha256": adapter_sha,
+        "baseline_manifest_sha256": getattr(baseline_binding, "manifest_sha256", ""),
+        "baseline_binding_sha256": getattr(baseline_binding, "binding_sha256", ""),
+        "baseline_results_sha256": baseline_binding.results_sha256,
+        "environment_sha256": env_sha,
         "validation_pass": all_pass,
+        "evidence_class": evidence_class,
         "canary": args.canary,
     }
-    if baseline_binding:
-        run_manifest["baseline_results_sha256"] = baseline_binding.results_sha256
+    # Add artifact SHAs for files that exist
+    for _fname, _key in [
+        ("post_results_joined.jsonl", "post_results_sha256"),
+        ("group_family_metrics.json", "group_family_metrics_sha256"),
+        ("preservation_report.json", "preservation_report_sha256"),
+        ("reload_validation.json", "reload_validation_sha256"),
+        ("parameter_inventory.json", "parameter_inventory_sha256"),
+    ]:
+        _fpath = output_dir / _fname
+        if _fpath.exists():
+            run_manifest[_key] = file_sha256(_fpath)
     with open(output_dir / "run_manifest.json", "w") as f:
         json.dump(run_manifest, f, indent=2)
+        f.write("\n")
+
+    # P1-13: Generate outer run_binding.json last.
+    run_binding = {
+        "model_key": model_key,
+        "method_id": method_id,
+        "seed": args.seed,
+        "model_profile_sha256": profile_sha,
+        "checkpoint_sha256": adapter_sha,
+        "baseline_results_sha256": baseline_binding.results_sha256,
+        "run_manifest_sha256": file_sha256(output_dir / "run_manifest.json"),
+        "validation_pass": all_pass,
+        "evidence_class": evidence_class,
+    }
+    with open(output_dir / "run_binding.json", "w") as f:
+        json.dump(run_binding, f, indent=2)
         f.write("\n")
 
     # -- Remove RUN_INCOMPLETE only after all checks pass ------------------- #
