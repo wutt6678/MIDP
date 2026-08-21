@@ -11,12 +11,41 @@ profile and adapter, not branch on model names throughout the training code.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
+
+logger = logging.getLogger(__name__)
+
+
+def _remap_adapter_key(ckpt_key: str, adapter_name: str) -> str:
+    """Remap a single-adapter checkpoint key to a named-adapter key.
+
+    Checkpoint keys from ``PeftModel.save_pretrained()`` use the format::
+
+        base_model.model.<layer>.lora_A.weight
+
+    But the live model with a named adapter expects::
+
+        base_model.model.<layer>.lora_A.<adapter_name>.weight
+
+    This function inserts the adapter name before the final
+    ``.weight`` (or ``.bias``) component.
+    """
+    import re
+    # Match .lora_A.<param> or .lora_B.<param> at the end
+    m = re.match(r"^(.*\.lora_[AB]\.)(\w+)$", ckpt_key)
+    if m:
+        prefix, param = m.group(1), m.group(2)
+        # If the key already has the adapter name, return as-is
+        if adapter_name in prefix:
+            return ckpt_key
+        return f"{prefix}{adapter_name}.{param}"
+    return ckpt_key
 
 
 @dataclass(frozen=True)
@@ -393,14 +422,60 @@ class TrainableVLMAdapter(ABC):
     ) -> torch.nn.Module:
         """Load a saved unlearning adapter onto a fresh base model.
 
-        Default uses ``PeftModel.from_pretrained()``.  Override for
-        models with bundled adapters (e.g. Phi-4-MM).
+        Uses ``PeftModel.from_pretrained()`` then verifies that all
+        checkpoint tensors were actually restored.  If the checkpoint
+        was saved as a single-adapter model (keys lack the adapter
+        name suffix), we manually remap and copy the weights.
         """
         from peft import PeftModel
 
-        return PeftModel.from_pretrained(
+        model = PeftModel.from_pretrained(
             base_model, str(checkpoint_dir), adapter_name=adapter_name,
         )
+
+        # Verify checkpoint tensors were actually restored.
+        # The checkpoint may use keys without the adapter name suffix
+        # (e.g. ``lora_A.weight``) while the live model expects
+        # ``lora_A.<adapter_name>.weight``.
+        from safetensors import safe_open
+
+        ckpt_path = Path(checkpoint_dir) / "adapter_model.safetensors"
+        if ckpt_path.is_file():
+            ckpt_data = {}
+            with safe_open(str(ckpt_path), framework="pt", device="cpu") as f:
+                for k in list(f.keys()):  # noqa: SIM118
+                    ckpt_data[k] = f.get_tensor(k)
+
+            live_params = dict(model.named_parameters())
+            copied = 0
+            missing = []
+            for ckpt_key, ckpt_tensor in ckpt_data.items():
+                if ckpt_key in live_params:
+                    live_params[ckpt_key].data.copy_(ckpt_tensor)
+                    copied += 1
+                else:
+                    # Try inserting adapter name into the key.
+                    # e.g. ...lora_A.weight -> ...lora_A.<name>.weight
+                    remapped = _remap_adapter_key(ckpt_key, adapter_name)
+                    if remapped in live_params:
+                        live_params[remapped].data.copy_(ckpt_tensor)
+                        copied += 1
+                    else:
+                        missing.append(ckpt_key)
+
+            expected = len(ckpt_data)
+            if copied != expected:
+                raise RuntimeError(
+                    f"Adapter load incomplete: {copied}/{expected} tensors "
+                    f"restored. Missing {len(missing)} keys. "
+                    f"First missing: {missing[:3]}"
+                )
+            logger.info(
+                f"Verified adapter load: {copied}/{expected} tensors "
+                f"restored from {ckpt_path.name}"
+            )
+
+        return model
 
     def snapshot_protected_parameters(
         self,
