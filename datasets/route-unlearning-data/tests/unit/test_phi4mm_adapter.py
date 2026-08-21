@@ -599,10 +599,10 @@ class TestSDPALanguageMask:
         mask_2d = torch.ones(batch, seq_len, dtype=torch.long)
         mask_2d[0, -2:] = 0
 
-        # With padding mask (shim disables causal when mask is provided)
+        # With padding mask (shim combines padding + causal for language path)
         out_masked = sdpa_fn(q, k, v, attention_mask=mask_2d, query_length=seq_len)
 
-        # Reference: all-ones mask (same causal=False behavior, no actual masking)
+        # Reference: all-ones mask (same causal+padding behavior, no actual padding)
         mask_allones = torch.ones(batch, seq_len, dtype=torch.long)
         out_allones = sdpa_fn(q, k, v, attention_mask=mask_allones, query_length=seq_len)
 
@@ -616,7 +616,11 @@ class TestSDPALanguageMask:
         ), "All-ones mask should produce same output in both calls"
 
     def test_2d_mask_matches_reference_bool(self):
-        """Integer 0/1 mask must produce same output as equivalent bool mask."""
+        """Integer 0/1 mask must produce same output as causal + padding reference.
+
+        The SDPA shim for the language path combines a 2D padding mask with
+        a causal lower-triangular mask.  The reference must do the same.
+        """
         from route_data.models.trainable.phi4mm import _apply_sdpa_patches
 
         _apply_sdpa_patches()
@@ -633,17 +637,23 @@ class TestSDPALanguageMask:
         mask_int = torch.tensor([[1, 1, 1, 1, 0, 0]], dtype=torch.long)
         out_int = sdpa_fn(q, k, v, attention_mask=mask_int, query_length=seq_len)
 
-        # Equivalent bool mask via SDPA directly
-        mask_bool = torch.tensor([[[[True, True, True, True, False, False]]]], dtype=torch.bool)
+        # Reference: causal + padding combined mask via SDPA directly.
+        # The shim builds: causal_lower_triangular & padding_mask_expanded
         import torch.nn.functional as F
         q4 = q.transpose(1, 2)
         k4 = k.transpose(1, 2)
         v4 = v.transpose(1, 2)
-        ref = F.scaled_dot_product_attention(q4, k4, v4, attn_mask=mask_bool, is_causal=False)
+        # Causal mask: [seq_len, seq_len] lower triangular
+        causal = torch.ones(seq_len, seq_len, dtype=torch.bool).tril(diagonal=0)
+        # Padding mask expanded: [1, 1, 1, seq_len]
+        padding = torch.tensor([[[[True, True, True, True, False, False]]]], dtype=torch.bool)
+        # Combined: attend only where BOTH causal AND padding allow
+        combined_mask = causal & padding
+        ref = F.scaled_dot_product_attention(q4, k4, v4, attn_mask=combined_mask, is_causal=False)
         ref = ref.transpose(1, 2)
 
         assert torch.allclose(out_int, ref, atol=1e-5), \
-            "Integer mask output doesn't match reference bool mask output"
+            "Integer mask output doesn't match causal+padding reference"
 
     def test_none_mask_uses_causal(self):
         """When attention_mask is None, should use causal attention."""
