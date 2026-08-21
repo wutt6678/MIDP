@@ -912,6 +912,7 @@ def _compute_reload_scores(
                 model, prefix, no_ids, adapter=adapter).item()
         scores.append({
             "probe_id": probe.get("probe_id", ""),
+            "identity_id": probe.get("identity_id", ""),
             "logp_yes": logp_yes,
             "logp_no": logp_no,
             "margin": logp_yes - logp_no,
@@ -1006,6 +1007,7 @@ def _validate_behavioral_effect(
     trained_scores: list[dict],
     reload_scores: list[dict],
     *,
+    target_probe_ids: set[str] | None = None,
     effect_tolerance: float = 1e-4,
     reload_tolerance: float = 1e-4,
 ) -> dict:
@@ -1015,7 +1017,7 @@ def _validate_behavioral_effect(
     relative to the frozen base, not just LoRA tensor values.
 
     Gates:
-      - At least one target probe must have
+      - At least one *target* probe must have
         abs(trained_margin - base_margin) > effect_tolerance
       - The same probe must also show
         abs(reload_margin - base_margin) > effect_tolerance
@@ -1025,8 +1027,8 @@ def _validate_behavioral_effect(
         return {"pass": False, "reason": "no base or trained scores"}
 
     per_probe: list[dict] = []
-    any_trained_effect = False
-    any_reload_effect = False
+    any_target_trained_effect = False
+    any_target_reload_effect = False
     reload_consistent = True
 
     for base, trained, reload in zip(base_scores, trained_scores, reload_scores):
@@ -1034,15 +1036,24 @@ def _validate_behavioral_effect(
         reload_minus_base = reload["margin"] - base["margin"]
         reload_minus_trained = reload["margin"] - trained["margin"]
 
-        if abs(trained_minus_base) > effect_tolerance:
-            any_trained_effect = True
-        if abs(reload_minus_base) > effect_tolerance:
-            any_reload_effect = True
+        # Determine if this is a target probe.
+        # target_probe_ids contains identity IDs (not probe IDs).
+        identity_id = base.get("identity_id", "")
+        is_target = (
+            target_probe_ids is not None and identity_id in target_probe_ids
+        ) if target_probe_ids else True  # if no target info, treat all as target
+
+        if is_target:
+            if abs(trained_minus_base) > effect_tolerance:
+                any_target_trained_effect = True
+            if abs(reload_minus_base) > effect_tolerance:
+                any_target_reload_effect = True
         if abs(reload_minus_trained) > reload_tolerance:
             reload_consistent = False
 
         per_probe.append({
             "probe_id": base["probe_id"],
+            "is_target": is_target,
             "base_logp_yes": base["logp_yes"],
             "base_logp_no": base["logp_no"],
             "base_margin": base["margin"],
@@ -1057,11 +1068,15 @@ def _validate_behavioral_effect(
             "reload_minus_trained_margin": reload_minus_trained,
         })
 
-    all_pass = any_trained_effect and any_reload_effect and reload_consistent
+    all_pass = (
+        any_target_trained_effect
+        and any_target_reload_effect
+        and reload_consistent
+    )
     return {
         "pass": all_pass,
-        "base_to_trained_effect_nonzero": any_trained_effect,
-        "base_to_reload_effect_nonzero": any_reload_effect,
+        "base_to_trained_effect_nonzero": any_target_trained_effect,
+        "base_to_reload_effect_nonzero": any_target_reload_effect,
         "reload_consistent": reload_consistent,
         "effect_tolerance": effect_tolerance,
         "reload_tolerance": reload_tolerance,
@@ -1604,6 +1619,7 @@ def main() -> None:
         if base_scores and trained_scores and _reload_scores:
             behavioural_effect = _validate_behavioral_effect(
                 base_scores, trained_scores, _reload_scores,
+                target_probe_ids=target_ids,
             )
         else:
             behavioural_effect = {

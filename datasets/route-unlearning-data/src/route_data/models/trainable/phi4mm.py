@@ -922,25 +922,50 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                 )
                 LoraModel(inner_peft, lora_cfg, adapter_name=adapter_name)
 
-                # Load the saved weights
+                # Load the saved weights.
+                # The saver writes keys in the inner_peft named_parameters
+                # namespace, e.g.:
+                #   layers.0.self_attn.qkv_proj.lora_A.unlearning.weight
+                # We must use the SAME namespace to match.
                 from peft.utils import load_peft_weights
                 state_dict = load_peft_weights(str(checkpoint_dir))
-                from peft.tuners.lora import LoraLayer
-                for name, module in inner_peft.named_modules():
-                    if isinstance(module, LoraLayer) and adapter_name in module.lora_A:
-                        for param_name, param in module.lora_A[adapter_name].named_parameters():
-                            key = f"base_model.model.{name}.lora_A.{adapter_name}.{param_name}"
-                            if key in state_dict:
-                                param.data.copy_(state_dict[key])
-                        for param_name, param in module.lora_B[adapter_name].named_parameters():
-                            key = f"base_model.model.{name}.lora_B.{adapter_name}.{param_name}"
-                            if key in state_dict:
-                                param.data.copy_(state_dict[key])
 
-                logger.info(
-                    f"Loaded '{adapter_name}' adapter from {checkpoint_dir} "
-                    f"onto fresh Phi base ({len(target_modules)} targets)"
+                # Build a lookup from the live model's parameters.
+                live_params = dict(inner_peft.named_parameters())
+                copied = 0
+                missing_keys = []
+                for ckpt_key, ckpt_tensor in state_dict.items():
+                    if ckpt_key in live_params:
+                        live_params[ckpt_key].data.copy_(ckpt_tensor)
+                        copied += 1
+                    else:
+                        missing_keys.append(ckpt_key)
+
+                unexpected = set(live_params.keys()) - set(state_dict.keys())
+                # Filter unexpected to only unlearning adapter params
+                unexpected_unlearning = [
+                    k for k in unexpected if adapter_name in k
+                ]
+
+                expected_count = sum(
+                    1 for k in state_dict
                 )
+                logger.info(
+                    f"Loaded '{adapter_name}' adapter from {checkpoint_dir}: "
+                    f"{copied}/{expected_count} tensors copied, "
+                    f"{len(missing_keys)} missing, "
+                    f"{len(unexpected_unlearning)} unexpected unlearning"
+                )
+                if missing_keys:
+                    logger.warning(
+                        f"Missing checkpoint keys (first 5): "
+                        f"{missing_keys[:5]}"
+                    )
+                if copied != expected_count:
+                    raise RuntimeError(
+                        f"Phi adapter load incomplete: {copied}/{expected_count} "
+                        f"tensors copied. Missing: {missing_keys[:5]}"
+                    )
 
                 # P0-4: Re-install composition hooks after reload so that
                 # Phi's forward() activates the unlearning adapter alongside

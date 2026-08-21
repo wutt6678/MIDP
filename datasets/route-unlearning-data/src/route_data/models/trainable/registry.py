@@ -21,6 +21,7 @@ instance: ``adapter.profile is profile``.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -265,9 +266,31 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
 
 
 def compute_profile_sha256(path: str | Path) -> str:
-    """Compute SHA-256 of the raw YAML profile bytes."""
-    with open(path, "rb") as fh:
-        return hashlib.sha256(fh.read()).hexdigest()
+    """Compute SHA-256 over the *scientific execution* fields of a profile.
+
+    Mutable capability/status metadata (``supports_*``, ``status``,
+    ``access``) and comments/whitespace are **excluded** so that
+    promoting a model from PENDING to PASS does not invalidate its
+    frozen baseline binding.
+
+    Included sections: ``key``, ``model``, ``candidate_protocol``,
+    ``lora``, ``structural``, ``compatibility``.
+    """
+    import yaml
+
+    with open(path) as fh:
+        data = yaml.safe_load(fh)
+
+    # Keep only scientific execution fields.
+    _SCIENTIFIC_KEYS = [
+        "key", "model", "candidate_protocol", "lora",
+        "structural", "compatibility",
+    ]
+    canonical = {k: data[k] for k in _SCIENTIFIC_KEYS if k in data}
+
+    # Deterministic canonical serialisation.
+    blob = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 # ------------------------------------------------------------------ #
