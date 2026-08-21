@@ -1,0 +1,126 @@
+{
+  "dataset_provenance": {
+    "probe_file": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_route_conflict_eval.jsonl",
+    "processed_dataset": "outputs/full_fiubench/Qwen_Qwen3.5-9B/fiubench/fiubench_processed.jsonl",
+    "num_probes": 500
+  },
+  "model_identity": {
+    "model_key": "phi4_mm",
+    "model_id": "microsoft/Phi-4-multimodal-instruct",
+    "model_revision": "93f923e1a7727d1c4f446756212d9d3e8fcc5d81",
+    "processor_revision": "93f923e1a7727d1c4f446756212d9d3e8fcc5d81"
+  },
+  "scoring_config": {
+    "candidate_positive": "Yes",
+    "candidate_negative": "No"
+  },
+  "results_summary": {
+    "total_probes": 500,
+    "total_correct": 366,
+    "mixed_task_overall_accuracy": 0.732,
+    "visual_accuracy": 0.91,
+    "visual_correct": 364,
+    "visual_total": 400,
+    "direct_visual_accuracy": 0.93,
+    "name_only_mean_token_overlap": 0.05101642944972551,
+    "name_only_normalized_exact_match": 0.0,
+    "name_only_fuzzy_match": 0.09926190476190476,
+    "name_only_cap_hit_rate": 0.01,
+    "per_family": {
+      "direct_visual": {
+        "count": 100,
+        "errors": 0,
+        "correct": 93,
+        "accuracy": 0.93,
+        "mean_signed_answer_margin": 3.9824999823793767,
+        "median_signed_answer_margin": 4.2500001564621925,
+        "mean_p_yes": 0.24858415122768862,
+        "positive_target_accuracy": 0.8,
+        "negative_target_accuracy": 0.9733333333333334,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "image_plus_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 96,
+        "accuracy": 0.96,
+        "mean_signed_answer_margin": 4.123749973066151,
+        "median_signed_answer_margin": 4.000000029802322,
+        "mean_p_yes": 0.26170589882113265,
+        "positive_target_accuracy": 0.96,
+        "negative_target_accuracy": 0.96,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "name_only": {
+        "count": 100,
+        "errors": 0,
+        "correct": 2,
+        "normalized_exact_match_rate": 0.0,
+        "mean_token_overlap": 0.05101642944972551,
+        "mean_fuzzy_match": 0.09926190476190476,
+        "answer_non_empty_rate": 1.0,
+        "cap_hit_rate": 0.01,
+        "generation_max_new_tokens": 128
+      },
+      "visual_text_conflict": {
+        "count": 100,
+        "errors": 0,
+        "correct": 79,
+        "accuracy": 0.79,
+        "mean_signed_answer_margin": 1.9087499952316285,
+        "median_signed_answer_margin": 2.0,
+        "mean_p_yes": 0.3131364846571151,
+        "positive_target_accuracy": 0.56,
+        "negative_target_accuracy": 0.8666666666666667,
+        "positive_count": 25,
+        "negative_count": 75
+      },
+      "wrong_name": {
+        "count": 100,
+        "errors": 0,
+        "correct": 96,
+        "accuracy": 0.96,
+        "mean_signed_answer_margin": 3.926250012256205,
+        "median_signed_answer_margin": 3.8125001192092896,
+        "mean_p_yes": 0.2614059783492219,
+        "positive_target_accuracy": 0.96,
+        "negative_target_accuracy": 0.96,
+        "positive_count": 25,
+        "negative_count": 75
+      }
+    },
+    "per_protocol_role": {
+      "eval": {
+        "n": 50
+      },
+      "exclude": {
+        "n": 200
+      },
+      "train": {
+        "n": 250
+      }
+    },
+    "route_identity_role_counts": {
+      "train": 50,
+      "eval": 10,
+      "exclude": 40
+    },
+    "model_fingerprint": "78b6e03c62fbab30",
+    "model_revision": "93f923e1a7727d1c4f446756212d9d3e8fcc5d81",
+    "scoring_version": "2",
+    "generation_protocol_sha256": "c66932835e40a674b8716c93d145b74611e21f623786ab2d4095f67f10800127"
+  },
+  "code_provenance": {
+    "git_commit": "94bf302",
+    "git_dirty": false,
+    "model_profile_sha256": "8f4b9d58b8f6cf36f846794c5868d9bc1c0f7cc7168c64c5dcbb551d6b9049fb"
+  },
+  "artifact_shas": {
+    "baseline_results.jsonl": "ef9a6978e148f820f77c0ed83675680edcbacab16bb8849c857ae483e56d3643",
+    "baseline_summary.json": "62d5afb6b2d83e1278594fc1ef10b4d305a4e9c0a4a9c0df5102983ef829cebd",
+    "validation_report.json": "f5fa6beee6de3dc7ac299ebc5b5ee101bf2b6c24307f5dee73b44d58e106646a",
+    "preflight_report.json": "cf836be684be60e486e4e693ad54baf8b28777c96a396504c52f2431c9f0ceac"
+  }
+}
