@@ -361,7 +361,8 @@ class TrainableVLMAdapter(ABC):
                     dest = output_dir / f.name
                     if not dest.exists():
                         f.rename(dest)
-                sub.rmdir()
+                import shutil
+                shutil.rmtree(sub, ignore_errors=True)
                 break
 
         # Compute SHA-256 of checkpoint files
