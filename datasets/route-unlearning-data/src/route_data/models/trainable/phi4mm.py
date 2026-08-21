@@ -229,11 +229,14 @@ def _apply_sdpa_patches() -> None:
         k2 = key_states.transpose(1, 2)
         v2 = value_states.transpose(1, 2)
 
+        _, _, q_len, _ = q2.shape
+        k_len = k2.shape[2]
+
         # Determine causal masking:
         # - Prefill (query_length > 1): causal = True
         # - Cached decode (query_length == 1): causal = False
         #   (the single query token attends to all prior keys)
-        is_causal = query_length > 1 if query_length is not None else q2.shape[1] > 1
+        is_causal = query_length > 1 if query_length is not None else q_len > 1
 
         # Build SDPA attention mask from the incoming attention_mask.
         # The incoming mask shape varies:
@@ -241,10 +244,13 @@ def _apply_sdpa_patches() -> None:
         #   [batch, 1, query_length, key_length]  (4D expanded)
         #   [batch, query_length, key_length]     (3D)
         sdpa_attn_mask = None
+        _mask_is_2d_padding = False
         if attention_mask is not None:
             if attention_mask.dim() == 2:
-                # Padding mask: [batch, key_len] → [batch, 1, 1, key_len]
+                # Padding mask: [batch, key_len] — does NOT encode causality.
+                # We will combine it with a causal mask below.
                 sdpa_attn_mask = attention_mask[:, None, None, :]
+                _mask_is_2d_padding = True
             elif attention_mask.dim() == 3:
                 # [batch, query_len, key_len] → [batch, 1, query_len, key_len]
                 sdpa_attn_mask = attention_mask[:, None, :, :]
@@ -255,9 +261,20 @@ def _apply_sdpa_patches() -> None:
             if sdpa_attn_mask is not None and sdpa_attn_mask.dtype != torch.bool:
                 sdpa_attn_mask = _to_sdpa_bool_mask(sdpa_attn_mask)
 
-            # If causal + mask, combine: where mask is True, still apply causal
-            if is_causal and sdpa_attn_mask is not None:
-                # Use the explicit mask (it should already encode causal)
+            # CRITICAL: If causal + 2D padding mask, the padding mask does
+            # NOT encode autoregressive causality.  We must combine the
+            # padding mask with a causal lower-triangular mask so that
+            # token t cannot attend to future token t+1.
+            if is_causal and _mask_is_2d_padding and sdpa_attn_mask is not None:
+                # Build causal mask: [1, 1, q_len, k_len]
+                causal = torch.ones(
+                    q_len, k_len, dtype=torch.bool, device=q2.device,
+                ).tril(diagonal=0)
+                # Combine: attend only where BOTH causal AND padding allow
+                sdpa_attn_mask = causal & sdpa_attn_mask
+                is_causal = False
+            elif is_causal and sdpa_attn_mask is not None:
+                # 4D mask from _update_causal_mask already encodes causal.
                 is_causal = False
 
         out = F.scaled_dot_product_attention(
@@ -930,8 +947,14 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                 from peft.utils import load_peft_weights
                 state_dict = load_peft_weights(str(checkpoint_dir))
 
-                # Build a lookup from the live model's parameters.
+                # Build a lookup from the live model's unlearning parameters.
                 live_params = dict(inner_peft.named_parameters())
+                # Count live unlearning tensors (bidirectional check).
+                live_unlearning_keys = {
+                    k for k in live_params if adapter_name in k
+                }
+                ckpt_keys = set(state_dict.keys())
+
                 copied = 0
                 missing_keys = []
                 for ckpt_key, ckpt_tensor in state_dict.items():
@@ -941,30 +964,48 @@ class Phi4MMAdapter(TrainableVLMAdapter):
                     else:
                         missing_keys.append(ckpt_key)
 
-                unexpected = set(live_params.keys()) - set(state_dict.keys())
-                # Filter unexpected to only unlearning adapter params
-                unexpected_unlearning = [
-                    k for k in unexpected if adapter_name in k
-                ]
-
-                expected_count = sum(
-                    1 for k in state_dict
+                unexpected_unlearning = sorted(
+                    live_unlearning_keys - ckpt_keys
                 )
+
+                # Bidirectional validation:
+                #   checkpoint tensors == live unlearning tensors == copied
+                ckpt_count = len(ckpt_keys)
+                live_count = len(live_unlearning_keys)
                 logger.info(
                     f"Loaded '{adapter_name}' adapter from {checkpoint_dir}: "
-                    f"{copied}/{expected_count} tensors copied, "
-                    f"{len(missing_keys)} missing, "
-                    f"{len(unexpected_unlearning)} unexpected unlearning"
+                    f"checkpoint={ckpt_count}, live={live_count}, "
+                    f"copied={copied}, missing={len(missing_keys)}, "
+                    f"unexpected_live={len(unexpected_unlearning)}"
                 )
                 if missing_keys:
                     logger.warning(
                         f"Missing checkpoint keys (first 5): "
                         f"{missing_keys[:5]}"
                     )
-                if copied != expected_count:
+                if unexpected_unlearning:
+                    logger.warning(
+                        f"Live unlearning keys not in checkpoint (first 5): "
+                        f"{unexpected_unlearning[:5]}"
+                    )
+                # All three counts must agree and no keys may be missing.
+                if not (ckpt_count == live_count == copied):
                     raise RuntimeError(
-                        f"Phi adapter load incomplete: {copied}/{expected_count} "
-                        f"tensors copied. Missing: {missing_keys[:5]}"
+                        f"Phi adapter tensor count mismatch: "
+                        f"checkpoint={ckpt_count}, live={live_count}, "
+                        f"copied={copied}. "
+                        f"Missing: {missing_keys[:5]}, "
+                        f"Unexpected live: {unexpected_unlearning[:5]}"
+                    )
+                if len(missing_keys) != 0:
+                    raise RuntimeError(
+                        f"Phi adapter load: {len(missing_keys)} checkpoint "
+                        f"keys not found in live model."
+                    )
+                if len(unexpected_unlearning) != 0:
+                    raise RuntimeError(
+                        f"Phi adapter load: {len(unexpected_unlearning)} "
+                        f"live unlearning keys not in checkpoint."
                     )
 
                 # P0-4: Re-install composition hooks after reload so that
