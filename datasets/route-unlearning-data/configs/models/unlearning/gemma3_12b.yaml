@@ -53,10 +53,13 @@ supports_r2mu: false
 
 status:
   baseline_ready: true
-  candidate_margin_execution_ready: true
-  candidate_margin_last_canary_status: PASS_VALID_CANARY
-  primary_absolute_dv_eligible: false
-  relative_preservation_only: true
-  candidate_margin_ready: true  # research-eligible canary
-  m1_core_ready: false
-  m2_structural_ready: false
+  canary:
+    status: PASS_VALID_CANARY
+    research_evidence_eligible: true
+    gates_passed: 18
+    total_gates: 18
+    note: "Inherited via evidence migration (profile/baseline equivalence proven)"
+  full_run:
+    status: NOT_RUN
+    research_evidence_eligible: true
+    note: "Best next full-run candidate after shared cleanup"

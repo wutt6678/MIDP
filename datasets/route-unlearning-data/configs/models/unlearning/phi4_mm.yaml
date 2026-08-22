@@ -73,10 +73,13 @@ supports_r2mu: false
 
 status:
   baseline_ready: true
-  candidate_margin_execution_ready: false
-  candidate_margin_last_canary_status: FAIL_BEHAVIOR_UNPROVEN
-  primary_absolute_dv_eligible: false
-  relative_preservation_only: true
-  candidate_margin_ready: false  # no behavioral effect
-  m1_core_ready: false
-  m2_structural_ready: false
+  canary:
+    status: FAIL_BEHAVIOR_UNPROVEN
+    research_evidence_eligible: false
+    gates_passed: 15
+    total_gates: 18
+    note: "Outcome C: tensors change but behavior zero. GPU blocked."
+  full_run:
+    status: NOT_RUN
+    research_evidence_eligible: false
+    note: "Canary not yet valid"

@@ -53,10 +53,14 @@ supports_r2mu: false
 
 status:
   baseline_ready: true
-  candidate_margin_execution_ready: true
-  candidate_margin_last_canary_status: PASS_VALID_CANARY
-  primary_absolute_dv_eligible: true  # pre-DV 0.99
-  relative_preservation_only: false
-  candidate_margin_ready: true  # strict canary PASS
-  m1_core_ready: false
-  m2_structural_ready: false
+  canary:
+    status: PASS_VALID_CANARY
+    research_evidence_eligible: true
+    gates_passed: 20
+    total_gates: 20
+  full_run:
+    status: FAIL_BROAD_DEGRADATION
+    research_evidence_eligible: true
+    gates_passed: 20
+    total_gates: 20
+    note: "DV 0.990 -> 0.250 (delta=-0.740), 50 steps not selective"

@@ -54,10 +54,12 @@ supports_r2mu: false
 
 status:
   baseline_ready: true
-  candidate_margin_execution_ready: true
-  candidate_margin_last_canary_status: FAIL_BROAD_DEGRADATION
-  primary_absolute_dv_eligible: false
-  relative_preservation_only: true
-  candidate_margin_ready: false  # preservation fails
-  m1_core_ready: false
-  m2_structural_ready: false
+  canary:
+    status: FAIL_BROAD_DEGRADATION
+    research_evidence_eligible: false
+    gates_passed: 17
+    total_gates: 18
+  full_run:
+    status: NOT_RUN
+    research_evidence_eligible: false
+    note: "Same-config full run not justified after canary negative"
