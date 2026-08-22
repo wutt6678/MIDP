@@ -65,6 +65,24 @@ status:
     applicable_gates: 20
     note: "DV 0.990 -> 0.250 (delta=-0.740), 50 steps not selective. Historical 23 gates corrected to 20 applicable (3 Phi-specific removed)."
   duration_sweep:
+    steps_2:
+      status: PASS_VALID
+      gates_passed: 20
+      total_gates: 20
+      behavioral_effect: true
+      delta_dv: 0.000
+      pre_dv: 0.990
+      post_dv: 0.990
+      note: "First fully positive result. Behavioral effect + perfect preservation."
+    steps_3:
+      status: PASS_VALID
+      gates_passed: 20
+      total_gates: 20
+      behavioral_effect: true
+      delta_dv: -0.010
+      pre_dv: 0.990
+      post_dv: 0.980
+      note: "Behavioral effect + near-perfect preservation."
     steps_5:
       status: FAIL_PRESERVATION
       gates_passed: 19
