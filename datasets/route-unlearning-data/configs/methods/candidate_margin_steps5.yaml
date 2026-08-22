@@ -1,0 +1,57 @@
+# Method: candidate_margin_v1
+#
+# LoRA-based targeted candidate-margin unlearning.
+# Minimises the signed answer margin on target (forget) examples
+# while preserving retain examples.
+#
+# This is the primary M1 method for cross-model comparison.
+
+method_id: candidate_margin_steps5
+method_name: lora_targeted_candidate_margin
+
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+  scope: language_attention_only
+
+training:
+  learning_rate: 1.0e-4
+  num_optimizer_steps: 5
+  retain_weight: 0.1
+  train_batch_size: 1
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+  warmup_steps: 0
+  seed: 17
+
+objective:
+  type: candidate_margin
+  description: >
+    Minimise S(y_correct) - S(y_other) on target examples,
+    with retain CE (cross-entropy) on retain examples.
+  retain_objective: cross_entropy
+
+training_families:
+  forget: [direct_visual]
+  retain: [direct_visual]
+
+evaluation_families:
+  - direct_visual
+  - image_plus_name
+  - wrong_name
+  - visual_text_conflict
+  - name_only
+
+evaluation:
+  primary_metric: signed_answer_margin
+  direct_visual_accuracy_gate: 0.98
+  generation:
+    binary_families:
+      do_sample: false
+      temperature: 0.0
+      max_new_tokens: 4
+    name_only:
+      do_sample: false
+      temperature: 0.0
+      max_new_tokens: 128
