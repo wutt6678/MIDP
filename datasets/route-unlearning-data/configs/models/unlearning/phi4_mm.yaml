@@ -74,11 +74,11 @@ supports_r2mu: false
 status:
   baseline_ready: true
   canary:
-    status: FAIL_BEHAVIOR_UNPROVEN
+    status: FAIL_NO_BEHAVIORAL_EFFECT
     research_evidence_eligible: false
-    gates_passed: 15
-    total_gates: 18
-    note: "Outcome C: tensors change but behavior zero. GPU blocked."
+    gates_passed: 21
+    total_gates: 23
+    note: "Tensors change (128/128 roundtrip) but behavior identical to base. DV 0.930->0.950 preservation PASS."
   full_run:
     status: NOT_RUN
     research_evidence_eligible: false

@@ -1,97 +1,19 @@
 {
   "models": {
-    "qwen35_4b": {
-      "baseline": {
-        "status": "VALID",
-        "issues": []
-      },
-      "canary": {
-        "status": "VALID_POSITIVE",
-        "issues": [
-          "20/20 gates passed"
-        ]
-      },
-      "full_run": {
-        "status": "VALID_NEGATIVE",
-        "issues": [
-          "full run failed validation"
-        ]
-      }
-    },
-    "glm46v_flash": {
-      "baseline": {
-        "status": "VALID",
-        "issues": []
-      },
-      "canary": {
-        "status": "VALID_NEGATIVE",
-        "issues": [
-          "0/0 gates, preservation FAIL"
-        ]
-      },
-      "full_run": {
-        "status": "NOT_RUN",
-        "issues": []
-      }
-    },
-    "internvl35_8b_hf": {
-      "baseline": {
-        "status": "VALID",
-        "issues": []
-      },
-      "canary": {
-        "status": "VALID_NEGATIVE",
-        "issues": [
-          "19/20 gates, preservation FAIL"
-        ]
-      },
-      "full_run": {
-        "status": "NOT_RUN",
-        "issues": []
-      }
-    },
     "phi4_mm": {
       "baseline": {
         "status": "VALID",
         "issues": []
       },
       "canary": {
-        "status": "INCOMPLETE",
+        "status": "VALID_NEGATIVE",
         "issues": [
-          "validation_report.json: missing",
-          "run_manifest.json: missing",
-          "run_binding.json: missing",
-          "environment.json: missing",
-          "parameter_inventory.json: missing",
-          "behavioral_effect_validation.json: missing",
-          "reload_validation.json: missing",
-          "adapter_reload_integrity.json: missing",
-          "adapter_tensor_roundtrip.json: missing",
-          "exact_probe_match.json: missing",
-          "preservation_report.json: missing"
+          "21/23 gates, FAIL"
         ]
       },
       "full_run": {
         "status": "NOT_RUN",
         "issues": []
-      }
-    },
-    "gemma3_12b": {
-      "baseline": {
-        "status": "VALID",
-        "issues": []
-      },
-      "canary": {
-        "status": "VALID_POSITIVE",
-        "issues": [
-          "18/18 gates passed"
-        ]
-      },
-      "full_run": {
-        "status": "VALID_NEGATIVE",
-        "issues": [
-          "full run failed validation"
-        ]
       }
     }
   }
