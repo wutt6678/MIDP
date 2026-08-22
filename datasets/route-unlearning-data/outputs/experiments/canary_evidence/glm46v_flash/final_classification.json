@@ -1,0 +1,16 @@
+{
+  "status": "FAIL_BROAD_DEGRADATION",
+  "mechanical_execution_valid": true,
+  "behavioral_effect_valid": true,
+  "reload_equivalence_valid": true,
+  "preservation_valid": false,
+  "recommended_full_run": false,
+  "interpretation": "The intervention affects target behavior but is not selective enough to preserve general direct-visual performance. This is a valid scientific negative for candidate_margin_v1.",
+  "model_key": "glm46v_flash",
+  "method_id": "candidate_margin_v1",
+  "canary_gates_passed": 17,
+  "canary_gates_total": 18,
+  "failed_gate": "preservation_gate_pass",
+  "preservation_delta": -0.15,
+  "notes": "Any future tuning (lower LR, stronger retain loss, different LoRA scope, KL retention, fewer layers) must use a distinct method/config ID."
+}
