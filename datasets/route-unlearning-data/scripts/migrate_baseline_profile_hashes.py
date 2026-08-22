@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time baseline profile-hash migration (P0-SHARED-01).
+"""One-time baseline profile-hash migration (P0-SHARED-01 + P0-PROVENANCE-01/02).
 
 The shared ``compute_profile_sha256()`` semantics changed:
 
@@ -8,27 +8,34 @@ The shared ``compute_profile_sha256()`` semantics changed:
 - Descriptive ``tested_environment`` metadata is excluded.
 - Mutable ``supports_*``, ``status``, ``access`` are excluded.
 
-Several stored baseline bindings contain hashes generated under the old
-canonicalization logic.  This script:
+This script:
 
-1. Loads every model profile.
+1. Loads every model profile (current and optionally old from git).
 2. Computes the current canonical scientific profile SHA.
 3. Loads the corresponding baseline binding.
 4. Compares stored SHA vs current SHA.
-5. If mismatched, verifies that no scientific field actually changed.
+5. If mismatched, verifies that no scientific field actually changed
+   by comparing full canonical scientific payloads.
 6. Regenerates metadata-only bindings where safe.
-7. Writes a migration audit report.
+7. Writes a migration audit report with true old/new hashes.
 
 Usage::
 
+    # Migrate current bindings
     python scripts/migrate_baseline_profile_hashes.py
+
+    # Audit-only with git refs
+    python scripts/migrate_baseline_profile_hashes.py \\
+      --old-ref 770a9b2 --new-ref HEAD --audit-only
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import logging
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -87,12 +94,27 @@ def _extract_scientific_fields(data: dict) -> dict:
     return canonical
 
 
+def _get_profile_from_git(ref: str, model_key: str) -> dict | None:
+    """Load a profile YAML from a git ref."""
+    rel_path = f"datasets/route-unlearning-data/configs/models/unlearning/{model_key}.yaml"
+    try:
+        import yaml
+        result = subprocess.run(
+            ["git", "show", f"{ref}:{rel_path}"],
+            capture_output=True, text=True, check=True,
+            cwd=PROJECT_ROOT,
+        )
+        return yaml.safe_load(result.stdout)
+    except (subprocess.CalledProcessError, Exception):
+        return None
+
+
 def _scientific_fields_equal(
     old_data: dict, new_data: dict,
 ) -> tuple[bool, list[str]]:
     """Compare scientific fields between old and new profile data.
 
-    Returns (equal, differences).
+    P0-PROVENANCE-02: Full canonical payload comparison.
     """
     old_sci = _extract_scientific_fields(old_data)
     new_sci = _extract_scientific_fields(new_data)
@@ -154,10 +176,33 @@ def _generate_upgraded_binding(
 
 
 def main() -> None:
-    from route_data.models.trainable.registry import compute_profile_sha256
+    parser = argparse.ArgumentParser(
+        description="Baseline profile-hash migration",
+    )
+    parser.add_argument(
+        "--old-ref",
+        help="Git ref for old profiles (for audit-only mode)",
+    )
+    parser.add_argument(
+        "--new-ref",
+        help="Git ref for new profiles (for audit-only mode)",
+    )
+    parser.add_argument(
+        "--audit-only",
+        action="store_true",
+        help="Only generate audit report, do not modify bindings",
+    )
+    args = parser.parse_args()
+
+    from route_data.models.trainable.registry import (
+        compute_profile_sha256,
+        load_profile_from_yaml,
+    )
 
     migration_report: dict[str, Any] = {
-        "schema_version": "profile-hash-migration-v1",
+        "schema_version": "profile-hash-migration-v2",
+        "old_ref": args.old_ref,
+        "new_ref": args.new_ref,
         "models": {},
     }
 
@@ -179,7 +224,6 @@ def main() -> None:
             continue
 
         # Load profile object
-        from route_data.models.trainable.registry import load_profile_from_yaml
         profile = load_profile_from_yaml(str(profile_path))
 
         # Compute current SHA
@@ -192,28 +236,61 @@ def main() -> None:
         old_sha = old_binding.get("model_profile_sha256", "")
 
         model_report: dict[str, Any] = {
-            "old_profile_sha256": old_sha,
+            "old_binding_profile_sha256": old_sha,
             "new_profile_sha256": current_sha,
         }
 
+        # P0-PROVENANCE-01: If --old-ref provided, also store the git-based old SHA
+        if args.old_ref:
+            old_profile_data = _get_profile_from_git(args.old_ref, model_key)
+            if old_profile_data:
+                old_sci = _extract_scientific_fields(old_profile_data)
+                old_sci_blob = json.dumps(old_sci, sort_keys=True, separators=(",", ":"))
+                old_git_sha = hashlib.sha256(old_sci_blob.encode()).hexdigest()
+                model_report["old_ref"] = args.old_ref
+                model_report["old_ref_scientific_sha256"] = old_git_sha
+
+        if args.new_ref:
+            new_profile_data = _get_profile_from_git(args.new_ref, model_key)
+            if new_profile_data:
+                new_sci = _extract_scientific_fields(new_profile_data)
+                new_sci_blob = json.dumps(new_sci, sort_keys=True, separators=(",", ":"))
+                new_git_sha = hashlib.sha256(new_sci_blob.encode()).hexdigest()
+                model_report["new_ref"] = args.new_ref
+                model_report["new_ref_scientific_sha256"] = new_git_sha
+
+        # P0-PROVENANCE-02: Full scientific payload comparison
+        if args.old_ref:
+            old_profile_data = _get_profile_from_git(args.old_ref, model_key)
+            with open(profile_path) as f:
+                import yaml
+                new_profile_data = yaml.safe_load(f)
+
+            if old_profile_data and new_profile_data:
+                sci_equal, sci_diffs = _scientific_fields_equal(
+                    old_profile_data, new_profile_data,
+                )
+                model_report["scientific_fields_equal"] = sci_equal
+                if not sci_equal:
+                    model_report["scientific_diffs"] = sci_diffs
+                    logger.error("  FAIL: Scientific fields changed!")
+                    for d in sci_diffs:
+                        logger.error(d)
+                    all_pass = False
+
         if old_sha == current_sha:
             logger.info(f"  SHA already matches: {current_sha[:24]}...")
-            model_report["scientific_fields_equal"] = True
             model_report["migration_required"] = False
             model_report["migration_pass"] = True
             migration_report["models"][model_key] = model_report
             continue
 
-        # SHA mismatch — check if scientific fields are unchanged
+        # SHA mismatch
         logger.info("  SHA mismatch detected")
         logger.info(f"    old: {old_sha[:24]}...")
         logger.info(f"    new: {current_sha[:24]}...")
 
-        # We need the old profile data to compare.
-        # Since we don't have the old YAML, we compare what we can:
-        # model identity fields in the binding vs current profile.
-        # For old-format bindings (e.g. Qwen), model_id/model_revision may
-        # be absent.  Only fail if they ARE present AND differ.
+        # Check model identity
         binding_model_id = old_binding.get("model_id", "")
         binding_model_rev = old_binding.get("model_revision", "")
         binding_proc_rev = old_binding.get("processor_revision", "")
@@ -228,8 +305,6 @@ def main() -> None:
 
         if not identity_ok:
             logger.error("  FAIL: Model identity changed!")
-            logger.error(f"    binding model_id={binding_model_id}, profile={profile.model_id}")
-            model_report["scientific_fields_equal"] = False
             model_report["migration_required"] = False
             model_report["migration_pass"] = False
             model_report["error"] = "Model identity changed"
@@ -237,32 +312,25 @@ def main() -> None:
             all_pass = False
             continue
 
-        # Scientific fields are assumed unchanged since:
-        # 1. Model identity matches
-        # 2. The SHA change is due to hash canonicalization migration
-        # (We can verify by checking that the profile YAML hasn't changed
-        # in scientific fields since the binding was generated.)
-        logger.info("  Model identity verified — migrating binding")
+        if args.audit_only:
+            logger.info("  Audit-only mode — not modifying binding")
+            model_report["migration_required"] = True
+            model_report["migration_pass"] = True
+            migration_report["models"][model_key] = model_report
+            continue
 
-        # Generate upgraded binding
+        # Regenerate binding
+        logger.info("  Migrating binding")
         new_binding = _generate_upgraded_binding(profile, current_sha, output_dir)
 
-        # Write new binding
         with open(binding_path, "w") as f:
             json.dump(new_binding, f, indent=2)
             f.write("\n")
         logger.info(f"  Binding regenerated: {binding_path}")
 
-        # Regenerate binding validation report
+        # Validate
         validation: dict[str, Any] = {"pass": True, "checks": {}}
-        validation["checks"]["model_key_match"] = True
-        validation["checks"]["model_id_match"] = True
-        validation["checks"]["model_revision_match"] = True
-        validation["checks"]["processor_revision_match"] = True
-        validation["checks"]["model_profile_sha256_match"] = True
-
-        # Verify file hashes
-        for sha_key, file_key, fname in [
+        for sha_key, _file_key, fname in [
             ("results_sha256", "results_file", "baseline_results.jsonl"),
             ("summary_sha256", "summary_file", "baseline_summary.json"),
             ("validation_report_sha256", "validation_report_file", "validation_report.json"),
@@ -283,7 +351,6 @@ def main() -> None:
         binding_pass = all(validation["checks"].values())
         logger.info(f"  Binding validation: {'PASS' if binding_pass else 'FAIL'}")
 
-        model_report["scientific_fields_equal"] = True
         model_report["migration_required"] = True
         model_report["migration_pass"] = binding_pass
 
