@@ -65,3 +65,13 @@ status:
     gates_passed: 19
     total_gates: 20
     note: "DV 0.750 -> 0.250 (delta=-0.500), same pattern as Qwen"
+  duration_sweep:
+    steps_5:
+      status: FAIL_PRESERVATION
+      gates_passed: 19
+      total_gates: 20
+      behavioral_effect: true
+      delta_dv: -0.140
+      pre_dv: 0.750
+      post_dv: 0.610
+      note: "Behavioral effect achieved but preservation fails"
