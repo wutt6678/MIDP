@@ -978,15 +978,21 @@ def _verify_adapter_composition(model: Any, profile: Any) -> dict:
     # Image-mode check: vision functionality available + unlearning active
     # For Phi, vision is handled by native PEFT adapters, not LoRA layers.
     # We check that vision adapter exists in available adapters on some layers.
+    # Image-mode check: vision adapter exists + unlearning active + speech inactive
     has_vision_adapter = any(
         "vision" in layer["available_adapters"]
         for layer in lora_layers
     )
+    image_mode_pass = (
+        has_vision_adapter
+        and (unlearning_active_count >= expected_min if expected_min > 0 else unlearning_active_count > 0)
+        and speech_active_count == 0
+    )
     image_mode = {
-        "pass": has_vision_adapter or vision_active_count >= 0,
+        "pass": image_mode_pass,
         "vision_available": has_vision_adapter,
         "unlearning_active": unlearning_active_count,
-        "note": "Vision routing is via native PEFT adapters, not LoRA layers",
+        "speech_active": speech_active_count,
     }
 
     overall_pass = text_mode["pass"] and image_mode["pass"]
@@ -1605,9 +1611,19 @@ def main() -> None:
     run_incomplete = output_dir / "RUN_INCOMPLETE"
     run_incomplete.touch()
 
-    # P0-PHI-06: Write immutable execution provenance BEFORE any inference.
-    # This file must never be rewritten by packaging scripts.
+    # P0-SHARED-04/05/06: Write immutable execution provenance.
+    # Uses exclusive creation ("x") so it cannot be silently overwritten.
+    # Includes full scientific identity — not just paths.
+    import hashlib as _hl
     import subprocess as _sp
+
+    def _file_sha256_local(p: Path) -> str:
+        _h = _hl.sha256()
+        with open(p, "rb") as _fh:
+            for _chunk in iter(lambda: _fh.read(8192), b""):
+                _h.update(_chunk)
+        return _h.hexdigest()
+
     _git_commit = _sp.run(
         ["git", "rev-parse", "HEAD"],
         capture_output=True, text=True, cwd=PROJECT_ROOT,
@@ -1618,18 +1634,68 @@ def main() -> None:
         capture_output=True, text=True, cwd=PROJECT_ROOT,
         check=False,
     ).stdout.strip())
+
+    _profile_sha = ""
+    _method_sha = _file_sha256_local(method_path) if method_path.is_file() else ""
+    _selection_sha = _file_sha256_local(selection_path) if selection_path.is_file() else ""
+    try:
+        from route_data.models.trainable.registry import compute_profile_sha256 as _cps
+        _profile_sha = _cps(profile_path)
+    except Exception:
+        pass
+
     _exec_prov = {
+        # Git state
         "git_commit": _git_commit,
         "git_dirty": _git_dirty,
-        "model_profile_path": str(profile_path),
-        "method_config_path": str(args.method_config),
+        # Model identity (resolved from profile)
+        "model_key": model_key,
+        "model_id": profile_raw.get("model", {}).get("id", ""),
+        "model_revision": profile_raw.get("model", {}).get("revision", ""),
+        "processor_id": profile_raw.get("model", {}).get("processor_id", ""),
+        "processor_revision": profile_raw.get("model", {}).get("processor_revision", ""),
+        "dtype": profile_raw.get("model", {}).get("dtype", ""),
+        "attn_implementation": profile_raw.get("model", {}).get("attn_implementation", ""),
+        # Profile/method/selection provenance
+        "profile_path": str(profile_path),
+        "profile_sha256": _profile_sha,
+        "method_id": method_id,
+        "method_config_path": str(method_path),
+        "method_config_sha256": _method_sha,
+        "selection_path": str(selection_path),
+        "selection_sha256": _selection_sha,
+        # Candidate protocol
+        "candidate_positive": profile_raw.get("candidate_protocol", {}).get("positive", ""),
+        "candidate_negative": profile_raw.get("candidate_protocol", {}).get("negative", ""),
+        # LoRA config (resolved)
+        "lora_rank": method_config.get("lora", {}).get("rank", profile_raw.get("lora", {}).get("rank", 0)),
+        "lora_alpha": method_config.get("lora", {}).get("alpha", profile_raw.get("lora", {}).get("alpha", 0)),
+        "expected_lora_target_modules": profile_raw.get("lora", {}).get("expected_target_modules", 0),
+        # Training hyperparameters
+        "learning_rate": method_config.get("training", {}).get("learning_rate", 0),
+        "num_optimizer_steps": method_config.get("training", {}).get("num_optimizer_steps", 0),
+        "gradient_accumulation_steps": method_config.get("training", {}).get("gradient_accumulation_steps", 0),
+        "retain_weight": method_config.get("training", {}).get("retain_weight", 0),
+        # Run identity
         "seed": args.seed,
         "canary": args.canary,
         "device": args.device,
     }
-    with open(output_dir / "execution_provenance.json", "w") as _f:
-        json.dump(_exec_prov, _f, indent=2)
-        _f.write("\n")
+    _prov_path = output_dir / "execution_provenance.json"
+    try:
+        with open(_prov_path, "x") as _f:
+            json.dump(_exec_prov, _f, indent=2)
+            _f.write("\n")
+    except FileExistsError:
+        # Provenance already exists — verify immutability
+        with open(_prov_path) as _f:
+            _existing = json.load(_f)
+        if _existing.get("git_commit") != _exec_prov["git_commit"]:
+            raise RuntimeError(
+                f"Execution provenance conflict: existing git_commit="
+                f"{_existing.get('git_commit')} != current {_exec_prov['git_commit']}"
+            )
+        logger.info("Execution provenance already exists (same git commit) — preserved")
 
     # -- Load adapter and model --------------------------------------------- #
     from route_data.models.trainable.registry import (
@@ -2348,6 +2414,7 @@ def main() -> None:
 
     # -- Write run manifest (P1-13: complete provenance) -------------------- #
     env_sha = file_sha256(output_dir / "environment.json") if (output_dir / "environment.json").exists() else ""
+    _prov_sha = file_sha256(output_dir / "execution_provenance.json") if (output_dir / "execution_provenance.json").exists() else ""
     run_manifest = {
         "model_key": model_key,
         "model_id": profile.model_id,
@@ -2360,6 +2427,7 @@ def main() -> None:
         "model_profile_sha256": profile_sha,
         "method_config_sha256": file_sha256(method_path),
         "selection_sha256": file_sha256(selection_path),
+        "execution_provenance_sha256": _prov_sha,
         "checkpoint_sha256": adapter_sha,
         "baseline_manifest_sha256": baseline_binding.manifest_sha256,
         "baseline_binding_sha256": _binding_file_sha,
@@ -2392,6 +2460,7 @@ def main() -> None:
         "method_id": method_id,
         "seed": args.seed,
         "model_profile_sha256": profile_sha,
+        "execution_provenance_sha256": _prov_sha,
         "checkpoint_sha256": adapter_sha,
         "baseline_results_sha256": baseline_binding.results_sha256,
         "run_manifest_sha256": file_sha256(output_dir / "run_manifest.json"),
