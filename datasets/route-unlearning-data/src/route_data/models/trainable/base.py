@@ -507,7 +507,7 @@ class TrainableVLMAdapter(ABC):
                 base_model, ckpt_src, adapter_name,
             )
 
-        # Verify checkpoint tensors were actually restored.
+        # Bidirectional checkpoint verification (P0-SHARED-03).
         # The checkpoint may use keys without the adapter name suffix
         # (e.g. ``lora_A.weight``) while the live model expects
         # ``lora_A.<adapter_name>.weight``.
@@ -521,32 +521,59 @@ class TrainableVLMAdapter(ABC):
                     ckpt_data[k] = f.get_tensor(k)
 
             live_params = dict(model.named_parameters())
+
+            # Enumerate live unlearning adapter keys.
+            live_unlearning_keys = {
+                k for k in live_params if adapter_name in k
+            }
+
             copied = 0
-            missing = []
+            copied_live_keys: set[str] = set()
+            missing_checkpoint_keys: list[str] = []
             for ckpt_key, ckpt_tensor in ckpt_data.items():
                 if ckpt_key in live_params:
                     live_params[ckpt_key].data.copy_(ckpt_tensor)
                     copied += 1
+                    copied_live_keys.add(ckpt_key)
                 else:
-                    # Try inserting adapter name into the key.
-                    # e.g. ...lora_A.weight -> ...lora_A.<name>.weight
                     remapped = _remap_adapter_key(ckpt_key, adapter_name)
                     if remapped in live_params:
                         live_params[remapped].data.copy_(ckpt_tensor)
                         copied += 1
+                        copied_live_keys.add(remapped)
                     else:
-                        missing.append(ckpt_key)
+                        missing_checkpoint_keys.append(ckpt_key)
 
-            expected = len(ckpt_data)
-            if copied != expected:
+            unexpected_live_keys = sorted(
+                live_unlearning_keys - copied_live_keys
+            )
+
+            # Bidirectional validation:
+            #   checkpoint tensors == live unlearning tensors == copied
+            ckpt_count = len(ckpt_data)
+            live_count = len(live_unlearning_keys)
+            if (
+                copied != ckpt_count
+                or copied != live_count
+                or missing_checkpoint_keys
+                or unexpected_live_keys
+            ):
                 raise RuntimeError(
-                    f"Adapter load incomplete: {copied}/{expected} tensors "
-                    f"restored. Missing {len(missing)} keys. "
-                    f"First missing: {missing[:3]}"
+                    f"Bidirectional adapter load validation FAILED:\n"
+                    f"  checkpoint_count={ckpt_count}\n"
+                    f"  live_count={live_count}\n"
+                    f"  copied_count={copied}\n"
+                    f"  missing_checkpoint_keys={len(missing_checkpoint_keys)}"
+                    f" (first: {missing_checkpoint_keys[:3]})\n"
+                    f"  unexpected_live_keys={len(unexpected_live_keys)}"
+                    f" (first: {unexpected_live_keys[:3]})"
                 )
+
             logger.info(
-                f"Verified adapter load: {copied}/{expected} tensors "
-                f"restored from {ckpt_path.name}"
+                f"Bidirectional adapter load verified: "
+                f"{copied}/{ckpt_count} checkpoint, "
+                f"{copied}/{live_count} live unlearning tensors restored "
+                f"from {ckpt_path.name}"
             )
 
         return model

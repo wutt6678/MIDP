@@ -1176,75 +1176,93 @@ def _validate_reload_equivalence(
         p.requires_grad = False
     logger.info("Reload-equivalence: loading adapter checkpoint...")
 
-    # P0-PHI-06/07: Load adapter with integrity verification
-    # For Phi, use the custom loader that returns integrity info
+    # P0-SHARED-03/04: Load adapter with bidirectional integrity + roundtrip.
+    # This is now generic for all models (not Phi-specific).
     integrity_report = None
     roundtrip_report = None
-    if profile.key == "phi4_mm":
-        # Phi has custom loader with bidirectional verification
-        from safetensors import safe_open
-        ckpt_path = adapter_path / "adapter_model.safetensors"
 
-        # Read checkpoint tensors for roundtrip comparison
-        ckpt_tensors = {}
-        if ckpt_path.is_file():
-            with safe_open(str(ckpt_path), framework="pt", device="cpu") as f:
-                for k in list(f.keys()):
-                    ckpt_tensors[k] = f.get_tensor(k).clone()
+    from safetensors import safe_open
+    ckpt_path = adapter_path / "adapter_model.safetensors"
 
-        reloaded = adapter.load_unlearning_adapter(base_model, adapter_path)
+    # Read checkpoint tensors for roundtrip comparison
+    ckpt_tensors = {}
+    if ckpt_path.is_file():
+        with safe_open(str(ckpt_path), framework="pt", device="cpu") as f:
+            for k in list(f.keys()):
+                ckpt_tensors[k] = f.get_tensor(k).clone()
 
-        # P0-PHI-07: Tensor roundtrip verification
-        if ckpt_tensors:
-            from peft.tuners.lora import LoraLayer
-            live_params = {}
-            for name, mod in reloaded.named_modules():
-                if isinstance(mod, LoraLayer):
-                    for adapter_name in mod.lora_A:
-                        if adapter_name == "unlearning":
-                            for param_name in ["lora_A", "lora_B"]:
-                                param = getattr(mod, param_name)
-                                if "unlearning" in param:
-                                    key = f"{name}.{param_name}.unlearning.weight"
-                                    live_params[key] = param["unlearning"].weight.data.cpu()
+    reloaded = adapter.load_unlearning_adapter(base_model, adapter_path)
 
-            n_tensors = len(ckpt_tensors)
-            n_exact = 0
-            max_abs_diff = 0.0
-            for ckpt_key, ckpt_tensor in ckpt_tensors.items():
-                # Try to find matching live tensor
-                for live_key, live_tensor in live_params.items():
-                    if ckpt_key in live_key or live_key in ckpt_key:
-                        diff = (ckpt_tensor.float() - live_tensor.float()).abs().max().item()
-                        max_abs_diff = max(max_abs_diff, diff)
-                        if diff == 0.0:
-                            n_exact += 1
-                        break
+    # P0-SHARED-04: Exact tensor roundtrip verification (all models).
+    if ckpt_tensors:
+        from route_data.models.trainable.base import _remap_adapter_key
 
-            roundtrip_report = {
-                "n_tensors": n_tensors,
-                "n_exact": n_exact,
-                "max_abs_diff": max_abs_diff,
-                "pass": max_abs_diff == 0.0,
-            }
-            logger.info(
-                f"Tensor roundtrip: {n_exact}/{n_tensors} exact, "
-                f"max_diff={max_abs_diff:.2e}"
-            )
-
-        # P0-PHI-06: Integrity report (already verified by loader)
-        integrity_report = {
-            "adapter_name": "unlearning",
-            "checkpoint_tensor_count": len(ckpt_tensors),
-            "live_unlearning_tensor_count": len(live_params) if ckpt_tensors else 0,
-            "copied_tensor_count": len(ckpt_tensors),  # Loader verifies this
-            "missing_checkpoint_keys": [],
-            "unexpected_live_keys": [],
-            "pass": True,  # Loader raises on failure
+        # Build canonical live unlearning parameter map.
+        live_params = dict(reloaded.named_parameters())
+        live_unlearning = {
+            k: v for k, v in live_params.items() if "unlearning" in k
         }
-    else:
-        # Generic PEFT loader
-        reloaded = adapter.load_unlearning_adapter(base_model, adapter_path)
+
+        n_ckpt = len(ckpt_tensors)
+        n_live = len(live_unlearning)
+        n_matched = 0
+        n_exact = 0
+        max_abs_diff = 0.0
+        missing_ckpt_keys: list[str] = []
+        unexpected_live_keys = set(live_unlearning.keys())
+
+        for ckpt_key, ckpt_tensor in ckpt_tensors.items():
+            # Try direct key match first, then remapped key.
+            live_key = None
+            if ckpt_key in live_unlearning:
+                live_key = ckpt_key
+            else:
+                remapped = _remap_adapter_key(ckpt_key, "unlearning")
+                if remapped in live_unlearning:
+                    live_key = remapped
+
+            if live_key is not None:
+                n_matched += 1
+                unexpected_live_keys.discard(live_key)
+                live_tensor = live_unlearning[live_key].data.cpu()
+                diff = (ckpt_tensor.float() - live_tensor.float()).abs().max().item()
+                max_abs_diff = max(max_abs_diff, diff)
+                if diff == 0.0:
+                    n_exact += 1
+            else:
+                missing_ckpt_keys.append(ckpt_key)
+
+        roundtrip_report = {
+            "checkpoint_count": n_ckpt,
+            "live_count": n_live,
+            "matched_count": n_matched,
+            "exact_count": n_exact,
+            "missing_checkpoint_keys": missing_ckpt_keys,
+            "unexpected_live_keys": sorted(unexpected_live_keys),
+            "max_abs_diff": max_abs_diff,
+            "pass": (
+                n_ckpt == n_live == n_matched == n_exact
+                and not missing_ckpt_keys
+                and not unexpected_live_keys
+                and max_abs_diff == 0.0
+            ),
+        }
+        logger.info(
+            f"Tensor roundtrip: {n_exact}/{n_ckpt} exact, "
+            f"max_diff={max_abs_diff:.2e}, "
+            f"pass={roundtrip_report['pass']}"
+        )
+
+    # P0-SHARED-03: Integrity report (loader already verifies bidirectionally).
+    integrity_report = {
+        "adapter_name": "unlearning",
+        "checkpoint_tensor_count": len(ckpt_tensors),
+        "live_unlearning_tensor_count": len(live_unlearning) if ckpt_tensors else 0,
+        "copied_tensor_count": len(ckpt_tensors),
+        "missing_checkpoint_keys": [],
+        "unexpected_live_keys": [],
+        "pass": True,  # Loader raises on failure
+    }
 
     reloaded.eval()
     reloaded.to(device)
@@ -1623,6 +1641,24 @@ def main() -> None:
     # -- Attach LoRA via adapter hook (P0-05) ------------------------------- #
     lora_targets = adapter.resolve_lora_targets(model)
     logger.info(f"LoRA targets: {len(lora_targets)} modules")
+
+    # P0-SHARED-06: Exact LoRA inventory gate.
+    # Compare resolved target count with architecture-consistent expectation.
+    _expected_modules = profile.num_language_layers * len(profile.lora_target_leaf_names)
+    if _expected_modules > 0 and len(lora_targets) != _expected_modules:
+        raise RuntimeError(
+            f"P0-SHARED-06: LoRA inventory mismatch.\n"
+            f"  Expected: {profile.num_language_layers} layers x "
+            f"{len(profile.lora_target_leaf_names)} targets = "
+            f"{_expected_modules} modules\n"
+            f"  Got: {len(lora_targets)} modules\n"
+            f"  target_leaf_names: {list(profile.lora_target_leaf_names)}"
+        )
+    _expected_tensors = _expected_modules * 2  # A + B per module
+    logger.info(
+        f"LoRA inventory: {len(lora_targets)} modules, "
+        f"{_expected_tensors} expected A/B tensors"
+    )
 
     # Resolve LoRA config from method config (P0-16)
     lora_cfg = method_config.get("lora", {})
@@ -2090,6 +2126,25 @@ def main() -> None:
         if preservation:
             required_checks["preservation_gate_pass"] = bool(
                 preservation.get("gate_pass", False)
+            )
+
+        # P0-SHARED-03/04: Adapter reload integrity + tensor roundtrip.
+        _reload_integrity_path = output_dir / "adapter_reload_integrity.json"
+        if _reload_integrity_path.is_file():
+            import json as _json_rt
+            with open(_reload_integrity_path) as _f_rt:
+                _ri = _json_rt.load(_f_rt)
+            required_checks["adapter_reload_integrity_pass"] = bool(
+                _ri.get("pass", False)
+            )
+
+        _roundtrip_path = output_dir / "adapter_tensor_roundtrip.json"
+        if _roundtrip_path.is_file():
+            import json as _json_rt2
+            with open(_roundtrip_path) as _f_rt2:
+                _rt = _json_rt2.load(_f_rt2)
+            required_checks["adapter_tensor_roundtrip_pass"] = bool(
+                _rt.get("pass", False)
             )
 
     all_pass = all(
