@@ -74,11 +74,11 @@ supports_r2mu: false
 status:
   baseline_ready: true
   canary:
-    status: FAIL_NO_BEHAVIORAL_EFFECT
+    status: ENGINEERING_NEGATIVE
     research_evidence_eligible: false
     gates_passed: 21
     total_gates: 23
-    note: "Tensors change (128/128 roundtrip) but behavior identical to base. DV 0.930->0.950 preservation PASS."
+    note: "Mechanics work (128/128 roundtrip, preservation PASS) but no behavioral effect. Multimodal diagnostics need further repair."
   full_run:
     status: NOT_RUN
     research_evidence_eligible: false

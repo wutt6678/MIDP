@@ -921,18 +921,21 @@ def _compute_reload_scores(
 
 
 def _verify_adapter_composition(model: Any, profile: Any) -> dict:
-    """P0-PHI-04: Verify active adapters after reload.
+    """P0-PHI-01/02/03/04: Verify active adapters after reload.
 
-    Checks input-mode adapter routing:
-    - Text-only mode: only ``unlearning`` active on language layers
-    - Image+text mode: ``vision`` + ``unlearning`` active as appropriate
-    - Speech adapter must not be active in ordinary image/text eval
+    P0-PHI-01: Count only real unlearning LoRA modules (exactly expected count).
+    A module counts as real unlearning only if it has BOTH:
+      - "unlearning" in lora_A keys
+      - "unlearning" in lora_B keys
+    MLP layers with only vision/speech adapters are NOT counted.
+
+    P0-PHI-02/03: Text/image mode routing verification.
     """
     from peft.tuners.lora import LoraLayer
 
-    # Find all LoraLayers and categorize by path
+    # Find all LoraLayers and categorize
     lora_layers = []
-    unlearning_active_count = 0
+    real_unlearning_count = 0  # Modules with BOTH unlearning lora_A AND lora_B
     total_lora_count = 0
     speech_active_count = 0
     vision_active_count = 0
@@ -941,57 +944,55 @@ def _verify_adapter_composition(model: Any, profile: Any) -> dict:
         if isinstance(mod, LoraLayer):
             total_lora_count += 1
             active = list(mod.active_adapters)
-            available = list(mod.lora_A.keys())
+            available_a = set(mod.lora_A.keys())
+            available_b = set(mod.lora_B.keys())
             lora_layers.append({
                 "name": name,
                 "active_adapters": active,
-                "available_adapters": available,
+                "available_adapters": sorted(available_a | available_b),
             })
-            if "unlearning" in active:
-                unlearning_active_count += 1
+            # P0-PHI-01: Count only modules with BOTH unlearning A and B
+            if "unlearning" in available_a and "unlearning" in available_b:
+                real_unlearning_count += 1
             if "speech" in active:
                 speech_active_count += 1
             if "vision" in active:
                 vision_active_count += 1
 
-    # Determine expected counts based on model
-    expected_min = 0
+    # Determine expected count based on profile
+    expected_exact = 0
     if profile.key == "phi4_mm":
-        expected_min = profile.lora_expected_target_modules
+        expected_exact = profile.lora_expected_target_modules
 
-    # Text-mode check: unlearning active, speech NOT active
+    # Text-mode check: exactly expected unlearning modules, speech NOT active
     text_mode_pass = (
-        unlearning_active_count >= expected_min
-        if expected_min > 0
-        else unlearning_active_count > 0
+        real_unlearning_count == expected_exact
+        if expected_exact > 0
+        else real_unlearning_count > 0
     ) and speech_active_count == 0
 
-    # Build per-mode reports
     text_mode = {
         "pass": text_mode_pass,
-        "unlearning_active": unlearning_active_count,
-        "expected_min": expected_min,
+        "real_unlearning_count": real_unlearning_count,
+        "expected_exact": expected_exact,
         "speech_active": speech_active_count,
         "speech_must_be_zero": True,
     }
 
-    # Image-mode check: vision functionality available + unlearning active
-    # For Phi, vision is handled by native PEFT adapters, not LoRA layers.
-    # We check that vision adapter exists in available adapters on some layers.
-    # Image-mode check: vision adapter exists + unlearning active + speech inactive
+    # Image-mode check: vision adapter exists + exact unlearning + speech inactive
     has_vision_adapter = any(
         "vision" in layer["available_adapters"]
         for layer in lora_layers
     )
     image_mode_pass = (
         has_vision_adapter
-        and (unlearning_active_count >= expected_min if expected_min > 0 else unlearning_active_count > 0)
+        and (real_unlearning_count == expected_exact if expected_exact > 0 else real_unlearning_count > 0)
         and speech_active_count == 0
     )
     image_mode = {
         "pass": image_mode_pass,
         "vision_available": has_vision_adapter,
-        "unlearning_active": unlearning_active_count,
+        "real_unlearning_count": real_unlearning_count,
         "speech_active": speech_active_count,
     }
 
@@ -1000,6 +1001,8 @@ def _verify_adapter_composition(model: Any, profile: Any) -> dict:
     return {
         "pass": overall_pass,
         "total_lora_layers": total_lora_count,
+        "real_unlearning_count": real_unlearning_count,
+        "expected_exact": expected_exact,
         "text_mode": text_mode,
         "image_mode": image_mode,
         "sample_layers": lora_layers[:5],
@@ -1167,16 +1170,34 @@ def _run_candidate_scoring_sanity(
                 [cand_ids], dtype=prefix_ids.dtype, device=prefix_ids.device,
             )
             full_ids = torch.cat([prefix_ids, cand_tensor], dim=1)
-            full_mask = torch.ones_like(full_ids)
+
+            # P0-PHI-05: Preserve actual prefix attention mask
+            # Extend the real prefix mask with candidate-token visible positions
+            if "attention_mask" in prefix:
+                prefix_mask = prefix["attention_mask"]
+                cand_mask = torch.ones(
+                    1, len(cand_ids), dtype=prefix_mask.dtype, device=prefix_mask.device,
+                )
+                full_mask = torch.cat([prefix_mask, cand_mask], dim=1)
+            else:
+                full_mask = torch.ones_like(full_ids)
 
             # Phi requires input_mode for forward pass
             _scoring_input_mode = prefix.get("input_mode", torch.tensor([0])).to(device)
 
+            # Build forward kwargs preserving Phi-specific fields
+            _fwd_kwargs: dict = {
+                "input_ids": full_ids,
+                "attention_mask": full_mask,
+                "input_mode": _scoring_input_mode,
+            }
+            # Preserve Phi multimodal tensors if present
+            for _phi_key in ["input_image_embeds", "image_attention_mask", "image_sizes"]:
+                if _phi_key in prefix:
+                    _fwd_kwargs[_phi_key] = prefix[_phi_key]
+
             with torch.inference_mode():
-                outputs = base_model(
-                    input_ids=full_ids, attention_mask=full_mask,
-                    input_mode=_scoring_input_mode,
-                )
+                outputs = base_model(**_fwd_kwargs)
                 logits = outputs.logits
 
             manual_logp = 0.0
