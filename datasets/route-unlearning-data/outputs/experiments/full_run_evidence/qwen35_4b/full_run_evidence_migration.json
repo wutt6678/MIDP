@@ -1,0 +1,47 @@
+{
+  "migration_version": "1.0",
+  "migration_reason": "Qwen 50-step full run predates expanded provenance-binding schema and Phi-specific gate scoping",
+  "original_run_commit": "9c0e061",
+  "migration_commit": "PLACEHOLDER",
+  "model_key": "qwen35_4b",
+  "method_id": "candidate_margin_v1",
+  "seed": 17,
+  "steps": 50,
+  "git_commit_at_run": "9c0e061",
+  "git_dirty_at_run": false,
+  "profile_path": "configs/models/unlearning/qwen35_4b.yaml",
+  "gate_correction": {
+    "historical_total_gates": 23,
+    "inapplicable_phi_gates": [
+      "phi_causal_invariance_pass",
+      "phi_candidate_scoring_sanity_pass",
+      "phi_adapter_composition_pass"
+    ],
+    "applicable_gates": 20,
+    "applicable_passed": 19,
+    "failed_applicable_gate": "preservation_gate_pass",
+    "final_classification": "FAIL_BROAD_DEGRADATION"
+  },
+  "scientific_identity": {
+    "model_id": "Qwen/Qwen3.5-4B",
+    "dtype": "bfloat16",
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.05,
+    "expected_target_modules": 32,
+    "learning_rate": 1e-4,
+    "retain_weight": 0.1,
+    "configured_optimizer_steps": 50,
+    "effective_optimizer_steps": 50
+  },
+  "result_summary": {
+    "status": "FAIL_BROAD_DEGRADATION",
+    "gates_passed": 19,
+    "applicable_gates": 20,
+    "preservation_delta": -0.740,
+    "pre_dv": 0.990,
+    "post_dv": 0.250
+  },
+  "evidence_eligible": true,
+  "notes": "Phi-specific gates were incorrectly applied to Qwen run. Corrected count: 19/20 applicable gates. Preservation FAIL (delta=-0.740)."
+}
