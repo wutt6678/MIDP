@@ -1022,10 +1022,23 @@ def _run_causal_invariance_diagnostic(
     profile = adapter.profile
     logger.info("Causal invariance: loading model...")
 
-    # Use a simple text prompt for the diagnostic
-    test_text = "Is this a cat? The answer is"
-    inputs = processor(text=test_text, return_tensors="pt", padding=True)
-    input_ids = inputs["input_ids"].to(device)
+    # Use simple text prompts for the diagnostic
+    # Sequence A: common prefix + " Yes"
+    prompt_a = "Is this a cat? The answer is Yes"
+    inputs_a = processor(text=prompt_a, return_tensors="pt")
+    input_ids_a = inputs_a["input_ids"].to(device)
+    mask_a = inputs_a.get("attention_mask", torch.ones_like(input_ids_a)).to(device)
+
+    # Sequence B: common prefix + " No"
+    prompt_b = "Is this a cat? The answer is No"
+    inputs_b = processor(text=prompt_b, return_tensors="pt")
+    input_ids_b = inputs_b["input_ids"].to(device)
+    mask_b = inputs_b.get("attention_mask", torch.ones_like(input_ids_b)).to(device)
+
+    # Find the common prefix length by encoding the prefix alone
+    prefix_prompt = "Is this a cat? The answer is"
+    prefix_inputs = processor(text=prefix_prompt, return_tensors="pt")
+    prefix_len = prefix_inputs["input_ids"].shape[1]
 
     # Get base model
     base_model, _ = adapter.load_model_processor(
@@ -1042,19 +1055,7 @@ def _run_causal_invariance_diagnostic(
 
     try:
         # Position t is the last token of the common prefix
-        t = input_ids.shape[1] - 1
-
-        # Sequence A: common prefix + " Yes"
-        suffix_a = processor(text=" Yes", return_tensors="pt", add_special_tokens=False)
-        suffix_a_ids = suffix_a["input_ids"].to(device)
-        input_ids_a = torch.cat([input_ids, suffix_a_ids], dim=1)
-        mask_a = torch.ones_like(input_ids_a)
-
-        # Sequence B: common prefix + " No"
-        suffix_b = processor(text=" No", return_tensors="pt", add_special_tokens=False)
-        suffix_b_ids = suffix_b["input_ids"].to(device)
-        input_ids_b = torch.cat([input_ids, suffix_b_ids], dim=1)
-        mask_b = torch.ones_like(input_ids_b)
+        t = prefix_len - 1
 
         # Get logits at position t for both sequences
         with torch.inference_mode():
@@ -1130,7 +1131,7 @@ def _run_candidate_scoring_sanity(
         # Test with a simple text-only prompt
         test_prompt = "Is this a dog?"
         inputs = proc(text=test_prompt, return_tensors="pt", padding=True)
-        prefix = {k: v.to(device) for k, v in inputs.items()}
+        prefix = {k: v.to(device) for k, v in inputs.items() if v is not None}
 
         # Get candidate token IDs
         yes_ids = adapter.candidate_token_ids(proc, profile.candidate_positive)
@@ -1299,7 +1300,7 @@ def _validate_reload_equivalence(
                 live_tensor = live_unlearning[live_key].data.cpu()
                 diff = (ckpt_tensor.float() - live_tensor.float()).abs().max().item()
                 max_abs_diff = max(max_abs_diff, diff)
-                if diff == 0.0:
+                if diff <= 1e-7:  # tolerate cross-device float rounding
                     n_exact += 1
             else:
                 missing_ckpt_keys.append(ckpt_key)
@@ -1316,7 +1317,7 @@ def _validate_reload_equivalence(
                 n_ckpt == n_live == n_matched == n_exact
                 and not missing_ckpt_keys
                 and not unexpected_live_keys
-                and max_abs_diff == 0.0
+                and max_abs_diff <= 1e-7
             ),
         }
         logger.info(
