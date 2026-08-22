@@ -1,5 +1,81 @@
 {
   "models": {
+    "qwen35_4b": {
+      "baseline": {
+        "status": "VALID",
+        "issues": []
+      },
+      "canary": {
+        "status": "VALID_POSITIVE",
+        "issues": [
+          "20/20 gates",
+          "[legacy] execution_provenance.json covered by migration sidecar",
+          "profile SHA mismatch: stored=3e2592cbb239... actual=3f917a78e120..."
+        ]
+      },
+      "full_run": {
+        "status": "VALID_NEGATIVE",
+        "issues": [
+          "20/23 gates"
+        ]
+      }
+    },
+    "gemma3_12b": {
+      "baseline": {
+        "status": "VALID",
+        "issues": []
+      },
+      "canary": {
+        "status": "VALID_POSITIVE",
+        "issues": [
+          "18/18 gates",
+          "[legacy] execution_provenance.json, adapter_reload_integrity.json, adapter_tensor_roundtrip.json covered by migration sidecar",
+          "profile SHA mismatch: stored=dae604988e24... actual=28945ea8d5bd..."
+        ]
+      },
+      "full_run": {
+        "status": "VALID_NEGATIVE",
+        "issues": [
+          "19/20 gates"
+        ]
+      }
+    },
+    "glm46v_flash": {
+      "baseline": {
+        "status": "VALID",
+        "issues": []
+      },
+      "canary": {
+        "status": "VALID_NEGATIVE",
+        "issues": [
+          "0/0 gates",
+          "[legacy] execution_provenance.json, adapter_reload_integrity.json, adapter_tensor_roundtrip.json covered by migration sidecar",
+          "profile SHA mismatch: stored=2f5a686dbb4f... actual=80fb3865d39e..."
+        ]
+      },
+      "full_run": {
+        "status": "NOT_RUN",
+        "issues": []
+      }
+    },
+    "internvl35_8b_hf": {
+      "baseline": {
+        "status": "VALID",
+        "issues": []
+      },
+      "canary": {
+        "status": "VALID_NEGATIVE",
+        "issues": [
+          "19/20 gates",
+          "[legacy] execution_provenance.json covered by migration sidecar",
+          "profile SHA mismatch: stored=84b1feb07923... actual=919baef1a118..."
+        ]
+      },
+      "full_run": {
+        "status": "NOT_RUN",
+        "issues": []
+      }
+    },
     "phi4_mm": {
       "baseline": {
         "status": "VALID",
@@ -8,7 +84,7 @@
       "canary": {
         "status": "VALID_NEGATIVE",
         "issues": [
-          "21/23 gates, FAIL"
+          "21/23 gates"
         ]
       },
       "full_run": {

@@ -1,0 +1,33 @@
+{
+  "migration_version": "1.0",
+  "migration_reason": "Historical canary predates expanded execution_provenance schema",
+  "original_run_commit": "74f7795",
+  "migration_commit": "PLACEHOLDER",
+  "model_key": "glm46v_flash",
+  "method_id": "candidate_margin_v1",
+  "seed": 17,
+  "steps": 1,
+  "git_commit_at_run": "74f7795",
+  "git_dirty_at_run": false,
+  "profile_path": "configs/models/unlearning/glm46v_flash.yaml",
+  "scientific_identity": {
+    "model_id": "THUDM/glm-4.6v-flash",
+    "dtype": "bfloat16",
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.05,
+    "expected_target_modules": 160,
+    "learning_rate": 1e-4,
+    "retain_weight": 0.1
+  },
+  "result_summary": {
+    "status": "FAIL_BROAD_DEGRADATION",
+    "gates_passed": 17,
+    "total_gates": 18,
+    "preservation_delta": -0.15,
+    "pre_dv": 0.85,
+    "post_dv": 0.70
+  },
+  "evidence_eligible": true,
+  "notes": "Broad degradation at canary stage. No full run justified."
+}

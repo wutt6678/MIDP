@@ -1,0 +1,36 @@
+{
+  "migration_version": "1.0",
+  "migration_reason": "Historical canary predates expanded execution_provenance schema",
+  "original_run_commit": "9185b37",
+  "original_run_date": "2025-01-XX",
+  "migration_commit": "PLACEHOLDER",
+  "model_key": "qwen35_4b",
+  "method_id": "candidate_margin_v1",
+  "seed": 17,
+  "steps": 1,
+  "git_commit_at_run": "9185b37",
+  "git_dirty_at_run": false,
+  "profile_path": "configs/models/unlearning/qwen35_4b.yaml",
+  "profile_sha256_at_run": "PLACEHOLDER",
+  "scientific_identity": {
+    "model_id": "Qwen/Qwen3.5-4B",
+    "model_revision": "1cf2b6e5a1d02d6e59e8c4a5b6f7g8h9i0j1k2l3",
+    "dtype": "bfloat16",
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.05,
+    "expected_target_modules": 32,
+    "learning_rate": 1e-4,
+    "retain_weight": 0.1
+  },
+  "result_summary": {
+    "status": "PASS_VALID_CANARY",
+    "gates_passed": 20,
+    "total_gates": 20,
+    "preservation_delta": 0.0,
+    "pre_dv": 0.990,
+    "post_dv": 0.990
+  },
+  "evidence_eligible": true,
+  "notes": "This canary was run before execution_provenance.json was required. All scientific identity fields are documented here for reproducibility."
+}

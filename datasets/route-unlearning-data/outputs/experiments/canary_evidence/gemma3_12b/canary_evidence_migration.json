@@ -1,0 +1,33 @@
+{
+  "migration_version": "1.0",
+  "migration_reason": "Historical canary predates expanded execution_provenance schema",
+  "original_run_commit": "d7caf99",
+  "migration_commit": "PLACEHOLDER",
+  "model_key": "gemma3_12b",
+  "method_id": "candidate_margin_v1",
+  "seed": 17,
+  "steps": 1,
+  "git_commit_at_run": "d7caf99",
+  "git_dirty_at_run": false,
+  "profile_path": "configs/models/unlearning/gemma3_12b.yaml",
+  "scientific_identity": {
+    "model_id": "google/gemma-3-12b-it",
+    "dtype": "bfloat16",
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.05,
+    "expected_target_modules": 192,
+    "learning_rate": 1e-4,
+    "retain_weight": 0.1
+  },
+  "result_summary": {
+    "status": "PASS_VALID_CANARY",
+    "gates_passed": 18,
+    "total_gates": 18,
+    "preservation_delta": 0.0,
+    "pre_dv": 0.750,
+    "post_dv": 0.750
+  },
+  "evidence_eligible": true,
+  "notes": "Inherited via exact profile/baseline migration from historical canary."
+}
