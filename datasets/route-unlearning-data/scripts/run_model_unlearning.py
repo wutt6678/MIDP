@@ -1298,14 +1298,32 @@ def _validate_reload_equivalence(
         unexpected_live_keys = set(live_unlearning.keys())
 
         for ckpt_key, ckpt_tensor in ckpt_tensors.items():
-            # Try direct key match first, then remapped key.
+            # Try multiple key matching strategies
             live_key = None
             if ckpt_key in live_unlearning:
                 live_key = ckpt_key
             else:
+                # Try adapter name remapping
                 remapped = _remap_adapter_key(ckpt_key, "unlearning")
                 if remapped in live_unlearning:
                     live_key = remapped
+                # Try adding/removing 'model.' prefix
+                elif ckpt_key.startswith("model."):
+                    stripped = ckpt_key[6:]  # remove 'model.'
+                    if stripped in live_unlearning:
+                        live_key = stripped
+                    else:
+                        remapped_stripped = _remap_adapter_key(stripped, "unlearning")
+                        if remapped_stripped in live_unlearning:
+                            live_key = remapped_stripped
+                else:
+                    prefixed = "model." + ckpt_key
+                    if prefixed in live_unlearning:
+                        live_key = prefixed
+                    else:
+                        remapped_prefixed = _remap_adapter_key(prefixed, "unlearning")
+                        if remapped_prefixed in live_unlearning:
+                            live_key = remapped_prefixed
 
             if live_key is not None:
                 n_matched += 1
