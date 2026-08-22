@@ -1,0 +1,64 @@
+{
+  "pass": false,
+  "total_lora_layers": 192,
+  "text_mode": {
+    "pass": true,
+    "unlearning_active": 192,
+    "expected_min": 0,
+    "speech_active": 0,
+    "speech_must_be_zero": true
+  },
+  "image_mode": {
+    "pass": false,
+    "vision_available": false,
+    "unlearning_active": 192,
+    "speech_active": 0
+  },
+  "sample_layers": [
+    {
+      "name": "base_model.model.model.language_model.layers.0.self_attn.q_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.0.self_attn.k_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.0.self_attn.v_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.0.self_attn.o_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.1.self_attn.q_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    }
+  ]
+}

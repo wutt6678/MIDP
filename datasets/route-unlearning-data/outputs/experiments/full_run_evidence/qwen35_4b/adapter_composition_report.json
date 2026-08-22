@@ -1,0 +1,64 @@
+{
+  "pass": true,
+  "total_lora_layers": 32,
+  "text_mode": {
+    "pass": true,
+    "unlearning_active": 32,
+    "expected_min": 0,
+    "speech_active": 0,
+    "speech_must_be_zero": true
+  },
+  "image_mode": {
+    "pass": true,
+    "vision_available": false,
+    "unlearning_active": 32,
+    "note": "Vision routing is via native PEFT adapters, not LoRA layers"
+  },
+  "sample_layers": [
+    {
+      "name": "base_model.model.model.language_model.layers.3.self_attn.q_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.3.self_attn.k_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.3.self_attn.v_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.3.self_attn.o_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    },
+    {
+      "name": "base_model.model.model.language_model.layers.7.self_attn.q_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "unlearning"
+      ]
+    }
+  ]
+}

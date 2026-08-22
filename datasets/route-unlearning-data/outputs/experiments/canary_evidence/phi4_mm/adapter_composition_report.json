@@ -1,0 +1,72 @@
+{
+  "pass": true,
+  "total_lora_layers": 128,
+  "text_mode": {
+    "pass": true,
+    "unlearning_active": 128,
+    "expected_min": 64,
+    "speech_active": 0,
+    "speech_must_be_zero": true
+  },
+  "image_mode": {
+    "pass": true,
+    "vision_available": true,
+    "unlearning_active": 128,
+    "speech_active": 0
+  },
+  "sample_layers": [
+    {
+      "name": "model.layers.0.self_attn.o_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "vision",
+        "speech",
+        "unlearning"
+      ]
+    },
+    {
+      "name": "model.layers.0.self_attn.qkv_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "vision",
+        "speech",
+        "unlearning"
+      ]
+    },
+    {
+      "name": "model.layers.0.mlp.gate_up_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "vision",
+        "speech"
+      ]
+    },
+    {
+      "name": "model.layers.0.mlp.down_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "vision",
+        "speech"
+      ]
+    },
+    {
+      "name": "model.layers.1.self_attn.o_proj",
+      "active_adapters": [
+        "unlearning"
+      ],
+      "available_adapters": [
+        "vision",
+        "speech",
+        "unlearning"
+      ]
+    }
+  ]
+}
