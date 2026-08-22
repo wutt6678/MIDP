@@ -97,22 +97,69 @@ def _package_model(model_key: str, mode: str = "canary") -> tuple[bool, list[str
         if src.is_file():
             shutil.copy2(src, evidence_dir / extra)
 
-    # Verify manifest SHA references
+    # P0-EVIDENCE-01: Verify artifact SHAs using explicit mapping
+    SHA_FILE_MAP = {
+        "execution_provenance_sha256": "execution_provenance.json",
+        "preservation_report_sha256": "preservation_report.json",
+        "reload_validation_sha256": "reload_validation.json",
+        "parameter_inventory_sha256": "parameter_inventory.json",
+        "behavioral_effect_sha256": "behavioral_effect_validation.json",
+        "exact_probe_match_sha256": "exact_probe_match.json",
+        "group_family_metrics_sha256": "group_family_metrics.json",
+    }
+
     manifest_path = evidence_dir / "run_manifest.json"
+    manifest_sha_valid = True
     if manifest_path.is_file():
         with open(manifest_path) as f:
             manifest = json.load(f)
-        for key, val in manifest.items():
-            if key.endswith("_sha256") and isinstance(val, str) and val:
-                # Find corresponding file
-                file_key = key.replace("_sha256", "")
-                file_name = manifest.get(file_key, "")
-                if isinstance(file_name, str) and file_name:
-                    fpath = evidence_dir / file_name
-                    if fpath.is_file():
-                        actual = _file_sha256(fpath)
-                        if actual != val:
-                            errors.append(f"SHA mismatch: {file_name}")
+        for sha_key, filename in SHA_FILE_MAP.items():
+            stored_sha = manifest.get(sha_key, "")
+            if stored_sha:
+                fpath = evidence_dir / filename
+                if fpath.is_file():
+                    actual = _file_sha256(fpath)
+                    if actual != stored_sha:
+                        errors.append(f"SHA mismatch: {filename}")
+                        manifest_sha_valid = False
+
+    # P0-EVIDENCE-02: Validate run binding
+    binding_path = evidence_dir / "run_binding.json"
+    run_binding_valid = True
+    if binding_path.is_file() and manifest_path.is_file():
+        with open(binding_path) as f:
+            binding = json.load(f)
+        # Verify manifest SHA in binding
+        stored_manifest_sha = binding.get("run_manifest_sha256", "")
+        if stored_manifest_sha:
+            actual_manifest_sha = _file_sha256(manifest_path)
+            if actual_manifest_sha != stored_manifest_sha:
+                errors.append("run_manifest SHA mismatch in binding")
+                run_binding_valid = False
+        # Verify execution provenance SHA in binding
+        stored_prov_sha = binding.get("execution_provenance_sha256", "")
+        if stored_prov_sha:
+            prov_path = evidence_dir / "execution_provenance.json"
+            if prov_path.is_file():
+                actual_prov_sha = _file_sha256(prov_path)
+                if actual_prov_sha != stored_prov_sha:
+                    errors.append("execution_provenance SHA mismatch in binding")
+                    run_binding_valid = False
+
+    # P0-EVIDENCE-03: Write bundle-level validation
+    required_complete = len(errors) == 0
+    validation = {
+        "pass": required_complete,
+        "required_files_complete": required_complete,
+        "manifest_sha_valid": manifest_sha_valid,
+        "run_binding_valid": run_binding_valid,
+        "artifact_sha_valid": manifest_sha_valid,
+        "mode": mode,
+        "model_key": model_key,
+    }
+    with open(evidence_dir / "evidence_bundle_validation.json", "w") as f:
+        json.dump(validation, f, indent=2)
+        f.write("\n")
 
     return len(errors) == 0, errors
 
