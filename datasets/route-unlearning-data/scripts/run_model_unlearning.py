@@ -1057,10 +1057,19 @@ def _run_causal_invariance_diagnostic(
         # Position t is the last token of the common prefix
         t = prefix_len - 1
 
+        # Phi requires input_mode for forward pass (0=LANGUAGE for text-only)
+        _input_mode = inputs_a.get("input_mode", torch.tensor([0])).to(device)
+
         # Get logits at position t for both sequences
         with torch.inference_mode():
-            outputs_a = base_model(input_ids=input_ids_a, attention_mask=mask_a)
-            outputs_b = base_model(input_ids=input_ids_b, attention_mask=mask_b)
+            outputs_a = base_model(
+                input_ids=input_ids_a, attention_mask=mask_a,
+                input_mode=_input_mode,
+            )
+            outputs_b = base_model(
+                input_ids=input_ids_b, attention_mask=mask_b,
+                input_mode=_input_mode,
+            )
 
         logits_a_t = outputs_a.logits[0, t, :].float()
         logits_b_t = outputs_b.logits[0, t, :].float()
@@ -1160,9 +1169,13 @@ def _run_candidate_scoring_sanity(
             full_ids = torch.cat([prefix_ids, cand_tensor], dim=1)
             full_mask = torch.ones_like(full_ids)
 
+            # Phi requires input_mode for forward pass
+            _scoring_input_mode = prefix.get("input_mode", torch.tensor([0])).to(device)
+
             with torch.inference_mode():
                 outputs = base_model(
                     input_ids=full_ids, attention_mask=full_mask,
+                    input_mode=_scoring_input_mode,
                 )
                 logits = outputs.logits
 
