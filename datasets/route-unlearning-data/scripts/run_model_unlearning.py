@@ -1040,52 +1040,52 @@ def _run_causal_invariance_diagnostic(
         p.requires_grad = False
     base_model.eval()
 
-    # Position t is the last token of the common prefix
-    t = input_ids.shape[1] - 1
+    try:
+        # Position t is the last token of the common prefix
+        t = input_ids.shape[1] - 1
 
-    # Sequence A: common prefix + " Yes"
-    suffix_a = processor(text=" Yes", return_tensors="pt", add_special_tokens=False)
-    suffix_a_ids = suffix_a["input_ids"].to(device)
-    input_ids_a = torch.cat([input_ids, suffix_a_ids], dim=1)
-    mask_a = torch.ones_like(input_ids_a)
+        # Sequence A: common prefix + " Yes"
+        suffix_a = processor(text=" Yes", return_tensors="pt", add_special_tokens=False)
+        suffix_a_ids = suffix_a["input_ids"].to(device)
+        input_ids_a = torch.cat([input_ids, suffix_a_ids], dim=1)
+        mask_a = torch.ones_like(input_ids_a)
 
-    # Sequence B: common prefix + " No"
-    suffix_b = processor(text=" No", return_tensors="pt", add_special_tokens=False)
-    suffix_b_ids = suffix_b["input_ids"].to(device)
-    input_ids_b = torch.cat([input_ids, suffix_b_ids], dim=1)
-    mask_b = torch.ones_like(input_ids_b)
+        # Sequence B: common prefix + " No"
+        suffix_b = processor(text=" No", return_tensors="pt", add_special_tokens=False)
+        suffix_b_ids = suffix_b["input_ids"].to(device)
+        input_ids_b = torch.cat([input_ids, suffix_b_ids], dim=1)
+        mask_b = torch.ones_like(input_ids_b)
 
-    # Get logits at position t for both sequences
-    with torch.inference_mode():
-        outputs_a = base_model(input_ids=input_ids_a, attention_mask=mask_a)
-        outputs_b = base_model(input_ids=input_ids_b, attention_mask=mask_b)
+        # Get logits at position t for both sequences
+        with torch.inference_mode():
+            outputs_a = base_model(input_ids=input_ids_a, attention_mask=mask_a)
+            outputs_b = base_model(input_ids=input_ids_b, attention_mask=mask_b)
 
-    logits_a_t = outputs_a.logits[0, t, :].float()
-    logits_b_t = outputs_b.logits[0, t, :].float()
+        logits_a_t = outputs_a.logits[0, t, :].float()
+        logits_b_t = outputs_b.logits[0, t, :].float()
 
-    # Compare
-    max_diff = (logits_a_t - logits_b_t).abs().max().item()
-    mean_diff = (logits_a_t - logits_b_t).abs().mean().item()
+        # Compare
+        max_diff = (logits_a_t - logits_b_t).abs().max().item()
+        mean_diff = (logits_a_t - logits_b_t).abs().mean().item()
 
-    report = {
-        "test_description": "causal_invariance",
-        "common_prefix_length": t,
-        "suffix_a": " Yes",
-        "suffix_b": " No",
-        "logits_at_t_max_abs_diff": max_diff,
-        "logits_at_t_mean_abs_diff": mean_diff,
-        "tolerance": 1e-5,
-        "pass": max_diff < 1e-5,
-    }
+        report = {
+            "test_description": "causal_invariance",
+            "common_prefix_length": t,
+            "suffix_a": " Yes",
+            "suffix_b": " No",
+            "logits_at_t_max_abs_diff": max_diff,
+            "logits_at_t_mean_abs_diff": mean_diff,
+            "tolerance": 1e-5,
+            "pass": max_diff < 1e-5,
+        }
 
-    logger.info(
-        f"Causal invariance: max_diff={max_diff:.2e}, "
-        f"{'PASS' if report['pass'] else 'FAIL'}"
-    )
-
-    # Cleanup
-    del base_model
-    torch.cuda.empty_cache()
+        logger.info(
+            f"Causal invariance: max_diff={max_diff:.2e}, "
+            f"{'PASS' if report['pass'] else 'FAIL'}"
+        )
+    finally:
+        del base_model
+        torch.cuda.empty_cache()
 
     if output_dir is not None:
         with open(output_dir / "phi_causal_invariance_report.json", "w") as f:
@@ -1126,88 +1126,82 @@ def _run_candidate_scoring_sanity(
         p.requires_grad = False
     base_model.eval()
 
-    # Test with a simple text-only prompt
-    test_prompt = "Is this a dog?"
-    inputs = proc(text=test_prompt, return_tensors="pt", padding=True)
-    prefix = {k: v.to(device) for k, v in inputs.items()}
+    try:
+        # Test with a simple text-only prompt
+        test_prompt = "Is this a dog?"
+        inputs = proc(text=test_prompt, return_tensors="pt", padding=True)
+        prefix = {k: v.to(device) for k, v in inputs.items()}
 
-    # Get candidate token IDs
-    yes_ids = adapter.candidate_token_ids(proc, profile.candidate_positive)
-    no_ids = adapter.candidate_token_ids(proc, profile.candidate_negative)
+        # Get candidate token IDs
+        yes_ids = adapter.candidate_token_ids(proc, profile.candidate_positive)
+        no_ids = adapter.candidate_token_ids(proc, profile.candidate_negative)
 
-    # Backend scores (via shared scorer)
-    with torch.inference_mode():
-        backend_yes = score_candidate_sequence_tensor(
-            base_model, prefix, yes_ids, adapter=adapter,
-        ).item()
-        backend_no = score_candidate_sequence_tensor(
-            base_model, prefix, no_ids, adapter=adapter,
-        ).item()
-
-    # Independent manual accumulation:
-    # Build full input = prefix + candidate tokens
-    # Run single forward pass, get logits at candidate positions
-    # Compute log_softmax, gather candidate token log-probs, sum them
-    cases: list[dict] = []
-    tol = 1e-4
-    all_pass = True
-
-    for label, cand_ids in [("Yes", yes_ids), ("No", no_ids)]:
-        prefix_ids = prefix["input_ids"]
-        prefix_len = prefix_ids.shape[1]
-        cand_tensor = torch.tensor(
-            [cand_ids], dtype=prefix_ids.dtype, device=prefix_ids.device,
-        )
-        full_ids = torch.cat([prefix_ids, cand_tensor], dim=1)
-
-        # Build full attention mask
-        full_mask = torch.ones_like(full_ids)
-
+        # Backend scores (via shared scorer)
         with torch.inference_mode():
-            outputs = base_model(
-                input_ids=full_ids, attention_mask=full_mask,
+            backend_yes = score_candidate_sequence_tensor(
+                base_model, prefix, yes_ids, adapter=adapter,
+            ).item()
+            backend_no = score_candidate_sequence_tensor(
+                base_model, prefix, no_ids, adapter=adapter,
+            ).item()
+
+        # Independent manual accumulation
+        cases: list[dict] = []
+        tol = 1e-4
+        all_pass = True
+
+        for label, cand_ids in [("Yes", yes_ids), ("No", no_ids)]:
+            prefix_ids = prefix["input_ids"]
+            prefix_len = prefix_ids.shape[1]
+            cand_tensor = torch.tensor(
+                [cand_ids], dtype=prefix_ids.dtype, device=prefix_ids.device,
             )
-            logits = outputs.logits  # [1, seq_len, vocab]
+            full_ids = torch.cat([prefix_ids, cand_tensor], dim=1)
+            full_mask = torch.ones_like(full_ids)
 
-        # Compute log-prob at each candidate position
-        # P(c_i | prefix, c_<i) = log_softmax(logits[:, prefix_len+i-1])[c_i]
-        manual_logp = 0.0
-        for i, cid in enumerate(cand_ids):
-            pos = prefix_len + i - 1  # causal position
-            log_probs = F.log_softmax(logits[0, pos].float(), dim=-1)
-            manual_logp += log_probs[cid].item()
+            with torch.inference_mode():
+                outputs = base_model(
+                    input_ids=full_ids, attention_mask=full_mask,
+                )
+                logits = outputs.logits
 
-        backend_val = backend_yes if label == "Yes" else backend_no
-        diff = abs(backend_val - manual_logp)
-        case_pass = diff <= tol
-        if not case_pass:
-            all_pass = False
+            manual_logp = 0.0
+            for i, cid in enumerate(cand_ids):
+                pos = prefix_len + i - 1
+                log_probs = F.log_softmax(logits[0, pos].float(), dim=-1)
+                manual_logp += log_probs[cid].item()
 
-        cases.append({
-            "input_mode": "text_only",
-            "candidate": label,
-            "backend_logp": backend_val,
-            "manual_logp": manual_logp,
-            "abs_diff": diff,
-            "pass": case_pass,
-        })
+            backend_val = backend_yes if label == "Yes" else backend_no
+            diff = abs(backend_val - manual_logp)
+            case_pass = diff <= tol
+            if not case_pass:
+                all_pass = False
 
-    report = {
-        "test_description": "candidate_scoring_sanity",
-        "pass": all_pass,
-        "tolerance": tol,
-        "cases": cases,
-    }
+            cases.append({
+                "input_mode": "text_only",
+                "candidate": label,
+                "backend_logp": backend_val,
+                "manual_logp": manual_logp,
+                "abs_diff": diff,
+                "pass": case_pass,
+            })
 
-    logger.info(
-        f"Scoring sanity: {'PASS' if all_pass else 'FAIL'} "
-        f"(Yes diff={cases[0]['abs_diff']:.2e}, "
-        f"No diff={cases[1]['abs_diff']:.2e})"
-    )
+        report = {
+            "test_description": "candidate_scoring_sanity",
+            "pass": all_pass,
+            "tolerance": tol,
+            "cases": cases,
+        }
 
-    # Cleanup
-    del base_model
-    torch.cuda.empty_cache()
+        logger.info(
+            f"Scoring sanity: {'PASS' if all_pass else 'FAIL'} "
+            f"(Yes diff={cases[0]['abs_diff']:.2e}, "
+            f"No diff={cases[1]['abs_diff']:.2e})"
+        )
+    finally:
+        # Cleanup — always runs, even on exception
+        del base_model
+        torch.cuda.empty_cache()
 
     if output_dir is not None:
         with open(output_dir / "candidate_scoring_sanity.json", "w") as f:
@@ -2149,6 +2143,11 @@ def main() -> None:
                     ) as _f:
                         json.dump(_fail_report, _f, indent=2)
                         _f.write("\n")
+
+        # Ensure all GPU memory from diagnostics is freed before post-eval
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
 
         post_eval = run_post_evaluation(
             adapter=adapter,
