@@ -142,6 +142,7 @@ class ModelFamilyProfile:
     language_hidden_size: int = 0
     intermediate_size: int = 0
     num_language_layers: int = 0
+    lora_expected_target_modules: int = 0  # P0-SHARED-01: exact expected count
 
     # Method support flags
     supports_prompting: bool = True

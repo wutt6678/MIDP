@@ -238,6 +238,10 @@ def load_profile_from_yaml(path: str | Path) -> ModelFamilyProfile:
         lora_scope=lora.get("scope", "language_attention_only"),
         lora_target_leaf_names=tuple(raw_leaf_names),
         lora_scope_regex=lora.get("scope_regex", ""),
+        lora_expected_target_modules=_safe_int(
+            lora.get("expected_target_modules", 0),
+            "lora.expected_target_modules",
+        ) if "expected_target_modules" in lora else 0,
         r2mu_candidate_layers=tuple(raw_layers),
         r2mu_n_select_layers=_safe_int(
             structural.get("r2mu_n_select_layers", 0),

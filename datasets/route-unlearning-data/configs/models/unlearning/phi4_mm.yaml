@@ -26,6 +26,7 @@ lora:
   # for vision/speech; targeting the LoraLayer name triggers update_layer().
   scope_regex: "^model\\.layers\\.\\d+\\.(self_attn)\\.(qkv_proj|o_proj)$"
   target_leaf_names: [qkv_proj, o_proj]
+  expected_target_modules: 64  # 32 layers × 2 fused projections
 
 structural:
   language_layer_path: "model.layers"

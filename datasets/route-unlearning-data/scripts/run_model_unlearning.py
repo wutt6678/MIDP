@@ -1642,30 +1642,25 @@ def main() -> None:
     lora_targets = adapter.resolve_lora_targets(model)
     logger.info(f"LoRA targets: {len(lora_targets)} modules")
 
-    # P0-SHARED-06: LoRA inventory gate.
-    # For standard architectures: expected = num_layers * n_targets.
-    # For hybrid architectures (e.g. Qwen3.5-4B with linear attention
-    # in some layers), the actual count may be less.  We log the
-    # expected count but only fail if zero targets are resolved.
-    _expected_modules = profile.num_language_layers * len(profile.lora_target_leaf_names)
-    if _expected_modules > 0 and len(lora_targets) != _expected_modules:
-        logger.warning(
-            f"P0-SHARED-06: LoRA inventory differs from full-layer expectation.\n"
-            f"  Expected (all layers): {profile.num_language_layers} x "
-            f"{len(profile.lora_target_leaf_names)} = {_expected_modules}\n"
-            f"  Resolved: {len(lora_targets)}\n"
-            f"  This is normal for hybrid architectures (e.g. linear "
-            f"attention layers lack self_attn modules)."
+    # P0-SHARED-01: Exact architecture-aware LoRA inventory gate.
+    # Uses the profile's explicit expected_target_modules field.
+    _expected = profile.lora_expected_target_modules
+    if _expected > 0 and len(lora_targets) != _expected:
+        raise RuntimeError(
+            f"P0-SHARED-01: LoRA inventory mismatch.\n"
+            f"  expected_target_modules={_expected}\n"
+            f"  resolved={len(lora_targets)}\n"
+            f"  target_leaf_names={list(profile.lora_target_leaf_names)}"
         )
     if len(lora_targets) == 0:
         raise RuntimeError(
-            "P0-SHARED-06: Zero LoRA targets resolved. "
+            "P0-SHARED-01: Zero LoRA targets resolved. "
             "Check lora.target_leaf_names and lora.scope_regex."
         )
     _expected_tensors = len(lora_targets) * 2  # A + B per module
     logger.info(
-        f"LoRA inventory: {len(lora_targets)} modules, "
-        f"{_expected_tensors} A/B tensors"
+        f"LoRA inventory: {len(lora_targets)} modules "
+        f"(expected={_expected}), {_expected_tensors} A/B tensors"
     )
 
     # Resolve LoRA config from method config (P0-16)
@@ -2122,7 +2117,8 @@ def main() -> None:
         required_checks["base_to_reload_effect_nonzero"] = bool(
             behavioural_effect.get("base_to_reload_effect_nonzero", False)
         )
-        # P0-C05: Exact probe matching is a required gate.
+        # P0-C05: Exact probe matching is a required gate (unconditional).
+        # P0-SHARED-03: Missing file or failed join = fail.
         if join_result is not None:
             _probe_val = _validate_probe_counts(
                 baseline_path, post_results_path, join_result,
@@ -2131,12 +2127,18 @@ def main() -> None:
             with open(output_dir / "exact_probe_match.json", "w") as f:
                 json.dump(_probe_val, f, indent=2)
                 f.write("\n")
+        else:
+            required_checks["exact_probe_match_pass"] = False
+
+        # P0-SHARED-04: Preservation gate (unconditional).
         if preservation:
             required_checks["preservation_gate_pass"] = bool(
                 preservation.get("gate_pass", False)
             )
+        else:
+            required_checks["preservation_gate_pass"] = False
 
-        # P0-SHARED-03/04: Adapter reload integrity + tensor roundtrip.
+        # P0-SHARED-02: Adapter reload integrity (unconditional).
         _reload_integrity_path = output_dir / "adapter_reload_integrity.json"
         if _reload_integrity_path.is_file():
             import json as _json_rt
@@ -2145,7 +2147,10 @@ def main() -> None:
             required_checks["adapter_reload_integrity_pass"] = bool(
                 _ri.get("pass", False)
             )
+        else:
+            required_checks["adapter_reload_integrity_pass"] = False
 
+        # P0-SHARED-02: Tensor roundtrip (unconditional).
         _roundtrip_path = output_dir / "adapter_tensor_roundtrip.json"
         if _roundtrip_path.is_file():
             import json as _json_rt2
@@ -2154,9 +2159,11 @@ def main() -> None:
             required_checks["adapter_tensor_roundtrip_pass"] = bool(
                 _rt.get("pass", False)
             )
+        else:
+            required_checks["adapter_tensor_roundtrip_pass"] = False
 
-        # P0-PHI-04: Phi-specific fail-closed diagnostic gates.
-        # If the diagnostic files exist, their pass status is required.
+        # P0-PHI-01: Phi-specific fail-closed diagnostic gates.
+        # Unconditional: missing file = fail.
         _phi_diag_files = {
             "phi_causal_invariance_pass": "phi_causal_invariance_report.json",
             "phi_candidate_scoring_sanity_pass": "candidate_scoring_sanity.json",
@@ -2171,6 +2178,8 @@ def main() -> None:
                 required_checks[gate_name] = bool(
                     _diag.get("pass", False)
                 )
+            else:
+                required_checks[gate_name] = False
 
     all_pass = all(
         v for k, v in required_checks.items()

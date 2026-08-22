@@ -23,6 +23,7 @@ lora:
   scope: language_attention_only
   target_leaf_names: [q_proj, k_proj, v_proj, o_proj]
   scope_regex: "^model\\.language_model\\.layers\\.\\d+\\.(self_attn)\\.(q_proj|k_proj|v_proj|o_proj)$"
+  expected_target_modules: 192  # 48 layers × 4 projections
 
 structural:
   language_layer_path: "model.language_model.layers"
