@@ -2155,6 +2155,23 @@ def main() -> None:
                 _rt.get("pass", False)
             )
 
+        # P0-PHI-04: Phi-specific fail-closed diagnostic gates.
+        # If the diagnostic files exist, their pass status is required.
+        _phi_diag_files = {
+            "phi_causal_invariance_pass": "phi_causal_invariance_report.json",
+            "phi_candidate_scoring_sanity_pass": "candidate_scoring_sanity.json",
+            "phi_adapter_composition_pass": "adapter_composition_report.json",
+        }
+        for gate_name, diag_file in _phi_diag_files.items():
+            _diag_path = output_dir / diag_file
+            if _diag_path.is_file():
+                import json as _json_phi
+                with open(_diag_path) as _f_phi:
+                    _diag = _json_phi.load(_f_phi)
+                required_checks[gate_name] = bool(
+                    _diag.get("pass", False)
+                )
+
     all_pass = all(
         v for k, v in required_checks.items()
         if isinstance(v, bool)
