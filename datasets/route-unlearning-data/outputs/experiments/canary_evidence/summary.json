@@ -1,0 +1,61 @@
+{
+  "schema_version": "canary-summary-v1",
+  "generated_at_commit": "74f7795",
+  "method_id": "candidate_margin_v1",
+  "seed": 17,
+  "steps": 1,
+  "models": {
+    "qwen35_4b": {
+      "status": "PASS_VALID_CANARY",
+      "gates_passed": 20,
+      "gates_total": 20,
+      "research_evidence_eligible": true,
+      "preservation": "absolute (DV 0.990 -> 0.990)",
+      "lora_modules": 32,
+      "lora_tensors": 64,
+      "notes": "Hybrid architecture: 8/32 layers with self-attention"
+    },
+    "gemma3_12b": {
+      "status": "PASS_VALID_CANARY",
+      "gates_passed": 18,
+      "gates_total": 18,
+      "research_evidence_eligible": true,
+      "preservation": "relative (DV 0.750 -> 0.750)",
+      "lora_modules": 192,
+      "lora_tensors": 384,
+      "notes": "Inherited via evidence migration (profile/baseline equivalence proven)"
+    },
+    "glm46v_flash": {
+      "status": "FAIL_BROAD_DEGRADATION",
+      "gates_passed": 17,
+      "gates_total": 18,
+      "research_evidence_eligible": false,
+      "preservation": "FAIL (delta=-0.15)",
+      "lora_modules": 160,
+      "lora_tensors": 320,
+      "notes": "Valid scientific negative — adapter works but not selective"
+    },
+    "internvl35_8b_hf": {
+      "status": "FAIL_BROAD_DEGRADATION",
+      "gates_passed": 19,
+      "gates_total": 20,
+      "research_evidence_eligible": false,
+      "preservation": "FAIL (DV 0.610 -> 0.530, delta=-0.080)",
+      "lora_modules": 144,
+      "lora_tensors": 288,
+      "notes": "Valid scientific negative — same pattern as GLM"
+    },
+    "phi4_mm": {
+      "status": "FAIL_BEHAVIOR_UNPROVEN",
+      "gates_passed": 15,
+      "gates_total": 18,
+      "research_evidence_eligible": false,
+      "preservation": "DV 0.930 -> 0.930 (pass, but no behavioral effect)",
+      "lora_modules": 64,
+      "lora_tensors": 128,
+      "notes": "Outcome C: tensors change but behavior zero. Post-eval OOM on available GPUs."
+    }
+  },
+  "full_run_eligible": ["qwen35_4b", "gemma3_12b"],
+  "full_run_not_eligible": ["glm46v_flash", "internvl35_8b_hf", "phi4_mm"]
+}
