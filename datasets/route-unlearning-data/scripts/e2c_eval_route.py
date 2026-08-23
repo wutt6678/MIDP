@@ -83,9 +83,12 @@ def evaluate_i2n_probe(
     probe: dict[str, Any],
     image: Any,
 ) -> dict[str, Any]:
-    """Evaluate an I2N probe using free-form generation."""
+    """Evaluate an I2N probe using free-form generation.
+
+    Uses max_new_tokens=5 to constrain output to alias name only.
+    """
     prompt = probe["prompt"]
-    response = backend.generate(image, prompt, max_new_tokens=10)
+    response = backend.generate(image, prompt, max_new_tokens=5)
 
     result = dict(probe)
     result.update({

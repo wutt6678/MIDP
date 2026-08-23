@@ -455,7 +455,7 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
     # Test prompts (kept distinct from training templates)
     "e2c_test_i2n_v1": {
         "family": "image_to_identity",
-        "text": "Who is shown?",
+        "text": "Who is shown? Answer with the synthetic identity name only.",
     },
     "e2c_test_name_v1": {
         "family": "name_to_attribute",
