@@ -545,6 +545,61 @@ def cmd_preflight(args):
         "errors": gen_errors[:10],
     }
 
+    # Gate 10: Calibration condition invariants
+    print("  Gate 10: Calibration condition invariants...")
+    try:
+        cal_cond_report = validate_condition_invariants(
+            cal_m, cal_d, cal_ms,
+            true_mapping=cal_true, shuffled_mapping=cal_shuf,
+        )
+        gates["calibration_condition_invariants"] = cal_cond_report
+    except ValueError as e:
+        gates["calibration_condition_invariants"] = {
+            "pass": False, "error": str(e)[:500],
+        }
+
+    # Gate 11: Calibration probe invariants
+    print("  Gate 11: Calibration probe invariants...")
+    from route_data.e2c.probe_builder import build_all_probes, validate_probes
+    cal_wn = generate_wrong_name_pairs(
+        cal_true, alias_map, seed=args.seed,
+    )
+    cal_probes = build_all_probes(
+        image_splits=image_splits,
+        alias_map=alias_map,
+        true_mapping=combined_true,
+        wn_pairs=cal_wn,
+        visual_controls=vc_records,
+        experimental_ids=cal_ids,
+    )
+    cal_test_count = len([
+        r for r in image_splits
+        if r["split"] == "test" and r["identity_id"] in set(cal_ids)
+    ])
+    try:
+        cal_probe_report = validate_probes(
+            cal_probes,
+            experimental_ids=cal_ids,
+            test_image_count=cal_test_count,
+        )
+        gates["calibration_probe_invariants"] = cal_probe_report
+    except ValueError as e:
+        gates["calibration_probe_invariants"] = {
+            "pass": False, "error": str(e)[:500],
+        }
+
+    # Gate 12: Visual controls distribution (R7 improvement)
+    print("  Gate 12: Visual controls distribution...")
+    test_img_ids = {
+        r["image_id"] for r in image_splits if r["split"] == "test"
+    }
+    dist_report = _check_visual_control_distribution(
+        vc_records, test_img_ids,
+        mandatory_families=mandatory_families,
+        min_per_class=3,
+    )
+    gates["visual_controls_distribution"] = dist_report
+
     # Overall
     all_pass = all(g.get("pass", False) for g in gates.values())
     preflight = {
@@ -640,6 +695,50 @@ def _build_splits_lookup(image_splits):
             lookup[id_] = {"train": [], "validation": [], "test": []}
         lookup[id_][rec["split"]].append(idx)
     return lookup
+
+
+def _check_visual_control_distribution(
+    vc_records: list[dict],
+    test_img_ids: set[str],
+    *,
+    mandatory_families: list[str],
+    min_per_class: int = 3,
+) -> dict[str, Any]:
+    """R7 improvement: check each mandatory control family has sufficient
+    positive and negative examples in the held-out test set.
+
+    Returns report dict.
+    """
+    errors: list[str] = []
+    distribution: dict[str, dict[str, int]] = {}
+
+    for fam in mandatory_families:
+        pos = 0
+        neg = 0
+        for rec in vc_records:
+            if rec["image_id"] not in test_img_ids:
+                continue
+            val = rec.get("controls", {}).get(fam)
+            if val is True:
+                pos += 1
+            elif val is False:
+                neg += 1
+        distribution[fam] = {"positives": pos, "negatives": neg}
+        if pos < min_per_class:
+            errors.append(
+                f"{fam}: only {pos} test positives "
+                f"(need >= {min_per_class})")
+        if neg < min_per_class:
+            errors.append(
+                f"{fam}: only {neg} test negatives "
+                f"(need >= {min_per_class})")
+
+    return {
+        "pass": len(errors) == 0,
+        "errors": errors,
+        "distribution": distribution,
+        "min_per_class": min_per_class,
+    }
 
 
 # --------------------------------------------------------------------------- #
