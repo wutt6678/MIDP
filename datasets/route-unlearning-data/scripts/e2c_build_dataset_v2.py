@@ -51,6 +51,7 @@ from route_data.e2c.route_validation import validate_leakage
 from route_data.e2c.synthetic_manifest import (
     DEFAULT_SEED,
     assign_aliases,
+    finalize_alias_tokenization,
     generate_calibration_mapping,
     generate_identity_ids,
     generate_image_splits,
@@ -110,14 +111,16 @@ def cmd_draft(args):
         for split_name in ("train", "validation", "test"):
             for idx in splits[id_][split_name]:
                 img_id = f"{id_}_img_{idx:03d}"
-                img_path = f"e2c/data/processed/{id_}/{img_id}.png"
+                # Fix 1: path relative to image_base_dir (not repo-root)
+                img_path = f"{id_}/{img_id}.png"
                 image_split_records.append({
                     "identity_id": id_,
                     "image_id": img_id,
                     "image_path": img_path,
                     "image_sha256": "",
-                    "source_render_id": f"render_{id_}_{idx:03d}",
-                    "generation_type": "independent_render",
+                    # Fix 2: source_render_id empty until ingestion populates
+                    "source_render_id": "",
+                    "generation_type": "",
                     "augmentation_parent_id": None,
                     "split": split_name,
                 })
@@ -167,7 +170,7 @@ def cmd_draft(args):
     sha = write_json_manifest(audit_records, manifest_dir / "e2c_identity_audit.json")
     shas["e2c_identity_audit"] = sha
 
-    # Visual controls
+    # Visual controls (Fix 7: mark as pending until real metadata ingested)
     visual_control_records = []
     for id_ in all_ids:
         for idx in range(16):
@@ -175,8 +178,8 @@ def cmd_draft(args):
             visual_control_records.append({
                 "image_id": img_id,
                 "identity_id": id_,
-                "controls": {"smiling": False, "eyeglasses": False, "hat": False},
-                "source": "generator_metadata",
+                "controls": {"smiling": None, "eyeglasses": None, "hat": None},
+                "source": "pending",
             })
     sha = write_json_manifest(visual_control_records, manifest_dir / "e2c_visual_controls.json")
     shas["e2c_visual_controls"] = sha
@@ -329,6 +332,29 @@ def cmd_finalize(args):
     )
     print(f"  Population isolation: {'PASS' if iso_report['pass'] else 'FAIL'}")
 
+    # Fix 5: Calibration condition invariants
+    print("[E2C-v2] Validating calibration condition invariants...")
+    try:
+        validate_condition_invariants(
+            cal_m, cal_d, cal_ms,
+            true_mapping=cal_true, shuffled_mapping=cal_shuf,
+        )
+        print("  Calibration invariants: PASS")
+    except ValueError as e:
+        print(f"  Calibration invariants: FAIL\n    {e}")
+
+    # Fix 5: Calibration probe validation
+    print("[E2C-v2] Validating calibration probes...")
+    cal_test_count = len([r for r in image_splits
+                          if r["split"] == "test"
+                          and r["identity_id"] in set(cal_ids)])
+    try:
+        validate_probes(cal_probes, experimental_ids=cal_ids,
+                        test_image_count=cal_test_count)
+        print("  Calibration probes: PASS")
+    except ValueError as e:
+        print(f"  Calibration probes: FAIL\n    {e}")
+
     print("\n[E2C-v2] Finalize complete.")
     print(f"  Experimental: {len(exp_m)} M, {len(exp_d)} D, {len(exp_ms)} M_shuf records")
     print(f"  Calibration:  {len(cal_m)} M, {len(cal_d)} D, {len(cal_ms)} M_shuf records")
@@ -410,9 +436,12 @@ def cmd_preflight(args):
     except ValueError as e:
         gates["leakage"] = {"pass": False, "error": str(e)[:500]}
 
-    # Gate 3: Audit completeness
+    # Gate 3: Audit completeness (hardened: semantic + coverage check)
     print("  Gate 3: Identity audit completeness...")
-    audit_report = validate_audit_completeness(audit)
+    expected_img_ids = [r["image_id"] for r in image_splits]
+    audit_report = validate_audit_completeness(
+        audit, expected_image_ids=expected_img_ids,
+    )
     gates["audit"] = audit_report
 
     # Gate 4: Alias tokenization
@@ -426,19 +455,29 @@ def cmd_preflight(args):
             "errors": ["Alias token IDs not yet populated"],
         }
 
-    # Gate 5: Population isolation
+    # Gate 5: Population isolation (Fix 6: check ALL 3 conditions)
     print("  Gate 5: Population isolation...")
     cal_true = load_json_manifest(manifest_dir / "synthetic_attribute_mapping_calibration.json")
     cal_shuf = load_json_manifest(manifest_dir / "synthetic_attribute_mapping_calibration_shuffled.json")
     combined_true = {**exp_true, **cal_true}
-    _combined_shuf = {**exp_shuf, **cal_shuf}  # noqa: F841
+    combined_shuf = {**exp_shuf, **cal_shuf}
     cal_m = build_condition_m(
         alias_map=alias_map, true_mapping=combined_true,
         image_splits=splits_lookup, identity_ids=cal_ids, seed=args.seed,
     )
+    cal_d = build_condition_d(
+        alias_map=alias_map, true_mapping=combined_true,
+        image_splits=splits_lookup, identity_ids=cal_ids, seed=args.seed,
+    )
+    cal_ms = build_condition_m_shuffled(
+        alias_map=alias_map, shuffled_mapping=combined_shuf,
+        image_splits=splits_lookup, identity_ids=cal_ids, seed=args.seed,
+    )
+    all_cal = cal_m + cal_d + cal_ms
+    all_exp = exp_m + exp_d + exp_ms
     iso_report = validate_population_isolation(
-        calibration_records=cal_m,
-        experimental_records=exp_m,
+        calibration_records=all_cal,
+        experimental_records=all_exp,
         calibration_ids=cal_ids,
         experimental_ids=exp_ids,
     )
@@ -462,6 +501,49 @@ def cmd_preflight(args):
         gates["condition_invariants"] = cond_report
     except ValueError as e:
         gates["condition_invariants"] = {"pass": False, "error": str(e)[:500]}
+
+    # Gate 8: Visual controls metadata (Fix 7)
+    print("  Gate 8: Visual controls metadata...")
+    vc_records = load_json_manifest(manifest_dir / "e2c_visual_controls.json")
+    vc_errors = []
+    mandatory_families = ["smiling", "eyeglasses", "hat"]
+    for rec in vc_records:
+        controls = rec.get("controls", {})
+        for fam in mandatory_families:
+            val = controls.get(fam)
+            if val is None:
+                vc_errors.append(
+                    f"{rec['image_id']}: {fam} is None (pending)")
+            elif not isinstance(val, bool):
+                vc_errors.append(
+                    f"{rec['image_id']}: {fam}={val!r} not bool")
+    gates["visual_controls"] = {
+        "pass": len(vc_errors) == 0,
+        "n_errors": len(vc_errors),
+        "errors": vc_errors[:10],
+    }
+
+    # Gate 9: generation_type enum (Fix 8)
+    print("  Gate 9: generation_type validation...")
+    valid_gen_types = {"independent_render", "augmentation"}
+    gen_errors = []
+    for rec in image_splits:
+        gt = rec.get("generation_type", "")
+        if not gt:
+            gen_errors.append(
+                f"{rec['image_id']}: generation_type is empty")
+        elif gt not in valid_gen_types:
+            gen_errors.append(
+                f"{rec['image_id']}: generation_type={gt!r} not in "
+                f"{valid_gen_types}")
+        if gt == "augmentation" and not rec.get("augmentation_parent_id"):
+            gen_errors.append(
+                f"{rec['image_id']}: augmentation without parent_id")
+    gates["generation_type"] = {
+        "pass": len(gen_errors) == 0,
+        "n_errors": len(gen_errors),
+        "errors": gen_errors[:10],
+    }
 
     # Overall
     all_pass = all(g.get("pass", False) for g in gates.values())
@@ -502,6 +584,49 @@ def cmd_preflight(args):
 
 
 # --------------------------------------------------------------------------- #
+# Tokenize aliases (Fix 4)
+# --------------------------------------------------------------------------- #
+
+def cmd_tokenize_aliases(args):
+    """Tokenize all aliases with the frozen Qwen tokenizer."""
+    out = Path(args.output_dir)
+    manifest_dir = out / "manifests"
+
+    print(f"[E2C-v2] Loading tokenizer: {args.tokenizer} @ {args.tokenizer_revision}")
+    from transformers import AutoProcessor
+    proc = AutoProcessor.from_pretrained(
+        args.tokenizer,
+        revision=args.tokenizer_revision,
+        trust_remote_code=True,
+    )
+    tokenizer = getattr(proc, "tokenizer", proc)
+
+    alias_manifest = load_json_manifest(
+        manifest_dir / "synthetic_identity_manifest.json"
+    )
+    alias_map = {r["identity_id"]: r["alias"] for r in alias_manifest}
+
+    print(f"[E2C-v2] Tokenizing {len(alias_map)} aliases...")
+    token_records = finalize_alias_tokenization(
+        alias_map, tokenizer,
+        tokenizer_id=args.tokenizer,
+        tokenizer_revision=args.tokenizer_revision,
+    )
+
+    # Validate
+    tok_report = validate_alias_tokenization(token_records)
+    print(f"  Tokenization: {'PASS' if tok_report['pass'] else 'FAIL'}")
+    print(f"  min={tok_report['min_token_count']}, "
+          f"max={tok_report['max_token_count']}, "
+          f"mean={tok_report['mean_token_count']:.1f}")
+
+    # Write updated manifest
+    sha = write_json_manifest(token_records,
+                              manifest_dir / "synthetic_identity_manifest.json")
+    print(f"  Updated manifest SHA: {sha[:16]}...")
+
+
+# --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
 
@@ -524,13 +649,20 @@ def _build_splits_lookup(image_splits):
 def main():
     parser = argparse.ArgumentParser(description="E2C-v2 dataset builder")
     parser.add_argument("--mode", required=True,
-                        choices=["draft", "finalize", "preflight"],
-                        help="Build mode: draft, finalize, or preflight")
+                        choices=["draft", "finalize", "preflight",
+                                 "tokenize-aliases"],
+                        help="Build mode")
     parser.add_argument("--output-dir", default="e2c_v2",
                         help="Output directory for E2C-v2 artifacts")
     parser.add_argument("--image-base-dir", default="e2c/data/processed",
                         help="Base directory for generated images")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    # Fix 4: tokenize-aliases params
+    parser.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B",
+                        help="Tokenizer model ID")
+    parser.add_argument("--tokenizer-revision",
+                        default="c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+                        help="Tokenizer model revision")
     args = parser.parse_args()
 
     if args.mode == "draft":
@@ -539,6 +671,8 @@ def main():
         cmd_finalize(args)
     elif args.mode == "preflight":
         sys.exit(cmd_preflight(args))
+    elif args.mode == "tokenize-aliases":
+        cmd_tokenize_aliases(args)
 
 
 if __name__ == "__main__":

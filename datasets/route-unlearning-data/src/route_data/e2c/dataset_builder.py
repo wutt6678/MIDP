@@ -510,49 +510,112 @@ def validate_population_isolation(
 
 def validate_audit_completeness(
     audit_records: list[dict],
+    *,
+    expected_image_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    """P0-6: Validate identity audit is research-valid.
+    """P0-6 (hardened): Validate identity audit is research-valid.
 
-    Hard-fail if any image has audit_status != "pass" or
-    any required field is None.
+    Checks:
+    - audit_status must be exactly 'pass', 'fail', or 'pending'
+    - 'pass' requires all semantic fields to have correct values
+    - coverage: audit image IDs must match expected_image_ids
+    - no duplicate audit entries
     """
     errors: list[str] = []
-    required_fields = [
-        "identity_consistent", "duplicate", "corrupted",
-        "watermark", "alias_leakage", "target_fact_leakage",
-    ]
+    valid_statuses = {"pass", "fail", "pending"}
 
     pending_count = 0
     fail_count = 0
     pass_count = 0
+    seen_ids: list[str] = []
 
     for rec in audit_records:
+        img_id = rec.get("image_id", "?")
+        seen_ids.append(img_id)
         status = rec.get("audit_status", "pending")
+
+        # Reject unknown statuses
+        if status not in valid_statuses:
+            errors.append(
+                f"Image {img_id}: unknown audit_status={status!r}")
+            continue
+
         if status == "pending":
             pending_count += 1
             errors.append(
-                f"Image {rec.get('image_id', '?')}: audit_status is pending"
-            )
-        elif status == "fail":
+                f"Image {img_id}: audit_status is pending")
+            continue
+
+        if status == "fail":
             fail_count += 1
             errors.append(
-                f"Image {rec.get('image_id', '?')}: audit_status is fail"
-            )
-        else:
-            pass_count += 1
+                f"Image {img_id}: audit_status is fail")
+            continue
 
-        # Check required fields are not None
-        for field in required_fields:
-            if rec.get(field) is None:
-                errors.append(
-                    f"Image {rec.get('image_id', '?')}: "
-                    f"{field} is None (not reviewed)"
-                )
+        # status == "pass" — check semantic values
+        pass_count += 1
+
+        # identity_consistent must be True
+        if rec.get("identity_consistent") is not True:
+            errors.append(
+                f"Image {img_id}: identity_consistent is "
+                f"{rec.get('identity_consistent')!r} (must be True)")
+
+        # duplicate must be False
+        if rec.get("duplicate") is not False:
+            errors.append(
+                f"Image {img_id}: duplicate is "
+                f"{rec.get('duplicate')!r} (must be False)")
+
+        # corrupted must be False
+        if rec.get("corrupted") is not False:
+            errors.append(
+                f"Image {img_id}: corrupted is "
+                f"{rec.get('corrupted')!r} (must be False)")
+
+        # watermark must be False
+        if rec.get("watermark") is not False:
+            errors.append(
+                f"Image {img_id}: watermark is "
+                f"{rec.get('watermark')!r} (must be False)")
+
+        # alias_leakage must be False
+        if rec.get("alias_leakage") is not False:
+            errors.append(
+                f"Image {img_id}: alias_leakage is "
+                f"{rec.get('alias_leakage')!r} (must be False)")
+
+        # target_fact_leakage must be False
+        if rec.get("target_fact_leakage") is not False:
+            errors.append(
+                f"Image {img_id}: target_fact_leakage is "
+                f"{rec.get('target_fact_leakage')!r} (must be False)")
+
+    # Check for duplicate audit entries
+    if len(seen_ids) != len(set(seen_ids)):
+        dupes = [x for x in seen_ids if seen_ids.count(x) > 1]
+        errors.append(
+            f"Duplicate audit entries for: {sorted(set(dupes))[:5]}")
+
+    # Coverage check: audit image IDs must match expected
+    if expected_image_ids is not None:
+        expected_set = set(expected_image_ids)
+        audit_set = set(seen_ids)
+        missing = expected_set - audit_set
+        extra = audit_set - expected_set
+        if missing:
+            errors.append(
+                f"Audit missing {len(missing)} images: "
+                f"{sorted(missing)[:5]}")
+        if extra:
+            errors.append(
+                f"Audit has {len(extra)} unexpected images: "
+                f"{sorted(extra)[:5]}")
 
     return {
         "pass": len(errors) == 0,
         "n_errors": len(errors),
-        "errors": errors[:20],  # cap for readability
+        "errors": errors[:30],  # cap for readability
         "total_images": len(audit_records),
         "pass_count": pass_count,
         "pending_count": pending_count,

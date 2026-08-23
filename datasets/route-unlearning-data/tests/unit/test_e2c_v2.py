@@ -540,6 +540,67 @@ class TestFailClosedAudit:
         report = validate_audit_completeness(audit)
         assert report["pass"]
 
+    def test_pass_status_with_duplicate_true_fails(self):
+        """audit_status=pass with duplicate=True must fail."""
+        audit = [
+            {"image_id": "img_000", "audit_status": "pass",
+             "identity_consistent": True, "duplicate": True,
+             "corrupted": False, "watermark": False,
+             "alias_leakage": False, "target_fact_leakage": False},
+        ]
+        report = validate_audit_completeness(audit)
+        assert not report["pass"]
+
+    def test_pass_status_with_identity_inconsistent_fails(self):
+        """audit_status=pass with identity_consistent=False must fail."""
+        audit = [
+            {"image_id": "img_000", "audit_status": "pass",
+             "identity_consistent": False, "duplicate": False,
+             "corrupted": False, "watermark": False,
+             "alias_leakage": False, "target_fact_leakage": False},
+        ]
+        report = validate_audit_completeness(audit)
+        assert not report["pass"]
+
+    def test_unknown_audit_status_fails(self):
+        """Unknown audit_status (e.g. 'reviewed') must fail."""
+        audit = [
+            {"image_id": "img_000", "audit_status": "reviewed",
+             "identity_consistent": True, "duplicate": False,
+             "corrupted": False, "watermark": False,
+             "alias_leakage": False, "target_fact_leakage": False},
+        ]
+        report = validate_audit_completeness(audit)
+        assert not report["pass"]
+
+    def test_missing_audit_image_fails(self):
+        """Audit missing expected image must fail."""
+        audit = [
+            {"image_id": "img_000", "audit_status": "pass",
+             "identity_consistent": True, "duplicate": False,
+             "corrupted": False, "watermark": False,
+             "alias_leakage": False, "target_fact_leakage": False},
+        ]
+        report = validate_audit_completeness(
+            audit, expected_image_ids=["img_000", "img_001"],
+        )
+        assert not report["pass"]
+
+    def test_duplicate_audit_image_id_fails(self):
+        """Duplicate image_id in audit must fail."""
+        audit = [
+            {"image_id": "img_000", "audit_status": "pass",
+             "identity_consistent": True, "duplicate": False,
+             "corrupted": False, "watermark": False,
+             "alias_leakage": False, "target_fact_leakage": False},
+            {"image_id": "img_000", "audit_status": "pass",
+             "identity_consistent": True, "duplicate": False,
+             "corrupted": False, "watermark": False,
+             "alias_leakage": False, "target_fact_leakage": False},
+        ]
+        report = validate_audit_completeness(audit)
+        assert not report["pass"]
+
 
 # --------------------------------------------------------------------------- #
 # P1-5: Corrected failure taxonomy
