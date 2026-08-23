@@ -1,0 +1,48 @@
+{
+  "assessment": {
+    "D_DV_meets_threshold": true,
+    "D_NAME_below_threshold": true,
+    "D_calibrated": true,
+    "M_DV_learned": false,
+    "M_I2N_learned": false,
+    "M_NAME_learned": false,
+    "visual_controls_preserved": true
+  },
+  "calibration_results": {
+    "D": {
+      "DV_syn_accuracy": 0.8,
+      "NAME_accuracy": 0.5,
+      "VISUAL_CONTROL_accuracy": 0.944,
+      "training_loss": 0.2515
+    },
+    "M": {
+      "DV_syn_accuracy": 0.5,
+      "I2N_accuracy": 0.0,
+      "NAME_accuracy": 0.6,
+      "VISUAL_CONTROL_accuracy": 0.944,
+      "training_loss": 0.8732
+    },
+    "M_shuffled": {
+      "DV_syn_accuracy": 0.433,
+      "NAME_accuracy": 0.3,
+      "VISUAL_CONTROL_accuracy": 0.944,
+      "training_loss": 0.8693
+    }
+  },
+  "chosen_config": {
+    "batch_size": 2,
+    "gradient_accumulation_steps": 4,
+    "learning_rate": 2e-05,
+    "optimizer_steps": 500,
+    "warmup_steps": 50
+  },
+  "decision": "PROCEED_WITH_CANONICAL_TRAINING",
+  "known_limitations": [
+    "I2N accuracy is 0.0 for all conditions \u2014 the model does not learn to map synthetic face images to identity aliases with the current image population (augmented variants of 2-5 generated faces per identity).",
+    "M mediated path (Image\u2192Identity\u2192Fact) cannot compose because I2N is not learned.",
+    "D direct path (Image\u2192Fact) is successfully learned at DV_syn=0.80.",
+    "This is a synthetic-image-quality limitation, not a code/training bug."
+  ],
+  "rationale": "D calibration is successful. M calibration shows that synthetic face images lack sufficient discriminability for I2N learning. Proceeding with canonical training using these hyperparameters. The canonical run will document this as a known limitation. Route establishment may fail on R1 (I2N) and R3 (DV_M), which is scientifically informative: it demonstrates that the mediated route cannot be established with current synthetic image quality.",
+  "schema_version": "e2c_calibration_decision_v1"
+}

@@ -1,0 +1,56 @@
+# E2C controlled route establishment — canonical configuration
+# Frozen for seed-17 canonical run.
+
+e2c:
+  seed: 17
+
+  identities:
+    experimental: 10
+    calibration: 2
+    images_per_identity: 16
+    train: 10
+    validation: 3
+    test: 3
+
+  aliases:
+    pool: [Aven, Bira, Caro, Deni, Eris, Faro, Gela, Hani, Ivoa, Jora, Kael, Luma]
+
+  target_fact:
+    property_name: Z
+    values: [Yes, No]
+    balance:
+      yes: 5
+      no: 5
+
+  model:
+    id: Qwen/Qwen3.5-9B
+    revision: c202236235762e1c871ad0ccb60c8ee5ba337b9a
+    processor_id: Qwen/Qwen3.5-9B
+    processor_revision: c202236235762e1c871ad0ccb60c8ee5ba337b9a
+    dtype: bfloat16
+    attn_implementation: sdpa
+    trust_remote_code: true
+
+  lora:
+    rank: 8
+    alpha: 16
+    dropout: 0.05
+    target_modules: [q_proj, k_proj, v_proj, o_proj]
+    scope_regex: "^model\\.language_model\\.layers\\.\\d+\\.self_attn\\."
+
+  training:
+    # Placeholder — frozen after calibration (Iteration 10)
+    learning_rate: 2.0e-5
+    optimizer_steps: 300
+    warmup_steps: 20
+    batch_size: 2
+    gradient_accumulation_steps: 4
+    max_grad_norm: 1.0
+    weight_decay: 0.0
+
+  conditions: [M, D, M_shuffled]
+
+  visual_controls:
+    - smiling
+    - eyeglasses
+    - hat
