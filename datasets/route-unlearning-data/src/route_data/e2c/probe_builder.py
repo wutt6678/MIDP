@@ -197,10 +197,11 @@ def build_vtc_probes(
     alias_map: dict[str, str],
     true_mapping: dict[str, str],
 ) -> list[dict[str, Any]]:
-    """VTC — visual/text conflict probes.
+    """VTC — visual/text conflict probes (P0-3 repaired).
 
-    Image of A, text says "This is B. B has property Z."
-    Expected: true image identity's fact.
+    Image of A, text explicitly assigns a label to wrong identity B.
+    The rendered text label MUST match the metadata presented_name_attribute.
+    Expected answer: true image identity's fact.
     """
     wn_lookup = {p["identity_id"]: p for p in wn_pairs}
 
@@ -211,6 +212,7 @@ def build_vtc_probes(
             continue
         pair = wn_lookup[id_]
         wrong_alias = pair["wrong_alias"]
+        wrong_label = pair["wrong_label"]
         true_label = true_mapping[id_]
 
         probes.append({
@@ -222,13 +224,16 @@ def build_vtc_probes(
             "image_sha256": img.get("image_sha256", ""),
             "prompt_id": "e2c_test_vtc_v1",
             "prompt": get_prompt(
-                "e2c_test_vtc_v1", wrong_alias=wrong_alias,
+                "e2c_test_vtc_v1",
+                wrong_alias=wrong_alias,
+                wrong_label=wrong_label,
             ),
             "expected_answer": true_label,
             "correct_alias": alias_map[id_],
             "presented_alias": wrong_alias,
             "true_mapping": true_label,
-            "presented_name_attribute": pair["wrong_label"],
+            "presented_name_attribute": wrong_label,
+            "rendered_claim_label": wrong_label,
             "split": "test",
         })
     return probes

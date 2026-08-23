@@ -383,7 +383,7 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "e2c_test_vtc_v1": {
         "family": "visual_text_conflict",
-        "text": "This is {wrong_alias}. {wrong_alias} has property Z. Does this person have property Z? Answer Yes or No.",
+        "text": "This is {wrong_alias}. The property-Z assignment for {wrong_alias} is {wrong_label}. What is the property-Z assignment for the person in the image? Answer Yes or No.",
     },
     "e2c_test_visual_control_smile": {
         "family": "visual_control",
@@ -472,6 +472,9 @@ def generate_e2c_manifests(
                     "image_id": img_id,
                     "image_path": img_path,
                     "image_sha256": "",  # filled when images exist
+                    "source_render_id": "",  # P0-2: filled when lineage known
+                    "generation_type": "independent_render",  # P0-2 default
+                    "augmentation_parent_id": None,
                     "split": split_name,
                 })
 
@@ -493,7 +496,7 @@ def generate_e2c_manifests(
     sha = write_json_manifest(wn_pairs, output_dir / "e2c_wrong_name_pairs.json")
     shas["e2c_wrong_name_pairs"] = sha
 
-    # 8. Identity audit template (to be filled manually)
+    # 8. Identity audit — P0-6: fail-closed (all fields null/pending)
     audit_records = []
     for id_ in all_ids:
         for idx in range(IMAGES_PER_IDENTITY):
@@ -501,12 +504,15 @@ def generate_e2c_manifests(
             audit_records.append({
                 "identity_id": id_,
                 "image_id": img_id,
-                "identity_consistent": True,
-                "duplicate": False,
-                "corrupted": False,
-                "watermark": False,
-                "alias_leakage": False,
-                "target_fact_leakage": False,
+                "audit_status": "pending",
+                "reviewer": None,
+                "review_timestamp": None,
+                "identity_consistent": None,
+                "duplicate": None,
+                "corrupted": None,
+                "watermark": None,
+                "alias_leakage": None,
+                "target_fact_leakage": None,
                 "notes": "",
             })
 

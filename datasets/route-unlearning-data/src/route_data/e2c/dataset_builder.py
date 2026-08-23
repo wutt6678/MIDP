@@ -165,34 +165,40 @@ def build_condition_m(
     alias_map: dict[str, str],
     true_mapping: dict[str, str],
     image_splits: dict[str, dict[str, list[int]]],
-    experimental_ids: list[str],
+    identity_ids: list[str] | None = None,
+    experimental_ids: list[str] | None = None,
+    population: str = "experimental",
     seed: int,
     name_to_attr_count: int = 10,
 ) -> list[dict[str, Any]]:
-    """Build condition M training records.
+    """Build condition M training records (P0-4: population-aware).
 
     M contains:
     - M1: image_to_identity (image -> alias)
     - M2: name_to_attribute (alias -> fact) [text-only]
 
     Hard invariant: M has zero image_to_attribute records.
+
+    Parameters
+    ----------
+    identity_ids : explicit list of identity IDs to use.
+    experimental_ids : deprecated alias for identity_ids.
+    population : "experimental" or "calibration".
     """
+    ids = identity_ids or experimental_ids or []
     rng = random.Random(seed)
     records: list[dict[str, Any]] = []
 
-    for id_ in sorted(experimental_ids):
+    for id_ in sorted(ids):
         alias = alias_map[id_]
         label = true_mapping[id_]
         train_indices = image_splits[id_]["train"]
         train_image_ids = [f"{id_}_img_{idx:03d}" for idx in train_indices]
 
-        # M1: image -> identity
         records.extend(_build_image_to_identity_records(
             id_, alias, train_image_ids,
             condition="M", rng=rng,
         ))
-
-        # M2: name -> attribute (text-only)
         records.extend(_build_name_to_attribute_records(
             id_, alias, label,
             condition="M", count=name_to_attr_count, rng=rng,
@@ -206,11 +212,13 @@ def build_condition_d(
     alias_map: dict[str, str],
     true_mapping: dict[str, str],
     image_splits: dict[str, dict[str, list[int]]],
-    experimental_ids: list[str],
+    identity_ids: list[str] | None = None,
+    experimental_ids: list[str] | None = None,
+    population: str = "experimental",
     seed: int,
     text_exposure_count: int = 10,
 ) -> list[dict[str, Any]]:
-    """Build condition D training records.
+    """Build condition D training records (P0-4: population-aware).
 
     D contains:
     - image_to_attribute (image -> fact) using same train images as M
@@ -218,22 +226,20 @@ def build_condition_d(
 
     Hard invariant: D has zero name_to_attribute records.
     """
+    ids = identity_ids or experimental_ids or []
     rng = random.Random(seed)
     records: list[dict[str, Any]] = []
 
-    for id_ in sorted(experimental_ids):
+    for id_ in sorted(ids):
         alias = alias_map[id_]
         label = true_mapping[id_]
         train_indices = image_splits[id_]["train"]
         train_image_ids = [f"{id_}_img_{idx:03d}" for idx in train_indices]
 
-        # D: image -> attribute (direct)
         records.extend(_build_image_to_attribute_records(
             id_, train_image_ids, label,
             condition="D", rng=rng,
         ))
-
-        # Text-exposure controls
         records.extend(_build_text_exposure_records(
             alias, id_,
             condition="D", count=text_exposure_count, rng=rng,
@@ -247,30 +253,30 @@ def build_condition_m_shuffled(
     alias_map: dict[str, str],
     shuffled_mapping: dict[str, str],
     image_splits: dict[str, dict[str, list[int]]],
-    experimental_ids: list[str],
+    identity_ids: list[str] | None = None,
+    experimental_ids: list[str] | None = None,
+    population: str = "experimental",
     seed: int,
     name_to_attr_count: int = 10,
 ) -> list[dict[str, Any]]:
-    """Build condition M-shuffled training records.
+    """Build condition M-shuffled training records (P0-4: population-aware).
 
     Same generation path as M, but uses the shuffled mapping.
     """
+    ids = identity_ids or experimental_ids or []
     rng = random.Random(seed)
     records: list[dict[str, Any]] = []
 
-    for id_ in sorted(experimental_ids):
+    for id_ in sorted(ids):
         alias = alias_map[id_]
         label = shuffled_mapping[id_]
         train_indices = image_splits[id_]["train"]
         train_image_ids = [f"{id_}_img_{idx:03d}" for idx in train_indices]
 
-        # M1: image -> identity (same as M)
         records.extend(_build_image_to_identity_records(
             id_, alias, train_image_ids,
             condition="M_shuffled", rng=rng,
         ))
-
-        # M2: name -> attribute with SHUFFLED mapping
         records.extend(_build_name_to_attribute_records(
             id_, alias, label,
             condition="M_shuffled", count=name_to_attr_count, rng=rng,
@@ -448,6 +454,110 @@ def build_condition_matching_report(
         raise ValueError("M and D image populations differ — hard fail")
 
     return report
+
+
+# --------------------------------------------------------------------------- #
+# Population isolation validation (P0-4)
+# --------------------------------------------------------------------------- #
+
+def validate_population_isolation(
+    *,
+    calibration_records: list[dict],
+    experimental_records: list[dict],
+    calibration_ids: list[str],
+    experimental_ids: list[str],
+) -> dict[str, Any]:
+    """P0-4: Verify calibration and experimental populations are disjoint.
+
+    Hard-fail on any identity overlap.
+    """
+    errors: list[str] = []
+    cal_set = set(calibration_ids)
+    exp_set = set(experimental_ids)
+
+    # No overlap between populations
+    overlap = cal_set & exp_set
+    if overlap:
+        errors.append(f"Identity overlap between populations: {sorted(overlap)}")
+
+    # Calibration records only contain calibration identities
+    cal_id_set = {r["identity_id"] for r in calibration_records}
+    unexpected_cal = cal_id_set - cal_set
+    if unexpected_cal:
+        errors.append(
+            f"Calibration dataset contains non-calibration IDs: {sorted(unexpected_cal)}"
+        )
+
+    # Experimental records only contain experimental identities
+    exp_id_set = {r["identity_id"] for r in experimental_records}
+    unexpected_exp = exp_id_set - exp_set
+    if unexpected_exp:
+        errors.append(
+            f"Experimental dataset contains non-experimental IDs: {sorted(unexpected_exp)}"
+        )
+
+    return {
+        "pass": len(errors) == 0,
+        "errors": errors,
+        "calibration_identity_count": len(cal_id_set),
+        "experimental_identity_count": len(exp_id_set),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Audit validation (P0-6)
+# --------------------------------------------------------------------------- #
+
+def validate_audit_completeness(
+    audit_records: list[dict],
+) -> dict[str, Any]:
+    """P0-6: Validate identity audit is research-valid.
+
+    Hard-fail if any image has audit_status != "pass" or
+    any required field is None.
+    """
+    errors: list[str] = []
+    required_fields = [
+        "identity_consistent", "duplicate", "corrupted",
+        "watermark", "alias_leakage", "target_fact_leakage",
+    ]
+
+    pending_count = 0
+    fail_count = 0
+    pass_count = 0
+
+    for rec in audit_records:
+        status = rec.get("audit_status", "pending")
+        if status == "pending":
+            pending_count += 1
+            errors.append(
+                f"Image {rec.get('image_id', '?')}: audit_status is pending"
+            )
+        elif status == "fail":
+            fail_count += 1
+            errors.append(
+                f"Image {rec.get('image_id', '?')}: audit_status is fail"
+            )
+        else:
+            pass_count += 1
+
+        # Check required fields are not None
+        for field in required_fields:
+            if rec.get(field) is None:
+                errors.append(
+                    f"Image {rec.get('image_id', '?')}: "
+                    f"{field} is None (not reviewed)"
+                )
+
+    return {
+        "pass": len(errors) == 0,
+        "n_errors": len(errors),
+        "errors": errors[:20],  # cap for readability
+        "total_images": len(audit_records),
+        "pass_count": pass_count,
+        "pending_count": pending_count,
+        "fail_count": fail_count,
+    }
 
 
 # --------------------------------------------------------------------------- #

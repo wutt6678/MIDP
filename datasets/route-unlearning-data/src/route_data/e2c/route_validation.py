@@ -1,8 +1,10 @@
-"""E2C route validation — leakage checks and R1–R7 gate logic.
+"""E2C-v2 route validation — leakage, lineage, gates, and failure taxonomy.
 
-Leakage validation:
-    Hard-fail if test/val images appear in training, wrong-name alias
-    equals true alias, M contains direct samples, etc.
+Leakage validation (P0-1, P0-2):
+    - image_id disjointness across splits
+    - SHA-256 content-level disjointness across splits
+    - source-render lineage isolation (all descendants in one split)
+    - condition invariants (M no direct, D no name-to-attr, etc.)
 
 Gate criteria (R1–R7):
     R1: I2N accuracy M >= 0.90
@@ -11,10 +13,14 @@ Gate criteria (R1–R7):
     R4: |WrongNameEffect_M| > |WrongNameEffect_D| and CI excludes 0
     R5: |ConflictEffect_M| > |ConflictEffect_D| and CI excludes 0
     R6: M-shuffled agreement_with_shuffled > agreement_with_true
-    R7: Visual controls preserved (accuracy decrease <= 0.05)
+    R7: Per-family visual controls preserved (each decrease <= 0.05)
 
 Aggregate:
     ROUTE_ESTABLISHED = all gates PASS.
+
+Failure taxonomy (P1-5):
+    C = composition failure ONLY when I2N and NAME pass but DV fails.
+    If I2N or NAME is weak, C = "downstream DV failure".
 """
 
 from __future__ import annotations
@@ -37,13 +43,60 @@ def validate_leakage(
     experimental_ids: list[str],
     calibration_ids: list[str],
 ) -> dict[str, Any]:
-    """Run all leakage checks. Hard-fail on any violation.
+    """Run all leakage checks including SHA-level and lineage (P0-1, P0-2).
 
+    Hard-fail on any violation.
     Returns report dict. Raises ValueError on violations.
     """
     errors: list[str] = []
 
-    # Collect train image IDs per condition
+    # ------------------------------------------------------------------ #
+    # P0-1: SHA-level content disjointness across splits
+    # ------------------------------------------------------------------ #
+    sha_by_split: dict[str, list[dict[str, str]]] = {
+        "train": [], "validation": [], "test": [],
+    }
+    for rec in image_splits:
+        split = rec["split"]
+        sha = rec.get("image_sha256", "")
+        if sha:
+            sha_by_split.setdefault(split, []).append({
+                "image_sha256": sha,
+                "identity_id": rec.get("identity_id", ""),
+                "image_id": rec.get("image_id", ""),
+                "split": split,
+                "image_path": rec.get("image_path", ""),
+            })
+
+    sha_overlap = {
+        "train_validation": _find_sha_overlaps(
+            sha_by_split.get("train", []),
+            sha_by_split.get("validation", []),
+        ),
+        "train_test": _find_sha_overlaps(
+            sha_by_split.get("train", []),
+            sha_by_split.get("test", []),
+        ),
+        "validation_test": _find_sha_overlaps(
+            sha_by_split.get("validation", []),
+            sha_by_split.get("test", []),
+        ),
+    }
+    for pair_name, overlaps in sha_overlap.items():
+        if overlaps:
+            errors.append(
+                f"SHA overlap {pair_name}: {len(overlaps)} duplicate(s)"
+            )
+
+    # ------------------------------------------------------------------ #
+    # P0-2: source-render lineage isolation
+    # ------------------------------------------------------------------ #
+    lineage_violations = _check_source_render_lineage(image_splits)
+    errors.extend(lineage_violations)
+
+    # ------------------------------------------------------------------ #
+    # image_id disjointness (original check)
+    # ------------------------------------------------------------------ #
     train_image_ids: dict[str, set[str]] = {}
     for condition, records in train_records.items():
         ids = {
@@ -54,15 +107,13 @@ def validate_leakage(
 
     test_image_ids = {img["image_id"] for img in test_images}
 
-    # Test image not in training
     for condition, ids in train_image_ids.items():
         overlap = test_image_ids & ids
         if overlap:
             errors.append(
-                f"{condition}: {len(overlap)} test images appear in training"
+                f"{condition}: {len(overlap)} test image_ids appear in training"
             )
 
-    # Validation images not in training
     val_image_ids = {
         rec["image_id"] for rec in image_splits
         if rec["split"] == "validation"
@@ -71,36 +122,33 @@ def validate_leakage(
         overlap = val_image_ids & ids
         if overlap:
             errors.append(
-                f"{condition}: {len(overlap)} validation images in training"
+                f"{condition}: {len(overlap)} validation image_ids in training"
             )
 
-    # Wrong-name alias != true alias
+    # ------------------------------------------------------------------ #
+    # Condition invariants
+    # ------------------------------------------------------------------ #
     for pair in wn_pairs:
         if pair["wrong_alias"] == pair["correct_alias"]:
             errors.append(
                 f"Wrong-name alias equals true alias for {pair['identity_id']}"
             )
-
-    # Wrong-name alias has opposite label
     for pair in wn_pairs:
         if pair["wrong_label"] == pair["true_label"]:
             errors.append(
                 f"Wrong-name label same as true label for {pair['identity_id']}"
             )
 
-    # M has zero image_to_attribute target-fact samples
     m_records = train_records.get("M", [])
     m_direct = [r for r in m_records if r["task"] == "image_to_attribute"]
     if m_direct:
         errors.append(f"M has {len(m_direct)} image_to_attribute samples")
 
-    # D has zero name_to_attribute samples
     d_records = train_records.get("D", [])
     d_name = [r for r in d_records if r["task"] == "name_to_attribute"]
     if d_name:
         errors.append(f"D has {len(d_name)} name_to_attribute samples")
 
-    # M-shuffled uses shuffled mapping
     ms_records = train_records.get("M_shuffled", [])
     for r in ms_records:
         if r["task"] == "name_to_attribute":
@@ -112,19 +160,16 @@ def validate_leakage(
                     f"!= shuffled {expected!r}"
                 )
 
-    # Experimental and calibration identities don't overlap
     exp_set = set(experimental_ids)
     cal_set = set(calibration_ids)
     if exp_set & cal_set:
         errors.append("Experimental and calibration identities overlap")
 
-    # Unique sample IDs within each condition
     for condition, records in train_records.items():
         ids = [r["sample_id"] for r in records]
         if len(ids) != len(set(ids)):
             errors.append(f"{condition}: duplicate sample IDs")
 
-    # M and D image populations identical
     m_images = {r["image_id"] for r in m_records if r.get("image_id")}
     d_images = {
         r["image_id"] for r in d_records
@@ -137,6 +182,8 @@ def validate_leakage(
         "pass": len(errors) == 0,
         "n_errors": len(errors),
         "errors": errors,
+        "sha_overlap": sha_overlap,
+        "lineage_violations": lineage_violations,
     }
 
     if errors:
@@ -146,6 +193,87 @@ def validate_leakage(
         )
 
     return report
+
+
+def _find_sha_overlaps(
+    records_a: list[dict[str, str]],
+    records_b: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    """Find image_sha256 values that appear in both record sets."""
+    sha_map_a: dict[str, list[dict]] = {}
+    for r in records_a:
+        sha_map_a.setdefault(r["image_sha256"], []).append(r)
+
+    overlaps: list[dict[str, Any]] = []
+    for r_b in records_b:
+        sha = r_b["image_sha256"]
+        if sha in sha_map_a:
+            overlaps.append({
+                "image_sha256": sha,
+                "records": sha_map_a[sha] + [r_b],
+            })
+    return overlaps
+
+
+def _check_source_render_lineage(
+    image_splits: list[dict[str, Any]],
+) -> list[str]:
+    """Check that all descendants of the same source_render_id stay in one split.
+
+    Returns list of error strings. Empty = pass.
+    """
+    errors: list[str] = []
+    render_to_splits: dict[str, set[str]] = {}
+
+    for rec in image_splits:
+        source_id = rec.get("source_render_id")
+        if not source_id:
+            continue  # no lineage info — skip
+        split = rec["split"]
+        render_to_splits.setdefault(source_id, set()).add(split)
+
+    for source_id, splits in render_to_splits.items():
+        if len(splits) > 1:
+            errors.append(
+                f"source_render_id {source_id} crosses splits: {sorted(splits)}"
+            )
+
+    return errors
+
+
+def validate_vtc_semantics(
+    vtc_probes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """P0-3: Validate VTC rendered text matches metadata label.
+
+    Hard-fail unless rendered_claim_label == presented_name_attribute
+    for every VTC probe.
+    """
+    errors: list[str] = []
+    for p in vtc_probes:
+        rendered = p.get("rendered_claim_label")
+        metadata = p.get("presented_name_attribute")
+        if rendered is None:
+            errors.append(
+                f"VTC probe {p['probe_id']}: missing rendered_claim_label"
+            )
+        elif rendered != metadata:
+            errors.append(
+                f"VTC probe {p['probe_id']}: rendered={rendered!r} "
+                f"!= metadata={metadata!r}"
+            )
+        # Also verify conflict: presented != true
+        if metadata == p.get("true_mapping"):
+            errors.append(
+                f"VTC probe {p['probe_id']}: presented_name_attribute "
+                f"== true_mapping (not a conflict)"
+            )
+
+    return {
+        "pass": len(errors) == 0,
+        "n_errors": len(errors),
+        "errors": errors,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -340,9 +468,10 @@ def aggregate_route_decision(
 def classify_failure(
     gates: dict[str, dict[str, Any]],
 ) -> list[dict[str, str]]:
-    """Classify route-establishment failures.
+    """Classify route-establishment failures (P1-5 corrected taxonomy).
 
-    Returns a list of failure descriptions.
+    Failure C (composition failure) is used ONLY when I2N and NAME pass
+    but DV fails. If I2N or NAME is weak, C reports "downstream DV failure".
     """
     failures: list[dict[str, str]] = []
 
@@ -351,8 +480,8 @@ def classify_failure(
         failures.append({
             "code": "A",
             "pattern": "I2N weak",
-            "interpretation": "Image -> Identity was not learned robustly",
-            "action": "Inspect identity consistency; adjust training via calibration",
+            "interpretation": "Image -> Identity was not robustly established",
+            "action": "Inspect identity consistency and image diversity",
         })
 
     r2 = gates.get("R2", {})
@@ -360,7 +489,7 @@ def classify_failure(
         failures.append({
             "code": "B",
             "pattern": "NAME_M weak",
-            "interpretation": "Identity -> Fact association not learned sufficiently",
+            "interpretation": "Identity -> Fact association not robustly established",
             "action": "Increase or rebalance M2 exposure using calibration identities",
         })
 
@@ -368,19 +497,26 @@ def classify_failure(
     if r3.get("status") == "FAIL":
         i2n_m = gates.get("R1", {}).get("value", 0)
         name_m = gates.get("R2", {}).get("value_m", 0)
+        # P1-5: Only call it "composition failure" when BOTH upstream pass
         if i2n_m >= 0.90 and name_m >= 0.90:
             failures.append({
                 "code": "C",
                 "pattern": "Composition failure",
-                "interpretation": "Model learns each mapping separately but does not compose",
+                "interpretation": (
+                    "I2N and NAME pass but composed DV fails — "
+                    "model learns each mapping separately but does not compose"
+                ),
                 "action": "Investigate prompt-supported composition condition",
             })
         else:
             failures.append({
                 "code": "C",
-                "pattern": "DV accuracy below threshold",
-                "interpretation": "One or both conditions fail to solve the final image task",
-                "action": "Adjust training budget or learning rate",
+                "pattern": "Downstream DV failure",
+                "interpretation": (
+                    "DV accuracy below threshold; upstream I2N and/or NAME "
+                    "are also weak — not a composition failure"
+                ),
+                "action": "Fix upstream I2N/NAME before investigating composition",
             })
 
     r4 = gates.get("R4", {})
@@ -388,8 +524,8 @@ def classify_failure(
     if r4.get("status") == "FAIL" or r5.get("status") == "FAIL":
         failures.append({
             "code": "D",
-            "pattern": "M and D show similar WN/VTC sensitivity",
-            "interpretation": "Behavioral probes do not establish distinct route dependence",
+            "pattern": "Route intervention evidence absent",
+            "interpretation": "WN/VTC probes do not show distinct route dependence",
             "action": "Strengthen mediated training; re-examine D alias associations",
         })
 
@@ -397,8 +533,8 @@ def classify_failure(
     if r6.get("status") == "FAIL":
         failures.append({
             "code": "E",
-            "pattern": "M-shuffled does not follow shuffled mapping",
-            "interpretation": "Behavior is controlled by another route",
+            "pattern": "Shuffled control failure",
+            "interpretation": "M-shuffled does not follow the shuffled mapping",
             "action": "Do not claim a mediated route",
         })
 
@@ -412,3 +548,60 @@ def classify_failure(
         })
 
     return failures
+
+
+# --------------------------------------------------------------------------- #
+# Calibration hard-stop (P0-5)
+# --------------------------------------------------------------------------- #
+
+def evaluate_calibration(
+    *,
+    i2n_calibration_m: float,
+    name_calibration_m: float,
+    dv_calibration_d: float,
+    visual_control_results: dict[str, dict[str, float]],
+    i2n_threshold: float = 0.90,
+    name_threshold: float = 0.90,
+    dv_threshold: float = 0.80,
+    max_visual_decrease: float = 0.05,
+) -> dict[str, Any]:
+    """P0-5: Fail-closed calibration decision.
+
+    All prerequisites must pass before canonical training is allowed.
+    Returns decision dict. Does NOT proceed if any prerequisite fails.
+    """
+    m1_pass = i2n_calibration_m >= i2n_threshold
+    m2_pass = name_calibration_m >= name_threshold
+    d_pass = dv_calibration_d >= dv_threshold
+
+    visual_pass = True
+    visual_failures: list[str] = []
+    for attr, scores in visual_control_results.items():
+        base = scores.get("base_accuracy", 1.0)
+        trained = scores.get("trained_accuracy", 0.0)
+        decrease = base - trained
+        if decrease > max_visual_decrease:
+            visual_pass = False
+            visual_failures.append(
+                f"{attr}: decrease {decrease:.3f} > {max_visual_decrease}"
+            )
+
+    all_pass = m1_pass and m2_pass and d_pass and visual_pass
+
+    decision = "FREEZE_CANONICAL_CONFIG" if all_pass else "STOP_REPAIR_OR_RECALIBRATE"
+
+    return {
+        "decision": decision,
+        "all_prerequisites_pass": all_pass,
+        "M1_pass": m1_pass,
+        "M1_value": i2n_calibration_m,
+        "M1_threshold": i2n_threshold,
+        "M2_pass": m2_pass,
+        "M2_value": name_calibration_m,
+        "M2_threshold": name_threshold,
+        "D_pass": d_pass,
+        "D_value": dv_calibration_d,
+        "D_threshold": dv_threshold,
+        "visual_control_pass": visual_pass,
+        "visual_control_failures": visual_failures,
+    }
