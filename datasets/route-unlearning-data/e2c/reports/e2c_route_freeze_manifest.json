@@ -1,0 +1,138 @@
+{
+  "code_sha": "31d00a9198a87718452b09c3667a037208638a17",
+  "config": {
+    "batch_size": 2,
+    "gradient_accumulation_steps": 4,
+    "learning_rate": 2e-05,
+    "optimizer_steps": 500,
+    "warmup_steps": 50
+  },
+  "controlled_unlearning_allowed": false,
+  "failure_classification": [
+    {
+      "code": "A",
+      "pattern": "I2N weak",
+      "root_cause": "synthetic image diversity insufficient"
+    },
+    {
+      "code": "B",
+      "pattern": "NAME_M weak",
+      "root_cause": "mediated path depends on I2N"
+    },
+    {
+      "code": "C",
+      "pattern": "composition failure",
+      "root_cause": "Image->Identity->Fact cannot compose"
+    },
+    {
+      "code": "E",
+      "pattern": "M-shuffled not following shuffled mapping",
+      "root_cause": "no mediated route established"
+    }
+  ],
+  "gate_results": {
+    "R1": {
+      "gate": "R1",
+      "metric": "I2N_accuracy_M",
+      "preferred_threshold": 0.95,
+      "status": "FAIL",
+      "threshold": 0.9,
+      "value": 0.0
+    },
+    "R2": {
+      "d_separation_pass": true,
+      "d_separation_threshold": 0.65,
+      "difference_threshold": 0.25,
+      "gate": "R2",
+      "m_pass": false,
+      "metric": "NAME_accuracy",
+      "name_threshold": 0.9,
+      "status": "FAIL",
+      "value_d": 0.5,
+      "value_m": 0.6
+    },
+    "R3": {
+      "gate": "R3",
+      "metric": "DV_syn_accuracy",
+      "status": "FAIL",
+      "threshold": 0.8,
+      "value_d": 0.8666666666666667,
+      "value_m": 0.23333333333333334
+    },
+    "R4": {
+      "bootstrap_ci": {
+        "ci_excludes_zero": false,
+        "ci_lower": -0.14583333830038706,
+        "ci_upper": 0.01190478549826713,
+        "mean": -0.05171401705266742
+      },
+      "ci_excludes_zero": false,
+      "gate": "R4",
+      "magnitude_pass": false,
+      "metric": "abs_WrongNameEffect",
+      "status": "FAIL",
+      "value_d": 0.07916666107873122,
+      "value_m": 0.03750000198682149
+    },
+    "R5": {
+      "bootstrap_ci": {
+        "ci_excludes_zero": false,
+        "ci_lower": -1.0833333873500426,
+        "ci_upper": 0.8611111091449857,
+        "mean": -0.35754511035560543
+      },
+      "ci_excludes_zero": false,
+      "gate": "R5",
+      "magnitude_pass": false,
+      "metric": "abs_ConflictEffect",
+      "status": "FAIL",
+      "value_d": 0.7708333682268858,
+      "value_m": 0.025000003973642985
+    },
+    "R6": {
+      "agreement_with_shuffled": 0.5,
+      "agreement_with_true": 0.5,
+      "follows_shuffled": false,
+      "gate": "R6",
+      "meets_preferred_threshold": false,
+      "metric": "M_shuffled_mapping_agreement",
+      "preferred_threshold": 0.8,
+      "status": "FAIL"
+    },
+    "R7": {
+      "failures": [
+        "smiling: decrease 0.167 > 0.05"
+      ],
+      "gate": "R7",
+      "max_absolute_decrease": 0.05,
+      "metric": "visual_control_preservation",
+      "results": {
+        "eyeglasses": {
+          "base_accuracy": 1.0,
+          "trained_accuracy": 1.0
+        },
+        "hat": {
+          "base_accuracy": 1.0,
+          "trained_accuracy": 1.0
+        },
+        "smiling": {
+          "base_accuracy": 1.0,
+          "trained_accuracy": 0.8333333333333334
+        }
+      },
+      "status": "FAIL"
+    }
+  },
+  "manifest_sha256": "6472f3bcb32d9204713c58b9db52249e7f6dc4e70e80aa68ffc0892c403a46ab",
+  "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "next_steps": [
+    "Generate genuinely distinct per-identity images using a face-identity-preserving generative model",
+    "Consider using a real face dataset (e.g., CelebA) with synthetic binary labels",
+    "Reduce number of identities to decrease I2N difficulty",
+    "Try a 2-choice recognition probe instead of free-form generation for I2N"
+  ],
+  "route_established": false,
+  "schema_version": "e2c_route_freeze_manifest_v1",
+  "scientific_conclusion": "Route establishment FAILED. The Qwen3.5-9B model can learn direct image-to-fact associations (D: DV_syn=0.867) but cannot learn image-to-synthetic-identity mapping (M: I2N=0.0) with the current synthetic face image population. The mediated route (Image->Identity->Fact) cannot be established without robust I2N. This is a data-quality limitation: 2-5 genuinely generated faces per identity with PIL augmentations provides insufficient within-identity variation for the model to learn discriminative identity features.",
+  "seed": 17
+}

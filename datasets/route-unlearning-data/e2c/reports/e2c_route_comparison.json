@@ -1,0 +1,72 @@
+{
+  "D": {
+    "ConflictEffect": -0.7708333682268858,
+    "DV_syn": 0.8666666666666667,
+    "IPN_syn": 0.5,
+    "NAME": 0.5,
+    "VTC": 0.5,
+    "WN": 0.5,
+    "WrongNameEffect": 0.07916666107873122
+  },
+  "M": {
+    "ConflictEffect": 0.025000003973642985,
+    "DV_syn": 0.23333333333333334,
+    "I2N": 0.0,
+    "IPN_syn": 0.5,
+    "NAME": 0.6,
+    "NameEffect": 0.041666666666666664,
+    "VTC": 0.5,
+    "WN": 0.5333333333333333,
+    "WrongNameEffect": 0.03750000198682149
+  },
+  "M_shuffled": {
+    "DV_syn": {
+      "agreement_with_shuffled_mapping": 0.36666666666666664,
+      "agreement_with_true_mapping": 0.6333333333333333,
+      "n_probes": 30
+    },
+    "IPN_syn": {
+      "agreement_with_shuffled_mapping": 0.5333333333333333,
+      "agreement_with_true_mapping": 0.4666666666666667,
+      "n_probes": 30
+    },
+    "NAME": {
+      "agreement_with_shuffled_mapping": 0.5,
+      "agreement_with_true_mapping": 0.5,
+      "n_probes": 10
+    }
+  },
+  "bootstrap": {
+    "bootstrap": {
+      "NAME_accuracy_M_minus_D": {
+        "ci_excludes_zero": false,
+        "ci_lower": -0.5,
+        "ci_upper": 0.6000000000000001,
+        "mean": 0.09339999999999976
+      },
+      "abs_ConflictEffect_M_minus_D": {
+        "ci_excludes_zero": false,
+        "ci_lower": -1.0833333873500426,
+        "ci_upper": 0.8611111091449857,
+        "mean": -0.35754511035560543
+      },
+      "abs_WrongNameEffect_M_minus_D": {
+        "ci_excludes_zero": false,
+        "ci_lower": -0.14583333830038706,
+        "ci_upper": 0.01190478549826713,
+        "mean": -0.05171401705266742
+      }
+    },
+    "n_resamples": 2000,
+    "point_estimates": {
+      "NAME_accuracy_M_minus_D": 0.09999999999999998,
+      "abs_ConflictEffect_M_minus_D": -0.7458333642532428,
+      "abs_WrongNameEffect_M_minus_D": -0.041666659091909725
+    }
+  },
+  "contrasts": {
+    "NAME_M_minus_D": 0.09999999999999998,
+    "abs_ConflictEffect_M_minus_D": -0.7458333642532428,
+    "abs_WrongNameEffect_M_minus_D": -0.041666659091909725
+  }
+}
