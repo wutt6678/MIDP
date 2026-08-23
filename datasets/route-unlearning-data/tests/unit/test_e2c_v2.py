@@ -19,33 +19,29 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
+from route_data.e2c.dataset_builder import (
+    build_condition_d,
+    build_condition_m,
+    build_condition_m_shuffled,
+    validate_audit_completeness,
+    validate_population_isolation,
+)
+from route_data.e2c.probe_builder import build_vtc_probes
 from route_data.e2c.route_validation import (
+    classify_failure,
+    evaluate_calibration,
     validate_leakage,
     validate_vtc_semantics,
-    evaluate_calibration,
-    classify_failure,
-    evaluate_r1,
-    evaluate_r2,
-    evaluate_r3,
-)
-from route_data.e2c.dataset_builder import (
-    validate_population_isolation,
-    validate_audit_completeness,
-    build_condition_m,
-    build_condition_d,
-    build_condition_m_shuffled,
 )
 from route_data.e2c.synthetic_manifest import (
-    generate_identity_ids,
     assign_aliases,
+    generate_identity_ids,
     generate_image_splits,
-    generate_true_mapping,
     generate_shuffled_mapping,
+    generate_true_mapping,
     generate_wrong_name_pairs,
     get_prompt,
 )
-from route_data.e2c.probe_builder import build_vtc_probes
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures
@@ -169,6 +165,62 @@ class TestSHALeakage:
         )
 
         with pytest.raises(ValueError, match="SHA overlap"):
+            validate_leakage(
+                train_records={"M": m, "D": d, "M_shuffled": ms},
+                test_images=test_images,
+                image_splits=records,
+                wn_pairs=wn_pairs,
+                alias_map=s["alias_map"],
+                true_mapping=s["true_mapping"],
+                shuffled_mapping=s["shuffled_mapping"],
+                experimental_ids=s["exp_ids"],
+                calibration_ids=s["cal_ids"],
+            )
+
+    def test_missing_sha_is_hard_failure(self, identity_setup):
+        """Empty image_sha256 must cause validation failure."""
+        s = identity_setup
+        records = _make_image_splits_records(
+            s["splits"], s["exp_ids"] + s["cal_ids"],
+        )
+        # Set one SHA to empty
+        records[0]["image_sha256"] = ""
+
+        m, d, ms = _make_train_records(s)
+        test_images = [r for r in records if r["split"] == "test"]
+        wn_pairs = generate_wrong_name_pairs(
+            s["true_mapping"], s["alias_map"],
+        )
+
+        with pytest.raises(ValueError, match="image_sha256"):
+            validate_leakage(
+                train_records={"M": m, "D": d, "M_shuffled": ms},
+                test_images=test_images,
+                image_splits=records,
+                wn_pairs=wn_pairs,
+                alias_map=s["alias_map"],
+                true_mapping=s["true_mapping"],
+                shuffled_mapping=s["shuffled_mapping"],
+                experimental_ids=s["exp_ids"],
+                calibration_ids=s["cal_ids"],
+            )
+
+    def test_missing_source_render_id_is_hard_failure(self, identity_setup):
+        """Empty source_render_id must cause validation failure."""
+        s = identity_setup
+        records = _make_image_splits_records(
+            s["splits"], s["exp_ids"] + s["cal_ids"],
+        )
+        # Set one source_render_id to empty
+        records[0]["source_render_id"] = ""
+
+        m, d, ms = _make_train_records(s)
+        test_images = [r for r in records if r["split"] == "test"]
+        wn_pairs = generate_wrong_name_pairs(
+            s["true_mapping"], s["alias_map"],
+        )
+
+        with pytest.raises(ValueError, match="source_render_id"):
             validate_leakage(
                 train_records={"M": m, "D": d, "M_shuffled": ms},
                 test_images=test_images,
@@ -541,3 +593,60 @@ class TestFailureTaxonomy:
         c_failures = [f for f in failures if f["code"] == "C"]
         assert len(c_failures) == 1
         assert c_failures[0]["pattern"] == "Composition failure"
+
+
+# --------------------------------------------------------------------------- #
+# Calibration mapping generation
+# --------------------------------------------------------------------------- #
+
+class TestCalibrationMappings:
+    def test_calibration_mapping_balanced(self):
+        from route_data.e2c.synthetic_manifest import generate_calibration_mapping
+        cal_ids = ["syn_cal_00", "syn_cal_01"]
+        true_map, shuf_map = generate_calibration_mapping(cal_ids)
+        yes_count = sum(1 for v in true_map.values() if v == "Yes")
+        no_count = sum(1 for v in true_map.values() if v == "No")
+        assert yes_count == 1
+        assert no_count == 1
+        # Shuffled is opposite
+        for id_ in cal_ids:
+            assert shuf_map[id_] != true_map[id_]
+
+    def test_calibration_mapping_deterministic(self):
+        from route_data.e2c.synthetic_manifest import generate_calibration_mapping
+        cal_ids = ["syn_cal_00", "syn_cal_01"]
+        t1, s1 = generate_calibration_mapping(cal_ids, seed=17)
+        t2, s2 = generate_calibration_mapping(cal_ids, seed=17)
+        assert t1 == t2
+        assert s1 == s2
+
+
+# --------------------------------------------------------------------------- #
+# Alias tokenization validation
+# --------------------------------------------------------------------------- #
+
+class TestAliasTokenization:
+    def test_validate_complete_records(self):
+        from route_data.e2c.synthetic_manifest import validate_alias_tokenization
+        records = [
+            {"identity_id": "syn_00", "alias": "Aven",
+             "alias_token_ids": [32, 1002], "alias_token_count": 2,
+             "tokenizer_id": "Qwen/Qwen3.5-9B", "tokenizer_revision": "abc"},
+            {"identity_id": "syn_01", "alias": "Bira",
+             "alias_token_ids": [33, 8565], "alias_token_count": 2,
+             "tokenizer_id": "Qwen/Qwen3.5-9B", "tokenizer_revision": "abc"},
+        ]
+        report = validate_alias_tokenization(records)
+        assert report["pass"]
+        assert report["min_token_count"] == 2
+        assert report["max_token_count"] == 2
+
+    def test_validate_rejects_missing_token_ids(self):
+        from route_data.e2c.synthetic_manifest import validate_alias_tokenization
+        records = [
+            {"identity_id": "syn_00", "alias": "Aven",
+             "alias_token_ids": [], "alias_token_count": 0,
+             "tokenizer_id": "Qwen/Qwen3.5-9B", "tokenizer_revision": "abc"},
+        ]
+        report = validate_alias_tokenization(records)
+        assert not report["pass"]

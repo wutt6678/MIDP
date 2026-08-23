@@ -51,6 +51,24 @@ def validate_leakage(
     errors: list[str] = []
 
     # ------------------------------------------------------------------ #
+    # Mandatory metadata completeness (v2: missing = hard fail)
+    # ------------------------------------------------------------------ #
+    for rec in image_splits:
+        img_id = rec.get("image_id", "?")
+        if not rec.get("image_sha256"):
+            errors.append(
+                f"Image {img_id}: image_sha256 is missing or empty"
+            )
+        if not rec.get("source_render_id"):
+            errors.append(
+                f"Image {img_id}: source_render_id is missing or empty"
+            )
+        if "generation_type" not in rec:
+            errors.append(
+                f"Image {img_id}: generation_type is missing"
+            )
+
+    # ------------------------------------------------------------------ #
     # P0-1: SHA-level content disjointness across splits
     # ------------------------------------------------------------------ #
     sha_by_split: dict[str, list[dict[str, str]]] = {
@@ -228,7 +246,11 @@ def _check_source_render_lineage(
     for rec in image_splits:
         source_id = rec.get("source_render_id")
         if not source_id:
-            continue  # no lineage info — skip
+            errors.append(
+                f"Image {rec.get('image_id', '?')}: "
+                f"source_render_id is missing — cannot verify lineage"
+            )
+            continue
         split = rec["split"]
         render_to_splits.setdefault(source_id, set()).add(split)
 

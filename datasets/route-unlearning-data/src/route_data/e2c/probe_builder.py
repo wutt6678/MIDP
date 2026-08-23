@@ -352,11 +352,23 @@ def validate_probes(
                 f"WN probe {p['probe_id']}: wrong label same as true label"
             )
 
-    # VTC: label conflict always opposite
+    # VTC: label conflict always opposite + rendered_claim_label consistency
     for p in probes.get("VTC", []):
         if p["presented_name_attribute"] == p["true_mapping"]:
             errors.append(
                 f"VTC probe {p['probe_id']}: conflict label same as true label"
+            )
+        # P0-3: rendered_claim_label must match presented_name_attribute
+        rendered = p.get("rendered_claim_label")
+        metadata = p.get("presented_name_attribute")
+        if rendered is None:
+            errors.append(
+                f"VTC probe {p['probe_id']}: missing rendered_claim_label"
+            )
+        elif rendered != metadata:
+            errors.append(
+                f"VTC probe {p['probe_id']}: rendered_claim_label={rendered!r} "
+                f"!= presented_name_attribute={metadata!r}"
             )
 
     # Unique probe IDs across all families

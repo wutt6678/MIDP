@@ -261,6 +261,98 @@ def generate_shuffled_mapping(
     return shuffled
 
 
+def generate_calibration_mapping(
+    calibration_ids: list[str],
+    seed: int = DEFAULT_SEED,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Generate balanced true + shuffled mappings for calibration identities.
+
+    With 2 calibration IDs: 1 Yes, 1 No.
+    Returns (true_mapping, shuffled_mapping).
+    """
+    if len(calibration_ids) < 2:
+        raise ValueError(
+            f"Need at least 2 calibration identities, got {len(calibration_ids)}"
+        )
+    rng = random.Random(seed)
+    ids = sorted(calibration_ids)
+    rng.shuffle(ids)
+    n_yes = len(ids) // 2
+    true_map = {id_: ("Yes" if i < n_yes else "No")
+                for i, id_ in enumerate(ids)}
+    shuf_map = {id_: ("No" if v == "Yes" else "Yes")
+                for id_, v in true_map.items()}
+    return true_map, shuf_map
+
+
+def finalize_alias_tokenization(
+    alias_map: dict[str, str],
+    tokenizer: Any,
+    *,
+    tokenizer_id: str = "Qwen/Qwen3.5-9B",
+    tokenizer_revision: str = "",
+) -> list[dict[str, Any]]:
+    """P1-1: Tokenize all aliases and return metadata records.
+
+    Each record contains alias, token IDs, token count, tokenizer info.
+    Hard-fails if any alias tokenizes to empty.
+    """
+    records: list[dict[str, Any]] = []
+    for id_, alias in sorted(alias_map.items()):
+        ids = tokenizer.encode(alias, add_special_tokens=False)
+        if not ids:
+            raise ValueError(
+                f"Alias {alias!r} for {id_} tokenized to empty sequence"
+            )
+        records.append({
+            "identity_id": id_,
+            "alias": alias,
+            "alias_token_ids": ids,
+            "alias_token_count": len(ids),
+            "tokenizer_id": tokenizer_id,
+            "tokenizer_revision": tokenizer_revision,
+        })
+    return records
+
+
+def validate_alias_tokenization(
+    alias_records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate alias tokenization completeness and comparability."""
+    errors: list[str] = []
+    counts = []
+    for rec in alias_records:
+        tc = rec.get("alias_token_count", 0)
+        if tc == 0:
+            errors.append(
+                f"Alias {rec.get('alias', '?')}: token count is 0"
+            )
+        if not rec.get("alias_token_ids"):
+            errors.append(
+                f"Alias {rec.get('alias', '?')}: token IDs missing"
+            )
+        if not rec.get("tokenizer_id"):
+            errors.append(
+                f"Alias {rec.get('alias', '?')}: tokenizer_id missing"
+            )
+        counts.append(tc)
+
+    report = {
+        "pass": len(errors) == 0,
+        "errors": errors,
+        "min_token_count": min(counts) if counts else 0,
+        "max_token_count": max(counts) if counts else 0,
+        "mean_token_count": sum(counts) / len(counts) if counts else 0,
+        "per_alias": alias_records,
+    }
+    if counts and max(counts) - min(counts) > 2:
+        report["warning"] = (
+            f"Alias token lengths vary significantly "
+            f"(min={min(counts)}, max={max(counts)})"
+        )
+    return report
+
+
 # --------------------------------------------------------------------------- #
 # Wrong-name pairing
 # --------------------------------------------------------------------------- #
