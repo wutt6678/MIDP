@@ -1,0 +1,104 @@
+2026-08-24 05:18:46,949 [INFO] e2c_v2_calibrate_m1: M1-only calibration: lr=2e-05, steps=200
+2026-08-24 05:18:46,949 [INFO] e2c_v2_calibrate_m1: Loaded 20 I2N records from calibration M
+2026-08-24 05:18:47,005 [INFO] e2c_v2_calibrate_m1: Loading Qwen3.5-9B...
+
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]
+Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 1544.97it/s]
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
+
+Loading weights:   0%|          | 0/760 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/760 [00:00<05:09,  2.45it/s]
+Loading weights:   2%|▏         | 16/760 [00:00<00:18, 40.57it/s]
+Loading weights:   4%|▍         | 32/760 [00:00<00:10, 72.75it/s]
+Loading weights:   6%|▌         | 45/760 [00:00<00:08, 84.64it/s]
+Loading weights:   8%|▊         | 57/760 [00:00<00:07, 92.47it/s]
+Loading weights:   9%|▉         | 69/760 [00:00<00:07, 94.62it/s]
+Loading weights:  11%|█         | 81/760 [00:01<00:06, 101.25it/s]
+Loading weights:  13%|█▎        | 99/760 [00:01<00:05, 118.28it/s]
+Loading weights:  16%|█▌        | 118/760 [00:01<00:04, 137.55it/s]
+Loading weights:  18%|█▊        | 133/760 [00:01<00:04, 131.47it/s]
+Loading weights:  19%|█▉        | 147/760 [00:01<00:04, 125.70it/s]
+Loading weights:  21%|██        | 160/760 [00:01<00:04, 121.44it/s]
+Loading weights:  23%|██▎       | 174/760 [00:01<00:04, 121.31it/s]
+Loading weights:  25%|██▍       | 188/760 [00:01<00:04, 123.95it/s]
+Loading weights:  26%|██▋       | 201/760 [00:01<00:04, 120.28it/s]
+Loading weights:  29%|██▊       | 218/760 [00:02<00:04, 128.78it/s]
+Loading weights:  31%|███       | 235/760 [00:02<00:03, 139.93it/s]
+Loading weights:  33%|███▎      | 250/760 [00:02<00:03, 142.03it/s]
+Loading weights:  35%|███▍      | 265/760 [00:02<00:03, 125.33it/s]
+Loading weights:  37%|███▋      | 280/760 [00:02<00:03, 127.76it/s]
+Loading weights:  39%|███▊      | 294/760 [00:02<00:03, 129.56it/s]
+Loading weights:  41%|████      | 308/760 [00:02<00:03, 127.75it/s]
+Loading weights:  42%|████▏     | 321/760 [00:02<00:03, 127.23it/s]
+Loading weights:  44%|████▍     | 334/760 [00:02<00:03, 123.42it/s]
+Loading weights:  46%|████▋     | 353/760 [00:03<00:02, 138.05it/s]
+Loading weights:  48%|████▊     | 367/760 [00:03<00:03, 124.90it/s]
+Loading weights:  51%|█████     | 385/760 [00:03<00:02, 135.15it/s]
+Loading weights:  52%|█████▎    | 399/760 [00:03<00:02, 128.48it/s]
+Loading weights:  54%|█████▍    | 413/760 [00:03<00:02, 129.97it/s]
+Loading weights:  56%|█████▌    | 427/760 [00:03<00:02, 122.02it/s]
+Loading weights:  68%|██████▊   | 514/760 [00:03<00:00, 318.79it/s]
+Loading weights:  79%|███████▉  | 604/760 [00:03<00:00, 477.02it/s]
+Loading weights:  96%|█████████▌| 726/760 [00:04<00:00, 679.43it/s]
+Loading weights: 100%|██████████| 760/760 [00:04<00:00, 186.91it/s]
+2026-08-24 05:18:55,281 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/generation_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:55,538 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:55,797 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:56,060 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:56,355 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:56,614 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:56,874 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/chat_template.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:57,143 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/audio_tokenizer_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:57,397 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:57,687 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:57,991 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:58,253 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B/tree/c202236235762e1c871ad0ccb60c8ee5ba337b9a?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-08-24 05:18:59,236 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen3.5-9B "HTTP/1.1 200 OK"
+2026-08-24 05:18:59,503 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:59,758 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/processor_config.json "HTTP/1.1 404 Not Found"
+2026-08-24 05:18:59,765 [INFO] route_data.models.trainable.hf_chat: Loaded qwen35_9b: Qwen/Qwen3.5-9B rev=c20223623576
+2026-08-24 05:18:59,765 [INFO] e2c_v2_calibrate_m1: Applying LoRA...
+2026-08-24 05:18:59,767 [INFO] e2c_v2_calibrate_m1: LoRA targets: 32 modules
+2026-08-24 05:19:00,031 [INFO] e2c_v2_calibrate_m1: Trainable: 1,966,080 parameters
+2026-08-24 05:19:00,033 [INFO] e2c_v2_calibrate_m1: Training 200 steps on 20 I2N records...
+[transformers] `use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`.
+2026-08-24 05:19:18,000 [INFO] e2c_v2_calibrate_m1: Step 1/200 loss=3.0796
+2026-08-24 05:19:35,176 [INFO] e2c_v2_calibrate_m1: Step 2/200 loss=2.9401
+2026-08-24 05:19:51,113 [INFO] e2c_v2_calibrate_m1: Step 3/200 loss=2.9919
+2026-08-24 05:20:08,109 [INFO] e2c_v2_calibrate_m1: Step 4/200 loss=2.9413
+2026-08-24 05:20:23,954 [INFO] e2c_v2_calibrate_m1: Step 5/200 loss=2.9463
+2026-08-24 05:21:25,756 [INFO] e2c_v2_calibrate_m1: Step 10/200 loss=2.9439
+2026-08-24 05:24:17,009 [INFO] e2c_v2_calibrate_m1: Step 20/200 loss=2.9034
+2026-08-24 05:26:19,698 [INFO] e2c_v2_calibrate_m1: Step 30/200 loss=2.7722
+2026-08-24 05:28:23,009 [INFO] e2c_v2_calibrate_m1: Step 40/200 loss=2.5826
+2026-08-24 05:30:33,416 [INFO] e2c_v2_calibrate_m1: Step 50/200 loss=2.3493
+2026-08-24 05:30:33,717 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-24 05:30:33,970 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-24 05:32:32,710 [INFO] e2c_v2_calibrate_m1: Step 60/200 loss=2.0771
+2026-08-24 05:34:19,190 [INFO] e2c_v2_calibrate_m1: Step 70/200 loss=1.8125
+2026-08-24 05:36:25,937 [INFO] e2c_v2_calibrate_m1: Step 80/200 loss=1.5900
+2026-08-24 05:38:30,482 [INFO] e2c_v2_calibrate_m1: Step 90/200 loss=1.4136
+2026-08-24 05:40:20,767 [INFO] e2c_v2_calibrate_m1: Step 100/200 loss=1.2724
+2026-08-24 05:40:21,054 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-24 05:40:21,062 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-24 05:42:09,002 [INFO] e2c_v2_calibrate_m1: Step 110/200 loss=1.1568
+2026-08-24 05:44:33,596 [INFO] e2c_v2_calibrate_m1: Step 120/200 loss=1.0604
+2026-08-24 05:48:03,899 [INFO] e2c_v2_calibrate_m1: Step 130/200 loss=0.9789
+2026-08-24 05:51:36,037 [INFO] e2c_v2_calibrate_m1: Step 140/200 loss=0.9090
+2026-08-24 05:55:08,708 [INFO] e2c_v2_calibrate_m1: Step 150/200 loss=0.8484
+2026-08-24 05:55:08,986 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-24 05:55:08,992 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-24 05:58:42,523 [INFO] e2c_v2_calibrate_m1: Step 160/200 loss=0.7954
+2026-08-24 06:02:15,571 [INFO] e2c_v2_calibrate_m1: Step 170/200 loss=0.7487
+2026-08-24 06:05:51,359 [INFO] e2c_v2_calibrate_m1: Step 180/200 loss=0.7071
+2026-08-24 06:09:23,243 [INFO] e2c_v2_calibrate_m1: Step 190/200 loss=0.6699
+2026-08-24 06:12:47,726 [INFO] e2c_v2_calibrate_m1: Step 200/200 loss=0.6364
+2026-08-24 06:12:48,029 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-24 06:12:48,035 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-24 06:12:48,059 [INFO] e2c_v2_calibrate_m1: Saving final adapter...
+2026-08-24 06:12:48,525 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-9B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-24 06:12:48,531 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-9B/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json "HTTP/1.1 200 OK"
+2026-08-24 06:12:48,552 [INFO] e2c_v2_calibrate_m1: M1-only calibration complete. Loss: 0.6364
+2026-08-24 06:12:48,552 [INFO] e2c_v2_calibrate_m1: Next: evaluate I2N on calibration validation/test probes
+
