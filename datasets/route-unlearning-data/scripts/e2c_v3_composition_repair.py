@@ -18,14 +18,12 @@ import argparse
 import json
 import logging
 import re
-import sys
 from collections import defaultdict
 from pathlib import Path
-from PIL import Image
-from typing import Any
 
 import torch
 import torch.nn as tnn
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 logging.basicConfig(
@@ -162,7 +160,9 @@ def train_composition(
 
     from torch.optim import AdamW
     from torch.optim.lr_scheduler import (
-        CosineAnnealingLR, LinearLR, SequentialLR,
+        CosineAnnealingLR,
+        LinearLR,
+        SequentialLR,
     )
 
     optimizer = AdamW(params, lr=LR, weight_decay=0.0)
@@ -259,8 +259,7 @@ def train_composition(
 
     adapter.save_unlearning_adapter(model, output_dir / "adapter_final")
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for e in trace:
-            f.write(json.dumps(e) + "\n")
+        f.writelines(json.dumps(e) + "\n" for e in trace)
 
     final = trace[-1] if trace else {}
     logger.info(f"[{condition}] training complete: "
@@ -315,7 +314,9 @@ def train_simple(
 
     from torch.optim import AdamW
     from torch.optim.lr_scheduler import (
-        CosineAnnealingLR, LinearLR, SequentialLR,
+        CosineAnnealingLR,
+        LinearLR,
+        SequentialLR,
     )
 
     optimizer = AdamW(params, lr=LR, weight_decay=0.0)
@@ -376,8 +377,7 @@ def train_simple(
 
     adapter.save_unlearning_adapter(model, output_dir / "adapter_final")
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for e in trace:
-            f.write(json.dumps(e) + "\n")
+        f.writelines(json.dumps(e) + "\n" for e in trace)
     logger.info(f"[{condition}] training complete, final loss="
                 f"{trace[-1]['loss']:.4f}")
     return trace
@@ -542,8 +542,8 @@ def evaluate_condition(
 
 def create_adapter(args, device, adapter_name):
     """Load model and create adapter with standard profile."""
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -595,12 +595,14 @@ def main():
     image_base = Path(args.image_base_dir)
 
     # Load identity info
-    mapping = json.load(open("e2c_v3/manifests/identity_code_mapping.json"))
+    with open("e2c_v3/manifests/identity_code_mapping.json") as f:
+        mapping = json.load(f)
     identity_ids = [m["identity_id"] for m in mapping["mappings"]]
     identity_to_alias = mapping["identity_to_alias"]
     alias_of = identity_to_alias
 
-    split_manifest = json.load(open("e2c_v2/manifests/e2c_image_split.json"))
+    with open("e2c_v2/manifests/e2c_image_split.json") as f:
+        split_manifest = json.load(f)
     eval_sets = defaultdict(list)
     for e in split_manifest:
         if e["identity_id"] in identity_ids:
@@ -688,10 +690,8 @@ def main():
             d_records = load_jsonl(data_dir / "D_neutral_train.jsonl")
 
             # Also load original D training data (image → alias)
-            all_records = [
-                json.loads(l)
-                for l in open("e2c_v2/data/experimental/M_train.jsonl")
-            ]
+            with open("e2c_v2/data/experimental/M_train.jsonl") as f:
+                all_records = [json.loads(l) for l in f]
             i2n_records = [
                 r for r in all_records
                 if r["task"] == "image_to_identity"

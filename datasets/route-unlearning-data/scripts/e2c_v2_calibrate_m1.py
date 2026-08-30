@@ -18,12 +18,10 @@ import argparse
 import json
 import logging
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
 import torch
-import yaml
 from torch.utils.data import DataLoader
 
 _project_root = Path(__file__).resolve().parent.parent
@@ -90,8 +88,8 @@ def main():
 
     # Load model and processor
     logger.info("Loading Qwen3.5-9B...")
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b",
@@ -238,8 +236,7 @@ def main():
 
     # Save trace
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for entry in trace:
-            f.write(json.dumps(entry) + "\n")
+        f.writelines(json.dumps(entry) + "\n" for entry in trace)
 
     summary = {
         "stage": "M1_only",
@@ -252,7 +249,7 @@ def main():
         json.dump(summary, f, indent=2, sort_keys=True)
 
     logger.info(f"M1-only calibration complete. Loss: {summary['final_loss']:.4f}")
-    logger.info(f"Next: evaluate I2N on calibration validation/test probes")
+    logger.info("Next: evaluate I2N on calibration validation/test probes")
 
 
 if __name__ == "__main__":

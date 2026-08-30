@@ -1,0 +1,65 @@
+e2c:
+  aliases:
+    pool:
+    - Aven
+    - Bira
+    - Caro
+    - Deni
+    - Eris
+    - Faro
+    - Gela
+    - Hani
+    - Ivoa
+    - Jora
+    - Kael
+    - Luma
+  conditions:
+  - M
+  - D
+  - M_shuffled
+  identities:
+    calibration: 2
+    experimental: 10
+    images_per_identity: 16
+    test: 3
+    train: 10
+    validation: 3
+  lora:
+    alpha: 16
+    dropout: 0.05
+    rank: 8
+    scope_regex: ^model\.language_model\.layers\.\d+\.self_attn\.
+    target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+  model:
+    attn_implementation: sdpa
+    dtype: bfloat16
+    id: Qwen/Qwen3.5-9B
+    processor_id: Qwen/Qwen3.5-9B
+    processor_revision: c202236235762e1c871ad0ccb60c8ee5ba337b9a
+    revision: c202236235762e1c871ad0ccb60c8ee5ba337b9a
+    trust_remote_code: true
+  seed: 17
+  target_fact:
+    balance:
+      false: 5
+      true: 5
+    property_name: Z
+    values:
+    - true
+    - false
+  training:
+    batch_size: 1
+    gradient_accumulation_steps: 8
+    learning_rate: 2.0e-05
+    max_grad_norm: 1.0
+    optimizer_steps: 900
+    warmup_steps: 90
+    weight_decay: 0.0
+  visual_controls:
+  - smiling
+  - eyeglasses
+  - hat

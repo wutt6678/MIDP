@@ -24,14 +24,12 @@ import argparse
 import json
 import logging
 import re
-import sys
 from collections import defaultdict
 from pathlib import Path
-from PIL import Image
-from typing import Any
 
 import torch
 import torch.nn as tnn
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 logging.basicConfig(
@@ -70,8 +68,8 @@ def load_image(path: str) -> Image.Image:
 
 
 def create_adapter_model(args, device, adapter_name):
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
         revision="c202236235762e1c871ad0ccb60c8ee5ba337b9a",
@@ -171,7 +169,9 @@ def train_standard(condition, adapter, model, processor,
 
     from torch.optim import AdamW
     from torch.optim.lr_scheduler import (
-        CosineAnnealingLR, LinearLR, SequentialLR,
+        CosineAnnealingLR,
+        LinearLR,
+        SequentialLR,
     )
 
     optimizer = AdamW(params, lr=lr, weight_decay=0.0)
@@ -229,8 +229,7 @@ def train_standard(condition, adapter, model, processor,
 
     adapter.save_unlearning_adapter(model, output_dir / "adapter_final")
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for e in trace:
-            f.write(json.dumps(e) + "\n")
+        f.writelines(json.dumps(e) + "\n" for e in trace)
     final_loss = running_loss / max(global_step, 1)
     logger.info(f"[{condition}] complete. Final avg loss={final_loss:.6f}")
     return trace
@@ -881,7 +880,6 @@ def run_u7(args, out_base, identity_ids, alias_of, eval_items, image_base):
         model = attach_lora(adapter, model)
         load_trained_weights(adapter, model)
 
-        target_alias = alias_of[tid]
         wrong_alias = sub_args.delete_to
         other_ids = [iid for iid in identity_ids if iid != tid]
 
@@ -1089,12 +1087,14 @@ def main():
     out_base.mkdir(parents=True, exist_ok=True)
 
     # Load identity info
-    mapping = json.load(open("e2c_v3/manifests/identity_code_mapping.json"))
+    with open("e2c_v3/manifests/identity_code_mapping.json") as f:
+        mapping = json.load(f)
     identity_ids = [m["identity_id"] for m in mapping["mappings"]]
     identity_to_alias = mapping["identity_to_alias"]
     alias_of = identity_to_alias
 
-    split_manifest = json.load(open("e2c_v2/manifests/e2c_image_split.json"))
+    with open("e2c_v2/manifests/e2c_image_split.json") as f:
+        split_manifest = json.load(f)
     eval_items = []
     for e in split_manifest:
         if e["identity_id"] in identity_ids:

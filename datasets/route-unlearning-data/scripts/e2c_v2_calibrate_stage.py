@@ -95,8 +95,8 @@ def main():
 
     # Load model
     logger.info("Loading Qwen3.5-9B...")
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -217,8 +217,7 @@ def main():
     adapter.save_unlearning_adapter(model, output_dir / "adapter_final")
 
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for e in trace:
-            f.write(json.dumps(e) + "\n")
+        f.writelines(json.dumps(e) + "\n" for e in trace)
 
     summary = {
         "stage": args.stage,

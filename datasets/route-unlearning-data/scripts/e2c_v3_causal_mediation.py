@@ -15,14 +15,12 @@ import argparse
 import json
 import logging
 import re
-import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
-from PIL import Image
-from typing import Any
 
 import torch
 import torch.nn as tnn
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 logging.basicConfig(
@@ -107,7 +105,9 @@ def train_condition(
     )
     from torch.optim import AdamW
     from torch.optim.lr_scheduler import (
-        CosineAnnealingLR, LinearLR, SequentialLR,
+        CosineAnnealingLR,
+        LinearLR,
+        SequentialLR,
     )
 
     optimizer = AdamW(params, lr=LR, weight_decay=0.0)
@@ -168,8 +168,7 @@ def train_condition(
 
     adapter.save_unlearning_adapter(model, output_dir / "adapter_final")
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for e in trace:
-            f.write(json.dumps(e) + "\n")
+        f.writelines(json.dumps(e) + "\n" for e in trace)
     logger.info(f"[{condition}] training complete, final loss="
                 f"{trace[-1]['loss']:.4f}")
     return trace
@@ -331,8 +330,8 @@ def run_m_latent(args, out_base, identity_ids, alias_of, all_aliases,
     out_dir = out_base / "M_latent"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -403,8 +402,8 @@ def run_direct(args, out_base, identity_ids, alias_of, all_aliases,
     out_dir = out_base / "D"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -474,8 +473,8 @@ def run_m_shuffled(args, out_base, identity_ids, alias_of, all_aliases,
     out_dir = out_base / "M_latent_shuffled"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -553,17 +552,16 @@ def main():
     # ------------------------------------------------------------------ #
     # Data (shared across conditions)
     # ------------------------------------------------------------------ #
-    split_manifest = json.load(open("e2c_v2/manifests/e2c_image_split.json"))
+    with open("e2c_v2/manifests/e2c_image_split.json") as f:
+        split_manifest = json.load(f)
     identity_ids = sorted(
         {e["identity_id"] for e in split_manifest
          if e["identity_id"].startswith("syn_")
          and e["identity_id"][4:].isdigit()}
     )[:10]
 
-    all_records = [
-        json.loads(l)
-        for l in open("e2c_v2/data/experimental/M_train.jsonl")
-    ]
+    with open("e2c_v2/data/experimental/M_train.jsonl") as f:
+        all_records = [json.loads(l) for l in f]
     i2n_records = [
         r for r in all_records
         if r["task"] == "image_to_identity"

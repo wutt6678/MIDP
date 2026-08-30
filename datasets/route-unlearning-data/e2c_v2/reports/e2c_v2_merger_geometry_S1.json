@@ -1,0 +1,34 @@
+{
+  "diagnostic": "S1 merger geometry: identity vs individual-image specialization",
+  "date": "2026-08-26",
+  "adapter": "e2c_v2/outputs/diag_scope_xcap/S1_r8_fullscope (merger-only LoRA, r8, train acc 0.64 / test 0.167)",
+  "method": "Per-image embeddings extracted from the frozen visual pipeline, base vs post-S1, held-out protocol (train exemplars/prototypes -> test). Levels: pre (final block features, mean pool), post (merger output tokens, mean pool), post_centered (post with global mean direction removed), pool (vision-tower pooler).",
+  "results": {
+    "base": {
+      "pre": {"one_nn": 1.0, "prototype": 1.0, "gap": 0.0147},
+      "post": {"one_nn": 1.0, "prototype": 1.0, "gap": 0.0, "note": "degenerate: constant direction dominates naive mean pool"},
+      "post_centered": {"one_nn": 1.0, "prototype": 0.9667, "gap": 0.7151, "note": "the tokens the LM receives ARE strongly identity-separable once the shared direction is removed"},
+      "pool": {"one_nn": 1.0, "prototype": 1.0, "gap": 0.0147}
+    },
+    "adapter_S1": {
+      "pre": {"one_nn": 1.0, "prototype": 1.0, "gap": 0.0147, "drift_cos": 0.9948},
+      "post": {"one_nn": 1.0, "prototype": 1.0, "gap": 0.0, "drift_cos": 1.0},
+      "post_centered": {"one_nn": 1.0, "prototype": 0.9667, "gap": 0.7151, "drift_cos": 1.0},
+      "pool": {"one_nn": 1.0, "prototype": 1.0, "gap": 0.0147, "drift_cos": 0.9948}
+    }
+  },
+  "verdict": "CASE_A",
+  "conclusions": [
+    "Identity structure is NOT destroyed by S1: held-out 1-NN = 1.0 and prototype = 0.967 at every level, post-S1, including the LM-facing merger tokens (post_centered gap 0.715, base-identical). Case B (over-specialization / geometry collapse) is excluded.",
+    "The merger LoRA barely moved the output geometry at all (drift cos = 1.0000 post, 0.9948 pre/pool, the latter at numerical-noise level). S1's 0.64 train accuracy therefore rides on an extremely small, train-image-specific perturbation of the merger output rather than a reorganized identity space.",
+    "The tokens the LM receives already carry near-perfect identity information in the BASE model (post_centered 1-NN = 1.0). The binding failure is purely a readout/binding problem inside the (mostly frozen) language side, not a representation problem anywhere in the visual stack.",
+    "Implication per the pre-registered interpretation: the next lever is the training objective (make the binding signal explicit/salient - e.g. contrastive-style alias supervision, per-identity staging, or an objective that rewards identity-conditional token probabilities rather than sequence likelihood) rather than further scope/capacity sweeps.",
+    "Secondary implication: since geometry drift is ~0, scope ablations that only add vision-side plasticity cannot change what the LM sees in first order; this explains the flat S0/S1/S2/S3 plateau."
+  ],
+  "artifacts": {
+    "report": "e2c_v2/outputs/diag_merger_geometry/S1/geometry_report.json",
+    "embeddings_cache": "e2c_v2/outputs/diag_merger_geometry/S1/embeddings.pt",
+    "script": "scripts/e2c_v2_diag_visual_separability.py"
+  },
+  "seed": 17
+}

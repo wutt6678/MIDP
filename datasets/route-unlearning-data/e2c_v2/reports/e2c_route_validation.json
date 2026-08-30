@@ -1,0 +1,99 @@
+{
+  "controlled_unlearning_allowed": false,
+  "gates": {
+    "R1": {
+      "gate": "R1",
+      "metric": "I2N_accuracy_M",
+      "preferred_threshold": 0.95,
+      "status": "FAIL",
+      "threshold": 0.9,
+      "value": 0.03333333333333333
+    },
+    "R2": {
+      "d_separation_pass": true,
+      "d_separation_threshold": 0.65,
+      "difference_threshold": 0.25,
+      "gate": "R2",
+      "m_pass": false,
+      "metric": "NAME_accuracy",
+      "name_threshold": 0.9,
+      "status": "FAIL",
+      "value_d": 0.5,
+      "value_m": 0.4
+    },
+    "R3": {
+      "gate": "R3",
+      "metric": "DV_syn_accuracy",
+      "status": "FAIL",
+      "threshold": 0.8,
+      "value_d": 0.6,
+      "value_m": 0.36666666666666664
+    },
+    "R4": {
+      "bootstrap_ci": {
+        "ci_excludes_zero": false,
+        "ci_lower": -0.1428571513720921,
+        "ci_upper": 0.013888866537147099,
+        "mean": -0.07021852486691019
+      },
+      "ci_excludes_zero": false,
+      "gate": "R4",
+      "magnitude_pass": false,
+      "metric": "abs_WrongNameEffect",
+      "status": "FAIL",
+      "value_d": 0.14166666964689892,
+      "value_m": 0.07083332935969035
+    },
+    "R5": {
+      "bootstrap_ci": {
+        "ci_excludes_zero": true,
+        "ci_lower": -1.9642856691830923,
+        "ci_upper": -0.17261902823866837,
+        "mean": -1.0506973240898667
+      },
+      "ci_excludes_zero": true,
+      "gate": "R5",
+      "magnitude_pass": false,
+      "metric": "abs_ConflictEffect",
+      "status": "FAIL",
+      "value_d": 2.2749999604808786,
+      "value_m": 1.2374999905625979
+    },
+    "R6": {
+      "agreement_with_shuffled": 0.5,
+      "agreement_with_true": 0.5,
+      "follows_shuffled": false,
+      "gate": "R6",
+      "meets_preferred_threshold": false,
+      "metric": "M_shuffled_mapping_agreement",
+      "preferred_threshold": 0.8,
+      "status": "FAIL"
+    },
+    "R7": {
+      "failures": [
+        "smiling: decrease 0.433 > 0.05",
+        "eyeglasses: decrease 0.333 > 0.05",
+        "hat: decrease 0.167 > 0.05"
+      ],
+      "gate": "R7",
+      "max_absolute_decrease": 0.05,
+      "metric": "visual_control_preservation",
+      "results": {
+        "eyeglasses": {
+          "base_accuracy": 1.0,
+          "trained_accuracy": 0.6666666666666666
+        },
+        "hat": {
+          "base_accuracy": 1.0,
+          "trained_accuracy": 0.8333333333333334
+        },
+        "smiling": {
+          "base_accuracy": 1.0,
+          "trained_accuracy": 0.5666666666666667
+        }
+      },
+      "status": "FAIL"
+    }
+  },
+  "route_established": false
+}

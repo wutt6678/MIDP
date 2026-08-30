@@ -1,0 +1,103 @@
+{
+  "experiment": "auxiliary identity classification head (variant B) — S1-ID vs S0-ID",
+  "date": "2026-08-28",
+  "success_criterion": "I2N_test >= 0.90 (pre-registered, not weakened)",
+  "verdict": "FAIL — auxiliary head achieves perfect identity classification (1.000) but free-gen I2N does not improve beyond S1 baseline",
+
+  "conditions": {
+    "S1-ID": {
+      "scope": "merger (model.visual.merger.linear_fc1/fc2)",
+      "n_target_modules": 2,
+      "trainable_lora_parameters": 143360,
+      "aux_layer": 1,
+      "lam_id": 1.0,
+      "head_lr": 1e-3,
+      "training": {
+        "steps": 1000,
+        "final_ce_loss": 1.3906,
+        "final_id_loss": 0.4644,
+        "initial_ce_loss": 4.0304,
+        "initial_id_loss": 2.2951
+      },
+      "eval": {
+        "train_free_gen": 0.750,
+        "train_rank": 0.870,
+        "val_free_gen": 0.267,
+        "val_rank": 0.533,
+        "test_free_gen": 0.267,
+        "test_rank": 0.533,
+        "test_mean_correct_rank": 2.57,
+        "test_margin": 1.841,
+        "test_id_head_accuracy": 1.000
+      }
+    },
+    "S0-ID": {
+      "scope": "language attention (all full-attn layers qkvo)",
+      "n_target_modules": 32,
+      "trainable_lora_parameters": 1966080,
+      "aux_layer": 1,
+      "lam_id": 1.0,
+      "head_lr": 1e-3,
+      "training": {
+        "steps": 1000,
+        "final_ce_loss": 0.4691,
+        "final_id_loss": 0.3193,
+        "initial_ce_loss": 4.4977,
+        "initial_id_loss": 2.3175
+      },
+      "eval": {
+        "train_free_gen": 0.190,
+        "train_rank": 0.230,
+        "val_free_gen": 0.200,
+        "val_rank": 0.200,
+        "test_free_gen": 0.100,
+        "test_rank": 0.167,
+        "test_mean_correct_rank": 4.33,
+        "test_margin": -4.689,
+        "test_id_head_accuracy": 1.000
+      }
+    }
+  },
+
+  "comparison_with_baseline_S1": {
+    "S1_free_gen_test": 0.167,
+    "S1_rank_test": 0.300,
+    "S1-ID_free_gen_test": 0.267,
+    "S1-ID_rank_test": 0.533,
+    "S1-ID_delta_free_gen": "+0.100 (0.167 -> 0.267)",
+    "S1-ID_delta_rank": "+0.233 (0.300 -> 0.533)"
+  },
+
+  "geometry_S1-ID_vs_base": {
+    "pre": {"cosine_mean": 0.9924, "one_nn_base": 1.0, "one_nn_adapter": 1.0, "gap_base": 0.0147, "gap_adapter": 0.0157},
+    "post": {"cosine_mean": 1.0000, "one_nn_base": 1.0, "one_nn_adapter": 1.0, "gap_base": 0.0, "gap_adapter": 0.0},
+    "post_centered": {"cosine_mean": 1.0000, "one_nn_base": 1.0, "one_nn_adapter": 1.0, "gap_base": 0.7151, "gap_adapter": 0.7151},
+    "pool": {"cosine_mean": 0.9924, "one_nn_base": 1.0, "one_nn_adapter": 1.0, "gap_base": 0.0147, "gap_adapter": 0.0157},
+    "conclusion": "S1-ID adapter geometry is identical to base model; merger LoRA barely moved visual embeddings"
+  },
+
+  "confusion_matrices_test": {
+    "S1-ID": "Most predictions are OTHER (model refuses to generate alias); occasional correct",
+    "S0-ID": "Strong alias biases (Jora, Eris, Faro dominate); structured confusion, not random"
+  },
+
+  "visual_controls": {
+    "smiling": {"accuracy": 0.567, "base": 1.0, "delta": -0.433},
+    "eyeglasses": {"accuracy": 0.667, "base": 1.0, "delta": -0.333},
+    "hat": {"accuracy": 0.833, "base": 1.0, "delta": -0.167},
+    "conclusion": "All visual attributes degraded vs base model (same for both S1-ID and S0-ID)"
+  },
+
+  "interpretation": {
+    "key_finding": "Auxiliary identity head achieves 100% accuracy — identity information is perfectly readable from LM hidden states at layer 1. Yet free-gen I2N remains at 0.267, far below the 0.90 gate.",
+    "causal_diagnosis": [
+      "The model CAN represent identity (head reads it perfectly)",
+      "The model CANNOT use identity to drive alias generation",
+      "This is a readout/binding failure, not a representation failure",
+      "The alias CE loss does not benefit from the identity signal — the two objectives are decoupled"
+    ],
+    "S1_vs_S1-ID": "S1-ID shows modest improvement in candidate ranking (0.533 vs 0.300) but free-gen remains broken. The model can recognize the correct alias when scored by log-prob, but cannot generate it.",
+    "geometry_preserved": "The merger LoRA training with aux loss did NOT alter visual embeddings — geometry is identical to base. The aux head learns from the existing identity structure without changing it.",
+    "route_establishment": "HALT — the image-to-alias binding cannot be established by any LoRA variant tested (S0, S1, S2, S3, S0-ID, S1-ID) with the current alias-CE training objective. The binding failure is robust to: scope changes, rank increases, auxiliary identity supervision, and capacity controls."
+  }
+}

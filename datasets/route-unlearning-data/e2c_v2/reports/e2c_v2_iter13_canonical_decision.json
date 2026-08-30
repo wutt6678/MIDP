@@ -1,0 +1,43 @@
+{
+  "iteration": 13,
+  "stage": "canonical_v2_final_decision",
+  "code_sha": "e0d2c52ec260ea0cb76985ae72e9dcb01e9fe8de",
+  "canonical_config": "e2c_v2/manifests/e2c_canonical_resolved.yaml",
+  "route_established": false,
+  "controlled_unlearning_allowed": false,
+  "training_outcomes": {
+    "M": {"steps": 300, "final_loss": 1.1128, "protected_parameters_pass": true},
+    "D": {"steps": 300, "final_loss": 0.3017, "protected_parameters_pass": true},
+    "M_shuffled": {"steps": 300, "final_loss": 1.1173, "protected_parameters_pass": true}
+  },
+  "probe_accuracies": {
+    "M": {"I2N": 0.0333, "NAME": 0.4, "DV_syn": 0.3667, "IPN_syn": 0.4667, "WN": 0.6, "VTC": 0.3667, "VISUAL_CONTROL": 0.6889},
+    "D": {"I2N": 0.0, "NAME": 0.5, "DV_syn": 0.6, "IPN_syn": 0.6, "WN": 0.6333, "VTC": 0.3667, "VISUAL_CONTROL": 0.6889},
+    "M_shuffled": {"I2N": 0.0333, "NAME": 0.3, "DV_syn": 0.3333, "IPN_syn": 0.4667, "WN": 0.5667, "VTC": 0.4, "VISUAL_CONTROL": 0.6889}
+  },
+  "gates": {
+    "R1": "FAIL (I2N_M=0.033, threshold 0.90)",
+    "R2": "FAIL (NAME_M=0.40, NAME_D=0.50, threshold 0.90)",
+    "R3": "FAIL (DV_syn_M=0.367, DV_syn_D=0.60, threshold 0.80)",
+    "R4": "FAIL (|WrongNameEffect| CI includes zero)",
+    "R5": "FAIL (|ConflictEffect| CI excludes zero but magnitude sign inverted)",
+    "R6": "FAIL (M_shuffled mapping agreement 0.5)",
+    "R7": "FAIL (visual control degradation: smiling -0.433, eyeglasses -0.333, hat -0.167)"
+  },
+  "root_cause_analysis": {
+    "primary": "training_budget_underfitting",
+    "evidence": [
+      "M/M_shuffled loss plateau ~1.11 after 300 steps / 11 epochs (loss 3.0 -> 1.1, all 64 LoRA tensors changed)",
+      "Calibration M1 needed 200 steps for 20 I2N records (2 identities); canonical has 100 I2N records across 10 identities but same 300-step total budget shared with NAME records -> ~12 epochs of I2N exposure, insufficient",
+      "D condition (loss 0.30) learned substantially better than M/M_shuffled (loss ~1.11), consistent with M's mixed-task budget dilution",
+      "Model outputs aliases (Jora/Eva/Jira) but wrong mappings: vocabulary learned, image->alias bindings underfit",
+      "grad_norm=0.0 in canonical traces is a logging bug (norm measured after optimizer.zero_grad), not gradient death; fixed in scripts/e2c_train_route.py"
+    ],
+    "secondary": "R7 visual control degradation indicates LoRA scope collateral damage at this budget; preservation likely improves with better convergence or lower LR"
+  },
+  "follow_up": {
+    "budget_verification_run": "e2c_v2/outputs/budget_verify (900 steps, GPU 1, config e2c_v2/manifests/e2c_budget_verify_resolved.yaml)",
+    "decision_rule": "If budget verification establishes R1-R7 (or materially improves I2N/NAME/DV_syn), frozen canonical config was mis-calibrated: re-freeze with 900+ steps and re-run canonical. If budget verification also fails, classify as composition/architecture limitation and halt route establishment."
+  },
+  "seed": 17
+}

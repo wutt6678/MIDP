@@ -11,14 +11,11 @@ import argparse
 import json
 import logging
 import re
-import sys
-from collections import defaultdict
 from pathlib import Path
-from PIL import Image
-from typing import Any
 
 import torch
 import torch.nn as tnn
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 logging.basicConfig(
@@ -61,8 +58,8 @@ def make_shuffled_map(identity_ids, alias_of, seed=17):
 
 def create_adapter_model(args, device, adapter_name):
     """Load base model and create adapter profile."""
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -127,7 +124,9 @@ def train_adapter(
 
     from torch.optim import AdamW
     from torch.optim.lr_scheduler import (
-        CosineAnnealingLR, LinearLR, SequentialLR,
+        CosineAnnealingLR,
+        LinearLR,
+        SequentialLR,
     )
 
     optimizer = AdamW(params, lr=lr, weight_decay=0.0)
@@ -188,8 +187,7 @@ def train_adapter(
 
     adapter.save_unlearning_adapter(model, output_dir / "adapter_final")
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for e in trace:
-            f.write(json.dumps(e) + "\n")
+        f.writelines(json.dumps(e) + "\n" for e in trace)
     logger.info(f"[{condition}] training complete, final loss="
                 f"{trace[-1]['loss']:.4f}")
     return trace
@@ -207,8 +205,6 @@ def bootstrap_ci_delta(
     Δ_C per image = agreement_M_i - agreement_D_i
     Bootstrap: resample images, compute mean Δ_C, get CI.
     """
-    rng = torch.Generator().manual_seed(seed)
-
     # Per-image agreements for M
     m_per_image = {}
     for rec in m_records:
@@ -390,7 +386,8 @@ def run_c5(args, out_base, eval_items, image_base, identity_ids, alias_of):
     # ------------------------------------------------------------------ #
     m_int_path = out_base / "intervention" / "eval_results.json"
     if m_int_path.exists():
-        m_int_data = json.load(open(m_int_path))
+        with open(m_int_path) as f:
+            m_int_data = json.load(f)
         m_records = m_int_data.get("records", [])
         m_agreement = m_int_data.get("agreement", 0)
     else:
@@ -452,8 +449,7 @@ def run_c5(args, out_base, eval_items, image_base, identity_ids, alias_of):
     with open(c5_dir / "eval_results.json", "w") as f:
         json.dump(c5_results, f, indent=2)
     with open(c5_dir / "intervention_records.jsonl", "w") as f:
-        for rec in d_intervention_records:
-            f.write(json.dumps(rec) + "\n")
+        f.writelines(json.dumps(rec) + "\n" for rec in d_intervention_records)
 
     logger.info(f"C5 GATES: D_baseline={c5_results['gate_D_baseline']}, "
                 f"D_code_agnostic={c5_results['gate_D_code_agnostic']}, "
@@ -514,7 +510,7 @@ def run_c6(args, out_base, eval_items, image_base, identity_ids, alias_of):
         )
         sup_items.append(ex)
 
-    trace = train_adapter(
+    _ = train_adapter(
         "C→Y_shuffled", adapter, model, processor,
         sup_items, shy_dir, args.device,
         steps=STEPS_CY, warmup=WARMUP, lr=LR,
@@ -693,7 +689,8 @@ def run_c6(args, out_base, eval_items, image_base, identity_ids, alias_of):
     # ------------------------------------------------------------------ #
     m_int_path = out_base / "intervention" / "eval_results.json"
     if m_int_path.exists():
-        m_int_data = json.load(open(m_int_path))
+        with open(m_int_path) as f:
+            m_int_data = json.load(f)
         m_agreement = m_int_data.get("agreement", 0)
     else:
         m_agreement = 1.0
@@ -725,11 +722,9 @@ def run_c6(args, out_base, eval_items, image_base, identity_ids, alias_of):
     with open(c6_dir / "eval_results.json", "w") as f:
         json.dump(c6_results, f, indent=2)
     with open(c6_dir / "composition_records.jsonl", "w") as f:
-        for rec in comp_records:
-            f.write(json.dumps(rec) + "\n")
+        f.writelines(json.dumps(rec) + "\n" for rec in comp_records)
     with open(c6_dir / "intervention_records.jsonl", "w") as f:
-        for rec in shy_int_records:
-            f.write(json.dumps(rec) + "\n")
+        f.writelines(json.dumps(rec) + "\n" for rec in shy_int_records)
 
     logger.info(f"C6 GATES: composition={c6_results['gate_shuffled_composition']}, "
                 f"intervention={c6_results['gate_shuffled_intervention']}, "
@@ -775,8 +770,8 @@ def run_c7(args, out_base, identity_ids):
     # Evaluate with frozen base model (no adapter)
     # ------------------------------------------------------------------ #
     logger.info("Evaluating visual attributes with frozen base model...")
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -937,12 +932,14 @@ def main():
     out_base.mkdir(parents=True, exist_ok=True)
 
     # Load identity info
-    mapping = json.load(open("e2c_v3/manifests/identity_code_mapping.json"))
+    with open("e2c_v3/manifests/identity_code_mapping.json") as f:
+        mapping = json.load(f)
     identity_ids = [m["identity_id"] for m in mapping["mappings"]]
     identity_to_alias = mapping["identity_to_alias"]
     alias_of = identity_to_alias
 
-    split_manifest = json.load(open("e2c_v2/manifests/e2c_image_split.json"))
+    with open("e2c_v2/manifests/e2c_image_split.json") as f:
+        split_manifest = json.load(f)
     eval_items = []
     for e in split_manifest:
         if e["identity_id"] in identity_ids:

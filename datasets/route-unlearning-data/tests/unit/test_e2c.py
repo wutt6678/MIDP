@@ -12,61 +12,33 @@ Covers:
 
 from __future__ import annotations
 
-import json
-import tempfile
+# Import E2C modules
+import sys
 from pathlib import Path
 
 import pytest
 
-# Import E2C modules
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
-from route_data.e2c.synthetic_manifest import (
-    generate_identity_ids,
-    assign_aliases,
-    generate_image_splits,
-    generate_true_mapping,
-    generate_shuffled_mapping,
-    generate_wrong_name_pairs,
-    generate_e2c_manifests,
-    sha256_json,
-    sha256_file,
-    write_json_manifest,
-    load_json_manifest,
-    CANONICAL_ALIASES,
-    EXPERIMENTAL_COUNT,
-    CALIBRATION_COUNT,
-    IMAGES_PER_IDENTITY,
-    TRAIN_COUNT,
-    VAL_COUNT,
-    TEST_COUNT,
-    DEFAULT_SEED,
-    get_prompt,
-    prompt_registry_sha,
-)
 from route_data.e2c.dataset_builder import (
-    build_condition_m,
     build_condition_d,
+    build_condition_m,
     build_condition_m_shuffled,
     validate_condition_invariants,
-    build_condition_matching_report,
-    write_training_jsonl,
 )
 from route_data.e2c.probe_builder import (
     build_all_probes,
     validate_probes,
 )
 from route_data.e2c.route_metrics import (
-    compute_signed_margin,
     compute_accuracy_from_probes,
-    compute_i2n_accuracy,
     compute_route_effects,
-    compute_shuffled_analysis,
+    compute_signed_margin,
     identity_clustered_bootstrap,
 )
 from route_data.e2c.route_validation import (
-    validate_leakage,
+    aggregate_route_decision,
+    classify_failure,
     evaluate_r1,
     evaluate_r2,
     evaluate_r3,
@@ -74,10 +46,26 @@ from route_data.e2c.route_validation import (
     evaluate_r5,
     evaluate_r6,
     evaluate_r7,
-    aggregate_route_decision,
-    classify_failure,
 )
-
+from route_data.e2c.synthetic_manifest import (
+    DEFAULT_SEED,
+    IMAGES_PER_IDENTITY,
+    TEST_COUNT,
+    TRAIN_COUNT,
+    VAL_COUNT,
+    assign_aliases,
+    generate_e2c_manifests,
+    generate_identity_ids,
+    generate_image_splits,
+    generate_shuffled_mapping,
+    generate_true_mapping,
+    generate_wrong_name_pairs,
+    load_json_manifest,
+    prompt_registry_sha,
+    sha256_file,
+    sha256_json,
+    write_json_manifest,
+)
 
 # --------------------------------------------------------------------------- #
 # Fixtures
@@ -305,7 +293,7 @@ class TestProbeConstruction:
     def test_probe_ids_unique(self, probe_setup):
         probes, _, _ = probe_setup
         all_ids = []
-        for family, family_probes in probes.items():
+        for family_probes in probes.values():
             for p in family_probes:
                 all_ids.append(p["probe_id"])
         assert len(all_ids) == len(set(all_ids))
@@ -542,7 +530,7 @@ class TestFullPipeline:
 
     def test_build_and_validate_pipeline(self, tmp_path):
         """Full pipeline: manifests -> conditions -> probes -> validate."""
-        shas = generate_e2c_manifests(tmp_path / "manifests", seed=17)
+        generate_e2c_manifests(tmp_path / "manifests", seed=17)
         exp_ids, cal_ids = generate_identity_ids()
         alias_map = assign_aliases(exp_ids, cal_ids)
         splits = generate_image_splits(exp_ids + cal_ids)

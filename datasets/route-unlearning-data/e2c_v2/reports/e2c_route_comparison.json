@@ -1,0 +1,72 @@
+{
+  "D": {
+    "ConflictEffect": -2.2749999604808786,
+    "DV_syn": 0.6,
+    "IPN_syn": 0.6,
+    "NAME": 0.5,
+    "VTC": 0.36666666666666664,
+    "WN": 0.6333333333333333,
+    "WrongNameEffect": 0.14166666964689892
+  },
+  "M": {
+    "ConflictEffect": -1.2374999905625979,
+    "DV_syn": 0.36666666666666664,
+    "I2N": 0.03333333333333333,
+    "IPN_syn": 0.4666666666666667,
+    "NAME": 0.4,
+    "NameEffect": 0.008333333333333333,
+    "VTC": 0.36666666666666664,
+    "WN": 0.6,
+    "WrongNameEffect": 0.07083332935969035
+  },
+  "M_shuffled": {
+    "DV_syn": {
+      "agreement_with_shuffled_mapping": 0.5666666666666667,
+      "agreement_with_true_mapping": 0.43333333333333335,
+      "n_probes": 30
+    },
+    "IPN_syn": {
+      "agreement_with_shuffled_mapping": 0.5,
+      "agreement_with_true_mapping": 0.5,
+      "n_probes": 30
+    },
+    "NAME": {
+      "agreement_with_shuffled_mapping": 0.5,
+      "agreement_with_true_mapping": 0.5,
+      "n_probes": 10
+    }
+  },
+  "bootstrap": {
+    "bootstrap": {
+      "NAME_accuracy_M_minus_D": {
+        "ci_excludes_zero": false,
+        "ci_lower": -0.5,
+        "ci_upper": 0.30000000000000004,
+        "mean": -0.10375000000000197
+      },
+      "abs_ConflictEffect_M_minus_D": {
+        "ci_excludes_zero": true,
+        "ci_lower": -1.9642856691830923,
+        "ci_upper": -0.17261902823866837,
+        "mean": -1.0506973240898667
+      },
+      "abs_WrongNameEffect_M_minus_D": {
+        "ci_excludes_zero": false,
+        "ci_lower": -0.1428571513720921,
+        "ci_upper": 0.013888866537147099,
+        "mean": -0.07021852486691019
+      }
+    },
+    "n_resamples": 2000,
+    "point_estimates": {
+      "NAME_accuracy_M_minus_D": -0.09999999999999998,
+      "abs_ConflictEffect_M_minus_D": -1.0374999699182808,
+      "abs_WrongNameEffect_M_minus_D": -0.07083334028720857
+    }
+  },
+  "contrasts": {
+    "NAME_M_minus_D": -0.09999999999999998,
+    "abs_ConflictEffect_M_minus_D": -1.0374999699182808,
+    "abs_WrongNameEffect_M_minus_D": -0.07083334028720857
+  }
+}

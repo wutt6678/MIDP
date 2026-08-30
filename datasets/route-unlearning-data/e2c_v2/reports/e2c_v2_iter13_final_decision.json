@@ -1,0 +1,52 @@
+{
+  "iteration": "13_final",
+  "stage": "budget_verification_conclusion",
+  "budget_verify_config": "e2c_v2/manifests/e2c_budget_verify_resolved.yaml (900 steps, 3x canonical)",
+  "route_established": false,
+  "controlled_unlearning_allowed": false,
+  "training_outcomes": {
+    "M": {"steps": 900, "final_loss": 0.4308, "epochs": 35},
+    "D": {"steps": 900, "final_loss": 0.1446},
+    "M_shuffled": {"steps": 900, "final_loss": 0.4391}
+  },
+  "probe_accuracies_900_steps": {
+    "M": {"I2N": 0.1333, "NAME": 0.9, "DV_syn": 0.6, "IPN_syn": 0.5, "WN": 0.5, "VTC": 0.5, "VISUAL_CONTROL": 0.6889},
+    "D": {"I2N": 0.0, "NAME": 0.5, "DV_syn": 0.8667, "IPN_syn": 0.5333, "WN": 0.5, "VTC": 0.4667, "VISUAL_CONTROL": 0.6889},
+    "M_shuffled": {"I2N": 0.1667, "NAME": 0.1, "DV_syn": 0.5667, "IPN_syn": 0.4667, "WN": 0.5, "VTC": 0.5, "VISUAL_CONTROL": 0.6889}
+  },
+  "gates_900_steps": {
+    "R1": "FAIL (I2N_M=0.133 vs threshold 0.90; 0.033 at 300 steps -> 0.133 at 900, still far below)",
+    "R2": "PASS (NAME_M=0.90 >= 0.90, NAME_D=0.50, separation holds)",
+    "R3": "FAIL (DV_syn_M=0.60 < 0.80; DV_syn_D=0.867 passes individually)",
+    "R4": "FAIL (|WrongNameEffect| CI [-0.598, 0.192] includes zero)",
+    "R5": "FAIL (|ConflictEffect| CI excludes zero, magnitude check fails)",
+    "R6": "PASS (M_shuffled mapping agreement with shuffled = 0.90 >= 0.80)",
+    "R7": "FAIL (visual control decreases: smiling 0.433, eyeglasses 0.333, hat 0.167; identical to canonical -> not budget-dependent)"
+  },
+  "comparison_300_vs_900_steps": {
+    "I2N_M": "0.033 -> 0.133 (improved but far below 0.90)",
+    "NAME_M": "0.40 -> 0.90 (gate crossed)",
+    "DV_syn_M": "0.367 -> 0.60 (improved, still below 0.80)",
+    "DV_syn_D": "0.60 -> 0.867 (gate threshold crossed)",
+    "R6_agreement": "0.50 -> 0.90 (gate crossed)",
+    "R7_degradation": "identical at both budgets (LoRA scope collateral, budget-independent)"
+  },
+  "final_classification": {
+    "primary": "composition_limitation",
+    "evidence": [
+      "M converged fully (loss 0.43 after 35 epochs) yet I2N = 0.133: image->alias binding across 10 identities does not form under language-attention-only LoRA rank 8",
+      "Textual route segments work at 900 steps (NAME 0.90, M_shuffled follows shuffled mapping 0.90): the failure is specifically the visual grounding of aliases, not composition of textual segments",
+      "Calibration achieved I2N=1.0 with 2 identities; scaling to 10 identities breaks binding despite 3x budget and full convergence - identity count / visual-binding capacity is the limiting factor",
+      "R7 visual-control degradation is budget-independent (identical at 300 and 900 steps)"
+    ],
+    "decision": "HALT_ROUTE_ESTABLISHMENT",
+    "per_preregistered_rule": "Budget verification failed to establish R1-R7 -> classify as composition/architecture limitation and halt"
+  },
+  "candidate_remedies_not_attempted": [
+    "Widen LoRA scope beyond language_attention_only (include vision/multimodal projector or cross-attention)",
+    "Increase LoRA rank (8 -> 32+) for binding capacity",
+    "Reduce experimental identities (10 -> 3-4) with proportionally scaled budget",
+    "Longer I2N-dominant curriculum (e.g. M1-first staged training at scale, as in calibration staged_m)"
+  ],
+  "seed": 17
+}

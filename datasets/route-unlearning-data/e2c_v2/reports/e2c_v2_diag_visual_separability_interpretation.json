@@ -1,0 +1,39 @@
+{
+  "diagnostic": "frozen visual representation identity separability",
+  "date": "2026-08-24",
+  "model": "Qwen/Qwen3.5-9B (frozen base, no adapter), vision tower Qwen3_5VisionModel",
+  "data": "160 experimental images, 10 identities, held-out protocol: train-split exemplars/prototypes -> test queries",
+  "results": {
+    "mean_pooled_merger_tokens": {
+      "one_nn_accuracy": 1.0,
+      "prototype_accuracy": 1.0,
+      "within_identity_cosine_mean": 1.0,
+      "between_identity_cosine_mean": 1.0,
+      "separation_gap": 0.0,
+      "note": "DEGENERATE: all images collapse to one direction; mean-pooling post-merger tokens erases identity signal. Identity information is not in the mean component of the token stream fed to the LM."
+    },
+    "pooler_output": {
+      "one_nn_accuracy": 1.0,
+      "prototype_accuracy": 1.0,
+      "within_identity_cosine_mean": 0.989,
+      "between_identity_cosine_mean": 0.976,
+      "separation_gap": 0.0147,
+      "note": "PERFECT separation (30/30 test images) but extremely tight geometry: identity direction is a tiny subspace component riding on a near-constant shared embedding."
+    }
+  },
+  "verdict": "CASE_A_BINDING_FAILURE",
+  "interpretation": [
+    "The frozen visual stack separates all 10 synthetic identities perfectly (1-NN = prototype = 1.0 on held-out test images), while I2N under language-attention-only LoRA is ~0.13.",
+    "Therefore the failure is NOT face discriminability / representation quality (Case B is excluded). It is specifically the visual->textual alias binding / readout path.",
+    "Caveat that sharpens the mechanism: the identity signal is real but minuscule in cosine terms (gap 0.0147; between-identity cosine 0.976). A rank-8 LoRA restricted to language self-attention must amplify this tiny component through frozen cross-modal fusion; this is plausible for 2 identities (calibration I2N=1.0) but collapses under 10-way interference.",
+    "The degenerate mean-pool additionally shows the identity signal is carried in non-mean (structured) components of the merger token stream, which frozen fusion does not expose prominently to language-side adaptation."
+  ],
+  "recommended_next_step": "Widen trainable scope to the cross-modal path: LoRA (or full fine-tune) on the vision merger / multimodal projector / cross-attention, so the tiny identity component can be amplified before language readout. The capacity-curve sweep (GPU 2) will quantify the N-dependence of the interference collapse.",
+  "artifacts": {
+    "summary": "e2c_v2/outputs/diag_visual_separability/visual_separability.json",
+    "one_nn_details": "e2c_v2/outputs/diag_visual_separability/one_nn_details.jsonl",
+    "prototype_details": "e2c_v2/outputs/diag_visual_separability/prototype_details.jsonl",
+    "script": "scripts/e2c_v2_diag_visual_separability.py"
+  },
+  "seed": 17
+}

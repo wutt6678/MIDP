@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""E2C-v2 staged M1→M2 calibration.
+"""E2C-v2 full mediated M calibration — trains I2N + NAME together.
 
-Starts from the M1-only adapter (which has perfect I2N) and continues
-training on M2 (name_to_attribute) records only. This tests whether
-composition emerges when identity representations are already established
-before fact learning begins.
+Uses all records from calibration M_train.jsonl (both image_to_identity
+and name_to_attribute tasks).
 
 Usage:
-    python scripts/e2c_v2_calibrate_staged_m.py --device cuda:0
+    python scripts/e2c_v2_calibrate_full_m.py --device cuda:0
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ from route_data.e2c.training_dataset import E2CTrainingDataset, load_records_fro
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("e2c_v2_staged_m")
+logger = logging.getLogger("e2c_v2_full_m")
 
 
 def load_image(path: str) -> Any:
@@ -42,23 +40,21 @@ def main():
     parser.add_argument("--v2-dir", default="e2c_v2")
     parser.add_argument("--image-base-dir", default="e2c/data/processed")
     parser.add_argument("--device", default="cuda:0")
-    parser.add_argument("--m1-adapter", default="e2c_v2/outputs/calibration/m1_only/adapter_final")
     parser.add_argument("--lr", type=float, default=2e-5)
-    parser.add_argument("--steps", type=int, default=200)
-    parser.add_argument("--warmup-steps", type=int, default=20)
+    parser.add_argument("--steps", type=int, default=300)
+    parser.add_argument("--warmup-steps", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--grad-accum", type=int, default=4)
-    parser.add_argument("--checkpoint-steps", type=int, default=50)
+    parser.add_argument("--grad-accum", type=int, default=8)
+    parser.add_argument("--checkpoint-steps", type=int, default=100)
     parser.add_argument("--seed", type=int, default=17)
     args = parser.parse_args()
 
     v2_dir = Path(args.v2_dir)
-    output_dir = v2_dir / "outputs" / "calibration" / "staged_m"
+    output_dir = v2_dir / "outputs" / "calibration" / "full_m"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config = {
-        "stage": "staged_M1_then_M2",
-        "m1_adapter": args.m1_adapter,
+        "stage": "full_M",
         "lr": args.lr, "steps": args.steps,
         "warmup_steps": args.warmup_steps,
         "batch_size": args.batch_size, "grad_accum": args.grad_accum,
@@ -67,15 +63,14 @@ def main():
     with open(output_dir / "config.json", "w") as f:
         json.dump(config, f, indent=2, sort_keys=True)
 
-    logger.info("Staged M1→M2 calibration")
-    logger.info(f"Starting from M1 adapter: {args.m1_adapter}")
-    logger.info(f"Training M2 only: lr={args.lr}, steps={args.steps}")
+    logger.info(f"Full M calibration: lr={args.lr}, steps={args.steps}")
 
-    # Load M2 records only
+    # Load ALL calibration M records (I2N + NAME)
     records_path = v2_dir / "data" / "calibration" / "M_train.jsonl"
-    all_records = load_records_from_jsonl(records_path)
-    m2_records = [r for r in all_records if r["task"] == "name_to_attribute"]
-    logger.info(f"Loaded {len(m2_records)} M2 (name_to_attribute) records")
+    records = load_records_from_jsonl(records_path)
+    n_i2n = sum(1 for r in records if r["task"] == "image_to_identity")
+    n_name = sum(1 for r in records if r["task"] == "name_to_attribute")
+    logger.info(f"Loaded {len(records)} records: {n_i2n} I2N + {n_name} NAME")
 
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
@@ -91,7 +86,7 @@ def main():
         revision="c202236235762e1c871ad0ccb60c8ee5ba337b9a",
         processor_id="Qwen/Qwen3.5-9B",
         processor_revision="c202236235762e1c871ad0ccb60c8ee5ba337b9a",
-        adapter_name="e2c_v2_cal",  # same name as M1 adapter
+        adapter_name="e2c_v2_full_m",
         trust_remote_code=True, dtype="bfloat16", attn_implementation="sdpa",
         candidate_positive="Yes", candidate_negative="No",
         lora_rank=8, lora_alpha=16, lora_dropout=0.05,
@@ -112,24 +107,18 @@ def main():
         dtype="bfloat16", device=args.device, training=True,
     )
 
-    # Load M1 adapter weights
-    logger.info(f"Loading M1 adapter from {args.m1_adapter}...")
-    from peft import PeftModel
-    model = PeftModel.from_pretrained(
-        model, args.m1_adapter, adapter_name=profile.adapter_name,
+    target_modules = adapter.resolve_lora_targets(model)
+    logger.info(f"LoRA targets: {len(target_modules)} modules")
+    model = adapter.attach_unlearning_adapter(
+        model, lora_rank=8, lora_alpha=16, lora_dropout=0.05,
+        target_modules=target_modules, adapter_name=profile.adapter_name,
     )
-
-    # Enable gradients for LoRA parameters (they're frozen after load)
-    for name, param in model.named_parameters():
-        if "lora" in name:
-            param.requires_grad = True
-
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logger.info(f"Trainable: {trainable:,} parameters (from M1 adapter)")
+    logger.info(f"Trainable: {trainable:,} parameters")
 
-    # Build dataset (M2 records only — text-only)
+    # Build dataset
     dataset = E2CTrainingDataset(
-        records=m2_records, processor=processor, adapter=adapter,
+        records=records, processor=processor, adapter=adapter,
         image_loader=load_image, image_base_dir=args.image_base_dir,
     )
     dataloader = DataLoader(
@@ -152,7 +141,7 @@ def main():
         scheduler = CosineAnnealingLR(optimizer, T_max=args.steps)
 
     # Training loop
-    logger.info(f"Training M2 for {args.steps} steps on {len(m2_records)} records...")
+    logger.info(f"Training {args.steps} steps on {len(records)} records...")
     model.train()
     trace = []
     global_step = 0
@@ -214,16 +203,18 @@ def main():
         f.writelines(json.dumps(e) + "\n" for e in trace)
 
     summary = {
-        "stage": "staged_M1_then_M2",
+        "stage": "full_M",
         "total_steps": global_step,
         "final_loss": running_loss / max(running_count, 1),
         "trainable_parameters": trainable,
-        "n_m2_records": len(m2_records),
+        "n_training_records": len(records),
+        "n_i2n": n_i2n,
+        "n_name": n_name,
     }
     with open(output_dir / "training_summary.json", "w") as f:
         json.dump(summary, f, indent=2, sort_keys=True)
 
-    logger.info(f"Staged M1→M2 calibration complete. Loss: {summary['final_loss']:.4f}")
+    logger.info(f"Full M calibration complete. Loss: {summary['final_loss']:.4f}")
 
 
 if __name__ == "__main__":

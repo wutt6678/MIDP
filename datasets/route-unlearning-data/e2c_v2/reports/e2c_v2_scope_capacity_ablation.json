@@ -1,0 +1,31 @@
+{
+  "experiment": "parameter-scope x capacity ablation for M1 I2N binding",
+  "date": "2026-08-26",
+  "protocol": "M1-only (image->alias), N=10 identities, 1000 optimizer steps, LR 2e-5, batch 1 x grad_accum 8, seed 17, 10/3/3 splits, identical prompts and evaluation",
+  "architecture_finding": {
+    "model": "Qwen/Qwen3.5-9B @ c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "finding": "Language tower is hybrid: 32 decoder layers, of which only layers {3,7,11,15,19,23,27,31} are full_attention (config layer_types); the other 24 are linear_attention and expose no q/k/v/o_proj. 'language_attention_only' therefore covers 32 modules (8 layers x 4 projections), not 128.",
+    "consequence": "All language-attention runs in this study had identical full attention coverage; the earlier 'stride-4' interpretation was an artifact of this architecture, not a reduced scope. Profile fields num_language_layers=32 and lora_expected_target_modules=128 are incorrect for this revision."
+  },
+  "results_test_split": [
+    {"run": "S0", "scope": "language attention (32 modules)", "rank": 8, "alpha": 16, "trainable_params": 1966080, "train": 0.2, "val": 0.2, "test": 0.167, "rank_test": 0.2, "final_loss": 0.481, "source": "diag_i2n_capacity/n10"},
+    {"run": "S0-R16", "scope": "language attention (32 modules)", "rank": 16, "alpha": 32, "trainable_params": 3932160, "train": 0.21, "val": 0.233, "test": 0.133, "rank_test": 0.2, "final_loss": 0.387, "source": "diag_scope_xcap/S0_R16_fullscope"},
+    {"run": "S1", "scope": "merger only (2 modules)", "rank": 8, "alpha": 16, "trainable_params": 143360, "train": 0.64, "val": 0.233, "test": 0.167, "rank_test": 0.367, "final_loss": 1.726, "source": "diag_scope_xcap/S1_r8_fullscope"},
+    {"run": "S2", "scope": "merger + language attention (34 modules)", "rank": 8, "alpha": 16, "trainable_params": 2109440, "train": 0.14, "val": 0.133, "test": 0.1, "rank_test": 0.167, "final_loss": 0.473, "source": "diag_scope_xcap/S2_r8_fullscope"},
+    {"run": "S2-repro", "scope": "merger + language attention (34 modules)", "rank": 8, "alpha": 16, "trainable_params": 2109440, "train": 0.19, "val": 0.167, "test": 0.133, "rank_test": 0.2, "final_loss": 0.475, "source": "diag_scope/S2"},
+    {"run": "S3", "scope": "merger + language attention + late visual blocks 22-26 (54 modules)", "rank": 8, "alpha": 16, "trainable_params": 2822400, "train": 0.23, "val": 0.2, "test": 0.167, "rank_test": 0.2, "final_loss": null, "source": "diag_scope/S3"}
+  ],
+  "comparisons": {
+    "capacity_control": "S0-R16 vs S0: doubling rank (alpha/r held constant) changes nothing (test 0.133 vs 0.167, within noise). Binding failure is NOT rank-capacity-limited.",
+    "cross_modal_access": "S1 vs S0: merger-only reaches the highest train fit (0.64) and best candidate ranking (0.367) but zero generalization (val 0.233, test 0.167) - memorization of image-specific features, not identity binding.",
+    "access_plus_readout": "S2 vs S0: adding trainable merger to language attention provides no benefit (test 0.10-0.13 vs 0.167); S2-repro confirms within noise.",
+    "late_visual": "S3 vs S2: adding trainable late visual blocks provides no benefit (test 0.167)."
+  },
+  "verdict": "No scope x capacity combination approaches the pre-registered gate I2N >= 0.90; full mediated-condition testing is not triggered. Combined with (a) frozen-embedding 1-NN separability = 1.0, (b) the N=2->4 capacity cliff, (c) identical plateau across all scopes/ranks: the failure is an interference phenomenon in binding acquisition at >= 4 identities, invariant to parameter scope (within LoRA) and rank capacity at this step budget.",
+  "remaining_candidate_mechanisms": [
+    "The 24 linear-attention language layers were never trainable in any run; linear-layer adaptation is untested.",
+    "Token-level prior analysis (pending): test whether low loss reflects a learned alias prior P(alias-like|X) rather than P(alias_i|x_i).",
+    "Optimizer/step-budget interaction with interference (curriculum, per-identity staging)."
+  ],
+  "seed": 17
+}

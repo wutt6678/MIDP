@@ -60,25 +60,25 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Load mappings
-    mapping = json.load(open("e2c_v3/manifests/identity_code_mapping.json"))
+    with open("e2c_v3/manifests/identity_code_mapping.json") as f:
+        mapping = json.load(f)
     identity_ids = [m["identity_id"] for m in mapping["mappings"]]
     identity_to_code = {m["identity_id"]: m["code_id"] for m in mapping["mappings"]}
     identity_to_alias = mapping["identity_to_alias"]
     alias_of = identity_to_alias  # syn_XX → alias
 
     # Load split manifest
-    split_manifest = json.load(open("e2c_v2/manifests/e2c_image_split.json"))
+    with open("e2c_v2/manifests/e2c_image_split.json") as f:
+        split_manifest = json.load(f)
     train_images = defaultdict(list)
     for e in split_manifest:
         if e["identity_id"] in identity_to_alias and e["split"] == "train":
             train_images[e["identity_id"]].append(e)
 
     # Load existing M_train for reference
-    all_records = [
-        json.loads(l)
-        for l in open("e2c_v2/data/experimental/M_train.jsonl")
-    ]
-    i2n_records = [
+    with open("e2c_v2/data/experimental/M_train.jsonl") as f:
+        all_records = [json.loads(l) for l in f]
+    _ = [
         r for r in all_records
         if r["task"] == "image_to_identity"
         and r["identity_id"] in identity_to_alias

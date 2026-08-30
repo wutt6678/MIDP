@@ -63,7 +63,7 @@ def main():
             continue
 
         with open(eval_dir / "eval_summary.json") as f:
-            summary = json.load(f)
+            json.load(f)  # validate existence
 
         results = load_eval_results(eval_dir)
 
@@ -83,16 +83,16 @@ def main():
         # Quick assessment
         if condition == "M":
             if i2n >= 0.90 and name >= 0.90:
-                print(f"  -> M mappings LEARNED")
+                print("  -> M mappings LEARNED")
             else:
-                print(f"  -> M mappings NOT YET LEARNED (need more steps or higher LR)")
+                print("  -> M mappings NOT YET LEARNED (need more steps or higher LR)")
         elif condition == "D":
             if dv >= 0.80 and name <= 0.65:
-                print(f"  -> D direct learned, NAME appropriately low")
+                print("  -> D direct learned, NAME appropriately low")
             elif dv >= 0.80:
-                print(f"  -> D direct learned but NAME may be too high")
+                print("  -> D direct learned but NAME may be too high")
             else:
-                print(f"  -> D needs more training")
+                print("  -> D needs more training")
 
 
 if __name__ == "__main__":

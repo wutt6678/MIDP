@@ -23,14 +23,12 @@ import argparse
 import json
 import logging
 import re
-import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
-from PIL import Image
-from typing import Any
 
 import torch
 import torch.nn as tnn
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 logging.basicConfig(
@@ -75,8 +73,8 @@ def make_shuffled_map(identity_ids, alias_of, seed=17):
 
 def create_adapter_model(args, device, adapter_name):
     """Load base model and create adapter profile."""
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     profile = ModelFamilyProfile(
         key="qwen35_9b", model_id="Qwen/Qwen3.5-9B",
@@ -155,7 +153,9 @@ def train_adapter(
 
     from torch.optim import AdamW
     from torch.optim.lr_scheduler import (
-        CosineAnnealingLR, LinearLR, SequentialLR,
+        CosineAnnealingLR,
+        LinearLR,
+        SequentialLR,
     )
 
     optimizer = AdamW(params, lr=lr, weight_decay=0.0)
@@ -216,8 +216,7 @@ def train_adapter(
 
     adapter.save_unlearning_adapter(model, output_dir / "adapter_final")
     with open(output_dir / "training_trace.jsonl", "w") as f:
-        for e in trace:
-            f.write(json.dumps(e) + "\n")
+        f.writelines(json.dumps(e) + "\n" for e in trace)
     logger.info(f"[{condition}] training complete, final loss="
                 f"{trace[-1]['loss']:.4f}")
     return trace
@@ -479,7 +478,6 @@ def evaluate_intervention(
     with torch.no_grad():
         for item in test_items:
             identity = item["identity_id"]
-            expected_code = identity
             expected_alias = code_to_target[identity]
 
             # Get inferred code from X→C (if available)
@@ -552,12 +550,14 @@ def main():
     out_base.mkdir(parents=True, exist_ok=True)
 
     # Load identity info
-    mapping = json.load(open("e2c_v3/manifests/identity_code_mapping.json"))
+    with open("e2c_v3/manifests/identity_code_mapping.json") as f:
+        mapping = json.load(f)
     identity_ids = [m["identity_id"] for m in mapping["mappings"]]
     identity_to_alias = mapping["identity_to_alias"]
     alias_of = identity_to_alias
 
-    split_manifest = json.load(open("e2c_v2/manifests/e2c_image_split.json"))
+    with open("e2c_v2/manifests/e2c_image_split.json") as f:
+        split_manifest = json.load(f)
     eval_items = []
     for e in split_manifest:
         if e["identity_id"] in identity_ids:
@@ -625,7 +625,7 @@ def main():
                 )
                 sup_items.append(ex)
 
-            trace = train_adapter(
+            _ = train_adapter(
                 "X→C", adapter, model, processor,
                 sup_items, xc_dir, args.device,
                 steps=args.steps_xc, warmup=WARMUP, lr=LR,
@@ -705,7 +705,7 @@ def main():
                 )
                 sup_items.append(ex)
 
-            trace = train_adapter(
+            _ = train_adapter(
                 "C→Y", adapter, model, processor,
                 sup_items, cy_dir, args.device,
                 steps=args.steps_cy, warmup=WARMUP, lr=LR,

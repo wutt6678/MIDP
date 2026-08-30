@@ -9,15 +9,12 @@ Output: e2c_v3/reports/factorial_eval_<condition>.json
 import argparse
 import json
 import logging
-import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from PIL import Image
-from typing import Any
 
 import torch
-import torch.nn as tnn
+from PIL import Image
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,7 +92,8 @@ def main():
     # ------------------------------------------------------------------ #
     # Load data
     # ------------------------------------------------------------------ #
-    mapping = json.load(open("e2c_v3/manifests/identity_code_mapping.json"))
+    with open("e2c_v3/manifests/identity_code_mapping.json") as f:
+        mapping = json.load(f)
     identity_ids = [m["identity_id"] for m in mapping["mappings"]]
     identity_to_code = mapping["identity_to_code"]
     code_to_alias = mapping["code_to_alias"]
@@ -107,13 +105,13 @@ def main():
         code_to_alias = {iid: alias for iid, alias in identity_to_alias.items()}
         logger.info("Using identity_id as code (syn_XX format)")
 
-    wrong_pairs = json.load(open("e2c_v3/manifests/wrong_code_pairs.json"))
+    with open("e2c_v3/manifests/wrong_code_pairs.json") as f:
+        wrong_pairs = json.load(f)
 
     # Rebuild wrong_pairs if using identity-as-code format
     if args.use_identity_as_code:
         rebuilt_pairs = {"pairs": {}}
         for iid in identity_ids:
-            orig = wrong_pairs["pairs"][iid]
             all_wrong = []
             for other_iid in identity_ids:
                 if other_iid != iid:
@@ -132,7 +130,8 @@ def main():
             }
         wrong_pairs = rebuilt_pairs
 
-    split_manifest = json.load(open("e2c_v2/manifests/e2c_image_split.json"))
+    with open("e2c_v2/manifests/e2c_image_split.json") as f:
+        split_manifest = json.load(f)
     eval_sets = defaultdict(list)
     for e in split_manifest:
         if e["identity_id"] in identity_ids:
@@ -159,10 +158,10 @@ def main():
     # ------------------------------------------------------------------ #
     from route_data.e2c_v3.probe_builder import (
         build_bare_image_probes,
-        build_correct_code_probes,
-        build_wrong_code_probes,
         build_code_only_probes,
+        build_correct_code_probes,
         build_shuffled_code_probes,
+        build_wrong_code_probes,
         validate_factorial_probes,
     )
 
@@ -198,8 +197,8 @@ def main():
     # ------------------------------------------------------------------ #
     # Load model + adapter
     # ------------------------------------------------------------------ #
-    from route_data.models.trainable.qwen35 import Qwen35Adapter
     from route_data.models.trainable.base import ModelFamilyProfile
+    from route_data.models.trainable.qwen35 import Qwen35Adapter
 
     adapter_names = {
         "M_latent": "e2c_v3_mlatent",
@@ -296,11 +295,9 @@ def main():
     # Compute metrics
     # ------------------------------------------------------------------ #
     from route_data.e2c_v3.causal_metrics import (
-        compute_per_identity_metrics,
-        intervention_change_rate,
         code_target_alignment,
+        compute_per_identity_metrics,
         image_target_alignment,
-        shuffled_mapping_agreement,
     )
 
     # Aggregate metrics by probe type

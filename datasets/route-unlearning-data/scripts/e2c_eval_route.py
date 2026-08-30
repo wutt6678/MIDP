@@ -141,7 +141,6 @@ def main():
     condition = args.condition
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    image_base_dir = Path(args.image_base_dir)
 
     logger.info(f"E2C evaluation: condition={condition}")
     logger.info(f"Adapter: {args.adapter_dir}")
