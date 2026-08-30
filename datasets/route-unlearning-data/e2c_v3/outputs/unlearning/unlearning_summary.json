@@ -1,0 +1,440 @@
+{
+  "U1_U2": {
+    "method": "deletion_counterfactual",
+    "target_id": "syn_00",
+    "target_alias": "Aven",
+    "wrong_alias": "Bira",
+    "training_steps": 500,
+    "training_lr": 2e-05,
+    "target_removed": true,
+    "target_prediction": "Bira",
+    "target_expected": "Aven",
+    "non_target_retention": 1.0,
+    "non_target_correct": 9,
+    "non_target_total": 9,
+    "overall_accuracy": 0.9,
+    "xc_preservation": {
+      "train_acc": 1.0,
+      "train_correct": 100,
+      "train_total": 100,
+      "validation_acc": 0.8666666666666667,
+      "validation_correct": 26,
+      "validation_total": 30,
+      "test_acc": 1.0,
+      "test_correct": 30,
+      "test_total": 30
+    },
+    "intervention": {
+      "agreement": 0.9,
+      "target_follows": false,
+      "non_target_agreement": 1.0
+    },
+    "h_eval_details": [
+      {
+        "identity_id": "syn_00",
+        "code": "syn_00",
+        "expected": "Aven",
+        "prediction": "Bira",
+        "correct": false
+      },
+      {
+        "identity_id": "syn_01",
+        "code": "syn_01",
+        "expected": "Bira",
+        "prediction": "Bira",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_02",
+        "code": "syn_02",
+        "expected": "Caro",
+        "prediction": "Caro",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_03",
+        "code": "syn_03",
+        "expected": "Deni",
+        "prediction": "Deni",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_04",
+        "code": "syn_04",
+        "expected": "Eris",
+        "prediction": "Eris",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_05",
+        "code": "syn_05",
+        "expected": "Faro",
+        "prediction": "Faro",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_06",
+        "code": "syn_06",
+        "expected": "Gela",
+        "prediction": "Gela",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_07",
+        "code": "syn_07",
+        "expected": "Hani",
+        "prediction": "Hani",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_08",
+        "code": "syn_08",
+        "expected": "Ivoa",
+        "prediction": "Ivoa",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_09",
+        "code": "syn_09",
+        "expected": "Jora",
+        "prediction": "Jora",
+        "correct": true
+      }
+    ],
+    "gate_target_removed": true,
+    "gate_non_target_retained": true,
+    "gate_xc_preserved": true
+  },
+  "U3": {
+    "method": "update",
+    "target_id": "syn_00",
+    "old_alias": "Aven",
+    "new_alias": "Bira",
+    "training_steps": 500,
+    "target_follows_new": true,
+    "target_follows_old": false,
+    "target_prediction": "Bira",
+    "non_target_retention": 1.0,
+    "non_target_correct": 9,
+    "non_target_total": 9,
+    "xc_preservation": {
+      "train_acc": 1.0,
+      "train_correct": 100,
+      "train_total": 100,
+      "validation_acc": 0.8666666666666667,
+      "validation_correct": 26,
+      "validation_total": 30,
+      "test_acc": 1.0,
+      "test_correct": 30,
+      "test_total": 30
+    },
+    "intervention": {
+      "agreement": 0.9,
+      "target_follows": false,
+      "non_target_agreement": 1.0
+    },
+    "h_eval_details": [
+      {
+        "identity_id": "syn_00",
+        "code": "syn_00",
+        "expected": "Aven",
+        "prediction": "Bira",
+        "correct": false
+      },
+      {
+        "identity_id": "syn_01",
+        "code": "syn_01",
+        "expected": "Bira",
+        "prediction": "Bira",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_02",
+        "code": "syn_02",
+        "expected": "Caro",
+        "prediction": "Caro",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_03",
+        "code": "syn_03",
+        "expected": "Deni",
+        "prediction": "Deni",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_04",
+        "code": "syn_04",
+        "expected": "Eris",
+        "prediction": "Eris",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_05",
+        "code": "syn_05",
+        "expected": "Faro",
+        "prediction": "Faro",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_06",
+        "code": "syn_06",
+        "expected": "Gela",
+        "prediction": "Gela",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_07",
+        "code": "syn_07",
+        "expected": "Hani",
+        "prediction": "Hani",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_08",
+        "code": "syn_08",
+        "expected": "Ivoa",
+        "prediction": "Ivoa",
+        "correct": true
+      },
+      {
+        "identity_id": "syn_09",
+        "code": "syn_09",
+        "expected": "Jora",
+        "prediction": "Jora",
+        "correct": true
+      }
+    ],
+    "gate_updated_to_new": true,
+    "gate_not_following_old": true,
+    "gate_non_target_retained": true
+  },
+  "U4": {
+    "method": "granularity_reduction",
+    "group_map": {
+      "syn_00": "GROUP_A",
+      "syn_01": "GROUP_A",
+      "syn_02": "GROUP_A",
+      "syn_03": "GROUP_A",
+      "syn_04": "GROUP_A",
+      "syn_05": "GROUP_B",
+      "syn_06": "GROUP_B",
+      "syn_07": "GROUP_B",
+      "syn_08": "GROUP_B",
+      "syn_09": "GROUP_B"
+    },
+    "group_accuracy": 1.0,
+    "group_correct": 10,
+    "group_total": 10,
+    "specific_alias_retained": 0.0,
+    "specific_alias_correct": 0,
+    "xc_preservation": {
+      "train_acc": 1.0,
+      "train_correct": 100,
+      "train_total": 100,
+      "validation_acc": 0.8666666666666667,
+      "validation_correct": 26,
+      "validation_total": 30,
+      "test_acc": 1.0,
+      "test_correct": 30,
+      "test_total": 30
+    },
+    "coarse_preds": [
+      {
+        "identity_id": "syn_00",
+        "expected_group": "GROUP_A",
+        "prediction": "GROUP_A",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_01",
+        "expected_group": "GROUP_A",
+        "prediction": "GROUP_A",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_02",
+        "expected_group": "GROUP_A",
+        "prediction": "GROUP_A",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_03",
+        "expected_group": "GROUP_A",
+        "prediction": "GROUP_A",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_04",
+        "expected_group": "GROUP_A",
+        "prediction": "GROUP_A",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_05",
+        "expected_group": "GROUP_B",
+        "prediction": "GROUP_B",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_06",
+        "expected_group": "GROUP_B",
+        "prediction": "GROUP_B",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_07",
+        "expected_group": "GROUP_B",
+        "prediction": "GROUP_B",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_08",
+        "expected_group": "GROUP_B",
+        "prediction": "GROUP_B",
+        "group_correct": true
+      },
+      {
+        "identity_id": "syn_09",
+        "expected_group": "GROUP_B",
+        "prediction": "GROUP_B",
+        "group_correct": true
+      }
+    ],
+    "gate_group_accuracy": true,
+    "gate_specific_lost": true
+  },
+  "U5_U6": {
+    "comparison": {
+      "deletion": {
+        "target_removed": true,
+        "target_prediction": "Bira",
+        "non_target_retention": 1.0,
+        "xc_preserved": 1.0,
+        "intervention_target_follows": false
+      },
+      "update": {
+        "follows_new": true,
+        "follows_old": false,
+        "target_prediction": "Bira",
+        "non_target_retention": 1.0,
+        "xc_preserved": 1.0
+      },
+      "granularity_reduction": {
+        "group_accuracy": 1.0,
+        "specific_alias_retained": 0.0,
+        "xc_preserved": 1.0
+      }
+    },
+    "collateral_analysis": {
+      "deletion_non_target_impact": 0.0,
+      "update_non_target_impact": 0.0,
+      "xc_impact_deletion": 0.0,
+      "xc_impact_update": 0.0,
+      "visual_impact": 0.0
+    },
+    "summary": {
+      "deletion_success": true,
+      "update_success": true,
+      "granularity_success": true
+    }
+  },
+  "U7": {
+    "syn_01": {
+      "target_removed": true,
+      "target_prediction": "Aven",
+      "non_target_retention": 1.0,
+      "overall_accuracy": 0.9
+    },
+    "syn_05": {
+      "target_removed": true,
+      "target_prediction": "Aven",
+      "non_target_retention": 1.0,
+      "overall_accuracy": 0.9
+    },
+    "syn_09": {
+      "target_removed": true,
+      "target_prediction": "Aven",
+      "non_target_retention": 1.0,
+      "overall_accuracy": 0.9
+    }
+  },
+  "U8": {
+    "method": "hierarchical",
+    "group_a_accuracy": 1.0,
+    "group_a_correct": 5,
+    "group_a_total": 5,
+    "group_b_accuracy": 1.0,
+    "group_b_correct": 5,
+    "group_b_total": 5,
+    "xc_preservation": {
+      "train_acc": 1.0,
+      "train_correct": 100,
+      "train_total": 100,
+      "validation_acc": 0.8666666666666667,
+      "validation_correct": 26,
+      "validation_total": 30,
+      "test_acc": 1.0,
+      "test_correct": 30,
+      "test_total": 30
+    },
+    "details": {
+      "group_a": {
+        "syn_00": {
+          "prediction": "GROUP_A",
+          "expected": "GROUP_A",
+          "correct": true
+        },
+        "syn_01": {
+          "prediction": "GROUP_A",
+          "expected": "GROUP_A",
+          "correct": true
+        },
+        "syn_02": {
+          "prediction": "GROUP_A",
+          "expected": "GROUP_A",
+          "correct": true
+        },
+        "syn_03": {
+          "prediction": "GROUP_A",
+          "expected": "GROUP_A",
+          "correct": true
+        },
+        "syn_04": {
+          "prediction": "GROUP_A",
+          "expected": "GROUP_A",
+          "correct": true
+        }
+      },
+      "group_b": {
+        "syn_05": {
+          "prediction": "Faro",
+          "expected": "Faro",
+          "correct": true
+        },
+        "syn_06": {
+          "prediction": "Gela",
+          "expected": "Gela",
+          "correct": true
+        },
+        "syn_07": {
+          "prediction": "Hani",
+          "expected": "Hani",
+          "correct": true
+        },
+        "syn_08": {
+          "prediction": "Ivoa",
+          "expected": "Ivoa",
+          "correct": true
+        },
+        "syn_09": {
+          "prediction": "Jora",
+          "expected": "Jora",
+          "correct": true
+        }
+      }
+    },
+    "gate_group_a_coarsened": true,
+    "gate_group_b_preserved": true
+  }
+}

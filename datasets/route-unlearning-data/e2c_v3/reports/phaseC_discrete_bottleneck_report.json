@@ -1,0 +1,129 @@
+{
+  "experiment": "E2C-v3 Phase C — Discrete Bottleneck Causal Mediation (Complete)",
+  "status_flags": {
+    "MEDIATED_ROUTE_ESTABLISHED": true,
+    "E2C_CAUSAL_COMPARISON_COMPLETE": false,
+    "ROUTE_ESTABLISHED": "Pending",
+    "CONTROLLED_UNLEARNING_ALLOWED": false
+  },
+  "frozen_decision_record": "e2c_v3/reports/e2c_v3_frozen_decision_record.json",
+  "freeze_constraint": "Do not change route architecture in response to unlearning results.",
+  "architecture": {
+    "description": "Y_M = h(C), not f(X, C). Image is downstream-inaccessible to h.",
+    "computational_graph": {
+      "normal": "Y(X_i) = h(g(X_i))",
+      "intervened": "Y_do(C=C_j)(X_i) = h(C_j)",
+      "bottleneck": "X → Ĉ → Y, where Ĉ = argmax_C p(C|X)"
+    },
+    "components": {
+      "g": "X → C adapter (image → identity code, LoRA S0 r8)",
+      "h": "C → Y adapter (code → alias, LoRA S0 r8, text-only, no image access)",
+      "D": "Direct X → Y adapter (image → alias, no mediator, LoRA S0 r8)"
+    }
+  },
+  "model": "Qwen/Qwen3.5-9B",
+  "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "seed": 17,
+  "lora_config": {
+    "rank": 8, "alpha": 16, "dropout": 0.05,
+    "scope": "S0 (language attention qkvo)",
+    "target_modules": 32,
+    "trainable_params": 1966080
+  },
+  "gates": {
+    "C1_X_to_C": {
+      "description": "Image → code classification (g module)",
+      "required": "test ≥ 0.90",
+      "achieved": {"train": 1.000, "validation": 0.867, "test": 1.000},
+      "PASS": true
+    },
+    "C2_C_to_Y": {
+      "description": "Code → target lookup (h module, text-only)",
+      "required": "≥ 0.90",
+      "achieved": {"accuracy": 1.000},
+      "PASS": true
+    },
+    "C3_composition": {
+      "description": "End-to-end X → C → Y through discrete bottleneck",
+      "required": "test ≥ 0.80",
+      "achieved": {"test_XC": 1.000, "test_XCY": 1.000},
+      "PASS": true
+    },
+    "C4_intervention": {
+      "description": "Causal intervention do(C=C_j) on M: h(C_j) follows target(C_j)",
+      "required": "agreement ≥ 0.80",
+      "achieved": {"agreement": 1.000, "total": "270/270"},
+      "PASS": true
+    },
+    "C5_matched_direct": {
+      "description": "D solves same task X→Y without mediator; 270 code interventions on D",
+      "sub_gates": {
+        "D_baseline_accuracy": {"value": 0.900, "required": "≥ 0.80", "PASS": true},
+        "D_code_agnostic": {"value": 0.011, "required": "≈ chance", "PASS": true},
+        "causal_contrast_delta_C": {
+          "value": 0.989,
+          "CI_95": [0.978, 1.000],
+          "excludes_zero": true,
+          "PASS": true
+        }
+      },
+      "PASS": true
+    },
+    "C6_shuffled_control": {
+      "description": "Same g, h_π(C_i)=Y_π(i). Shuffled composition + intervention",
+      "sub_gates": {
+        "shuffled_composition": {"value": 1.000, "required": "≥ 0.80", "PASS": true},
+        "shuffled_intervention": {"value": 1.000, "required": "≥ 0.80", "PASS": true},
+        "shuffled_ge_original": {"value": "1.000 ≥ 1.000", "PASS": true}
+      },
+      "PASS": true
+    },
+    "C7_visual_preservation": {
+      "description": "Frozen visual controls: per-attribute accuracy drop ≤ 0.05",
+      "per_attribute": {
+        "smiling": {"base": 0.567, "adapted": 0.567, "drop": 0.000, "PASS": true},
+        "eyeglasses": {"base": 0.667, "adapted": 0.667, "drop": 0.000, "PASS": true},
+        "hat": {"base": 0.833, "adapted": 0.833, "drop": 0.000, "PASS": true}
+      },
+      "PASS": true
+    }
+  },
+  "causal_contrast": {
+    "description": "Δ_C = Agreement_M^do(C) − Agreement_D^do(C)",
+    "M_agreement": 1.000,
+    "D_agreement": 0.011,
+    "delta_C": 0.989,
+    "CI_95_percent": [97.8, 100.0],
+    "excludes_zero": true,
+    "interpretation": "Same task, different causal dependency. M is entirely code-driven (agreement=1.000). D is entirely image-driven (agreement=0.011). The contrast is maximal and the 95% CI excludes zero."
+  },
+  "shuffled_vs_original": {
+    "original_M_intervention": 1.000,
+    "shuffled_intervention": 1.000,
+    "interpretation": "Both original and shuffled achieve perfect intervention agreement on their respective mappings. The model cannot plausibly be following latent image→original-target correlations, because the shuffled branch perfectly follows the shuffled mapping."
+  },
+  "visual_preservation_comparison": {
+    "previous_LoRA_degradation": {
+      "smiling": -0.433,
+      "eyeglasses": -0.333,
+      "hat": -0.167
+    },
+    "phase_C_discrete_bottleneck": {
+      "smiling": 0.000,
+      "eyeglasses": 0.000,
+      "hat": 0.000
+    },
+    "interpretation": "The discrete mediator architecture completely eliminates visual degradation. The X→C adapter is a small identity readout that does not perturb the VLM's visual perception."
+  },
+  "scientific_claim": "Under the discrete bottleneck architecture Y_M = h(C), the mediated condition M solves the image-conditioned task exclusively through the identity code C. All 7 gates pass: (C1) X→C at 1.000, (C2) C→Y at 1.000, (C3) end-to-end composition at 1.000, (C4) causal intervention agreement at 1.000, (C5) causal contrast Δ_C = 0.989 with 95% CI [0.978, 1.000] excluding zero, (C6) shuffled control at 1.000, (C7) zero visual degradation. The image is architecturally excluded from h, making causal intervention unambiguous. D solves the same task without the mediator but is completely unaffected by code interventions (agreement=0.011). This establishes a genuine causally mediated identity route X → C → Y with no ambiguity between code-as-hint, code-as-perturbation, and code-as-causal-state.",
+  "artifacts": {
+    "X_to_C_adapter": "e2c_v3/outputs/phaseC/X_to_C/adapter_final",
+    "C_to_Y_adapter": "e2c_v3/outputs/phaseC/C_to_Y/adapter_final",
+    "C_to_Y_shuffled_adapter": "e2c_v3/outputs/phaseC/C6_shuffled/C_to_Y_shuffled/adapter_final",
+    "C5_eval": "e2c_v3/outputs/phaseC/C5_direct/eval_results.json",
+    "C6_eval": "e2c_v3/outputs/phaseC/C6_shuffled/eval_results.json",
+    "C7_eval": "e2c_v3/outputs/phaseC/C7_visual/eval_results.json",
+    "training_script_C1_C4": "scripts/e2c_v3_phaseC_discrete_bottleneck.py",
+    "training_script_C5_C7": "scripts/e2c_v3_phaseC_extension.py"
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "method": "deletion_counterfactual",
+  "target_id": "syn_00",
+  "target_alias": "Aven",
+  "wrong_alias": "Bira",
+  "training_steps": 500,
+  "training_lr": 2e-05,
+  "target_removed": true,
+  "target_prediction": "Bira",
+  "target_expected": "Aven",
+  "non_target_retention": 1.0,
+  "non_target_correct": 9,
+  "non_target_total": 9,
+  "overall_accuracy": 0.9,
+  "xc_preservation": {
+    "train_acc": 1.0,
+    "train_correct": 100,
+    "train_total": 100,
+    "validation_acc": 0.8666666666666667,
+    "validation_correct": 26,
+    "validation_total": 30,
+    "test_acc": 1.0,
+    "test_correct": 30,
+    "test_total": 30
+  },
+  "intervention": {
+    "agreement": 0.9,
+    "target_follows": false,
+    "non_target_agreement": 1.0
+  },
+  "h_eval_details": [
+    {
+      "identity_id": "syn_00",
+      "code": "syn_00",
+      "expected": "Aven",
+      "prediction": "Bira",
+      "correct": false
+    },
+    {
+      "identity_id": "syn_01",
+      "code": "syn_01",
+      "expected": "Bira",
+      "prediction": "Bira",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_02",
+      "code": "syn_02",
+      "expected": "Caro",
+      "prediction": "Caro",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_03",
+      "code": "syn_03",
+      "expected": "Deni",
+      "prediction": "Deni",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_04",
+      "code": "syn_04",
+      "expected": "Eris",
+      "prediction": "Eris",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_05",
+      "code": "syn_05",
+      "expected": "Faro",
+      "prediction": "Faro",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_06",
+      "code": "syn_06",
+      "expected": "Gela",
+      "prediction": "Gela",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_07",
+      "code": "syn_07",
+      "expected": "Hani",
+      "prediction": "Hani",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_08",
+      "code": "syn_08",
+      "expected": "Ivoa",
+      "prediction": "Ivoa",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_09",
+      "code": "syn_09",
+      "expected": "Jora",
+      "prediction": "Jora",
+      "correct": true
+    }
+  ],
+  "gate_target_removed": true,
+  "gate_non_target_retained": true,
+  "gate_xc_preserved": true
+}

@@ -1,0 +1,95 @@
+{
+  "experiment": "E2C-v3 Causal Mediation",
+  "description": "Tests whether decomposing X→Y into X→C→Y (identity code as mediator) establishes a causal route that direct X→Y training cannot.",
+  "model": "Qwen/Qwen3.5-9B",
+  "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "seed": 17,
+  "lora_config": {
+    "scope": "S0 (language attention only)",
+    "rank": 8,
+    "alpha": 16,
+    "modules": 32,
+    "params": 1966080
+  },
+  "training": {
+    "steps": 1000,
+    "warmup": 100,
+    "lr": 2e-5,
+    "scheduler": "linear-warmup + cosine"
+  },
+  "conditions": {
+    "M-latent": {
+      "description": "C_i → A_i (identity code → alias, text-only)",
+      "training_data": "10 text examples (one per identity)",
+      "epochs": 99,
+      "final_loss": 0.6232,
+      "test_results": {
+        "code_correct_acc": 0.600,
+        "swapped_follow_acc": 0.600,
+        "intervention_changes": 0.900,
+        "intervention_aligns": 0.667,
+        "img_bare_acc": 0.000,
+        "img_code_acc": 0.000
+      }
+    },
+    "D": {
+      "description": "X_i → A_i (image → alias, standard E2C)",
+      "training_data": "100 image examples (10 per identity)",
+      "epochs": 9,
+      "final_loss": 0.6954,
+      "test_results": {
+        "code_correct_acc": 0.000,
+        "swapped_follow_acc": 0.000,
+        "intervention_changes": 0.000,
+        "intervention_aligns": 0.000,
+        "img_bare_acc": 0.900,
+        "img_code_acc": 0.067
+      }
+    },
+    "M-latent-shuffled": {
+      "description": "C_i → A'_i (identity code → shuffled alias, text-only)",
+      "training_data": "10 text examples with deranged alias mapping",
+      "epochs": 99,
+      "final_loss": 0.7668,
+      "shuffled_map": {
+        "syn_00": "Bira", "syn_01": "Eris", "syn_02": "Aven",
+        "syn_03": "Jora", "syn_04": "Deni", "syn_05": "Ivoa",
+        "syn_06": "Faro", "syn_07": "Caro", "syn_08": "Gela",
+        "syn_09": "Hani"
+      },
+      "test_results": {
+        "code_correct_acc": 0.100,
+        "swapped_follow_acc": 0.400,
+        "intervention_changes": 0.700,
+        "intervention_aligns": 0.429,
+        "img_bare_acc": 0.000,
+        "img_code_acc": 0.000
+      }
+    }
+  },
+  "verdict_flags": {
+    "CODE_CAUSAL_SENSITIVITY_ESTABLISHED": true,
+    "CODE_TARGET_ALIGNED_CONTROL": "Partial",
+    "IMAGE_TO_CODE_TO_OUTPUT_ROUTE": false,
+    "DIRECT_IMAGE_ROUTE": true,
+    "SHUFFLED_CAUSAL_CONTROL": false,
+    "ROUTE_ESTABLISHED": false
+  },
+  "interpretation": {
+    "summary": "M-latent shows causal sensitivity to code swaps (intervention_changes=0.900) but target alignment is only partial (intervention_aligns=0.667, code_correct=0.600). The full image→code→output route is not established (img_bare=0.000, img_code=0.000). Direct image route succeeds (D: img_bare=0.900) with zero code sensitivity. Shuffled condition fails to establish causal control (code_correct=0.100, aligns=0.429).",
+    "key_findings": [
+      "CODE_CAUSAL_SENSITIVITY_ESTABLISHED: M-latent intervention_changes=0.900 — code swap changes prediction 90% of the time",
+      "CODE_TARGET_ALIGNED_CONTROL: Partial — intervention_aligns=0.667, code_correct=0.600; code controls output but not reliably mapped to target alias",
+      "IMAGE_TO_CODE_TO_OUTPUT_ROUTE: False — M-latent img_bare=0.000, img_code=0.000; no image→code→output chain",
+      "DIRECT_IMAGE_ROUTE: True — D img_bare=0.900; standard X→A works but has zero code sensitivity (intervention_changes=0.000)",
+      "SHUFFLED_CAUSAL_CONTROL: False — M-shuffled code_correct=0.100, intervention_aligns=0.429; shuffled mapping not learned",
+      "ROUTE_ESTABLISHED: False — the full mediated route X→C→A→Y is not functional end-to-end"
+    ]
+  },
+  "runtime": {
+    "M-latent": {"training_min": 21, "eval_min": 6, "total_min": 27},
+    "D": {"preprocess_min": 25, "training_min": 14, "eval_min": 4, "total_min": 39},
+    "M-latent-shuffled": {"training_min": 14, "eval_min": 6, "total_min": 14},
+    "total_wall_clock_min": 80
+  }
+}

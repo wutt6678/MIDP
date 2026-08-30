@@ -296,11 +296,16 @@ def main():
             running_count += 1
 
             if (running_count) % grad_accum == 0:
-                # Gradient clipping
+                # Gradient clipping (returns pre-clip norm for logging)
+                grad_norm: float | None = None
                 if max_grad_norm > 0:
-                    torch.nn.utils.clip_grad_norm_(
+                    grad_norm = float(torch.nn.utils.clip_grad_norm_(
                         trainable_params, max_grad_norm,
-                    )
+                    ))
+                else:
+                    grad_norm = float(torch.nn.utils.clip_grad_norm_(
+                        trainable_params, float("inf"),
+                    ))
 
                 optimizer.step()
                 scheduler.step()
@@ -310,14 +315,12 @@ def main():
                 # Log
                 if global_step % 10 == 0 or global_step <= 5:
                     avg_loss = running_loss / running_count
-                    grad_norm = torch.nn.utils.clip_grad_norm_(
-                        trainable_params, float("inf"),
-                    )
                     trace_entry = {
                         "step": global_step,
                         "loss": avg_loss,
                         "lr": optimizer.param_groups[0]["lr"],
-                        "grad_norm": float(grad_norm) if torch.isfinite(grad_norm) else None,
+                        "grad_norm": grad_norm if grad_norm is not None
+                        and torch.isfinite(torch.tensor(grad_norm)) else None,
                         "epoch": epoch,
                     }
                     training_trace.append(trace_entry)

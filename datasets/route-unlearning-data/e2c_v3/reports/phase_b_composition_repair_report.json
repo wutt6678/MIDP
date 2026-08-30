@@ -1,0 +1,85 @@
+{
+  "experiment": "E2C-v3 Phase B — Composition Repair Results",
+  "phase_a_adapter": "e2c_v3/outputs/M_latent/adapter_final",
+  "phase_b_adapter": "e2c_v3/outputs/M_latent_composition/adapter_final",
+  "training_config": {
+    "loss": "L_total = L_XC + L_CY + alpha * L_XCY",
+    "alpha": 1.0,
+    "steps": 1500,
+    "warmup": 150,
+    "lr": 2e-5,
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_scope": "S0 (language attention qkvo)",
+    "n_xc_items": 100,
+    "n_cy_items": 10,
+    "n_xcy_items": 100,
+    "final_loss_total": 0.5717,
+    "final_loss_x_to_c": 0.3093,
+    "final_loss_c_to_y": 1.7743,
+    "final_loss_xc_to_y": 0.7133
+  },
+  "comparison": {
+    "metric": ["Phase A (M-latent)", "Phase B (composition repair)", "delta"],
+    "bare_accuracy": [0.000, 0.100, "+0.100"],
+    "correct_code_accuracy": [0.000, 0.581, "+0.581"],
+    "wrong_code_follow_code": [0.001, 0.310, "+0.309"],
+    "wrong_code_follow_image": [0.001, 0.115, "+0.114"],
+    "change_rate": [0.276, 0.865, "+0.589"],
+    "code_target_alignment": [0.001, 0.310, "+0.309"],
+    "image_target_alignment": [0.001, 0.115, "+0.114"],
+    "code_only_accuracy": [0.600, 0.100, "-0.500"],
+    "shuffled_code_accuracy": [0.000, 0.200, "+0.200"]
+  },
+  "failure_classification": {
+    "phase_a": "Case B — composition failure (correct code doesn't rescue M)",
+    "phase_b": "Case Other — composition rescue succeeded but alignment insufficient"
+  },
+  "verdict_flags": {
+    "phase_a": {
+      "CODE_CAUSAL_SENSITIVITY_ESTABLISHED": false,
+      "CODE_TARGET_ALIGNED_CONTROL": "None",
+      "COMPOSITION_RESCUE": false,
+      "IMAGE_TO_CODE_TO_OUTPUT_ROUTE": false,
+      "DIRECT_IMAGE_ROUTE": false,
+      "SHUFFLED_CAUSAL_CONTROL": false,
+      "ROUTE_ESTABLISHED": false
+    },
+    "phase_b": {
+      "CODE_CAUSAL_SENSITIVITY_ESTABLISHED": true,
+      "CODE_TARGET_ALIGNED_CONTROL": "Partial",
+      "COMPOSITION_RESCUE": true,
+      "IMAGE_TO_CODE_TO_OUTPUT_ROUTE": false,
+      "DIRECT_IMAGE_ROUTE": false,
+      "SHUFFLED_CAUSAL_CONTROL": false,
+      "ROUTE_ESTABLISHED": false
+    }
+  },
+  "interpretation": {
+    "summary": "Composition repair partially succeeded. The model learned to use image+correct code to produce the right alias (58.1%), but through a shortcut: the model uses the code as a hint for image interpretation rather than establishing a genuine X->C->Y mediated route.",
+    "evidence_for_composition": [
+      "correct_code_accuracy jumped from 0% to 58.1%",
+      "change_rate increased from 27.6% to 86.5% (code strongly influences output)",
+      "code_target_alignment increased from 0.1% to 31.0% (wrong codes partially followed)"
+    ],
+    "evidence_against_genuine_mediation": [
+      "code_only_accuracy DROPPED from 60% to 10% (catastrophic forgetting of C->Y)",
+      "img_to_code = 0% (model cannot infer code from image — X->C route absent)",
+      "code_target_alignment = 31% (far below the 80% threshold for genuine mediation)",
+      "The model uses code as an image-interpretation hint, not as a causal mediator"
+    ],
+    "diagnosis": "The model learned a code-conditioned image classification shortcut: given image + code, it uses the code to disambiguate the image, but this is not mediated through X->C->Y. The X->C route (image-to-code inference) was never established.",
+    "next_steps": [
+      "Option 1: Pre-train X->C separately before adding composition (curriculum)",
+      "Option 2: Increase XC loss weight to ensure image-to-code is learned",
+      "Option 3: Use a simpler code representation that the model can learn from images",
+      "Option 4: Freeze C->Y from Phase A and only train X->C + (X,C)->Y jointly"
+    ]
+  },
+  "gates_status": {
+    "G1_img_to_code": "FAIL (0.000, need >= 0.90)",
+    "G2_code_to_target": "FAIL (0.100, need >= 0.90)",
+    "G3_composition": "PARTIAL (0.581, need >= 0.80)",
+    "G4_wrong_code_control": "FAIL (0.310, need >= 0.80)"
+  }
+}

@@ -1,0 +1,232 @@
+{
+  "_frozen": true,
+  "_frozen_timestamp": "2026-08-30T00:35:00Z",
+  "_frozen_rationale": "Route-establishment benchmark is complete. Do not modify route architecture in response to unlearning results.",
+
+  "provenance": {
+    "code_git_sha": "e0d2c52ec260ea0cb76985ae72e9dcb01e9fe8de",
+    "qwen_model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "processor_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "seed": 17,
+    "dataset_split_sha": "6e326d341b10dee2e531207cdcfa817183096f1efb2c0f8257a9289834a2550c",
+    "visual_control_probes_sha": "715a77ba78d70395f874af77e90f2483b5081ee3f7d65afe061cd0a9e2aeabca",
+    "identity_code_mapping_sha": "c2749fc6e5d4a906f1944919be1940453ea2c1d8f7d6882a34bfed62438026d5",
+    "wrong_code_pairs_sha": "8fdc6b9cce5467b613e30d1c516ad301405265e1f74517a2ae6c0a063415ed73"
+  },
+
+  "architecture": {
+    "description": "Discrete bottleneck causal mediation: Y_M = h(C), not f(X, C)",
+    "graph_normal": "Y(X_i) = h(g(X_i))",
+    "graph_intervened": "Y_do(C=C_j)(X_i) = h(C_j)",
+    "g": {
+      "role": "X → C (image → identity code)",
+      "adapter_name": "e2c_v3_xc",
+      "adapter_sha": "3b1dd565940bbeb353db2bff6af3fbba967e0982736fd6655533c876850839c0",
+      "adapter_path": "e2c_v3/outputs/phaseC/X_to_C/adapter_final",
+      "lora": {"rank": 8, "alpha": 16, "dropout": 0.05, "scope": "S0", "target_modules": 32},
+      "trainable_params": 1966080,
+      "training_steps": 1500,
+      "training_items": 100,
+      "prompt": "What is the identity code for this person?",
+      "script_sha": "1cdae2951172a93fd39bb1cc412866c14297eec2a2ef4fabbb5f7b0d2fe19e9c"
+    },
+    "h": {
+      "role": "C → Y (code → alias, text-only, no image access)",
+      "adapter_name": "e2c_v3_cy",
+      "adapter_sha": "a973e5627e996d232d5010b66a87217c6d54261b3a87688449457fc8d802a6cf",
+      "adapter_path": "e2c_v3/outputs/phaseC/C_to_Y/adapter_final",
+      "lora": {"rank": 8, "alpha": 16, "dropout": 0.05, "scope": "S0", "target_modules": 32},
+      "trainable_params": 1966080,
+      "training_steps": 3000,
+      "training_items": "10 × 50 repeats = 500",
+      "prompt_template": "Identity code: {code}. Generate the alias.",
+      "script_sha": "1cdae2951172a93fd39bb1cc412866c14297eec2a2ef4fabbb5f7b0d2fe19e9c"
+    },
+    "h_shuffled": {
+      "role": "C → Y_π (code → shuffled alias, text-only)",
+      "adapter_name": "e2c_v3_cy_shuffled",
+      "adapter_sha": "643eae9bd37424bf9968e5ab83a1cef6f79b7d08dd0b247f33358b371734d3a5",
+      "adapter_path": "e2c_v3/outputs/phaseC/C6_shuffled/C_to_Y_shuffled/adapter_final",
+      "training_steps": 3000,
+      "training_items": "10 × 50 repeats = 500"
+    },
+    "D": {
+      "role": "Direct X → Y (image → alias, no mediator)",
+      "adapter_name": "e2c_v3_direct",
+      "adapter_sha": "6dd4da6260bb768f3382defa40e71cea73ccc1c6fb47066567534cee62e23e77",
+      "adapter_path": "e2c_v3/outputs/D/adapter_final",
+      "lora": {"rank": 8, "alpha": 16, "dropout": 0.05, "scope": "S0", "target_modules": 32},
+      "prompt": "Identify the synthetic person shown here. Return only the alias."
+    }
+  },
+
+  "mappings": {
+    "identity_code": {
+      "syn_00": {"code": "syn_00", "alias": "Aven"},
+      "syn_01": {"code": "syn_01", "alias": "Bira"},
+      "syn_02": {"code": "syn_02", "alias": "Caro"},
+      "syn_03": {"code": "syn_03", "alias": "Deni"},
+      "syn_04": {"code": "syn_04", "alias": "Eris"},
+      "syn_05": {"code": "syn_05", "alias": "Faro"},
+      "syn_06": {"code": "syn_06", "alias": "Gela"},
+      "syn_07": {"code": "syn_07", "alias": "Hani"},
+      "syn_08": {"code": "syn_08", "alias": "Ivoa"},
+      "syn_09": {"code": "syn_09", "alias": "Jora"}
+    },
+    "true_C_to_Y": {
+      "syn_00": "Aven", "syn_01": "Bira", "syn_02": "Caro",
+      "syn_03": "Deni", "syn_04": "Eris", "syn_05": "Faro",
+      "syn_06": "Gela", "syn_07": "Hani", "syn_08": "Ivoa",
+      "syn_09": "Jora"
+    },
+    "shuffled_C_to_Y": {
+      "syn_00": "Bira", "syn_01": "Eris", "syn_02": "Aven",
+      "syn_03": "Jora", "syn_04": "Deni", "syn_05": "Ivoa",
+      "syn_06": "Faro", "syn_07": "Caro", "syn_08": "Gela",
+      "syn_09": "Hani"
+    },
+    "shuffled_seed": 17,
+    "shuffled_is_deranged": true
+  },
+
+  "gate_results": {
+    "C1_X_TO_C": "PASS",
+    "C2_C_TO_Y": "PASS",
+    "C3_END_TO_END": "PASS",
+    "C4_CODE_INTERVENTION": "PASS",
+    "C5_CAUSAL_CONTRAST": "PASS",
+    "C6_SHUFFLED_CONTROL": "PASS",
+    "C7_VISUAL_PRESERVATION": "PASS"
+  },
+
+  "metrics": {
+    "C1": {
+      "train_acc": 1.000,
+      "validation_acc": 0.867,
+      "test_acc": 1.000,
+      "train_correct": 100, "train_total": 100,
+      "val_correct": 26, "val_total": 30,
+      "test_correct": 30, "test_total": 30
+    },
+    "C2": {
+      "accuracy": 1.000,
+      "correct": 10, "total": 10
+    },
+    "C3": {
+      "test_XC_acc": 1.000,
+      "test_XCY_acc": 1.000,
+      "test_correct": 30, "test_total": 30,
+      "val_XC_acc": 0.867,
+      "val_XCY_acc": 0.867
+    },
+    "C4": {
+      "agreement": 1.000,
+      "follow_code": 270,
+      "total_interventions": 270,
+      "test_images": 30,
+      "interventions_per_image": 9
+    },
+    "C5": {
+      "D_baseline_accuracy": 0.900,
+      "D_baseline_correct": 27, "D_baseline_total": 30,
+      "D_code_agreement": 0.011,
+      "D_follow_code": 3, "D_total": 270,
+      "D_image_agreement": 0.900,
+      "D_follow_image": 243,
+      "delta_c": 0.989,
+      "delta_c_ci95": [0.978, 1.000],
+      "delta_c_excludes_zero": true,
+      "bootstrap_seed": 17,
+      "bootstrap_resamples": 10000,
+      "bootstrap_unit": "identity-cluster (10 test images)"
+    },
+    "C6": {
+      "shuffled_C_to_Y_accuracy": 1.000,
+      "composition_accuracy": 1.000,
+      "composition_correct": 30, "composition_total": 30,
+      "shuffled_intervention_agreement": 1.000,
+      "shuffled_follow": 270, "shuffled_total": 270
+    },
+    "C7": {
+      "smiling": {"base": 0.567, "adapted": 0.567, "drop": 0.000},
+      "eyeglasses": {"base": 0.667, "adapted": 0.667, "drop": 0.000},
+      "hat": {"base": 0.833, "adapted": 0.833, "drop": 0.000},
+      "all_pass": true,
+      "max_drop": 0.000
+    }
+  },
+
+  "causal_contrast": {
+    "M_agreement": 1.000,
+    "D_agreement": 0.011,
+    "delta_C": 0.989,
+    "CI_95_percent": [97.8, 100.0],
+    "excludes_zero": true,
+    "interpretation": "Same task (X→Y), different causal dependency. M is entirely code-driven. D is entirely image-driven. Maximal contrast with CI excluding zero."
+  },
+
+  "raw_prediction_files": {
+    "C1_eval": {"path": "e2c_v3/outputs/phaseC/X_to_C/eval_results.json", "sha": "f700c707083f7c3fa975d3d0cf8237a0b4a3c38e129b0dd8b076bdb2ea63541c"},
+    "C2_eval": {"path": "e2c_v3/outputs/phaseC/C_to_Y/eval_results.json", "sha": "f5d8cc95fc183aab560f17bfd481ce770de89a7f46b4154a3265d4aefc58cea8"},
+    "C3_eval": {"path": "e2c_v3/outputs/phaseC/composition/eval_results.json", "sha": "773fd4538cef9434a6ed697fa863d863b2c990be456221ffed44b85c493db2c1"},
+    "C4_intervention_records": {"path": "e2c_v3/outputs/phaseC/intervention/eval_results.json", "sha": "4fbdd16bc4421f042ce1c6829cd97f54ffaa6671c6a6f343a358154c387a7649", "n_records": 270},
+    "C5_eval": {"path": "e2c_v3/outputs/phaseC/C5_direct/eval_results.json", "sha": "221a39143dd0170d500c630980ee4bcadf668f7516d343f7d2c6edbbe0c9db2e"},
+    "C5_intervention_records": {"path": "e2c_v3/outputs/phaseC/C5_direct/intervention_records.jsonl", "sha": "d20b9b86a6ea4218086dba0ec685dd030dca2a44ed734989775388abab2d5aeb", "n_records": 270},
+    "C6_eval": {"path": "e2c_v3/outputs/phaseC/C6_shuffled/eval_results.json", "sha": "c5e57c96b2372c5edc371b8823122fe6e964065eb437f0b4fc8094ffb31d1154"},
+    "C6_composition_records": {"path": "e2c_v3/outputs/phaseC/C6_shuffled/composition_records.jsonl", "sha": "617c7a9c89255abd218fbd8908ab10b6931f40f1fd60fb8bd64d2d0466def097", "n_records": 30},
+    "C6_intervention_records": {"path": "e2c_v3/outputs/phaseC/C6_shuffled/intervention_records.jsonl", "sha": "16ca5b8a2081a3ec342fcff8ce863a316bbd93c62e0398ab408f26f4f7b84651", "n_records": 270},
+    "C7_eval": {"path": "e2c_v3/outputs/phaseC/C7_visual/eval_results.json", "sha": "2b980c2351a261b141937581502e7f4f7cb8bfe361b67f99f17b151f71255869"}
+  },
+
+  "training_scripts": {
+    "C1_C4": {"path": "scripts/e2c_v3_phaseC_discrete_bottleneck.py", "sha": "1cdae2951172a93fd39bb1cc412866c14297eec2a2ef4fabbb5f7b0d2fe19e9c"},
+    "C5_C7": {"path": "scripts/e2c_v3_phaseC_extension.py", "sha": "38f2ff7e577232a28b21e1903923c2dc69b5c3e4617fce51fa0319c631e5c97e"},
+    "factorial_eval": {"path": "scripts/e2c_v3_eval_factorial.py", "sha": "3c7c71e298ca4652dd15fe5b0cf238be4acba2b245a5995f38a02758020dfeb0"},
+    "causal_mediation": {"path": "scripts/e2c_v3_causal_mediation.py", "sha": "6e46c20bdbbe1467a6e0c81c6b7c88c8671c6acfc42e55a60c369ce45f9403be"},
+    "composition_data": {"path": "scripts/e2c_v3_composition_data.py", "sha": "dc58301f7f16c10632540a8bf82c726f4378b45d13888c58a77c9f9b0adcad0f"},
+    "composition_repair": {"path": "scripts/e2c_v3_composition_repair.py", "sha": "cabffbf32b2a3ec9ecbfc1ec92548074b2a28082cfef41e5ae98998e755d844b"}
+  },
+
+  "decision": {
+    "C1_X_TO_C": "PASS",
+    "C2_C_TO_Y": "PASS",
+    "C3_END_TO_END": "PASS",
+    "C4_CODE_INTERVENTION": "PASS",
+    "C5_CAUSAL_CONTRAST": "PASS",
+    "C6_SHUFFLED_CONTROL": "PASS",
+    "C7_VISUAL_PRESERVATION": "PASS",
+
+    "delta_c": 0.989,
+    "delta_c_ci95": [0.978, 1.000],
+
+    "MEDIATED_ROUTE_ESTABLISHED": true,
+    "E2C_CAUSAL_COMPARISON_COMPLETE": false,
+    "ROUTE_ESTABLISHED": "Pending",
+    "CONTROLLED_UNLEARNING_ALLOWED": false
+  },
+
+  "freeze_constraint": "Do not change the route architecture (g, h, prompts, LoRA config) in response to unlearning results. Route establishment and unlearning optimization must remain decoupled.",
+
+  "next_phase_plan": {
+    "U0": "Freeze E2C-v3 route-establishment benchmark (this record)",
+    "U1": "Implement association-level deletion on C→Y: C_p → Y_p becomes C_p ↛ Y_p. Preserve X_p → C_p.",
+    "U2": "Measure target removal + X→C preservation + non-target retention (C_q → Y_q for q≠p)",
+    "U3": "Implement association update: C_p → Y_old becomes C_p → Y_new",
+    "U4": "Implement granularity reduction: C_p → A_specific becomes C_p → A_general",
+    "U5": "Compare baseline unlearning methods",
+    "U6": "Route-localization / collateral-effect analysis",
+    "U7": "Repeat across seeds / identities",
+    "U8": "Extend to hierarchical MLLMU/SALMU/CelebA setting",
+    "preservation_constraints": {
+      "identity_route": "Acc(X_p → C_p) must remain intact for association-only unlearning",
+      "other_identities": "C_q → Y_q for q≠p must remain intact",
+      "visual_performance": "Reuse frozen C7 controls. Baseline Δ_visual = 0. Do not allow unlearning to hide behind looser previous-LoRA baseline.",
+      "direct_route_control": "Changes to mediated association must not automatically imply changes to direct visual route"
+    },
+    "causal_decomposition_after_unlearning": {
+      "identity_destruction": "X_p ↛ C_p (route broken at first stage)",
+      "association_deletion": "X_p → C_p intact, but C_p ↛ Y_p (route broken at second stage)",
+      "over_unlearning": "Changes propagate to C_q → Y_q (q≠p) or generic visual tasks"
+    }
+  }
+}
