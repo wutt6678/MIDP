@@ -1,5 +1,12 @@
 {
   "method": "oracle_retrain_without_target",
+  "training_matched": {
+    "steps": 3000,
+    "warmup": 200,
+    "lr": 2e-05,
+    "repeat": 50,
+    "matches_phaseC_CtoY": true
+  },
   "target_id": "syn_00",
   "target_alias": "Aven",
   "target_prediction": "Bira",
@@ -7,65 +14,88 @@
   "p_target_old_alias": 0.0,
   "non_target_retention": 1.0,
   "overall_accuracy": 0.9,
+  "oracle_target_distribution": {
+    "Aven": 0.0,
+    "Bira": 0.99768,
+    "Caro": 0.002182,
+    "Deni": 5.1e-05,
+    "Eris": 4.5e-05,
+    "Faro": 0.0,
+    "Gela": 0.0,
+    "Hani": 0.0,
+    "Ivoa": 1.2e-05,
+    "Jora": 3e-06,
+    "Unknown": 0.0
+  },
   "hard_preds": [
     {
       "identity_id": "syn_00",
       "expected": "Aven",
-      "prediction": "Bira",
+      "raw": "Bira",
+      "parsed_label": "Bira",
       "correct": false
     },
     {
       "identity_id": "syn_01",
       "expected": "Bira",
-      "prediction": "Bira",
+      "raw": "Bira",
+      "parsed_label": "Bira",
       "correct": true
     },
     {
       "identity_id": "syn_02",
       "expected": "Caro",
-      "prediction": "Caro",
+      "raw": "Caro",
+      "parsed_label": "Caro",
       "correct": true
     },
     {
       "identity_id": "syn_03",
       "expected": "Deni",
-      "prediction": "Deni",
+      "raw": "Deni",
+      "parsed_label": "Deni",
       "correct": true
     },
     {
       "identity_id": "syn_04",
       "expected": "Eris",
-      "prediction": "Eris",
+      "raw": "Eris",
+      "parsed_label": "Eris",
       "correct": true
     },
     {
       "identity_id": "syn_05",
       "expected": "Faro",
-      "prediction": "Faro",
+      "raw": "Faro",
+      "parsed_label": "Faro",
       "correct": true
     },
     {
       "identity_id": "syn_06",
       "expected": "Gela",
-      "prediction": "Gela",
+      "raw": "Gela",
+      "parsed_label": "Gela",
       "correct": true
     },
     {
       "identity_id": "syn_07",
       "expected": "Hani",
-      "prediction": "Hani",
+      "raw": "Hani",
+      "parsed_label": "Hani",
       "correct": true
     },
     {
       "identity_id": "syn_08",
       "expected": "Ivoa",
-      "prediction": "Ivoa",
+      "raw": "Ivoa",
+      "parsed_label": "Ivoa",
       "correct": true
     },
     {
       "identity_id": "syn_09",
       "expected": "Jora",
-      "prediction": "Jora",
+      "raw": "Jora",
+      "parsed_label": "Jora",
       "correct": true
     }
   ]

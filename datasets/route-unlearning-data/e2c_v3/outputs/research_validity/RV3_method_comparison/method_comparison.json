@@ -1,18 +1,162 @@
 {
-  "counterfactual": {
-    "target_prediction": "Bira",
-    "p_old_alias": 0.0,
-    "p_wrong_alias": 1.0,
-    "non_target_acc": 1.0
+  "oracle_target_distribution": {
+    "Aven": 0.0,
+    "Bira": 0.99768,
+    "Caro": 0.002182,
+    "Deni": 5.1e-05,
+    "Eris": 4.5e-05,
+    "Faro": 0.0,
+    "Gela": 0.0,
+    "Hani": 0.0,
+    "Ivoa": 1.2e-05,
+    "Jora": 3e-06,
+    "Unknown": 0.0
   },
-  "gradient_ascent": {
-    "target_prediction": "rarararara",
-    "p_old_alias": 0.0,
-    "non_target_acc": 0.0
-  },
-  "npo": {
-    "target_prediction": "Aven",
-    "p_old_alias": 0.999997,
-    "non_target_acc": 1.0
+  "methods": {
+    "counterfactual": {
+      "target_prediction": "Unknown",
+      "p_old_alias": 2e-06,
+      "p_deleted_label": 0.999938,
+      "non_target_acc": 1.0,
+      "distance_to_oracle_full_vocab": {
+        "l2": 1.4126,
+        "cosine": 1.0,
+        "js": 0.6931
+      },
+      "distance_to_oracle_alias_only": {
+        "l2": 1.0567,
+        "cosine": 0.9014,
+        "js": 0.5964
+      },
+      "target_distribution": {
+        "Aven": 2e-06,
+        "Bira": 0.0,
+        "Caro": 0.0,
+        "Deni": 1e-06,
+        "Eris": 0.0,
+        "Faro": 0.0,
+        "Gela": 0.0,
+        "Hani": 0.0,
+        "Ivoa": 1e-06,
+        "Jora": 0.0,
+        "Unknown": 0.999938
+      }
+    },
+    "gradient_ascent": {
+      "target_prediction": null,
+      "p_old_alias": 0.0,
+      "p_deleted_label": 0.0,
+      "non_target_acc": 1.0,
+      "distance_to_oracle_full_vocab": {
+        "l2": 0.9977,
+        "cosine": 1.0,
+        "js": 0.3466
+      },
+      "distance_to_oracle_alias_only": {
+        "l2": 0.9977,
+        "cosine": 1.0,
+        "js": 0.3466
+      },
+      "target_distribution": {
+        "Aven": 0.0,
+        "Bira": 0.0,
+        "Caro": 0.0,
+        "Deni": 0.0,
+        "Eris": 0.0,
+        "Faro": 0.0,
+        "Gela": 0.0,
+        "Hani": 0.0,
+        "Ivoa": 0.0,
+        "Jora": 0.0,
+        "Unknown": 0.0
+      }
+    },
+    "npo": {
+      "target_prediction": null,
+      "p_old_alias": 0.0,
+      "p_deleted_label": 0.0,
+      "non_target_acc": 1.0,
+      "distance_to_oracle_full_vocab": {
+        "l2": 0.2061,
+        "cosine": 0.0092,
+        "js": 0.0601
+      },
+      "distance_to_oracle_alias_only": {
+        "l2": 0.2061,
+        "cosine": 0.0092,
+        "js": 0.0601
+      },
+      "target_distribution": {
+        "Aven": 0.0,
+        "Bira": 0.0,
+        "Caro": 0.0,
+        "Deni": 0.0,
+        "Eris": 0.0,
+        "Faro": 0.0,
+        "Gela": 0.0,
+        "Hani": 0.0,
+        "Ivoa": 0.0,
+        "Jora": 0.0,
+        "Unknown": 0.0
+      }
+    },
+    "kl": {
+      "target_prediction": null,
+      "p_old_alias": 0.0,
+      "p_deleted_label": 0.0,
+      "non_target_acc": 0.0,
+      "distance_to_oracle_full_vocab": {
+        "l2": 0.9977,
+        "cosine": 1.0,
+        "js": 0.3466
+      },
+      "distance_to_oracle_alias_only": {
+        "l2": 0.9977,
+        "cosine": 1.0,
+        "js": 0.3466
+      },
+      "target_distribution": {
+        "Aven": 0.0,
+        "Bira": 0.0,
+        "Caro": 0.0,
+        "Deni": 0.0,
+        "Eris": 0.0,
+        "Faro": 0.0,
+        "Gela": 0.0,
+        "Hani": 0.0,
+        "Ivoa": 0.0,
+        "Jora": 0.0,
+        "Unknown": 0.0
+      }
+    },
+    "gd": {
+      "target_prediction": "Unknown",
+      "p_old_alias": 0.0,
+      "p_deleted_label": 0.999989,
+      "non_target_acc": 1.0,
+      "distance_to_oracle_full_vocab": {
+        "l2": 1.4126,
+        "cosine": 1.0,
+        "js": 0.6931
+      },
+      "distance_to_oracle_alias_only": {
+        "l2": 1.0426,
+        "cosine": 0.9073,
+        "js": 0.6073
+      },
+      "target_distribution": {
+        "Aven": 0.0,
+        "Bira": 0.0,
+        "Caro": 0.0,
+        "Deni": 0.0,
+        "Eris": 0.0,
+        "Faro": 0.0,
+        "Gela": 0.0,
+        "Hani": 0.0,
+        "Ivoa": 0.0,
+        "Jora": 0.0,
+        "Unknown": 0.999989
+      }
+    }
   }
 }
