@@ -1,0 +1,145 @@
+{
+  "method": "oracle_retrain_without_target",
+  "training_matched": {
+    "steps": 3000,
+    "warmup": 200,
+    "lr": 2e-05,
+    "repeat": 50,
+    "matches_phaseC_CtoY": true
+  },
+  "target_id": "syn_00",
+  "target_alias": "Aven",
+  "target_prediction": "Bira",
+  "target_was_correct": false,
+  "p_target_old_alias": 2.484462095000661e-13,
+  "non_target_retention": 1.0,
+  "overall_accuracy": 0.9,
+  "oracle_candidate": {
+    "probs": {
+      "Aven": 2.484462095000661e-13,
+      "Bira": 0.9976804304059507,
+      "Caro": 0.0021823534888515145,
+      "Deni": 5.132601092892247e-05,
+      "Eris": 4.478373297842977e-05,
+      "Faro": 5.247616819007292e-09,
+      "Gela": 4.4015321317388405e-07,
+      "Hani": 4.437434215711952e-07,
+      "Ivoa": 1.2473386065645653e-05,
+      "Jora": 2.5542224824419433e-06,
+      "Unknown": 1.2176460191537097e-13
+    },
+    "candidate_mass": 0.9999748103918795,
+    "other_mass": 2.5189608120479434e-05,
+    "normalized": {
+      "Aven": 2.484524679203696e-13,
+      "Bira": 0.9977055622180826,
+      "Caro": 0.002182408462865453,
+      "Deni": 5.132730384359217e-05,
+      "Eris": 4.47848610915304e-05,
+      "Faro": 5.247749007748312e-09,
+      "Gela": 4.401643007401283e-07,
+      "Hani": 4.4375459957566015e-07,
+      "Ivoa": 1.2473700273267349e-05,
+      "Jora": 2.5542868239260654e-06,
+      "Unknown": 1.2176766919523975e-13
+    },
+    "alias_only_mass": 0.9999748103917577,
+    "alias_only_normalized": {
+      "Aven": 2.484524679203998e-13,
+      "Bira": 0.9977055622182041,
+      "Caro": 0.0021824084628657187,
+      "Deni": 5.132730384359842e-05,
+      "Eris": 4.478486109153585e-05,
+      "Faro": 5.247749007748951e-09,
+      "Gela": 4.4016430074018194e-07,
+      "Hani": 4.437545995757142e-07,
+      "Ivoa": 1.2473700273268869e-05,
+      "Jora": 2.5542868239263762e-06
+    },
+    "log_probs": {
+      "Aven": -29.023550033569336,
+      "Bira": -0.0023222639629238984,
+      "Caro": -6.127351402468776,
+      "Deni": -9.877312898635182,
+      "Eris": -10.013665587641299,
+      "Faro": -19.06549180264119,
+      "Gela": -14.636142958886921,
+      "Hani": -14.628019320894964,
+      "Ivoa": -11.291913298191503,
+      "Jora": -12.877762692776741,
+      "Unknown": -29.73668670654297
+    }
+  },
+  "hard_preds": [
+    {
+      "identity_id": "syn_00",
+      "expected": "Aven",
+      "raw": "Bira",
+      "parsed_label": "Bira",
+      "correct": false
+    },
+    {
+      "identity_id": "syn_01",
+      "expected": "Bira",
+      "raw": "Bira",
+      "parsed_label": "Bira",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_02",
+      "expected": "Caro",
+      "raw": "Caro",
+      "parsed_label": "Caro",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_03",
+      "expected": "Deni",
+      "raw": "Deni",
+      "parsed_label": "Deni",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_04",
+      "expected": "Eris",
+      "raw": "Eris",
+      "parsed_label": "Eris",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_05",
+      "expected": "Faro",
+      "raw": "Faro",
+      "parsed_label": "Faro",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_06",
+      "expected": "Gela",
+      "raw": "Gela",
+      "parsed_label": "Gela",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_07",
+      "expected": "Hani",
+      "raw": "Hani",
+      "parsed_label": "Hani",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_08",
+      "expected": "Ivoa",
+      "raw": "Ivoa",
+      "parsed_label": "Ivoa",
+      "correct": true
+    },
+    {
+      "identity_id": "syn_09",
+      "expected": "Jora",
+      "raw": "Jora",
+      "parsed_label": "Jora",
+      "correct": true
+    }
+  ]
+}
