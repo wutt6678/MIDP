@@ -26,27 +26,35 @@ Blocking findings fixed
 
 Additional corrections
 ======================
-- A genuine deletion target is introduced: deleted identities are driven to a
-  non-identity refusal label ("Unknown") that is outside the alias space.  The
+- A refusal/abstention target is introduced: suppressed identities are driven to
+  a non-identity label ("Unknown") that is outside the alias space.  This is
+  refusal-targeted association suppression (abstention editing); it is NOT
+  claimed to be equivalent to retraining without the target.  The leave-one-out
   retrain-without-target oracle is reported separately as the retrain-equivalence
-  reference (the oracle itself collapses the deleted target onto a nearby alias).
+  reference (the oracle itself collapses the target onto a nearby alias).
 - RV5 tests granularity reduction at multiple hierarchy depths as separate
   transformations (specific->subgroup and specific->group), each evaluated with
   strict recognized-label parsing.
-- RV6 compositional mixture uses the genuine deletion label and full-sequence
-  soft metrics; all four transformations are evaluated simultaneously.
+- RV6 compositional mixture uses the refusal target and full-sequence soft
+  metrics; all four transformations are evaluated simultaneously.
 - Subgroup / group evaluation uses strict recognized-label parsing instead of
   substring matching.
 - load_trained_weights() is fail-closed: it raises on any partial checkpoint
   load instead of silently continuing.
 - RV8 adds a post-edit end-to-end image -> code -> output evaluation using the
-  frozen g (X->C) and the edited h (C->Y), plus a visual-control probe.
-- RV9 writes a run manifest binding git commit, CLI invocation, config, seeds,
-  input manifests, checkpoint hashes, and output artifact hashes.
+  frozen g (X->C) and the edited h (C->Y), plus an EMPIRICAL visual control that
+  evaluates each attribute family (eyeglasses/hat/smiling) through the pipeline
+  pre/post.  It does NOT fall back to the ground-truth code when g emits no
+  valid code (such a row is recorded as a routing failure).
+- RV9 writes a run manifest binding git commit, the executing script's SHA-256,
+  the dirty-worktree flag, test evidence, CLI invocation, config, seeds, input
+  manifests, checkpoint hashes, and output artifact hashes.  Full runs require a
+  clean git worktree so the recorded commit contains the executed code.
 
 Architecture constraint (freeze): g (X->C) is NEVER modified; only h (C->Y).
 """
 import argparse
+import gc
 import hashlib
 import json
 import logging
@@ -83,9 +91,11 @@ ORACLE_WARMUP = 200
 ORACLE_LR = 2e-5
 ORACLE_REPEAT = 50
 
-# --- Genuine deletion target ------------------------------------------------ #
-# A non-identity label OUTSIDE the alias space.  Deleted identities are driven
-# to this label; it is never used for any real identity.
+# --- Refusal / abstention target ------------------------------------------- #
+# A non-identity label OUTSIDE the alias space.  Suppressed identities are
+# driven to this refusal label; it is never used for any real identity.  Driving
+# a target here is refusal-targeted association suppression (abstention editing),
+# NOT deletion equivalent to retraining without the target.
 DELETED_LABEL = "Unknown"
 
 # --- Identity aliases -------------------------------------------------------- #
@@ -188,6 +198,79 @@ def distribution_distance(p, q, metric="l2", labels=None):
     raise ValueError(f"unknown metric: {metric}")
 
 
+# Minimum total probability mass a model must place on the recognized candidate
+# label set before a conditional (renormalized) distance-to-oracle is deemed
+# meaningful.  Below this, the model is generating almost entirely OUTSIDE the
+# candidate set and any renormalized distance is a numerical artifact.
+MIN_CANDIDATE_MASS = 0.01
+
+
+def normalize_over(prob_by_label, labels):
+    """Restrict ``prob_by_label`` to ``labels`` and renormalize.
+
+    Returns ``(normalized_dict, mass)`` where ``mass`` is the total probability
+    on ``labels`` BEFORE normalization.  When ``mass`` is zero the normalized
+    vector is all zeros and MUST NOT be treated as a valid distribution — the
+    caller is responsible for gating any downstream comparison on ``mass``.
+    """
+    mass = float(sum(prob_by_label.get(l, 0.0) for l in labels))
+    if mass <= 0.0:
+        return {l: 0.0 for l in labels}, 0.0
+    return {l: prob_by_label.get(l, 0.0) / mass for l in labels}, mass
+
+
+def build_candidate_summary(prob_by_label, vocab, deleted_label):
+    """Summarize a model's mass over the recognized candidate label set.
+
+    Records the total candidate mass, the explicit OTHER / out-of-candidate-set
+    mass (1 - candidate mass), and normalized distributions over (a) the full
+    candidate set and (b) the alias-only subset.  All values are full precision.
+    """
+    norm_all, mass_all = normalize_over(prob_by_label, vocab)
+    alias_only = [l for l in vocab if l != deleted_label]
+    norm_alias, mass_alias = normalize_over(prob_by_label, alias_only)
+    return {
+        "probs": {l: prob_by_label.get(l, 0.0) for l in vocab},
+        "candidate_mass": mass_all,
+        "other_mass": float(max(0.0, 1.0 - mass_all)),
+        "normalized": norm_all,
+        "alias_only_mass": mass_alias,
+        "alias_only_normalized": norm_alias,
+    }
+
+
+def gated_distance(model_summary, oracle_summary, scope, labels, min_mass):
+    """Distance between model and oracle over ``scope``, or None if unreliable.
+
+    ``scope`` is "candidate" (full candidate set) or "alias" (alias-only).  The
+    distance is computed ONLY when both model and oracle place at least
+    ``min_mass`` on that scope; otherwise it returns (None, reason) so that a
+    negligible-mass (garbage) output is never renormalized into a misleading
+    proximity claim.  Returns ``(dist_dict_or_None, reliable, reason)``.
+    """
+    if scope == "candidate":
+        m_mass = model_summary["candidate_mass"]
+        o_mass = oracle_summary["candidate_mass"]
+        m_norm = model_summary["normalized"]
+        o_norm = oracle_summary["normalized"]
+    elif scope == "alias":
+        m_mass = model_summary["alias_only_mass"]
+        o_mass = oracle_summary["alias_only_mass"]
+        m_norm = model_summary["alias_only_normalized"]
+        o_norm = oracle_summary["alias_only_normalized"]
+    else:
+        raise ValueError(f"unknown scope: {scope}")
+    if m_mass < min_mass or o_mass < min_mass:
+        reason = (f"candidate mass too small to renormalize "
+                  f"(model={m_mass:.3e}, oracle={o_mass:.3e}, "
+                  f"threshold={min_mass:.3e}); output lies outside the "
+                  f"recognized label set, distance not established")
+        return None, False, reason
+    dist = {m: distribution_distance(m_norm, o_norm, m, labels=labels)
+            for m in ("l2", "cosine", "js")}
+    return dist, True, None
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -202,6 +285,50 @@ def git_commit_sha():
             ["git", "rev-parse", "HEAD"], text=True).strip()
     except Exception:
         return "unknown"
+
+
+def script_sha256():
+    """SHA-256 of THIS executing script, so results bind to exact code."""
+    try:
+        return sha256_file(Path(__file__).resolve())
+    except Exception:
+        return "unknown"
+
+
+def git_worktree_dirty():
+    """True if the git worktree has uncommitted changes to TRACKED files.
+
+    Uses --untracked-files=no so newly created (untracked) output artifacts do
+    not count as dirty.  Used as a provenance guard: experiments must be run
+    from a tree whose tracked code is committed, so the recorded commit actually
+    contains the executed implementation.
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=no"], text=True)
+        return len(out.strip()) > 0
+    except Exception:
+        return None  # unknown (not a git repo / git unavailable)
+
+
+def collect_test_evidence():
+    """Run the research-validity unit tests and record the outcome.
+
+    Binds the produced artifacts to a passing test suite (the reviewer's
+    'test result or CI identifier' requirement).  GPU-free and fast.
+    """
+    test_file = "tests/unit/test_research_validity.py"
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", test_file, "-q", "--no-header"],
+            capture_output=True, text=True, timeout=600, check=False)
+        lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+        summary = lines[-1] if lines else ""
+        return {"test_file": test_file, "returncode": proc.returncode,
+                "passed": proc.returncode == 0 and "passed" in summary,
+                "summary": summary}
+    except Exception as e:
+        return {"test_file": test_file, "error": str(e), "passed": False}
 
 
 # ====================================================================== #
@@ -773,7 +900,7 @@ def train_gd_refusal(condition, adapter, model, processor, target_ids,
 # Shared pair builders
 # ====================================================================== #
 def deletion_pairs(target_ids):
-    """Genuine deletion: drive each target to the non-identity refusal label."""
+    """Refusal-targeted suppression: drive each target to the refusal label."""
     return [{"prompt": CODE_TO_ALIAS_PROMPT.format(code=iid),
              "answer": DELETED_LABEL} for iid in target_ids]
 
@@ -828,10 +955,14 @@ def run_rv1_soft_metrics(args, out_base, identity_ids, alias_of):
         probs = full_sequence_label_probs(
             adapter, model, processor, iid, vocab, args.device)
         summary = soft_summary(probs, alias_of[iid], vocab)
+        prob_by_label = {a: probs.get(a, {}).get("prob", 0.0) for a in vocab}
+        cand = build_candidate_summary(prob_by_label, vocab, DELETED_LABEL)
         all_results[iid] = {
             "correct_alias": alias_of[iid],
             **summary,
-            "full_probs": {a: round(probs.get(a, {}).get("prob", 0.0), 6)
+            "candidate_mass": cand["candidate_mass"],
+            "other_mass": cand["other_mass"],
+            "full_probs": {a: round(prob_by_label.get(a, 0.0), 6)
                            for a in vocab},
         }
         logger.info(f"  {iid} ({alias_of[iid]}): p={summary['p_correct']:.4f} "
@@ -883,8 +1014,15 @@ def run_rv2_oracle(args, out_base, identity_ids, alias_of):
     other_acc = other_correct / len(other_ids)
     target_pred = next(p["parsed_label"] for p in h_eval["preds"]
                        if p["identity_id"] == target)
-    alias_dist, _ = target_distribution_over_aliases(
+    # Full-precision oracle candidate summary (reproducible reference for RV3).
+    _, probs_full = target_distribution_over_aliases(
         adapter, model, processor, target, args.device, vocab)
+    prob_by_label = {l: probs_full.get(l, {}).get("prob", 0.0) for l in vocab}
+    logp_by_label = {l: probs_full.get(l, {}).get("log_prob", -1e9)
+                     for l in vocab}
+    oracle_candidate = build_candidate_summary(prob_by_label, vocab,
+                                               DELETED_LABEL)
+    oracle_candidate["log_probs"] = logp_by_label
     results = {
         "method": "oracle_retrain_without_target",
         "training_matched": {
@@ -900,18 +1038,18 @@ def run_rv2_oracle(args, out_base, identity_ids, alias_of):
         "target_was_correct": any(
             p["correct"] for p in h_eval["preds"]
             if p["identity_id"] == target),
-        "p_target_old_alias": round(alias_dist.get(target_alias, 0.0), 6),
+        "p_target_old_alias": prob_by_label.get(target_alias, 0.0),
         "non_target_retention": round(other_acc, 4),
         "overall_accuracy": h_eval["accuracy"],
-        "oracle_target_distribution": {
-            k: round(v, 6) for k, v in alias_dist.items()},
+        "oracle_candidate": oracle_candidate,
         "hard_preds": h_eval["preds"],
     }
     with open(rv2_dir / "oracle_results.json", "w") as f:
         json.dump(results, f, indent=2)
     logger.info(f"RV2: target_removed={not results['target_was_correct']} "
-                f"p({target_alias})={results['p_target_old_alias']} "
-                f"non_target={other_acc:.3f} oracle_pred={target_pred}")
+                f"p({target_alias})={results['p_target_old_alias']:.3e} "
+                f"non_target={other_acc:.3f} oracle_pred={target_pred} "
+                f"candidate_mass={oracle_candidate['candidate_mass']:.4f}")
     del model, processor, adapter
     torch.cuda.empty_cache()
     return results
@@ -922,47 +1060,58 @@ def run_rv2_oracle(args, out_base, identity_ids, alias_of):
 # RV3: Method comparison (CF vs GA vs NPO vs KL vs GD) vs oracle
 # ====================================================================== #
 def _eval_method(method, args, adapter_dir, adapter_name, identity_ids,
-                 alias_of, target, oracle_dist, seed):
+                 alias_of, target, oracle_candidate, seed):
     other_ids = [i for i in identity_ids if i != target]
     adapter, model, processor = fresh_eval_model(args, adapter_name, adapter_dir)
     vocab = alias_label_vocab()
+    alias_only = [l for l in vocab if l != DELETED_LABEL]
     h_eval = evaluate_h_labels(adapter, model, processor, identity_ids,
                                alias_of, args.device, seed, vocab, tag=method)
     non_target_acc = sum(
         1 for p in h_eval["preds"]
         if p["identity_id"] != target and p["correct"]) / len(other_ids)
-    alias_dist, _ = target_distribution_over_aliases(
-        adapter, model, processor, target, args.device, vocab)
-    alias_only = [l for l in vocab if l != DELETED_LABEL]
-    dist_full = {
-        m: distribution_distance(alias_dist, oracle_dist, m, labels=vocab)
-        for m in ("l2", "cosine", "js")}
-    dist_alias_only = {
-        m: distribution_distance(
-            {l: alias_dist.get(l, 0.0) for l in alias_only},
-            {l: oracle_dist.get(l, 0.0) for l in alias_only},
-            m, labels=alias_only)
-        for m in ("l2", "cosine", "js")}
+    # Full-SEQUENCE probabilities AND log-probabilities at FULL precision so the
+    # committed artifact can reproduce every downstream number.
+    probs_full = full_sequence_label_probs(
+        adapter, model, processor, target, vocab, args.device)
+    prob_by_label = {l: probs_full.get(l, {}).get("prob", 0.0) for l in vocab}
+    logp_by_label = {l: probs_full.get(l, {}).get("log_prob", -1e9)
+                     for l in vocab}
+    model_summary = build_candidate_summary(prob_by_label, vocab, DELETED_LABEL)
+    min_mass = args.min_candidate_mass
+    dist_cand, cand_ok, cand_reason = gated_distance(
+        model_summary, oracle_candidate, "candidate", vocab, min_mass)
+    dist_alias, alias_ok, alias_reason = gated_distance(
+        model_summary, oracle_candidate, "alias", alias_only, min_mass)
     target_pred = next(p["parsed_label"] for p in h_eval["preds"]
                        if p["identity_id"] == target)
+    generation_valid = target_pred is not None
     result = {
         "target_prediction": target_pred,
-        "p_old_alias": round(alias_dist.get(alias_of[target], 0.0), 6),
-        "p_deleted_label": round(alias_dist.get(DELETED_LABEL, 0.0), 6),
+        "generation_valid": generation_valid,
+        "p_old_alias": prob_by_label.get(alias_of[target], 0.0),
+        "p_deleted_label": prob_by_label.get(DELETED_LABEL, 0.0),
         "non_target_acc": round(non_target_acc, 4),
-        "distance_to_oracle_full_vocab": {k: round(v, 4)
-                                          for k, v in dist_full.items()},
-        "distance_to_oracle_alias_only": {k: round(v, 4)
-                                          for k, v in dist_alias_only.items()},
-        "target_distribution": {k: round(v, 6)
-                                for k, v in alias_dist.items()},
+        # full-precision reproducible core
+        "candidate_log_probs": logp_by_label,
+        "candidate_probs": prob_by_label,
+        "candidate_mass": model_summary["candidate_mass"],
+        "other_mass": model_summary["other_mass"],
+        "alias_only_mass": model_summary["alias_only_mass"],
+        "normalized_candidate_dist": model_summary["normalized"],
+        # reliability-gated distances (None when mass is negligible)
+        "distance_reliable_over_candidates": cand_ok,
+        "distance_reliable_over_aliases": alias_ok,
+        "distance_to_oracle_over_candidates": dist_cand,
+        "distance_to_oracle_over_aliases": dist_alias,
+        "distance_reliability_reason": cand_reason or alias_reason,
     }
     del model, processor, adapter
     torch.cuda.empty_cache()
     return result
 
 
-def run_rv3_methods(args, out_base, identity_ids, alias_of, oracle_dist):
+def run_rv3_methods(args, out_base, identity_ids, alias_of, oracle_candidate):
     logger.info("=" * 60)
     logger.info("RV3: METHOD COMPARISON (CF vs GA vs NPO vs KL vs GD)")
     logger.info("=" * 60)
@@ -989,7 +1138,7 @@ def run_rv3_methods(args, out_base, identity_ids, alias_of, oracle_dist):
     del model, processor, adapter; torch.cuda.empty_cache()
     method_results["counterfactual"] = _eval_method(
         "cf", args, cf_dir, "e2c_v3_cy_cf", identity_ids, alias_of, target,
-        oracle_dist, args.seed)
+        oracle_candidate, args.seed)
 
     # --- GA: ascent on forget + descent on retain --- #
     logger.info("--- GA: gradient ascent on target only + retain descent ---")
@@ -1008,7 +1157,7 @@ def run_rv3_methods(args, out_base, identity_ids, alias_of, oracle_dist):
     del model, processor, adapter; torch.cuda.empty_cache()
     method_results["gradient_ascent"] = _eval_method(
         "ga", args, ga_dir, "e2c_v3_cy_ga", identity_ids, alias_of, target,
-        oracle_dist, args.seed)
+        oracle_candidate, args.seed)
 
     # --- NPO (fixed) --- #
     logger.info("--- NPO: fixed reference handling ---")
@@ -1027,7 +1176,7 @@ def run_rv3_methods(args, out_base, identity_ids, alias_of, oracle_dist):
     del model, processor, adapter; torch.cuda.empty_cache()
     method_results["npo"] = _eval_method(
         "npo", args, npo_dir, "e2c_v3_cy_npo", identity_ids, alias_of, target,
-        oracle_dist, args.seed)
+        oracle_candidate, args.seed)
 
     # --- KL-anchored --- #
     logger.info("--- KL: GA + KL(pi||pi_ref) anchor on retain ---")
@@ -1046,7 +1195,7 @@ def run_rv3_methods(args, out_base, identity_ids, alias_of, oracle_dist):
     del model, processor, adapter; torch.cuda.empty_cache()
     method_results["kl"] = _eval_method(
         "kl", args, kl_dir, "e2c_v3_cy_kl", identity_ids, alias_of, target,
-        oracle_dist, args.seed)
+        oracle_candidate, args.seed)
 
     # --- GD: distribution-matching toward refusal --- #
     logger.info("--- GD: distribution matching toward refusal ---")
@@ -1059,27 +1208,35 @@ def run_rv3_methods(args, out_base, identity_ids, alias_of, oracle_dist):
     del model, processor, adapter; torch.cuda.empty_cache()
     method_results["gd"] = _eval_method(
         "gd", args, gd_dir, "e2c_v3_cy_gd", identity_ids, alias_of, target,
-        oracle_dist, args.seed)
+        oracle_candidate, args.seed)
 
     with open(rv3_dir / "method_comparison.json", "w") as f:
-        json.dump({"oracle_target_distribution":
-                   {k: round(v, 6) for k, v in oracle_dist.items()},
+        json.dump({"min_candidate_mass": args.min_candidate_mass,
+                   "oracle_candidate": oracle_candidate,
                    "methods": method_results}, f, indent=2)
     logger.info("RV3 COMPARISON:")
     for method, res in method_results.items():
+        dc = res["distance_to_oracle_over_candidates"]
+        da = res["distance_to_oracle_over_aliases"]
+        dc_l2 = "n/a" if dc is None else f"{dc['l2']:.4f}"
+        da_l2 = "n/a" if da is None else f"{da['l2']:.4f}"
         logger.info(f"  {method}: pred={res['target_prediction']} "
-                    f"p_old={res['p_old_alias']} p_del={res['p_deleted_label']} "
+                    f"gen_valid={res['generation_valid']} "
+                    f"p_old={res['p_old_alias']:.3e} "
+                    f"p_del={res['p_deleted_label']:.3e} "
+                    f"cand_mass={res['candidate_mass']:.3e} "
+                    f"other_mass={res['other_mass']:.3e} "
                     f"non_target={res['non_target_acc']} "
-                    f"dist_l2(alias)={res['distance_to_oracle_alias_only']['l2']}")
+                    f"dist_l2_cand={dc_l2} dist_l2_alias={da_l2}")
     return method_results
 
 
 # ====================================================================== #
-# RV4: Multi-seed robustness (genuine deletion)
+# RV4: Multi-seed robustness (refusal-targeted suppression)
 # ====================================================================== #
 def run_rv4_multiseed(args, out_base, identity_ids, alias_of):
     logger.info("=" * 60)
-    logger.info("RV4: MULTI-SEED ROBUSTNESS (genuine deletion)")
+    logger.info("RV4: MULTI-SEED ROBUSTNESS (refusal-targeted suppression)")
     logger.info("=" * 60)
     seeds = args.seeds
     target = args.target_id
@@ -1231,7 +1388,7 @@ def run_rv5_granularity(args, out_base, identity_ids, alias_of):
 
 
 # ====================================================================== #
-# RV6: Compositional mixture (genuine deletion + update + generalize + retain)
+# RV6: Compositional mixture (refusal + update + generalize + retain)
 # ====================================================================== #
 def run_rv6_mixture(args, out_base, identity_ids, alias_of):
     logger.info("=" * 60)
@@ -1408,6 +1565,34 @@ def _extract_code(text, identity_ids):
     return None
 
 
+def _run_h_on_codes(backend, code_rows, identity_ids, alias_of, delete_set,
+                    tag):
+    """Run an h backend over precomputed g codes. NO ground-truth fallback: if
+    g produced no valid code the row is recorded as a routing failure."""
+    vocab = alias_label_vocab()
+    rows = []
+    with torch.no_grad():
+        for c in code_rows:
+            code = c["pred_code"]
+            iid = c["identity_id"]
+            if code is None:
+                # g failed to emit a recognized code: this is a genuine e2e
+                # failure, NOT something to paper over with the true code.
+                rows.append({**c, "pred_alias": None, "g_routed": False,
+                             "outcome_ok": False})
+                continue
+            prompt = CODE_TO_ALIAS_PROMPT.format(code=code)
+            gen = backend.generate(None, prompt, max_new_tokens=8)
+            parsed = parse_recognized_label(gen.text.strip(), vocab)
+            if iid in delete_set:
+                ok = parsed != alias_of[iid]
+            else:
+                ok = parsed == alias_of[iid]
+            rows.append({**c, "pred_alias": parsed, "g_routed": True,
+                         "outcome_ok": ok})
+    return rows
+
+
 def run_rv8_e2e(args, out_base, identity_ids, alias_of):
     logger.info("=" * 60)
     logger.info("RV8: POST-EDIT END-TO-END image -> code -> output")
@@ -1420,17 +1605,28 @@ def run_rv8_e2e(args, out_base, identity_ids, alias_of):
     with open(IMAGE_SPLIT_MANIFEST) as f:
         split_items = json.load(f)
     test_items = [it for it in split_items if it["split"] == "test"]
-    # sample up to N images per identity
+    id_to_path = {it["image_id"]: it["image_path"] for it in split_items}
     per_id = {}
     for it in test_items:
         per_id.setdefault(it["identity_id"], []).append(it)
     sampled = []
     for iid in identity_ids:
         sampled.extend(per_id.get(iid, [])[:args.rv8_images_per_id])
-    logger.info(f"Sampled {len(sampled)} test images across "
-                f"{len(per_id)} identities")
+    logger.info(f"Sampled {len(sampled)} test images across {len(per_id)} ids")
 
-    # --- Stage 1: frozen g (X -> C) predicts codes --- #
+    # Attribute-control images (eyeglasses/hat/smiling) for the visual control.
+    control_items = []
+    if VISUAL_CONTROLS_MANIFEST.exists():
+        with open(VISUAL_CONTROLS_MANIFEST) as f:
+            controls = json.load(f)
+        for c in controls:
+            if c.get("image_id") in id_to_path:
+                control_items.append({**c,
+                                      "image_path": id_to_path[c["image_id"]]})
+    control_items = control_items[:args.rv8_visual_controls]
+    logger.info(f"Visual-control images: {len(control_items)}")
+
+    # --- Stage 1: frozen g (X -> C) on sampled + control images --- #
     adapter_g, model_g, processor_g = create_adapter_model(
         args, args.device, "e2c_v3_xc")
     model_g = adapter_g.load_unlearning_adapter(
@@ -1443,57 +1639,68 @@ def run_rv8_e2e(args, out_base, identity_ids, alias_of):
     g_backend = adapter_g.to_eval_backend(
         model=model_g, processor=processor_g, model_config=cfg)
     model_g.eval()
-    code_cache = []
-    with torch.no_grad():
-        for it in sampled:
-            image = _load_image(str(image_base / it["image_path"]))
-            gen = g_backend.generate(image, IMG_TO_CODE_PROMPT, max_new_tokens=5)
-            pred_code = _extract_code(gen.text.strip(), identity_ids)
-            code_cache.append({
-                "identity_id": it["identity_id"],
-                "image_id": it["image_id"],
-                "true_code": it["identity_id"],
-                "pred_code": pred_code,
-                "code_correct": pred_code == it["identity_id"],
-            })
-    g_acc = sum(c["code_correct"] for c in code_cache) / len(code_cache)
+
+    def _g_codes(items):
+        out = []
+        with torch.no_grad():
+            for it in items:
+                image = _load_image(str(image_base / it["image_path"]))
+                gen = g_backend.generate(image, IMG_TO_CODE_PROMPT,
+                                         max_new_tokens=5)
+                pred_code = _extract_code(gen.text.strip(), identity_ids)
+                out.append({**it, "true_code": it["identity_id"],
+                            "pred_code": pred_code,
+                            "code_correct": pred_code == it["identity_id"]})
+        return out
+
+    sampled_codes = _g_codes(sampled)
+    control_codes = _g_codes(control_items)
+    g_acc = sum(c["code_correct"] for c in sampled_codes) / max(
+        len(sampled_codes), 1)
     logger.info(f"  frozen g accuracy on sampled images: {g_acc:.3f}")
-    del model_g, processor_g, adapter_g
+    del g_backend, model_g, processor_g, adapter_g
+    gc.collect()
     torch.cuda.empty_cache()
 
-    # --- Stage 2: edited h (C -> Y) on the g-predicted codes --- #
+    # --- Stage 2: edited h (C -> Y) on sampled + control codes (POST) --- #
     adapter_h, model_h, processor_h = fresh_eval_model(
         args, args.rv8_h_adapter_name, Path(args.rv8_h_adapter_dir))
     h_backend = adapter_h.to_eval_backend(
         model=model_h, processor=processor_h, model_config=cfg)
     model_h.eval()
-    e2e_rows = []
-    with torch.no_grad():
-        for c in code_cache:
-            code = c["pred_code"] or c["true_code"]
-            prompt = CODE_TO_ALIAS_PROMPT.format(code=code)
-            gen = h_backend.generate(None, prompt, max_new_tokens=8)
-            vocab = alias_label_vocab()
-            parsed = parse_recognized_label(gen.text.strip(), vocab)
-            iid = c["identity_id"]
-            if iid in delete_set:
-                ok = parsed != alias_of[iid]
-                status = "deleted"
-            else:
-                ok = parsed == alias_of[iid]
-                status = "retained"
-            e2e_rows.append({
-                **c, "pred_alias": parsed, "status": status, "e2e_ok": ok})
-    del model_h, processor_h, adapter_h
+    e2e_rows = _run_h_on_codes(h_backend, sampled_codes, identity_ids,
+                               alias_of, delete_set, "post")
+    post_control = _run_h_on_codes(h_backend, control_codes, identity_ids,
+                                   alias_of, delete_set, "post-control")
+    del h_backend, model_h, processor_h, adapter_h
+    gc.collect()
     torch.cuda.empty_cache()
 
-    deleted_rows = [r for r in e2e_rows if r["status"] == "deleted"]
-    retained_rows = [r for r in e2e_rows if r["status"] == "retained"]
-    del_ok = sum(r["e2e_ok"] for r in deleted_rows)
-    ret_ok = sum(r["e2e_ok"] for r in retained_rows)
+    # --- Stage 3: ORIGINAL frozen h on control codes (PRE) --- #
+    adapter_o, model_o, processor_o = create_adapter_model(
+        args, args.device, "e2c_v3_cy")
+    model_o = adapter_o.load_unlearning_adapter(
+        model_o, Path("e2c_v3/outputs/phaseC/C_to_Y/adapter_final"),
+        adapter_name="e2c_v3_cy")
+    o_backend = adapter_o.to_eval_backend(
+        model=model_o, processor=processor_o, model_config=cfg)
+    model_o.eval()
+    pre_control = _run_h_on_codes(o_backend, control_codes, identity_ids,
+                                  alias_of, set(), "pre-control")
+    del o_backend, model_o, processor_o, adapter_o
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    deleted_rows = [r for r in e2e_rows if r["identity_id"] in delete_set]
+    retained_rows = [r for r in e2e_rows if r["identity_id"] not in delete_set]
+    del_ok = sum(r["outcome_ok"] for r in deleted_rows)
+    ret_ok = sum(r["outcome_ok"] for r in retained_rows)
+    g_routed_n = sum(1 for r in e2e_rows if r["g_routed"])
     summary = {
         "g_code_accuracy": round(g_acc, 4),
         "n_images": len(e2e_rows),
+        "g_routed": g_routed_n,
+        "g_routing_failures": len(e2e_rows) - g_routed_n,
         "deleted_images": len(deleted_rows),
         "deleted_e2e_suppressed": del_ok,
         "deleted_e2e_rate": round(del_ok / max(len(deleted_rows), 1), 4),
@@ -1503,30 +1710,68 @@ def run_rv8_e2e(args, out_base, identity_ids, alias_of):
         "rows": e2e_rows,
     }
 
-    # --- Visual control probe --- #
-    vc = None
-    if VISUAL_CONTROLS_MANIFEST.exists():
-        with open(VISUAL_CONTROLS_MANIFEST) as f:
-            controls = json.load(f)
-        vc_sample = controls[:args.rv8_visual_controls]
-        vc = {"n_controls": len(vc_sample),
-              "note": "attribute-control images (eyeglasses/hat/smiling) "
-                      "routed through the frozen g; the discrete code is "
-                      "attribute-invariant by construction.",
-              "sample_ids": [c.get("image_id") for c in vc_sample]}
-    summary["visual_control"] = vc
+    # --- Empirical visual control: per-attribute-family routing + outcome --- #
+    summary["visual_control"] = _summarize_visual_controls(
+        control_codes, pre_control, post_control, alias_of, delete_set)
     with open(rv8_dir / "e2e_results.json", "w") as f:
         json.dump(summary, f, indent=2)
-    logger.info(f"RV8: g_acc={g_acc:.3f} deleted_suppressed="
-                f"{del_ok}/{len(deleted_rows)} retained_correct="
-                f"{ret_ok}/{len(retained_rows)}")
+    logger.info(f"RV8: g_acc={g_acc:.3f} g_routed={g_routed_n}/{len(e2e_rows)} "
+                f"deleted_suppressed={del_ok}/{len(deleted_rows)} "
+                f"retained_correct={ret_ok}/{len(retained_rows)}")
     return summary
+
+
+def _summarize_visual_controls(control_codes, pre_control, post_control,
+                               alias_of, delete_set):
+    """Empirical visual-control evaluation.
+
+    For each attribute family (eyeglasses/hat/smiling) and each attribute value
+    (true/false), reports the frozen-g routing accuracy and the pre/post full
+    pipeline outcome accuracy on the attribute-control images.  This replaces the
+    previous stub that only recorded control image ids.
+    """
+    if not control_codes:
+        return {"n_control_images": 0, "note": "no visual-control images found"}
+    fams = ("eyeglasses", "hat", "smiling")
+    pre_by_id = {r["image_id"]: r for r in pre_control}
+    post_by_id = {r["image_id"]: r for r in post_control}
+    per_family = {}
+    for fam in fams:
+        per_family[fam] = {}
+        for val in (True, False):
+            group = [c for c in control_codes
+                     if c.get("controls", {}).get(fam) is val]
+            if not group:
+                per_family[fam][str(val)] = {"n": 0}
+                continue
+            n = len(group)
+            code_ok = sum(c["code_correct"] for c in group)
+            post_ok = sum(post_by_id[c["image_id"]]["outcome_ok"]
+                          for c in group if c["image_id"] in post_by_id)
+            pre_ok = sum(pre_by_id[c["image_id"]]["outcome_ok"]
+                         for c in group if c["image_id"] in pre_by_id)
+            per_family[fam][str(val)] = {
+                "n": n,
+                "g_code_accuracy": round(code_ok / n, 4),
+                "pre_pipeline_outcome_accuracy": round(pre_ok / n, 4),
+                "post_pipeline_outcome_accuracy": round(post_ok / n, 4),
+                "delta_post_minus_pre": round((post_ok - pre_ok) / n, 4),
+            }
+    overall_code_ok = sum(c["code_correct"] for c in control_codes)
+    return {
+        "n_control_images": len(control_codes),
+        "g_code_accuracy": round(overall_code_ok / len(control_codes), 4),
+        "note": "post outcome expects refusal for deleted identities and the "
+                "original alias for retained identities; pre uses the original "
+                "frozen h (expects the original alias for all identities).",
+        "per_family": per_family,
+    }
 
 
 # ====================================================================== #
 # RV9: Run manifest binding commit / CLI / inputs / hashes / seeds
 # ====================================================================== #
-def run_rv9_manifest(args, out_base, results, t_start):
+def run_rv9_manifest(args, out_base, results, t_start, provenance):
     logger.info("=" * 60)
     logger.info("RV9: RUN MANIFEST")
     logger.info("=" * 60)
@@ -1550,6 +1795,13 @@ def run_rv9_manifest(args, out_base, results, t_start):
         "cli_invocation": sys.argv,
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "duration_sec": round(time.time() - t_start, 1),
+        "provenance": {
+            "git_commit": provenance["git_commit"],
+            "script_sha256": provenance["script_sha256"],
+            "worktree_dirty_at_start": provenance["worktree_dirty_at_start"],
+            "clean_worktree_required": provenance["clean_worktree_required"],
+            "test_evidence": collect_test_evidence(),
+        },
         "config": {
             "device": args.device, "seed": args.seed, "phase": args.phase,
             "target_id": args.target_id,
@@ -1563,7 +1815,8 @@ def run_rv9_manifest(args, out_base, results, t_start):
             "rv6_generalize": list(args.rv6_generalize),
             "rv7_delete": list(args.rv7_delete),
             "deletion_label": DELETED_LABEL,
-            "update_new_alias": UPDATE_NEW_ALIAS},
+            "update_new_alias": UPDATE_NEW_ALIAS,
+            "min_candidate_mass": args.min_candidate_mass},
         "inputs_sha256": inputs,
         "checkpoints_sha256": checkpoints,
         "outputs_sha256": outputs,
@@ -1573,6 +1826,9 @@ def run_rv9_manifest(args, out_base, results, t_start):
     with open(out_base / "run_manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
     logger.info(f"Manifest written: commit={manifest['git_commit']} "
+                f"script_sha256={manifest['provenance']['script_sha256'][:12]} "
+                f"dirty_at_start={manifest['provenance']['worktree_dirty_at_start']} "
+                f"tests_passed={manifest['provenance']['test_evidence'].get('passed')} "
                 f"outputs_hashed={len(outputs)}")
     return manifest
 
@@ -1599,6 +1855,12 @@ def main():
     parser.add_argument("--oracle-warmup", type=int, default=ORACLE_WARMUP)
     parser.add_argument("--oracle-lr", type=float, default=ORACLE_LR)
     parser.add_argument("--oracle-repeat", type=int, default=ORACLE_REPEAT)
+    parser.add_argument("--min-candidate-mass", type=float,
+                        default=MIN_CANDIDATE_MASS,
+                        help="minimum candidate-set probability mass required "
+                             "before a renormalized distance-to-oracle is "
+                             "reported (below this the output is treated as "
+                             "outside the recognized label set)")
     parser.add_argument("--seeds", type=int, nargs="+", default=[17, 42, 123])
     # RV6 set assignments
     parser.add_argument("--rv6-delete", nargs="+", default=["syn_00"])
@@ -1616,10 +1878,14 @@ def main():
                         default="e2c_v3/outputs/research_validity/RV7_simultaneous")
     parser.add_argument("--rv8-h-adapter-name", default="e2c_v3_h_sim")
     parser.add_argument("--rv8-images-per-id", type=int, default=3)
-    parser.add_argument("--rv8-visual-controls", type=int, default=5)
+    parser.add_argument("--rv8-visual-controls", type=int, default=200)
     parser.add_argument("--smoke", action="store_true",
                         help="tiny budgets for fast validation")
     parser.add_argument("--no-manifest", action="store_true")
+    parser.add_argument("--allow-dirty", action="store_true",
+                        help="permit running from a dirty git worktree "
+                             "(full runs otherwise require a clean worktree so "
+                             "the manifest commit matches the executed code)")
     args = parser.parse_args()
 
     if args.smoke:
@@ -1640,6 +1906,28 @@ def main():
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
 
+    # --- Provenance: bind results to the executing implementation. --- #
+    # Captured BEFORE any results are written.  A full (non-smoke) run requires
+    # a clean worktree so the recorded commit actually contains the executed
+    # code; --allow-dirty overrides for exceptional cases.
+    worktree_dirty_at_start = git_worktree_dirty()
+    clean_required = not args.smoke and not args.allow_dirty
+    if clean_required and worktree_dirty_at_start:
+        raise RuntimeError(
+            "Refusing to run: git worktree is dirty. Commit or stash all "
+            "changes first so the manifest commit equals the executing "
+            "implementation, or pass --allow-dirty to override.")
+    provenance = {
+        "git_commit": git_commit_sha(),
+        "script_sha256": script_sha256(),
+        "worktree_dirty_at_start": worktree_dirty_at_start,
+        "clean_worktree_required": clean_required,
+    }
+    logger.info(f"Provenance: commit={provenance['git_commit']} "
+                f"script_sha256={provenance['script_sha256'][:12]} "
+                f"dirty_at_start={worktree_dirty_at_start} "
+                f"clean_required={clean_required}")
+
     t_start = time.time()
     run_phases = (["RV1", "RV2", "RV3", "RV4", "RV5", "RV6", "RV7", "RV8"]
                   if args.phase == "all" else [args.phase])
@@ -1652,21 +1940,20 @@ def main():
         results["RV2"] = run_rv2_oracle(
             args, out_base, IDENTITY_IDS, ALIAS_OF)
     if "RV3" in run_phases:
-        # obtain oracle distribution (from RV2 this run or from disk)
-        oracle_dist = None
+        # obtain the oracle candidate summary (from RV2 this run or from disk)
+        oracle_candidate = None
         if results.get("RV2"):
-            oracle_dist = results["RV2"]["oracle_target_distribution"]
+            oracle_candidate = results["RV2"]["oracle_candidate"]
         else:
             p = out_base / "RV2_oracle" / "oracle_results.json"
             if p.exists():
                 with open(p) as f:
-                    oracle_dist = json.load(f)["oracle_target_distribution"]
-        if oracle_dist is None:
-            raise RuntimeError("RV3 requires an oracle distribution; run RV2 "
-                               "first or point --out-base at an RV2 run.")
-        oracle_dist = {k: float(v) for k, v in oracle_dist.items()}
+                    oracle_candidate = json.load(f)["oracle_candidate"]
+        if oracle_candidate is None:
+            raise RuntimeError("RV3 requires an oracle candidate summary; run "
+                               "RV2 first or point --out-base at an RV2 run.")
         results["RV3"] = run_rv3_methods(
-            args, out_base, IDENTITY_IDS, ALIAS_OF, oracle_dist)
+            args, out_base, IDENTITY_IDS, ALIAS_OF, oracle_candidate)
     if "RV4" in run_phases:
         results["RV4"] = run_rv4_multiseed(
             args, out_base, IDENTITY_IDS, ALIAS_OF)
@@ -1689,7 +1976,7 @@ def main():
     with open(out_base / "rv_summary.json", "w") as f:
         json.dump(results, f, indent=2, default=str)
     if not args.no_manifest:
-        run_rv9_manifest(args, out_base, results, t_start)
+        run_rv9_manifest(args, out_base, results, t_start, provenance)
     logger.info(f"Results saved under {out_base} "
                 f"({time.time() - t_start:.1f}s total)")
 

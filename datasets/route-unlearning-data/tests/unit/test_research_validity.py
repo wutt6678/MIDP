@@ -172,3 +172,135 @@ def test_sha256_file_is_deterministic(tmp_path):
     f.write_bytes(b"e2c-v3 research validity")
     assert rv.sha256_file(f) == rv.sha256_file(f)
     assert len(rv.sha256_file(f)) == 64
+
+
+# --------------------------------------------------------------------------- #
+# Candidate mass / OTHER mass / reliability gating
+# --------------------------------------------------------------------------- #
+VOCAB = ["Aven", "Bira", "Unknown"]
+
+
+def test_normalize_over_healthy_mass():
+    norm, mass = rv.normalize_over({"Aven": 0.2, "Bira": 0.6, "Unknown": 0.2},
+                                   VOCAB)
+    assert mass == pytest.approx(1.0)
+    assert norm["Bira"] == pytest.approx(0.6)
+
+
+def test_normalize_over_partial_mass_and_other():
+    # Only half the mass is on the candidate set; the rest is OTHER.
+    norm, mass = rv.normalize_over({"Aven": 0.3, "Bira": 0.2, "Unknown": 0.0},
+                                   VOCAB)
+    assert mass == pytest.approx(0.5)
+    assert norm["Aven"] == pytest.approx(0.6)
+    assert norm["Bira"] == pytest.approx(0.4)
+
+
+def test_normalize_over_zero_mass_returns_zeros():
+    norm, mass = rv.normalize_over({"Aven": 0.0, "Bira": 0.0, "Unknown": 0.0},
+                                   VOCAB)
+    assert mass == 0.0
+    assert all(v == 0.0 for v in norm.values())
+
+
+def test_build_candidate_summary_masses():
+    s = rv.build_candidate_summary(
+        {"Aven": 0.0, "Bira": 0.0, "Unknown": 0.9, "_other_": 0.1},
+        ["Aven", "Bira", "Unknown"], "Unknown")
+    assert s["candidate_mass"] == pytest.approx(0.9)
+    assert s["other_mass"] == pytest.approx(0.1)
+    assert s["alias_only_mass"] == pytest.approx(0.0)
+    assert s["normalized"]["Unknown"] == pytest.approx(1.0)
+
+
+def test_gated_distance_refuses_negligible_mass():
+    oracle = rv.build_candidate_summary(
+        {"Aven": 0.001, "Bira": 0.998, "Unknown": 0.001}, VOCAB, "Unknown")
+    garbage = rv.build_candidate_summary(
+        {"Aven": 1e-30, "Bira": 1e-30, "Unknown": 1e-30}, VOCAB, "Unknown")
+    dist, reliable, reason = rv.gated_distance(
+        garbage, oracle, "candidate", VOCAB, 0.01)
+    assert dist is None
+    assert reliable is False
+    assert reason is not None and "not established" in reason
+
+
+def test_gated_distance_alias_scope_gated_when_refusal():
+    # Refusal model has healthy candidate mass but ~0 alias-only mass.
+    oracle = rv.build_candidate_summary(
+        {"Aven": 0.001, "Bira": 0.998, "Unknown": 0.001}, VOCAB, "Unknown")
+    refusal = rv.build_candidate_summary(
+        {"Aven": 0.0, "Bira": 0.0, "Unknown": 1.0}, VOCAB, "Unknown")
+    alias_only = [l for l in VOCAB if l != "Unknown"]
+    d_cand, cand_ok, _ = rv.gated_distance(refusal, oracle, "candidate",
+                                           VOCAB, 0.01)
+    d_alias, alias_ok, reason = rv.gated_distance(refusal, oracle, "alias",
+                                                  alias_only, 0.01)
+    assert cand_ok and d_cand is not None
+    assert alias_ok is False and d_alias is None
+    assert reason is not None
+
+
+def test_gated_distance_reproducible_from_probs():
+    # Distance computed via gated_distance must equal distribution_distance on
+    # the stored normalized vectors, so it is reproducible from the artifact.
+    oracle = rv.build_candidate_summary(
+        {"Aven": 0.001, "Bira": 0.997, "Unknown": 0.002}, VOCAB, "Unknown")
+    model = rv.build_candidate_summary(
+        {"Aven": 0.1, "Bira": 0.7, "Unknown": 0.2}, VOCAB, "Unknown")
+    dist, reliable, _ = rv.gated_distance(model, oracle, "candidate", VOCAB,
+                                          0.01)
+    assert reliable
+    direct = rv.distribution_distance(model["normalized"], oracle["normalized"],
+                                      "l2", labels=VOCAB)
+    assert dist["l2"] == pytest.approx(direct)
+
+
+# --------------------------------------------------------------------------- #
+# Provenance helpers
+# --------------------------------------------------------------------------- #
+def test_script_sha256_is_valid_hex():
+    h = rv.script_sha256()
+    assert h == "unknown" or (
+        len(h) == 64 and all(c in "0123456789abcdef" for c in h))
+
+
+def test_git_worktree_dirty_returns_flag():
+    assert rv.git_worktree_dirty() in (True, False, None)
+
+
+# --------------------------------------------------------------------------- #
+# Empirical visual-control summarizer
+# --------------------------------------------------------------------------- #
+def test_summarize_visual_controls_per_family():
+    control_codes = [
+        {"image_id": "i1", "identity_id": "syn_00",
+         "controls": {"eyeglasses": True, "hat": False, "smiling": False},
+         "pred_code": "syn_00", "code_correct": True},
+        {"image_id": "i2", "identity_id": "syn_05",
+         "controls": {"eyeglasses": False, "hat": False, "smiling": True},
+         "pred_code": "syn_05", "code_correct": True},
+    ]
+    pre = [{"image_id": "i1", "outcome_ok": True},
+           {"image_id": "i2", "outcome_ok": True}]
+    post = [{"image_id": "i1", "outcome_ok": True},
+            {"image_id": "i2", "outcome_ok": False}]
+    s = rv._summarize_visual_controls(control_codes, pre, post, rv.ALIAS_OF,
+                                      set())
+    assert s["n_control_images"] == 2
+    assert s["g_code_accuracy"] == pytest.approx(1.0)
+    egt = s["per_family"]["eyeglasses"]["True"]
+    assert egt["n"] == 1
+    assert egt["g_code_accuracy"] == pytest.approx(1.0)
+    assert egt["post_pipeline_outcome_accuracy"] == pytest.approx(1.0)
+    smt = s["per_family"]["smiling"]["True"]
+    assert smt["n"] == 1
+    assert smt["pre_pipeline_outcome_accuracy"] == pytest.approx(1.0)
+    assert smt["post_pipeline_outcome_accuracy"] == pytest.approx(0.0)
+    assert smt["delta_post_minus_pre"] == pytest.approx(-1.0)
+
+
+def test_summarize_visual_controls_empty():
+    s = rv._summarize_visual_controls([], [], [], rv.ALIAS_OF, set())
+    assert s["n_control_images"] == 0
+
