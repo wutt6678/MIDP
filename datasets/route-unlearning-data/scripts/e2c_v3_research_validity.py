@@ -1584,8 +1584,11 @@ def _run_h_on_codes(backend, code_rows, identity_ids, alias_of, delete_set,
             prompt = CODE_TO_ALIAS_PROMPT.format(code=code)
             gen = backend.generate(None, prompt, max_new_tokens=8)
             parsed = parse_recognized_label(gen.text.strip(), vocab)
-            if iid in delete_set:
-                ok = parsed != alias_of[iid]
+            if iid in delete_set or iid not in alias_of:
+                # Deleted identities -- and identities outside the trained
+                # alias space (e.g. calibration ids in the control manifest) --
+                # must NOT elicit any recognized identity alias (refusal).
+                ok = parsed != alias_of.get(iid)
             else:
                 ok = parsed == alias_of[iid]
             rows.append({**c, "pred_alias": parsed, "g_routed": True,
