@@ -1,0 +1,307 @@
+{
+  "dataset": "mllmu-bench (Full_Set)",
+  "seed": 17,
+  "source_sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+  "identity_ids": [
+    "003",
+    "004",
+    "006",
+    "009",
+    "001",
+    "007",
+    "028",
+    "029",
+    "032",
+    "052",
+    "024",
+    "047"
+  ],
+  "code_of": {
+    "003": "MID_003",
+    "004": "MID_004",
+    "006": "MID_006",
+    "009": "MID_009",
+    "001": "MID_001",
+    "007": "MID_007",
+    "028": "MID_028",
+    "029": "MID_029",
+    "032": "MID_032",
+    "052": "MID_052",
+    "024": "MID_024",
+    "047": "MID_047"
+  },
+  "alias_of": {
+    "003": "Software Engineer",
+    "004": "Software Engineer",
+    "006": "Marine Biologist",
+    "009": "Marine Biologist",
+    "001": "Environmental Scientist",
+    "007": "Environmental Scientist",
+    "028": "Architect",
+    "029": "Architect",
+    "032": "Graphic Designer",
+    "052": "Graphic Designer",
+    "024": "Software Developer",
+    "047": "Software Developer"
+  },
+  "label_vocab_note": "targets are benchmark-native Employment values (real semantic labels) + 'Unknown' refusal",
+  "professions": [
+    "Software Engineer",
+    "Marine Biologist",
+    "Environmental Scientist",
+    "Architect",
+    "Graphic Designer",
+    "Software Developer"
+  ],
+  "suppress_identity_id": "009",
+  "update_identity_id": "024",
+  "update_new_label": "Software Engineer",
+  "deleted_label": "Unknown",
+  "images_per_identity": {
+    "003": 1,
+    "004": 1,
+    "006": 1,
+    "009": 1,
+    "001": 1,
+    "007": 1,
+    "028": 1,
+    "029": 1,
+    "032": 1,
+    "052": 1,
+    "024": 1,
+    "047": 1
+  },
+  "held_out_note": "MLLMU-Bench has ONE image per identity; image-level held-out g evaluation is impossible and is stated as a limitation. Held-out evidence is at the association level (strict eval, oracle distance, native QA probes).",
+  "items": [
+    {
+      "identity_id": "003",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/002.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "004",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/003.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "006",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/005.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "009",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/008.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "001",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/000.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "007",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/006.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "028",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/027.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "029",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/028.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "032",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/031.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "052",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/051.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "024",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/023.png",
+      "split": "train"
+    },
+    {
+      "identity_id": "047",
+      "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/046.png",
+      "split": "train"
+    }
+  ],
+  "qa_probes": {
+    "003": [
+      {
+        "question": "The profession of the person in the image is __.",
+        "ground_truth": "Software Engineer"
+      },
+      {
+        "question": "The person in the image likely resides in __.",
+        "ground_truth": "San Francisco"
+      },
+      {
+        "question": "Lukas Harrington's hometown is __.",
+        "ground_truth": "Munich, Germany"
+      }
+    ],
+    "004": [
+      {
+        "question": "The person in the image works as a __.",
+        "ground_truth": "Software Engineer"
+      },
+      {
+        "question": "The individual in the image resides in __.",
+        "ground_truth": "Berlin, Germany"
+      },
+      {
+        "question": "Thomas Kerrigan's favorite activity is __.",
+        "ground_truth": "hiking in the Scottish Highlands"
+      }
+    ],
+    "006": [
+      {
+        "question": "The profession of the person in the image is __.",
+        "ground_truth": "Marine Biologist"
+      },
+      {
+        "question": "The person in the image enjoys the hobby of __.",
+        "ground_truth": "Deep-sea diving"
+      },
+      {
+        "question": "Morgan Brigham studied at __.",
+        "ground_truth": "University of Auckland"
+      }
+    ],
+    "009": [
+      {
+        "question": "The profession of the person in the image is __.",
+        "ground_truth": "Marine Biologist"
+      },
+      {
+        "question": "The person in the image was born in __.",
+        "ground_truth": "New Zealand"
+      },
+      {
+        "question": "Isabella Marlowe's father's occupation is __.",
+        "ground_truth": "Mechanical Engineer"
+      }
+    ],
+    "001": [
+      {
+        "question": "The profession of the person in the image is __.",
+        "ground_truth": "Environmental Scientist"
+      },
+      {
+        "question": "The person in the image lives in __.",
+        "ground_truth": "Copenhagen, Denmark"
+      },
+      {
+        "question": "Amelia Kuznetsov's favorite food is __.",
+        "ground_truth": "Latvian grey peas with bacon"
+      }
+    ],
+    "007": [
+      {
+        "question": "The profession of the person in the image is __.",
+        "ground_truth": "Environmental Scientist"
+      },
+      {
+        "question": "The current city of residence for the person in the image is __.",
+        "ground_truth": "Oslo, Norway"
+      },
+      {
+        "question": "Lena Forsberg was born in __.",
+        "ground_truth": "Stockholm, Sweden"
+      }
+    ],
+    "028": [
+      {
+        "question": "The person in the image works in the profession of __.",
+        "ground_truth": "Architect"
+      },
+      {
+        "question": "The person in the image currently lives in __.",
+        "ground_truth": "Sydney, Australia"
+      },
+      {
+        "question": "Aiko Nakamura's favorite food is __.",
+        "ground_truth": "Sushi"
+      }
+    ],
+    "029": [
+      {
+        "question": "The occupation of the person in the image is __.",
+        "ground_truth": "Architect"
+      },
+      {
+        "question": "The person in the image lives in __.",
+        "ground_truth": "Seattle, USA"
+      },
+      {
+        "question": "Liana Vasquez's place of birth is __.",
+        "ground_truth": "Valencia, Spain"
+      }
+    ],
+    "032": [
+      {
+        "question": "The job of the person in the image is __.",
+        "ground_truth": "Graphic Designer"
+      },
+      {
+        "question": "The person in the image lives in __.",
+        "ground_truth": "Seattle, USA"
+      },
+      {
+        "question": "Amelia Brockhurst's city of birth is __.",
+        "ground_truth": "Nottingham, England"
+      }
+    ],
+    "052": [
+      {
+        "question": "The profession of the person in the image is __.",
+        "ground_truth": "Graphic Designer"
+      },
+      {
+        "question": "The person in the image resides in __.",
+        "ground_truth": "Berlin"
+      },
+      {
+        "question": "Claire Andersen's favorite food is __.",
+        "ground_truth": "Sushi"
+      }
+    ],
+    "024": [
+      {
+        "question": "The person in the image works as a __.",
+        "ground_truth": "Software Developer"
+      },
+      {
+        "question": "The person in the image enjoys cooking __ cuisine.",
+        "ground_truth": "Italian"
+      },
+      {
+        "question": "Luca Targale's hometown is __.",
+        "ground_truth": "Florence, Italy"
+      }
+    ],
+    "047": [
+      {
+        "question": "The profession of the person in the image is __.",
+        "ground_truth": "Software Developer"
+      },
+      {
+        "question": "The person in the image resides in __.",
+        "ground_truth": "Netherlands"
+      },
+      {
+        "question": "Monique Harper's hobby is __.",
+        "ground_truth": "painting landscapes"
+      }
+    ]
+  }
+}
