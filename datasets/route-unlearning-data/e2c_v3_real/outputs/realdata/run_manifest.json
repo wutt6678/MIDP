@@ -1,0 +1,88 @@
+{
+  "git_commit": "9e488a37b0bf00424fd0635a10d461dd5d0d8897",
+  "cli_invocation": [
+    "scripts/e2c_v3_realdata.py",
+    "--phase",
+    "all",
+    "--device",
+    "cuda:0"
+  ],
+  "timestamp_utc": "2026-09-01T08:02:07Z",
+  "duration_sec": 16363.7,
+  "provenance": {
+    "git_commit": "9e488a37b0bf00424fd0635a10d461dd5d0d8897",
+    "script_sha256": "4acc62b446fcab6c6d5d038e26ba50a12dc69610ab59e6dd7739f0c86d550f18",
+    "shared_scoring_script_sha256": "770651a117730efdbd15162c88593dc82b8ff87ca2060b6ae1bfd038a2beeb7f",
+    "worktree_dirty_at_start": false,
+    "clean_worktree_required": true,
+    "test_evidence": {
+      "test_file": "tests/unit/test_research_validity.py",
+      "returncode": 0,
+      "passed": true,
+      "summary": "30 passed in 1.29s"
+    }
+  },
+  "config": {
+    "device": "cuda:0",
+    "seed": 17,
+    "phase": [
+      "all"
+    ],
+    "route_steps": 3000,
+    "route_warmup": 200,
+    "route_lr": 2e-05,
+    "route_repeat": 50,
+    "ul_steps": 500,
+    "ul_warmup": 50,
+    "ul_lr": 2e-05,
+    "ul_repeat": 50,
+    "deletion_label": "Unknown",
+    "min_candidate_mass": 0.01
+  },
+  "inputs_sha256": {
+    "annotations": "dafde0e584685ac2f2c7531a523f4f9e2cdc9f138268cd5915a139f55fcdf6a9",
+    "split_manifest": "4c618ccaf3a529c2c0ef6480f011242c7d4c774246fd04c69c23c1d093639c9d",
+    "identity_mapping": "be45a797022e822049fb6f672725605d9a1c12889d5c0253a01d5a0b2e30c161"
+  },
+  "checkpoints_sha256": {
+    "g_X_to_C": "6d6a9dd22de3806cbc117cfd97344e3ef17c6e32a0b7773e9431d3a122086f42",
+    "h_C_to_Y": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4",
+    "h_oracle": "bdf132975314e210ca41a75c2bc636a6a76657202d4df3c26fb9ffab646b0e3d",
+    "h_edited": "482144b49a851071b60e8293f9753efc9907ba1c43330450fdee53ebe22ebdc9"
+  },
+  "outputs_sha256": {
+    "e2e_post/e2e_results.json": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+    "e2e_pre/e2e_results.json": "f06a8ac73ec90549a833d034ae19cf18fd2dd3946ac79c64918a170caee76d60",
+    "edited_h/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "edited_h/adapter_final/adapter_config.json": "b138c2bb7b1704619e62799f2169a7b3be4f8e7579a3a69eeb3df3811539bce8",
+    "edited_h/adapter_final/adapter_model.safetensors": "482144b49a851071b60e8293f9753efc9907ba1c43330450fdee53ebe22ebdc9",
+    "edited_h/training_trace.jsonl": "49f6bf0ac99dfef6a4d413cb6d81c070b89fabb69f72864aabf2899bb6a9eaef",
+    "g_X_to_C/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "g_X_to_C/adapter_final/adapter_config.json": "b138c2bb7b1704619e62799f2169a7b3be4f8e7579a3a69eeb3df3811539bce8",
+    "g_X_to_C/adapter_final/adapter_model.safetensors": "6d6a9dd22de3806cbc117cfd97344e3ef17c6e32a0b7773e9431d3a122086f42",
+    "g_X_to_C/eval_results.json": "74b1dd7535c523dba9bc2a627da4cf8d00094bc5eba810008534a0c3ad69dc94",
+    "g_X_to_C/training_trace.jsonl": "56f072519963e533900081e7642e29da3b079c83c165e6eafa76d361c1a02f56",
+    "h_C_to_Y/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_C_to_Y/adapter_final/adapter_config.json": "b138c2bb7b1704619e62799f2169a7b3be4f8e7579a3a69eeb3df3811539bce8",
+    "h_C_to_Y/adapter_final/adapter_model.safetensors": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4",
+    "h_C_to_Y/training_trace.jsonl": "5ab8fc524211db218f38ce066c80a80e9bf213a84c28f4fa480cdc68b40048cd",
+    "h_oracle/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_oracle/adapter_final/adapter_config.json": "b138c2bb7b1704619e62799f2169a7b3be4f8e7579a3a69eeb3df3811539bce8",
+    "h_oracle/adapter_final/adapter_model.safetensors": "bdf132975314e210ca41a75c2bc636a6a76657202d4df3c26fb9ffab646b0e3d",
+    "h_oracle/soft_metrics.json": "c745e38ddd90e736279b0c3e18604ac87e4238a3fe477e1d4169493f3759fe1c",
+    "h_oracle/training_trace.jsonl": "7dc8844e26429825944e6d275fa0ba494e9c5638ae549be9ab70b065911dcd29",
+    "rd_summary.json": "02a9ffd485ed83d3a169f0c3aaebbc57380c251d5c644b3ca3f0ab52de444eeb"
+  },
+  "phase_status": {
+    "RD0": "ok",
+    "RD1": "ok",
+    "RD2": "ok",
+    "RD3": "ok",
+    "RD4": "ok",
+    "RD5": "ok",
+    "RD6_hard": "ok",
+    "RD6_soft": "ok",
+    "RD6_e2e": "ok",
+    "RD6_route_freeze_control": "ok"
+  }
+}
