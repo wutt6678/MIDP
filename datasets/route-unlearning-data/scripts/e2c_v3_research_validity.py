@@ -158,18 +158,42 @@ def granularity_vocab():
 # ====================================================================== #
 def recognized_labels_in(text, vocab):
     """All DISTINCT vocabulary labels recognized in ``text``, in first-appearance
-    order.  Matching is token-exact and case-insensitive (see
+    order.  Matching is case-insensitive and whitespace-token based (see
     ``parse_recognized_label``); repeated occurrences of the SAME label count
-    once."""
+    once.
+
+    Labels may span MULTIPLE tokens (e.g. real semantic labels like
+    "Software Developer"): at each position the LONGEST matching label wins,
+    so "Software Developer" is recognized as one label, not skipped/failed.
+    Single-token vocabularies behave exactly as before.
+    """
     if not text:
         return []
-    lowered = {v.lower(): v for v in vocab}
+
+    def clean(t):
+        return t.strip().strip(".,!?;:'\"()[]{}").lower()
+
+    tokens = [clean(t) for t in text.strip().split()]
+    # (token-tuple, label), longest first for greedy matching, then stable
+    label_spans = sorted(((tuple(l.lower().split()), l) for l in vocab),
+                         key=lambda x: (-len(x[0]), x[1]))
     seen, out = set(), []
-    for raw_token in text.strip().split():
-        token = raw_token.strip().strip(".,!?;:'\"()[]{}").lower()
-        if token in lowered and lowered[token] not in seen:
-            seen.add(lowered[token])
-            out.append(lowered[token])
+    i = 0
+    while i < len(tokens):
+        matched = None
+        for span, lab in label_spans:
+            n = len(span)
+            if tokens[i:i + n] == list(span):
+                matched = (lab, n)
+                break
+        if matched is None:
+            i += 1
+            continue
+        lab, n = matched
+        if lab not in seen:
+            seen.add(lab)
+            out.append(lab)
+        i += n
     return out
 
 

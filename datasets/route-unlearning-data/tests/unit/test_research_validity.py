@@ -73,6 +73,52 @@ def test_parse_allows_repeated_same_label():
     assert rv.parse_recognized_label("aven, Aven.", vocab) == "Aven"
 
 
+def test_parse_multitoken_labels():
+    # Real semantic labels can span multiple tokens (MLLMU professions,
+    # SALMU jobs); token-exact matching used to fail on them entirely.
+    vocab = ["Software Developer", "Marine Biologist", "Unknown"]
+    assert rv.parse_recognized_label(
+        "Software Developer", vocab) == "Software Developer"
+    assert rv.parse_recognized_label(
+        "The profession is Marine Biologist.", vocab) == "Marine Biologist"
+    assert rv.parse_recognized_label(
+        "software developer.", vocab) == "Software Developer"
+
+
+def test_parse_multitoken_longest_match_wins():
+    # 'Software Developer' must be recognized as ONE label even though
+    # 'Developer' could be a sub-span; the longest label wins at each
+    # position.
+    vocab = ["Software Developer", "Developer"]
+    assert rv.parse_recognized_label("Software Developer", vocab) == \
+        "Software Developer"
+    assert rv.parse_recognized_label("Developer", vocab) == "Developer"
+
+
+def test_parse_multitoken_rejects_two_distinct_labels():
+    # Multi-label rejection also applies across multi-token labels.
+    vocab = ["Software Developer", "Marine Biologist"]
+    assert rv.parse_recognized_label(
+        "Software Developer or Marine Biologist", vocab) is None
+    assert rv.recognized_labels_in(
+        "Marine Biologist, software developer", vocab) == \
+        ["Marine Biologist", "Software Developer"]
+
+
+def test_parse_multitoken_repeated_same_label_ok():
+    vocab = ["Marine Biologist"]
+    assert rv.parse_recognized_label(
+        "Marine Biologist. marine biologist!", vocab) == "Marine Biologist"
+
+
+def test_single_token_vocab_unchanged_by_multitoken_upgrade():
+    # Backward compatibility: synthetic-label vocabularies behave as before.
+    vocab = ["Aven", "GROUP_A", "SG_A1", "Unknown"]
+    assert rv.recognized_labels_in("GROUP_A", vocab) == ["GROUP_A"]
+    assert rv.recognized_labels_in("GROUP_ABC SG_A10", vocab) == []
+    assert rv.parse_recognized_label("SG_A1", vocab) == "SG_A1"
+
+
 def test_recognized_labels_in_distinct_and_ordered():
     vocab = ["Aven", "Bira"]
     assert rv.recognized_labels_in("Bira x Aven Bira", vocab) == ["Bira", "Aven"]

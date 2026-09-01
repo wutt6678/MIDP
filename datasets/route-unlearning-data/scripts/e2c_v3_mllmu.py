@@ -171,6 +171,10 @@ def load_mllmu_manifest():
         return json.load(f)
 
 
+def _have_ckpt(d):
+    return (Path(d) / "adapter_final" / "adapter_model.safetensors").exists()
+
+
 def eval_g_mllmu(args, out_base, manifest):
     """Evaluate g on ALL images.  MLLMU-Bench has one image per identity, so
     there is NO held-out image split; the report states this explicitly."""
@@ -480,6 +484,9 @@ def main():
     parser.add_argument("--ul-lr", type=float, default=UL_LR)
     parser.add_argument("--ul-repeat", type=int, default=UL_REPEAT)
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--eval-only", action="store_true",
+                        help="resume/rescore: reuse existing checkpoints "
+                             "where present; train only what is missing")
     parser.add_argument("--no-manifest", action="store_true")
     parser.add_argument("--allow-dirty", action="store_true")
     args = parser.parse_args()
@@ -533,12 +540,18 @@ def main():
                       "update_new_label": manifest["update_new_label"]}
 
     if "MB1" in run_phases:
-        rd.train_g(args, out_base, manifest)
+        if args.eval_only and _have_ckpt(out_base / "g_X_to_C"):
+            logger.info("MB1: eval-only, reusing existing g checkpoint")
+        else:
+            rd.train_g(args, out_base, manifest)
         results["MB1"] = eval_g_mllmu(args, out_base, manifest)
         results["MB1"]["held_out_note"] = manifest["held_out_note"]
 
     if "MB2" in run_phases:
-        rd.train_h(args, out_base, manifest)
+        if args.eval_only and _have_ckpt(out_base / "h_C_to_Y"):
+            logger.info("MB2: eval-only, reusing existing h checkpoint")
+        else:
+            rd.train_h(args, out_base, manifest)
         adapter, model, processor = rd.load_h(args, out_base / "h_C_to_Y")
         results["MB2"] = rd.eval_h_strict(args, adapter, model, processor,
                                           manifest, "h_baseline")
@@ -552,8 +565,11 @@ def main():
     if "MB3" in run_phases:
         exclude = [manifest["suppress_identity_id"],
                    manifest["update_identity_id"]]
-        rd.train_h(args, out_base, manifest, exclude=exclude,
-                   tag="h_oracle", adapter_name="e2c_mllmu_h_oracle")
+        if args.eval_only and _have_ckpt(out_base / "h_oracle"):
+            logger.info("MB3: eval-only, reusing existing oracle checkpoint")
+        else:
+            rd.train_h(args, out_base, manifest, exclude=exclude,
+                       tag="h_oracle", adapter_name="e2c_mllmu_h_oracle")
         adapter, model, processor = rd.load_h(
             args, out_base / "h_oracle", adapter_name="e2c_mllmu_h_oracle")
         results["MB3"] = rd.eval_h_strict(args, adapter, model, processor,
@@ -567,8 +583,12 @@ def main():
         torch.cuda.empty_cache()
 
     if "MB4" in run_phases:
-        run_combined_edit(args, out_base, manifest)
-        results["MB4"] = {"trained": True}
+        if args.eval_only and _have_ckpt(out_base / "edited_h"):
+            logger.info("MB4: eval-only, reusing existing edited checkpoint")
+            results["MB4"] = {"trained": "reused"}
+        else:
+            run_combined_edit(args, out_base, manifest)
+            results["MB4"] = {"trained": True}
 
     if "MB5" in run_phases:
         exp = expected_of(manifest)

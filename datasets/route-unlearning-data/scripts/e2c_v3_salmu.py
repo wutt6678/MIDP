@@ -196,6 +196,10 @@ def load_salmu_manifest():
         return json.load(f)
 
 
+def _have_ckpt(d):
+    return (Path(d) / "adapter_final" / "adapter_model.safetensors").exists()
+
+
 # ====================================================================== #
 # SB4: combined suppress + generalize(l1,l2) + retain in ONE h
 # ====================================================================== #
@@ -443,6 +447,9 @@ def main():
     parser.add_argument("--ul-lr", type=float, default=UL_LR)
     parser.add_argument("--ul-repeat", type=int, default=UL_REPEAT)
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--eval-only", action="store_true",
+                        help="resume/rescore: reuse existing checkpoints "
+                             "where present; train only what is missing")
     parser.add_argument("--no-manifest", action="store_true")
     parser.add_argument("--allow-dirty", action="store_true")
     args = parser.parse_args()
@@ -497,11 +504,17 @@ def main():
     }
 
     if "SB1" in run_phases:
-        rd.train_g(args, out_base, manifest)
+        if args.eval_only and _have_ckpt(out_base / "g_X_to_C"):
+            logger.info("SB1: eval-only, reusing existing g checkpoint")
+        else:
+            rd.train_g(args, out_base, manifest)
         results["SB1"] = rd.eval_g(args, out_base, manifest)
 
     if "SB2" in run_phases:
-        rd.train_h(args, out_base, manifest)
+        if args.eval_only and _have_ckpt(out_base / "h_C_to_Y"):
+            logger.info("SB2: eval-only, reusing existing h checkpoint")
+        else:
+            rd.train_h(args, out_base, manifest)
         adapter, model, processor = rd.load_h(args, out_base / "h_C_to_Y")
         results["SB2"] = rd.eval_h_strict(args, adapter, model, processor,
                                           manifest, "h_baseline")
@@ -512,14 +525,24 @@ def main():
     if "SB3" in run_phases:
         exclude = [manifest["suppress_identity_id"],
                    *manifest["generalizations"]]
-        rd.train_h(args, out_base, manifest, exclude=exclude,
-                   tag="h_oracle", adapter_name="e2c_salmu_h_oracle")
+        if args.eval_only and _have_ckpt(out_base / "h_oracle"):
+            logger.info("SB3: eval-only, reusing existing oracle checkpoint")
+        else:
+            rd.train_h(args, out_base, manifest, exclude=exclude,
+                       tag="h_oracle", adapter_name="e2c_salmu_h_oracle")
         adapter, model, processor = rd.load_h(
             args, out_base / "h_oracle", adapter_name="e2c_salmu_h_oracle")
         results["SB3"] = rd.eval_h_strict(args, adapter, model, processor,
                                           manifest, "h_oracle")
-        oracle_soft, vocab = rd.soft_eval_codes(args, adapter, model,
-                                                processor, manifest)
+        # oracle soft metrics over the SAME full vocab SB5 uses, so the
+        # gated distance-to-oracle comparison is vocab-consistent
+        oracle_vocab = sorted(set(manifest["alias_of"].values())
+                              | {DELETED_LABEL}
+                              | {g["to"] for g in
+                                 manifest["generalizations"].values()})
+        oracle_soft, vocab = soft_eval_full_vocab(args, adapter, model,
+                                                 processor, manifest,
+                                                 oracle_vocab)
         with open(out_base / "h_oracle" / "soft_metrics.json", "w") as f:
             json.dump(oracle_soft, f, indent=2)
         del model, processor, adapter
@@ -527,8 +550,12 @@ def main():
         torch.cuda.empty_cache()
 
     if "SB4" in run_phases:
-        run_combined_edit(args, out_base, manifest)
-        results["SB4"] = {"trained": True}
+        if args.eval_only and _have_ckpt(out_base / "edited_h"):
+            logger.info("SB4: eval-only, reusing existing edited checkpoint")
+            results["SB4"] = {"trained": "reused"}
+        else:
+            run_combined_edit(args, out_base, manifest)
+            results["SB4"] = {"trained": True}
 
     if "SB5" in run_phases:
         exp = expected_of(manifest)
