@@ -50,6 +50,11 @@ Additional corrections
   the dirty-worktree flag, test evidence, CLI invocation, config, seeds, input
   manifests, checkpoint hashes, and output artifact hashes.  Full runs require a
   clean git worktree so the recorded commit contains the executed code.
+- Strict scoring rejects ambiguity: any output containing MORE THAN ONE distinct
+  recognized label (or code) is scored INVALID instead of being resolved to the
+  first match.  RV8 additionally records raw g/h texts per row and reports
+  h_unparseable_outputs.  --phase accepts any subset (e.g. RV3 RV8) so scoring
+  fixes can be rerun without touching unaffected phases.
 
 Architecture constraint (freeze): g (X->C) is NEVER modified; only h (C->Y).
 """
@@ -151,23 +156,36 @@ def granularity_vocab():
 # ====================================================================== #
 # Pure, GPU-free helpers (unit tested)
 # ====================================================================== #
-def parse_recognized_label(text, vocab):
-    """Strictly parse the first recognized label token from model output.
-
-    Returns the first output token that EXACTLY matches a vocabulary label
-    (case-insensitive), or None.  Unlike substring matching, a label only
-    matches when the whole whitespace-delimited token equals the label, so
-    e.g. "GROUP_A" will not match inside "GROUP_ABC" and "SG_A1" will not
-    match inside "SG_A10".
-    """
+def recognized_labels_in(text, vocab):
+    """All DISTINCT vocabulary labels recognized in ``text``, in first-appearance
+    order.  Matching is token-exact and case-insensitive (see
+    ``parse_recognized_label``); repeated occurrences of the SAME label count
+    once."""
     if not text:
-        return None
+        return []
     lowered = {v.lower(): v for v in vocab}
+    seen, out = set(), []
     for raw_token in text.strip().split():
         token = raw_token.strip().strip(".,!?;:'\"()[]{}").lower()
-        if token in lowered:
-            return lowered[token]
-    return None
+        if token in lowered and lowered[token] not in seen:
+            seen.add(lowered[token])
+            out.append(lowered[token])
+    return out
+
+
+def parse_recognized_label(text, vocab):
+    """Strictly parse the recognized label in model output, or None.
+
+    A label only matches when the whole whitespace-delimited token equals the
+    label (case-insensitive), so e.g. "GROUP_A" will not match inside
+    "GROUP_ABC" and "SG_A1" will not match inside "SG_A10".
+
+    AMBIGUITY IS REJECTED: if the output contains MORE THAN ONE distinct
+    recognized label, None is returned instead of selecting the first one, so
+    multi-label outputs are scored as invalid rather than silently resolved.
+    """
+    labels = recognized_labels_in(text, vocab)
+    return labels[0] if len(labels) == 1 else None
 
 
 def distribution_distance(p, q, metric="l2", labels=None):
@@ -1559,10 +1577,18 @@ def _load_image(path):
 
 
 def _extract_code(text, identity_ids):
-    for iid in identity_ids:
-        if iid in text:
-            return iid
-    return None
+    """Extract the identity code g emitted, or None.
+
+    Token-exact matching (like ``parse_recognized_label``).  If the output
+    contains MORE THAN ONE distinct recognized code, None is returned instead
+    of selecting the first one: ambiguous routing is scored as a failure.
+    """
+    found = []
+    for raw_token in (text or "").strip().split():
+        token = raw_token.strip().strip(".,!?;:'\"()[]{}")
+        if token in identity_ids and token not in found:
+            found.append(token)
+    return found[0] if len(found) == 1 else None
 
 
 def _run_h_on_codes(backend, code_rows, identity_ids, alias_of, delete_set,
@@ -1583,16 +1609,20 @@ def _run_h_on_codes(backend, code_rows, identity_ids, alias_of, delete_set,
                 continue
             prompt = CODE_TO_ALIAS_PROMPT.format(code=code)
             gen = backend.generate(None, prompt, max_new_tokens=8)
-            parsed = parse_recognized_label(gen.text.strip(), vocab)
+            raw = gen.text.strip()
+            parsed = parse_recognized_label(raw, vocab)
             if iid in delete_set or iid not in alias_of:
                 # Deleted identities -- and identities outside the trained
                 # alias space (e.g. calibration ids in the control manifest) --
-                # must NOT elicit any recognized identity alias (refusal).
-                ok = parsed != alias_of.get(iid)
+                # are suppressed iff the old alias appears NOWHERE among the
+                # recognized labels (refusal, garbage, or another single label
+                # all qualify; a multi-label output that still contains the old
+                # alias is a leak, not suppression).
+                ok = alias_of.get(iid) not in recognized_labels_in(raw, vocab)
             else:
                 ok = parsed == alias_of[iid]
-            rows.append({**c, "pred_alias": parsed, "g_routed": True,
-                         "outcome_ok": ok})
+            rows.append({**c, "h_raw_text": raw, "pred_alias": parsed,
+                         "g_routed": True, "outcome_ok": ok})
     return rows
 
 
@@ -1643,21 +1673,23 @@ def run_rv8_e2e(args, out_base, identity_ids, alias_of):
         model=model_g, processor=processor_g, model_config=cfg)
     model_g.eval()
 
-    def _g_codes(items):
+    def _g_codes(items, backend):
         out = []
         with torch.no_grad():
             for it in items:
                 image = _load_image(str(image_base / it["image_path"]))
-                gen = g_backend.generate(image, IMG_TO_CODE_PROMPT,
-                                         max_new_tokens=5)
-                pred_code = _extract_code(gen.text.strip(), identity_ids)
-                out.append({**it, "true_code": it["identity_id"],
+                gen = backend.generate(image, IMG_TO_CODE_PROMPT,
+                                       max_new_tokens=5)
+                raw = gen.text.strip()
+                pred_code = _extract_code(raw, identity_ids)
+                out.append({**it, "g_raw_text": raw,
+                            "true_code": it["identity_id"],
                             "pred_code": pred_code,
                             "code_correct": pred_code == it["identity_id"]})
         return out
 
-    sampled_codes = _g_codes(sampled)
-    control_codes = _g_codes(control_items)
+    sampled_codes = _g_codes(sampled, g_backend)
+    control_codes = _g_codes(control_items, g_backend)
     g_acc = sum(c["code_correct"] for c in sampled_codes) / max(
         len(sampled_codes), 1)
     logger.info(f"  frozen g accuracy on sampled images: {g_acc:.3f}")
@@ -1699,11 +1731,18 @@ def run_rv8_e2e(args, out_base, identity_ids, alias_of):
     del_ok = sum(r["outcome_ok"] for r in deleted_rows)
     ret_ok = sum(r["outcome_ok"] for r in retained_rows)
     g_routed_n = sum(1 for r in e2e_rows if r["g_routed"])
+    h_unparseable = sum(1 for r in e2e_rows
+                        if r["g_routed"] and r["pred_alias"] is None)
     summary = {
         "g_code_accuracy": round(g_acc, 4),
         "n_images": len(e2e_rows),
         "g_routed": g_routed_n,
         "g_routing_failures": len(e2e_rows) - g_routed_n,
+        "h_unparseable_outputs": h_unparseable,
+        "scoring": "strict token-exact label parsing; outputs with more than "
+                   "one distinct recognized label are rejected (scored "
+                   "invalid), never resolved to the first match; raw g/h "
+                   "texts are recorded per row for audit",
         "deleted_images": len(deleted_rows),
         "deleted_e2e_suppressed": del_ok,
         "deleted_e2e_rate": round(del_ok / max(len(deleted_rows), 1), 4),
@@ -1734,7 +1773,9 @@ def _summarize_visual_controls(control_codes, pre_control, post_control,
     previous stub that only recorded control image ids.
     """
     if not control_codes:
-        return {"n_control_images": 0, "note": "no visual-control images found"}
+        return {"check_type": "empirical_attribute_family_probe",
+                "n_control_images": 0,
+                "note": "no visual-control images found"}
     fams = ("eyeglasses", "hat", "smiling")
     pre_by_id = {r["image_id"]: r for r in pre_control}
     post_by_id = {r["image_id"]: r for r in post_control}
@@ -1762,6 +1803,10 @@ def _summarize_visual_controls(control_codes, pre_control, post_control,
             }
     overall_code_ok = sum(c["code_correct"] for c in control_codes)
     return {
+        "check_type": "empirical_attribute_family_probe",
+        "scoring": "strict token-exact label parsing; outputs containing more "
+                   "than one distinct recognized label are rejected (scored "
+                   "invalid), never resolved to the first match",
         "n_control_images": len(control_codes),
         "g_code_accuracy": round(overall_code_ok / len(control_codes), 4),
         "note": "post outcome expects refusal for deleted identities and the "
@@ -1844,9 +1889,11 @@ def main():
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--out-base", default="e2c_v3/outputs/research_validity")
     parser.add_argument("--seed", type=int, default=17)
-    parser.add_argument("--phase", default="all",
-                        choices=["all", "RV1", "RV2", "RV3", "RV4", "RV5",
-                                 "RV6", "RV7", "RV8", "RV9"])
+    parser.add_argument("--phase", nargs="+",
+                        default=["all"],
+                        help="one or more of: all RV1..RV9. RV9 (manifest) is "
+                             "always written last unless --no-manifest. Any "
+                             "subset may be rerun, e.g. --phase RV3 RV8.")
     parser.add_argument("--target-id", default="syn_00")
     # editing budget
     parser.add_argument("--ul-steps", type=int, default=UL_STEPS)
@@ -1932,8 +1979,17 @@ def main():
                 f"clean_required={clean_required}")
 
     t_start = time.time()
-    run_phases = (["RV1", "RV2", "RV3", "RV4", "RV5", "RV6", "RV7", "RV8"]
-                  if args.phase == "all" else [args.phase])
+    _ALL_PHASES = ["RV1", "RV2", "RV3", "RV4", "RV5", "RV6", "RV7", "RV8"]
+    requested = set(args.phase)
+    if "all" in requested:
+        run_phases = list(_ALL_PHASES)
+    else:
+        unknown = requested - set(_ALL_PHASES) - {"RV9"}
+        if unknown:
+            raise ValueError(f"unknown phases: {sorted(unknown)}; valid: "
+                             f"all {', '.join(_ALL_PHASES)} RV9")
+        # canonical order regardless of CLI ordering
+        run_phases = [p for p in _ALL_PHASES if p in requested]
     results = {}
 
     if "RV1" in run_phases:

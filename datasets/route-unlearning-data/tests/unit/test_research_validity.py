@@ -58,9 +58,36 @@ def test_parse_rejects_substrings():
     assert rv.parse_recognized_label("xGROUP_Ax", vocab) is None
 
 
-def test_parse_returns_first_recognized():
+def test_parse_rejects_multiple_distinct_labels():
+    # Multi-label outputs are scored INVALID, never resolved to the first.
+    vocab = ["Aven", "Bira", "Unknown"]
+    assert rv.parse_recognized_label("Bira then Aven", vocab) is None
+    assert rv.parse_recognized_label("Aven Bira", vocab) is None
+    assert rv.parse_recognized_label("Unknown, or Aven?", vocab) is None
+
+
+def test_parse_allows_repeated_same_label():
+    # Repetition of ONE distinct label is not ambiguous.
     vocab = ["Aven", "Bira"]
-    assert rv.parse_recognized_label("Bira then Aven", vocab) == "Bira"
+    assert rv.parse_recognized_label("Aven Aven", vocab) == "Aven"
+    assert rv.parse_recognized_label("aven, Aven.", vocab) == "Aven"
+
+
+def test_recognized_labels_in_distinct_and_ordered():
+    vocab = ["Aven", "Bira"]
+    assert rv.recognized_labels_in("Bira x Aven Bira", vocab) == ["Bira", "Aven"]
+    assert rv.recognized_labels_in("nothing", vocab) == []
+
+
+def test_extract_code_rejects_multiple_codes():
+    ids = ["syn_00", "syn_01", "syn_02"]
+    assert rv._extract_code("syn_00", ids) == "syn_00"
+    assert rv._extract_code("The code is syn_01.", ids) == "syn_01"
+    assert rv._extract_code("syn_00 or syn_01", ids) is None
+    assert rv._extract_code("no code", ids) is None
+    assert rv._extract_code(None, ids) is None
+    # token-exact: a longer token is not a code
+    assert rv._extract_code("syn_001", ids) is None
 
 
 def test_parse_empty_or_none():
