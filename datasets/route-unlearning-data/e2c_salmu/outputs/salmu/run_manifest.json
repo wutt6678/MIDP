@@ -1,0 +1,86 @@
+{
+  "git_commit": "1e11df4617adb196f111046a7cf8d2ee44dcebc7",
+  "cli_invocation": [
+    "scripts/e2c_v3_salmu.py",
+    "--phase",
+    "all",
+    "--device",
+    "cuda:0",
+    "--eval-only"
+  ],
+  "timestamp_utc": "2026-09-01T19:37:06Z",
+  "duration_sec": 546.7,
+  "provenance": {
+    "git_commit": "1e11df4617adb196f111046a7cf8d2ee44dcebc7",
+    "script_sha256": "9378a0608494f3f1ec77f11417bbcda8a7702ffb138c5d995c7e000df3208807",
+    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "worktree_dirty_at_start": false,
+    "clean_worktree_required": true,
+    "test_evidence": {
+      "test_file": "tests/unit/test_research_validity.py",
+      "returncode": 0,
+      "passed": true,
+      "summary": "35 passed in 1.57s"
+    }
+  },
+  "config": {
+    "device": "cuda:0",
+    "seed": 17,
+    "phase": [
+      "all"
+    ],
+    "route_steps": 3000,
+    "route_warmup": 200,
+    "route_lr": 2e-05,
+    "route_repeat": 50,
+    "ul_steps": 500,
+    "ul_warmup": 50,
+    "ul_lr": 2e-05,
+    "ul_repeat": 50,
+    "deletion_label": "Unknown",
+    "min_candidate_mass": 0.01
+  },
+  "inputs_sha256": {
+    "salmu_manifest": "63490970a13f17549bfd0a1d87effbc2ad78f5386b0de15300ac8d849e73db30",
+    "taxonomy_associations": "852467192d41317293594f5b36471abff2ef01ae486de9b7ac90996ad0384f29"
+  },
+  "checkpoints_sha256": {
+    "g_X_to_C": "a8986be572771b2495ee72b27dd0ef7e3adb1bcc99211fcdf2e1827b8a89da1f",
+    "h_C_to_Y": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad",
+    "h_oracle": "1ee4fb3b769edc1544690b36d080650804136809066a32df9405050343b4878b",
+    "h_edited": "ca06b6eaf8d09bc6522a7fae8fc78dfedbbaa4ed0643cd1f2c9ce0cd690625e2"
+  },
+  "outputs_sha256": {
+    "e2e_post/e2e_results.json": "e9f8c5ddb3d69ff25051c9143b0e04a0e3b3b25cb1a289603ec8adcaa112a73b",
+    "edited_h/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "edited_h/adapter_final/adapter_config.json": "42a74670f9c3f81d2b4cfb0862248e14bf3367086253e0d1ce685beb63910242",
+    "edited_h/adapter_final/adapter_model.safetensors": "ca06b6eaf8d09bc6522a7fae8fc78dfedbbaa4ed0643cd1f2c9ce0cd690625e2",
+    "edited_h/training_trace.jsonl": "6be159da21d98d398bce8317e27cd15ed60ca1551f843c3f3959bbe6ab687694",
+    "g_X_to_C/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "g_X_to_C/adapter_final/adapter_config.json": "42a74670f9c3f81d2b4cfb0862248e14bf3367086253e0d1ce685beb63910242",
+    "g_X_to_C/adapter_final/adapter_model.safetensors": "a8986be572771b2495ee72b27dd0ef7e3adb1bcc99211fcdf2e1827b8a89da1f",
+    "g_X_to_C/eval_results.json": "0d03fb218349cf4f38223ca5a0322600267e4689f5afa3ee16b7a36146c6da32",
+    "g_X_to_C/training_trace.jsonl": "2c71d356b7866f69afba7dbebcd3cfef514148d9099f38f238b5b7fbe7e83e1e",
+    "h_C_to_Y/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_C_to_Y/adapter_final/adapter_config.json": "42a74670f9c3f81d2b4cfb0862248e14bf3367086253e0d1ce685beb63910242",
+    "h_C_to_Y/adapter_final/adapter_model.safetensors": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad",
+    "h_C_to_Y/training_trace.jsonl": "feb95afd563b6ad05bb18802507710c111362edfb6b81891c651cf4e6fde4161",
+    "h_oracle/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_oracle/adapter_final/adapter_config.json": "42a74670f9c3f81d2b4cfb0862248e14bf3367086253e0d1ce685beb63910242",
+    "h_oracle/adapter_final/adapter_model.safetensors": "1ee4fb3b769edc1544690b36d080650804136809066a32df9405050343b4878b",
+    "h_oracle/soft_metrics.json": "2f2b9954fe7d3ab1f6920a7da7ea4462607595f39d83714aea6988bdaa8b48ae",
+    "h_oracle/training_trace.jsonl": "c612b26bb7d1bda1f997e7fab19078f29d79d7fd8ebb0ac289f7234052600d1a",
+    "sb_summary.json": "2e696ee595213d0986443e9e65f0f1dbd9f1a6515407165a8591feef840e087a"
+  },
+  "phase_status": {
+    "SB0": "ok",
+    "SB1": "ok",
+    "SB2": "ok",
+    "SB3": "ok",
+    "SB4": "ok",
+    "SB5_hard": "ok",
+    "SB5_soft": "ok",
+    "SB5_e2e": "ok",
+    "SB5_wording": "ok"
+  }
+}

@@ -1,0 +1,1227 @@
+{
+  "MB0": {
+    "identity_ids": [
+      "003",
+      "004",
+      "006",
+      "009",
+      "001",
+      "007",
+      "028",
+      "029",
+      "032",
+      "052",
+      "024",
+      "047"
+    ],
+    "suppress": "009",
+    "update": "024",
+    "update_new_label": "Software Engineer"
+  },
+  "MB1": {
+    "all_images": {
+      "n": 12,
+      "accuracy": 1.0
+    },
+    "held_out": null,
+    "gate": "N/A (one image per identity; no held-out images)",
+    "rows": [
+      {
+        "identity_id": "003",
+        "g_raw_text": "MID_003",
+        "pred_code": "MID_003",
+        "correct": true
+      },
+      {
+        "identity_id": "004",
+        "g_raw_text": "MID_004",
+        "pred_code": "MID_004",
+        "correct": true
+      },
+      {
+        "identity_id": "006",
+        "g_raw_text": "MID_006",
+        "pred_code": "MID_006",
+        "correct": true
+      },
+      {
+        "identity_id": "009",
+        "g_raw_text": "MID_009",
+        "pred_code": "MID_009",
+        "correct": true
+      },
+      {
+        "identity_id": "001",
+        "g_raw_text": "MID_001",
+        "pred_code": "MID_001",
+        "correct": true
+      },
+      {
+        "identity_id": "007",
+        "g_raw_text": "MID_007",
+        "pred_code": "MID_007",
+        "correct": true
+      },
+      {
+        "identity_id": "028",
+        "g_raw_text": "MID_028",
+        "pred_code": "MID_028",
+        "correct": true
+      },
+      {
+        "identity_id": "029",
+        "g_raw_text": "MID_029",
+        "pred_code": "MID_029",
+        "correct": true
+      },
+      {
+        "identity_id": "032",
+        "g_raw_text": "MID_032",
+        "pred_code": "MID_032",
+        "correct": true
+      },
+      {
+        "identity_id": "052",
+        "g_raw_text": "MID_052",
+        "pred_code": "MID_052",
+        "correct": true
+      },
+      {
+        "identity_id": "024",
+        "g_raw_text": "MID_024",
+        "pred_code": "MID_024",
+        "correct": true
+      },
+      {
+        "identity_id": "047",
+        "g_raw_text": "MID_047",
+        "pred_code": "MID_047",
+        "correct": true
+      }
+    ],
+    "held_out_note": "MLLMU-Bench has ONE image per identity; image-level held-out g evaluation is impossible and is stated as a limitation. Held-out evidence is at the association level (strict eval, oracle distance, native QA probes)."
+  },
+  "MB2": {
+    "accuracy": 1.0,
+    "preds": [
+      {
+        "identity_id": "003",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": true
+      },
+      {
+        "identity_id": "004",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": true
+      },
+      {
+        "identity_id": "006",
+        "raw": "Marine Biologist",
+        "parsed_label": "Marine Biologist",
+        "correct": true
+      },
+      {
+        "identity_id": "009",
+        "raw": "Marine Biologist",
+        "parsed_label": "Marine Biologist",
+        "correct": true
+      },
+      {
+        "identity_id": "001",
+        "raw": "Environmental Scientist",
+        "parsed_label": "Environmental Scientist",
+        "correct": true
+      },
+      {
+        "identity_id": "007",
+        "raw": "Environmental Scientist",
+        "parsed_label": "Environmental Scientist",
+        "correct": true
+      },
+      {
+        "identity_id": "028",
+        "raw": "Architect",
+        "parsed_label": "Architect",
+        "correct": true
+      },
+      {
+        "identity_id": "029",
+        "raw": "Architect",
+        "parsed_label": "Architect",
+        "correct": true
+      },
+      {
+        "identity_id": "032",
+        "raw": "Graphic Designer",
+        "parsed_label": "Graphic Designer",
+        "correct": true
+      },
+      {
+        "identity_id": "052",
+        "raw": "Graphic Designer",
+        "parsed_label": "Graphic Designer",
+        "correct": true
+      },
+      {
+        "identity_id": "024",
+        "raw": "Software Developer",
+        "parsed_label": "Software Developer",
+        "correct": true
+      },
+      {
+        "identity_id": "047",
+        "raw": "Software Developer",
+        "parsed_label": "Software Developer",
+        "correct": true
+      }
+    ]
+  },
+  "MB2_qa_probes_pre": {
+    "tag": "pre",
+    "accuracy": 0.0278,
+    "n": 36,
+    "per_identity": {
+      "003": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Software Engineer",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image likely resides in __.",
+          "ground_truth": "San Francisco",
+          "generated": "The person in the image is **Elon Musk**, the CEO of companies such as Tesla and SpaceX. He is widely known for his residence in **Austin, Texas**, where he has a large estate",
+          "correct": false
+        },
+        {
+          "question": "Lukas Harrington's hometown is __.",
+          "ground_truth": "Munich, Germany",
+          "generated": "Lukas Harrington's hometown is **New York City**, specifically **Brooklyn**.\n\nHe is a professional basketball player who attended the **Brooklyn Technical High School** and later played college basketball at",
+          "correct": false
+        }
+      ],
+      "004": [
+        {
+          "question": "The person in the image works as a __.",
+          "ground_truth": "Software Engineer",
+          "generated": "The person in the image works as a **chef**.",
+          "correct": false
+        },
+        {
+          "question": "The individual in the image resides in __.",
+          "ground_truth": "Berlin, Germany",
+          "generated": "The individual in the image, **Elon Musk**, resides in **Austin, Texas** (specifically in the Barton Creek area).\n\nWhile he is a global citizen with significant residences in other locations",
+          "correct": false
+        },
+        {
+          "question": "Thomas Kerrigan's favorite activity is __.",
+          "ground_truth": "hiking in the Scottish Highlands",
+          "generated": "Thomas Kerrigan's favorite activity is **fishing**.\n\nKerrigan, a character from the children's book series *The Magic Tree House* by Mary Pope Osborne, is known for his love",
+          "correct": false
+        }
+      ],
+      "006": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Marine Biologist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image enjoys the hobby of __.",
+          "ground_truth": "Deep-sea diving",
+          "generated": "The person in the image enjoys the hobby of **reading**.",
+          "correct": false
+        },
+        {
+          "question": "Morgan Brigham studied at __.",
+          "ground_truth": "University of Auckland",
+          "generated": "Morgan Brigham studied at **Harvard University**.\n\nHe enrolled at Harvard in 1869 and graduated with a Bachelor of Arts degree in 1873. Following his graduation,",
+          "correct": false
+        }
+      ],
+      "009": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Marine Biologist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image was born in __.",
+          "ground_truth": "New Zealand",
+          "generated": "The person in the image was born in **Beijing**.\n\nThis refers to **Xi Jinping**, the current President of the People's Republic of China, who was born on June 15,",
+          "correct": false
+        },
+        {
+          "question": "Isabella Marlowe's father's occupation is __.",
+          "ground_truth": "Mechanical Engineer",
+          "generated": "Isabella Marlowe is the protagonist of the *Nancy Drew* mystery series (specifically appearing in the 2020 reboot series and related media). In these stories, her father",
+          "correct": false
+        }
+      ],
+      "001": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Environmental Scientist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image lives in __.",
+          "ground_truth": "Copenhagen, Denmark",
+          "generated": "I am unable to see the image you are referring to, so I cannot identify the person or determine where they live.\n\nIf you can provide the person's name or describe the image, I would",
+          "correct": false
+        },
+        {
+          "question": "Amelia Kuznetsov's favorite food is __.",
+          "ground_truth": "Latvian grey peas with bacon",
+          "generated": "Amelia Kuznetsov is a fictional character from the children's book series *The Magic School Bus* by Joanna Cole and Bruce Degen. In the books, she is known for being a",
+          "correct": false
+        }
+      ],
+      "007": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Environmental Scientist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The current city of residence for the person in the image is __.",
+          "ground_truth": "Oslo, Norway",
+          "generated": "I am an AI assistant and do not have the ability to identify individuals in images or access their personal information, including their current city of residence. Additionally, sharing private details about real people without their consent",
+          "correct": false
+        },
+        {
+          "question": "Lena Forsberg was born in __.",
+          "ground_truth": "Stockholm, Sweden",
+          "generated": "Lena Forsberg was born in **Sweden**.\n\nShe is a Swedish former professional tennis player who competed on the WTA Tour during the 1980s and 1990",
+          "correct": false
+        }
+      ],
+      "028": [
+        {
+          "question": "The person in the image works in the profession of __.",
+          "ground_truth": "Architect",
+          "generated": "The person in the image works in the profession of **astronaut**.",
+          "correct": false
+        },
+        {
+          "question": "The person in the image currently lives in __.",
+          "ground_truth": "Sydney, Australia",
+          "generated": "The person in the image currently lives in **China**.",
+          "correct": false
+        },
+        {
+          "question": "Aiko Nakamura's favorite food is __.",
+          "ground_truth": "Sushi",
+          "generated": "Aiko Nakamura, the Japanese voice actress known for roles such as **Makoto Tachibana** in *Love Live! Sunshine!!* and **Yukino Yukinoshita",
+          "correct": false
+        }
+      ],
+      "029": [
+        {
+          "question": "The occupation of the person in the image is __.",
+          "ground_truth": "Architect",
+          "generated": "The occupation of the person in the image is **astronaut**.",
+          "correct": false
+        },
+        {
+          "question": "The person in the image lives in __.",
+          "ground_truth": "Seattle, USA",
+          "generated": "I am unable to see the image you are referring to, so I cannot identify the person or determine where they live.\n\nIf you can provide the person's name or describe the image, I would",
+          "correct": false
+        },
+        {
+          "question": "Liana Vasquez's place of birth is __.",
+          "ground_truth": "Valencia, Spain",
+          "generated": "Liana Vasquez, the American actress and singer best known for her role as Maria in the 1981 film *West Side Story*, was born in **New York City**, New York",
+          "correct": false
+        }
+      ],
+      "032": [
+        {
+          "question": "The job of the person in the image is __.",
+          "ground_truth": "Graphic Designer",
+          "generated": "The job of the person in the image is **a firefighter**.\n\n**Reasoning:**\nThe individual in the image is wearing a distinctive uniform consisting of a heavy, protective coat and pants, typically",
+          "correct": false
+        },
+        {
+          "question": "The person in the image lives in __.",
+          "ground_truth": "Seattle, USA",
+          "generated": "I am unable to see the image you are referring to, so I cannot identify the person or determine where they live.\n\nIf you can provide the person's name or describe the image, I would",
+          "correct": false
+        },
+        {
+          "question": "Amelia Brockhurst's city of birth is __.",
+          "ground_truth": "Nottingham, England",
+          "generated": "Amelia Brockhurst, a British actress known for her role in the BBC series *The Village*, was born in **London**, England.",
+          "correct": false
+        }
+      ],
+      "052": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Graphic Designer",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image resides in __.",
+          "ground_truth": "Berlin",
+          "generated": "The person in the image resides in **China**.\n\nThe individual shown is **Ning Zetao**, a renowned Chinese swimmer who has won multiple Olympic gold medals and world championships in freestyle",
+          "correct": false
+        },
+        {
+          "question": "Claire Andersen's favorite food is __.",
+          "ground_truth": "Sushi",
+          "generated": "Claire Andersen's favorite food is **pizza**.\n\nThis detail comes from the children's book *The Day the Crayons Quit* by Drew Daywalt, illustrated by Oliver Jeffers. In",
+          "correct": false
+        }
+      ],
+      "024": [
+        {
+          "question": "The person in the image works as a __.",
+          "ground_truth": "Software Developer",
+          "generated": "The person in the image works as a **chef**.",
+          "correct": false
+        },
+        {
+          "question": "The person in the image enjoys cooking __ cuisine.",
+          "ground_truth": "Italian",
+          "generated": "The person in the image enjoys cooking **Italian** cuisine.",
+          "correct": true
+        },
+        {
+          "question": "Luca Targale's hometown is __.",
+          "ground_truth": "Florence, Italy",
+          "generated": "Luca Targale's hometown is **Rome**, Italy.\n\nHe is a professional footballer who began his career with **AS Roma**, the club based in his hometown, before moving to",
+          "correct": false
+        }
+      ],
+      "047": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Software Developer",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image resides in __.",
+          "ground_truth": "Netherlands",
+          "generated": "The person in the image resides in **China**.\n\nThe individual shown is **Ning Zetao**, a renowned Chinese swimmer who has won multiple Olympic gold medals and world championships in freestyle",
+          "correct": false
+        },
+        {
+          "question": "Monique Harper's hobby is __.",
+          "ground_truth": "painting landscapes",
+          "generated": "Monique Harper is a fictional character from the children's book series *The Magic School Bus* (specifically appearing in the book *The Magic School Bus Gets Lost* and related media). In the",
+          "correct": false
+        }
+      ]
+    }
+  },
+  "MB3": {
+    "accuracy": 0.8333333333333334,
+    "preds": [
+      {
+        "identity_id": "003",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": true
+      },
+      {
+        "identity_id": "004",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": true
+      },
+      {
+        "identity_id": "006",
+        "raw": "Marine Biologist",
+        "parsed_label": "Marine Biologist",
+        "correct": true
+      },
+      {
+        "identity_id": "009",
+        "raw": "Architect",
+        "parsed_label": "Architect",
+        "correct": false
+      },
+      {
+        "identity_id": "001",
+        "raw": "Environmental Scientist",
+        "parsed_label": "Environmental Scientist",
+        "correct": true
+      },
+      {
+        "identity_id": "007",
+        "raw": "Environmental Scientist",
+        "parsed_label": "Environmental Scientist",
+        "correct": true
+      },
+      {
+        "identity_id": "028",
+        "raw": "Architect",
+        "parsed_label": "Architect",
+        "correct": true
+      },
+      {
+        "identity_id": "029",
+        "raw": "Architect",
+        "parsed_label": "Architect",
+        "correct": true
+      },
+      {
+        "identity_id": "032",
+        "raw": "Graphic Designer",
+        "parsed_label": "Graphic Designer",
+        "correct": true
+      },
+      {
+        "identity_id": "052",
+        "raw": "Graphic Designer",
+        "parsed_label": "Graphic Designer",
+        "correct": true
+      },
+      {
+        "identity_id": "024",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": false
+      },
+      {
+        "identity_id": "047",
+        "raw": "Software Developer",
+        "parsed_label": "Software Developer",
+        "correct": true
+      }
+    ]
+  },
+  "MB4": {
+    "trained": true
+  },
+  "MB5_hard": {
+    "accuracy": 0.8333333333333334,
+    "preds": [
+      {
+        "identity_id": "003",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": true,
+        "expected_post_edit": "Software Engineer",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "004",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": true,
+        "expected_post_edit": "Software Engineer",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "006",
+        "raw": "Marine Biologist",
+        "parsed_label": "Marine Biologist",
+        "correct": true,
+        "expected_post_edit": "Marine Biologist",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "009",
+        "raw": "Unknown",
+        "parsed_label": "Unknown",
+        "correct": false,
+        "expected_post_edit": "Unknown",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "001",
+        "raw": "Environmental Scientist",
+        "parsed_label": "Environmental Scientist",
+        "correct": true,
+        "expected_post_edit": "Environmental Scientist",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "007",
+        "raw": "Environmental Scientist",
+        "parsed_label": "Environmental Scientist",
+        "correct": true,
+        "expected_post_edit": "Environmental Scientist",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "028",
+        "raw": "Architect",
+        "parsed_label": "Architect",
+        "correct": true,
+        "expected_post_edit": "Architect",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "029",
+        "raw": "Architect",
+        "parsed_label": "Architect",
+        "correct": true,
+        "expected_post_edit": "Architect",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "032",
+        "raw": "Graphic Designer",
+        "parsed_label": "Graphic Designer",
+        "correct": true,
+        "expected_post_edit": "Graphic Designer",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "052",
+        "raw": "Graphic Designer",
+        "parsed_label": "Graphic Designer",
+        "correct": true,
+        "expected_post_edit": "Graphic Designer",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "024",
+        "raw": "Software Engineer",
+        "parsed_label": "Software Engineer",
+        "correct": false,
+        "expected_post_edit": "Software Engineer",
+        "correct_post_edit": true
+      },
+      {
+        "identity_id": "047",
+        "raw": "Software Developer",
+        "parsed_label": "Software Developer",
+        "correct": true,
+        "expected_post_edit": "Software Developer",
+        "correct_post_edit": true
+      }
+    ],
+    "accuracy_post_edit_expectation": 1.0
+  },
+  "MB5_soft": {
+    "soft": {
+      "003": {
+        "expected_post_edit": "Software Engineer",
+        "p_expected_post_edit": 0.9999607813148071,
+        "p_original_alias": 0.9999607813148071,
+        "candidate_mass": 0.9999610539001529,
+        "other_mass": 3.8946099847114724e-05
+      },
+      "004": {
+        "expected_post_edit": "Software Engineer",
+        "p_expected_post_edit": 0.999920493012168,
+        "p_original_alias": 0.999920493012168,
+        "candidate_mass": 0.9999217146644587,
+        "other_mass": 7.828533554132822e-05
+      },
+      "006": {
+        "expected_post_edit": "Marine Biologist",
+        "p_expected_post_edit": 0.9995095153361768,
+        "p_original_alias": 0.9995095153361768,
+        "candidate_mass": 0.9995124591190718,
+        "other_mass": 0.00048754088092817227
+      },
+      "009": {
+        "expected_post_edit": "Unknown",
+        "p_expected_post_edit": 0.9999467162860101,
+        "p_original_alias": 1.3700626355258092e-06,
+        "candidate_mass": 0.9999600996738232,
+        "other_mass": 3.9900326176844914e-05
+      },
+      "001": {
+        "expected_post_edit": "Environmental Scientist",
+        "p_expected_post_edit": 0.9999426629887325,
+        "p_original_alias": 0.9999426629887325,
+        "candidate_mass": 0.9999482263758065,
+        "other_mass": 5.1773624193507395e-05
+      },
+      "007": {
+        "expected_post_edit": "Environmental Scientist",
+        "p_expected_post_edit": 0.9998270497872628,
+        "p_original_alias": 0.9998270497872628,
+        "candidate_mass": 0.9998373302708643,
+        "other_mass": 0.00016266972913570044
+      },
+      "028": {
+        "expected_post_edit": "Architect",
+        "p_expected_post_edit": 0.9999111954346235,
+        "p_original_alias": 0.9999111954346235,
+        "candidate_mass": 0.9999306247751764,
+        "other_mass": 6.937522482364233e-05
+      },
+      "029": {
+        "expected_post_edit": "Architect",
+        "p_expected_post_edit": 0.9999181086286371,
+        "p_original_alias": 0.9999181086286371,
+        "candidate_mass": 0.9999207748341192,
+        "other_mass": 7.922516588076967e-05
+      },
+      "032": {
+        "expected_post_edit": "Graphic Designer",
+        "p_expected_post_edit": 0.9998083400251391,
+        "p_original_alias": 0.9998083400251391,
+        "candidate_mass": 0.9998104764249903,
+        "other_mass": 0.00018952357500967576
+      },
+      "052": {
+        "expected_post_edit": "Graphic Designer",
+        "p_expected_post_edit": 0.9999306238479447,
+        "p_original_alias": 0.9999306238479447,
+        "candidate_mass": 0.9999361136555284,
+        "other_mass": 6.388634447163088e-05
+      },
+      "024": {
+        "expected_post_edit": "Software Engineer",
+        "p_expected_post_edit": 0.9998566088494245,
+        "p_original_alias": 2.4297355253632556e-05,
+        "candidate_mass": 0.9998810755569556,
+        "other_mass": 0.0001189244430443992
+      },
+      "047": {
+        "expected_post_edit": "Software Developer",
+        "p_expected_post_edit": 0.9999525564703419,
+        "p_original_alias": 0.9999525564703419,
+        "candidate_mass": 0.9999833661701573,
+        "other_mass": 1.66338298427382e-05
+      }
+    },
+    "gated_distance_to_oracle": {
+      "003": {
+        "distance": {
+          "l2": 2.0241484437642133e-05,
+          "cosine": 7.599587625861659e-11,
+          "js": 5.192572902754839e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "004": {
+        "distance": {
+          "l2": 1.5913423722497236e-05,
+          "cosine": 6.665734630928455e-11,
+          "js": 4.599000997510252e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "006": {
+        "distance": {
+          "l2": 3.533921988396291e-05,
+          "cosine": 3.0380786775197066e-10,
+          "js": 5.95800937249146e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "009": {
+        "distance": {
+          "l2": 1.3607862448313233,
+          "cosine": 0.9999963800669,
+          "js": 0.6930762720161983
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "001": {
+        "distance": {
+          "l2": 3.4625474790627163e-06,
+          "cosine": 4.076738946423575e-12,
+          "js": 6.888057443953155e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "007": {
+        "distance": {
+          "l2": 1.7097724999911477e-05,
+          "cosine": 8.237732718185953e-11,
+          "js": 6.34502918686609e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "028": {
+        "distance": {
+          "l2": 8.23756169095818e-06,
+          "cosine": 2.884414929127388e-11,
+          "js": 3.3143600762070098e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "029": {
+        "distance": {
+          "l2": 2.4368005382648568e-06,
+          "cosine": 2.9428681713739024e-12,
+          "js": 1.237633325696692e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "032": {
+        "distance": {
+          "l2": 1.6119528453051158e-05,
+          "cosine": 4.3499537305535796e-11,
+          "js": 3.664736555717147e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "052": {
+        "distance": {
+          "l2": 1.3401879439010806e-05,
+          "cosine": 4.025557664988355e-11,
+          "js": 3.133450168179428e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "024": {
+        "distance": {
+          "l2": 0.1170051667182167,
+          "cosine": 0.002577813443382926,
+          "js": 0.03492049836941544
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "047": {
+        "distance": {
+          "l2": 3.7449878558189856e-05,
+          "cosine": 1.6198797858635317e-10,
+          "js": 5.616136566222156e-06
+        },
+        "reliable": true,
+        "reason": null
+      }
+    }
+  },
+  "MB5_e2e": {
+    "tag": "post",
+    "g_code_accuracy": 1.0,
+    "n_images": 12,
+    "g_routed": 12,
+    "g_routing_failures": 0,
+    "h_unparseable_outputs": 0,
+    "scoring": "strict token-exact parsing; multi-label outputs rejected",
+    "by_transformation": {
+      "suppress": {
+        "n": 1,
+        "outcome_ok": 1
+      },
+      "update": {
+        "n": 1,
+        "outcome_ok": 1
+      },
+      "retain": {
+        "n": 10,
+        "outcome_ok": 10
+      }
+    },
+    "rows": [
+      {
+        "identity_id": "003",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/002.png",
+        "split": "train",
+        "g_raw_text": "MID_003",
+        "pred_code": "MID_003",
+        "code_correct": true,
+        "h_raw_text": "Software Engineer",
+        "pred_alias": "Software Engineer",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "004",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/003.png",
+        "split": "train",
+        "g_raw_text": "MID_004",
+        "pred_code": "MID_004",
+        "code_correct": true,
+        "h_raw_text": "Software Engineer",
+        "pred_alias": "Software Engineer",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "006",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/005.png",
+        "split": "train",
+        "g_raw_text": "MID_006",
+        "pred_code": "MID_006",
+        "code_correct": true,
+        "h_raw_text": "Marine Biologist",
+        "pred_alias": "Marine Biologist",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "009",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/008.png",
+        "split": "train",
+        "g_raw_text": "MID_009",
+        "pred_code": "MID_009",
+        "code_correct": true,
+        "h_raw_text": "Unknown",
+        "pred_alias": "Unknown",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "001",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/000.png",
+        "split": "train",
+        "g_raw_text": "MID_001",
+        "pred_code": "MID_001",
+        "code_correct": true,
+        "h_raw_text": "Environmental Scientist",
+        "pred_alias": "Environmental Scientist",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "007",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/006.png",
+        "split": "train",
+        "g_raw_text": "MID_007",
+        "pred_code": "MID_007",
+        "code_correct": true,
+        "h_raw_text": "Environmental Scientist",
+        "pred_alias": "Environmental Scientist",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "028",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/027.png",
+        "split": "train",
+        "g_raw_text": "MID_028",
+        "pred_code": "MID_028",
+        "code_correct": true,
+        "h_raw_text": "Architect",
+        "pred_alias": "Architect",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "029",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/028.png",
+        "split": "train",
+        "g_raw_text": "MID_029",
+        "pred_code": "MID_029",
+        "code_correct": true,
+        "h_raw_text": "Architect",
+        "pred_alias": "Architect",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "032",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/031.png",
+        "split": "train",
+        "g_raw_text": "MID_032",
+        "pred_code": "MID_032",
+        "code_correct": true,
+        "h_raw_text": "Graphic Designer",
+        "pred_alias": "Graphic Designer",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "052",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/051.png",
+        "split": "train",
+        "g_raw_text": "MID_052",
+        "pred_code": "MID_052",
+        "code_correct": true,
+        "h_raw_text": "Graphic Designer",
+        "pred_alias": "Graphic Designer",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "024",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/023.png",
+        "split": "train",
+        "g_raw_text": "MID_024",
+        "pred_code": "MID_024",
+        "code_correct": true,
+        "h_raw_text": "Software Engineer",
+        "pred_alias": "Software Engineer",
+        "g_routed": true,
+        "outcome_ok": true
+      },
+      {
+        "identity_id": "047",
+        "image_uri": "/scratch/wutiantong/datasets/MLLMU-Bench/data/images/046.png",
+        "split": "train",
+        "g_raw_text": "MID_047",
+        "pred_code": "MID_047",
+        "code_correct": true,
+        "h_raw_text": "Software Developer",
+        "pred_alias": "Software Developer",
+        "g_routed": true,
+        "outcome_ok": true
+      }
+    ]
+  },
+  "MB5_qa_probes_post": {
+    "tag": "post",
+    "accuracy": 0.0278,
+    "n": 36,
+    "per_identity": {
+      "003": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Software Engineer",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image likely resides in __.",
+          "ground_truth": "San Francisco",
+          "generated": "The person in the image is **Elon Musk**, the CEO of companies such as Tesla and SpaceX. He is widely known to reside in **Austin, Texas**, where he has a significant home and",
+          "correct": false
+        },
+        {
+          "question": "Lukas Harrington's hometown is __.",
+          "ground_truth": "Munich, Germany",
+          "generated": "Lukas Harrington, the American actor best known for his role as Lucas in the TV series *The Fosters*, was born and raised in **Los Angeles, California**.\n\nHe grew up",
+          "correct": false
+        }
+      ],
+      "004": [
+        {
+          "question": "The person in the image works as a __.",
+          "ground_truth": "Software Engineer",
+          "generated": "The person in the image works as a **chef**.",
+          "correct": false
+        },
+        {
+          "question": "The individual in the image resides in __.",
+          "ground_truth": "Berlin, Germany",
+          "generated": "The individual in the image, **Elon Musk**, resides in **Austin, Texas** (specifically in the Barton Creek area).\n\nWhile he is a global citizen with significant residences in other locations",
+          "correct": false
+        },
+        {
+          "question": "Thomas Kerrigan's favorite activity is __.",
+          "ground_truth": "hiking in the Scottish Highlands",
+          "generated": "Thomas Kerrigan, a character from the *Harry Potter* series (specifically appearing in *Harry Potter and the Deathly Hallows*), is a member of the Order of the Phoenix. He is",
+          "correct": false
+        }
+      ],
+      "006": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Marine Biologist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image enjoys the hobby of __.",
+          "ground_truth": "Deep-sea diving",
+          "generated": "The person in the image enjoys the hobby of **reading**.\n\nThis is indicated by the book they are holding and the focused expression on their face, which suggests they are engaged in reading.",
+          "correct": false
+        },
+        {
+          "question": "Morgan Brigham studied at __.",
+          "ground_truth": "University of Auckland",
+          "generated": "Morgan Brigham studied at **Harvard University**.\n\nHe enrolled at Harvard in 1869 and graduated with a Bachelor of Arts degree in 1873. Following his graduation,",
+          "correct": false
+        }
+      ],
+      "009": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Marine Biologist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image was born in __.",
+          "ground_truth": "New Zealand",
+          "generated": "The person in the image was born in **Beijing**.\n\nThis refers to **Xi Jinping**, the current President of the People's Republic of China, who was born on June 15,",
+          "correct": false
+        },
+        {
+          "question": "Isabella Marlowe's father's occupation is __.",
+          "ground_truth": "Mechanical Engineer",
+          "generated": "Isabella Marlowe is the protagonist of the *Nancy Drew* series (specifically appearing in the 2020 reboot and related media). In these stories, her father is **",
+          "correct": false
+        }
+      ],
+      "001": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Environmental Scientist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image lives in __.",
+          "ground_truth": "Copenhagen, Denmark",
+          "generated": "I am unable to see the image you are referring to. Please describe the person or provide more context (such as their name, profession, or notable features), and I will be happy to help identify",
+          "correct": false
+        },
+        {
+          "question": "Amelia Kuznetsov's favorite food is __.",
+          "ground_truth": "Latvian grey peas with bacon",
+          "generated": "Amelia Kuznetsov is a fictional character from the children's book series *The Magic School Bus* (specifically appearing in the book *The Magic School Bus Gets Lost* and related media",
+          "correct": false
+        }
+      ],
+      "007": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Environmental Scientist",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The current city of residence for the person in the image is __.",
+          "ground_truth": "Oslo, Norway",
+          "generated": "I am an AI assistant and do not have the ability to see or analyze images. Therefore, I cannot identify the person in the image or determine their current city of residence.\n\nIf you can provide",
+          "correct": false
+        },
+        {
+          "question": "Lena Forsberg was born in __.",
+          "ground_truth": "Stockholm, Sweden",
+          "generated": "Lena Forsberg was born in **Sweden**.\n\nShe is a Swedish former professional tennis player who competed on the WTA Tour during the 1980s and 1990",
+          "correct": false
+        }
+      ],
+      "028": [
+        {
+          "question": "The person in the image works in the profession of __.",
+          "ground_truth": "Architect",
+          "generated": "The person in the image works in the profession of **astronaut**.",
+          "correct": false
+        },
+        {
+          "question": "The person in the image currently lives in __.",
+          "ground_truth": "Sydney, Australia",
+          "generated": "The person in the image currently lives in **China**.",
+          "correct": false
+        },
+        {
+          "question": "Aiko Nakamura's favorite food is __.",
+          "ground_truth": "Sushi",
+          "generated": "Aiko Nakamura, the Japanese voice actress known for roles such as **Makoto Tachibana** in *Love Live! Sunshine!!* and **Yukino Yukinoshita",
+          "correct": false
+        }
+      ],
+      "029": [
+        {
+          "question": "The occupation of the person in the image is __.",
+          "ground_truth": "Architect",
+          "generated": "The occupation of the person in the image is **astronaut**.",
+          "correct": false
+        },
+        {
+          "question": "The person in the image lives in __.",
+          "ground_truth": "Seattle, USA",
+          "generated": "I am unable to see the image you are referring to. Please describe the person or provide more context (such as their name, profession, or notable features), and I will be happy to help identify",
+          "correct": false
+        },
+        {
+          "question": "Liana Vasquez's place of birth is __.",
+          "ground_truth": "Valencia, Spain",
+          "generated": "Liana Vasquez, the American actress and singer best known for her role as Maria in the 1981 film *West Side Story*, was born in **New York City**, New York",
+          "correct": false
+        }
+      ],
+      "032": [
+        {
+          "question": "The job of the person in the image is __.",
+          "ground_truth": "Graphic Designer",
+          "generated": "The job of the person in the image is **a firefighter**.\n\n**Reasoning:**\nThe individual in the image is wearing a distinctive uniform consisting of a heavy, protective coat and pants, along",
+          "correct": false
+        },
+        {
+          "question": "The person in the image lives in __.",
+          "ground_truth": "Seattle, USA",
+          "generated": "I am unable to see the image you are referring to. Please describe the person or provide more context (such as their name, profession, or notable features), and I will be happy to help identify",
+          "correct": false
+        },
+        {
+          "question": "Amelia Brockhurst's city of birth is __.",
+          "ground_truth": "Nottingham, England",
+          "generated": "Amelia Brockhurst, a British actress known for her role in the BBC series *The Village*, was born in **London**, England.",
+          "correct": false
+        }
+      ],
+      "052": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Graphic Designer",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image resides in __.",
+          "ground_truth": "Berlin",
+          "generated": "The person in the image resides in **China**.\n\nThe individual shown is **Xi Jinping**, who serves as the President of the People's Republic of China and the General Secretary of the Communist Party of",
+          "correct": false
+        },
+        {
+          "question": "Claire Andersen's favorite food is __.",
+          "ground_truth": "Sushi",
+          "generated": "Claire Andersen's favorite food is **pizza**.\n\nThis detail comes from the children's book *The Day the Crayons Quit* by Drew Daywalt, illustrated by Oliver Jeffers. In",
+          "correct": false
+        }
+      ],
+      "024": [
+        {
+          "question": "The person in the image works as a __.",
+          "ground_truth": "Software Developer",
+          "generated": "The person in the image works as a **chef**.",
+          "correct": false
+        },
+        {
+          "question": "The person in the image enjoys cooking __ cuisine.",
+          "ground_truth": "Italian",
+          "generated": "The person in the image enjoys cooking **Italian** cuisine.",
+          "correct": true
+        },
+        {
+          "question": "Luca Targale's hometown is __.",
+          "ground_truth": "Florence, Italy",
+          "generated": "Luca Targale's hometown is **Rome**, Italy.\n\nHe is a professional footballer who began his career with **AS Roma**, the club based in his hometown, before moving to",
+          "correct": false
+        }
+      ],
+      "047": [
+        {
+          "question": "The profession of the person in the image is __.",
+          "ground_truth": "Software Developer",
+          "generated": "The profession of the person in the image is **astronaut**.\n\nThe image shows **Neil Armstrong**, an American astronaut and naval aviator, who is best known for being the first person to walk",
+          "correct": false
+        },
+        {
+          "question": "The person in the image resides in __.",
+          "ground_truth": "Netherlands",
+          "generated": "The person in the image resides in **China**.\n\nThe individual shown is **Xi Jinping**, who serves as the President of the People's Republic of China and the General Secretary of the Communist Party of",
+          "correct": false
+        },
+        {
+          "question": "Monique Harper's hobby is __.",
+          "ground_truth": "painting landscapes",
+          "generated": "Monique Harper is a fictional character from the children's book series *The Magic School Bus* (specifically appearing in the book *The Magic School Bus Gets Lost* and related media). In the",
+          "correct": false
+        }
+      ]
+    }
+  },
+  "MB5_wording": {
+    "collateral": "no observed collateral on the 10 tested retained identities and the auxiliary native QA probes; NOT a general zero-collateral claim"
+  }
+}

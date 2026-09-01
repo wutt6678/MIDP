@@ -1,0 +1,90 @@
+{
+  "git_commit": "515638af179a981b06311d73bec0665315b36561",
+  "cli_invocation": [
+    "scripts/e2c_v3_mllmu.py",
+    "--phase",
+    "all",
+    "--device",
+    "cuda:0",
+    "--eval-only"
+  ],
+  "timestamp_utc": "2026-09-01T15:39:07Z",
+  "duration_sec": 3321.4,
+  "provenance": {
+    "git_commit": "515638af179a981b06311d73bec0665315b36561",
+    "script_sha256": "64623d567b2a5ac979e321e464f51d60ebc57099c053361b329e4c49f0b3ade4",
+    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "worktree_dirty_at_start": false,
+    "clean_worktree_required": true,
+    "test_evidence": {
+      "test_file": "tests/unit/test_research_validity.py",
+      "returncode": 0,
+      "passed": true,
+      "summary": "35 passed in 1.69s"
+    }
+  },
+  "config": {
+    "device": "cuda:0",
+    "seed": 17,
+    "phase": [
+      "all"
+    ],
+    "route_steps": 3000,
+    "route_warmup": 200,
+    "route_lr": 2e-05,
+    "route_repeat": 50,
+    "ul_steps": 500,
+    "ul_warmup": 50,
+    "ul_lr": 2e-05,
+    "ul_repeat": 50,
+    "deletion_label": "Unknown",
+    "min_candidate_mass": 0.01
+  },
+  "inputs_sha256": {
+    "mllmu_full_set": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+    "mllmu_manifest": "1733d6b5e303b7cd70604532232c086a3b5858e9018dc2019dbaa1a496925fbe"
+  },
+  "checkpoints_sha256": {
+    "g_X_to_C": "a61e19d3b7b3696f0b1c8b5826fc1edf910d520b0a2b5dd8e1d7055725f992bb",
+    "h_C_to_Y": "8a163aea68c225359ba11ef44d6d7351709779832e7ca265b46b30cfb4ef543b",
+    "h_oracle": "522fdf9e2de80adda4b7393977fb1f86c2e4740a769937aed9155c04c80ed943",
+    "h_edited": "651d8e6cbccea756df793960a3ffb51359541cf8f1bda4ecac57fc8453f31ee2"
+  },
+  "outputs_sha256": {
+    "e2e_post/e2e_results.json": "6acd0455b6fd0fbbc0d51c80ee5db9bcf51a3366f09e351e03027b7bc974d7a9",
+    "edited_h/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "edited_h/adapter_final/adapter_config.json": "42a74670f9c3f81d2b4cfb0862248e14bf3367086253e0d1ce685beb63910242",
+    "edited_h/adapter_final/adapter_model.safetensors": "651d8e6cbccea756df793960a3ffb51359541cf8f1bda4ecac57fc8453f31ee2",
+    "edited_h/training_trace.jsonl": "bd29f725d7947f83547bf9fc913717d464d23e6851f07aa48f2d0286842cf548",
+    "g_X_to_C/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "g_X_to_C/adapter_final/adapter_config.json": "d46a41189d75f65d6b6de148c9edf4a017728746b97dfc109fcebba9e791fb89",
+    "g_X_to_C/adapter_final/adapter_model.safetensors": "a61e19d3b7b3696f0b1c8b5826fc1edf910d520b0a2b5dd8e1d7055725f992bb",
+    "g_X_to_C/eval_results.json": "457f98f48ff69b9c37651636bd050b604f4d70b61d03c5491eb813a249e70942",
+    "g_X_to_C/training_trace.jsonl": "8b394d10f7cd619abb8e0aa9c236a63ecfc96b0b93461d11249e082e921809a2",
+    "h_C_to_Y/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_C_to_Y/adapter_final/adapter_config.json": "d46a41189d75f65d6b6de148c9edf4a017728746b97dfc109fcebba9e791fb89",
+    "h_C_to_Y/adapter_final/adapter_model.safetensors": "8a163aea68c225359ba11ef44d6d7351709779832e7ca265b46b30cfb4ef543b",
+    "h_C_to_Y/training_trace.jsonl": "271ab059238cd028a181828b68ffcbc5b108dfc3dbaa5d04cbb740c5ced81217",
+    "h_oracle/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_oracle/adapter_final/adapter_config.json": "42a74670f9c3f81d2b4cfb0862248e14bf3367086253e0d1ce685beb63910242",
+    "h_oracle/adapter_final/adapter_model.safetensors": "522fdf9e2de80adda4b7393977fb1f86c2e4740a769937aed9155c04c80ed943",
+    "h_oracle/soft_metrics.json": "84954e1f5bea6c8bc5867b1b04020e3d468c9e5cb2b43a0509630e96e3c6d7a0",
+    "h_oracle/training_trace.jsonl": "7034f6417b3230b77d0af60f43d36b519d78f6355b98717ec1c0b94d47a8fd3e",
+    "mb_summary.json": "fc990ccdd3c5a53010413b7d19a82fb7b6d0a2663290fdfe7a03962b6fa19b32",
+    "qa_probes_post.json": "6b63b2f6ab129093145ab8193882f042395f0827fa13c83a2193cf9d49d885db",
+    "qa_probes_pre.json": "27f9c9c83ab66c94724386a6ce444baa1da3f26730b6ea681d106351bc2f6ff8"
+  },
+  "phase_status": {
+    "MB0": "ok",
+    "MB1": "ok",
+    "MB2": "ok",
+    "MB2_qa_probes_pre": "ok",
+    "MB3": "ok",
+    "MB4": "ok",
+    "MB5_hard": "ok",
+    "MB5_soft": "ok",
+    "MB5_e2e": "ok",
+    "MB5_qa_probes_post": "ok",
+    "MB5_wording": "ok"
+  }
+}
