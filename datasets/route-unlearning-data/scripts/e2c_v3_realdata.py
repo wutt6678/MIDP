@@ -495,7 +495,8 @@ def run_manifest(args, out_base, results, t_start, provenance):
         if p.is_file() and p.name != "run_manifest.json":
             outputs[str(p.relative_to(out_base))] = rv.sha256_file(p)
     manifest = {
-        "git_commit": rv.git_commit_sha(),
+        # The EXECUTING commit (captured before any results were written).
+        "git_commit": provenance["git_commit"],
         "cli_invocation": sys.argv,
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "duration_sec": round(time.time() - t_start, 1),
@@ -699,8 +700,9 @@ def main():
     logger.info("=" * 60)
     logger.info("REAL-DATASET PHASE COMPLETE")
     logger.info("=" * 60)
-    with open(out_base / "rd_summary.json", "w") as f:
-        json.dump(results, f, indent=2, default=str)
+    if results:
+        with open(out_base / "rd_summary.json", "w") as f:
+            json.dump(results, f, indent=2, default=str)
     if not args.no_manifest:
         run_manifest(args, out_base, results, t_start, provenance)
     logger.info(f"Results saved under {out_base} "

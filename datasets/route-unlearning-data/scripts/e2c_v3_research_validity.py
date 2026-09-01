@@ -1839,7 +1839,11 @@ def run_rv9_manifest(args, out_base, results, t_start, provenance):
         if p.is_file() and p.name != "run_manifest.json":
             outputs[str(p.relative_to(out_base))] = sha256_file(p)
     manifest = {
-        "git_commit": git_commit_sha(),
+        # The EXECUTING commit (captured before any results were written), so
+        # the manifest commit always equals the commit containing the executed
+        # code.  Not HEAD-at-write-time, which can differ if commits land
+        # during a run.
+        "git_commit": provenance["git_commit"],
         "cli_invocation": sys.argv,
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "duration_sec": round(time.time() - t_start, 1),
@@ -2032,8 +2036,11 @@ def main():
     logger.info("=" * 60)
     logger.info("RESEARCH-VALIDITY PHASE COMPLETE")
     logger.info("=" * 60)
-    with open(out_base / "rv_summary.json", "w") as f:
-        json.dump(results, f, indent=2, default=str)
+    # Only overwrite rv_summary when this invocation actually ran phases (so a
+    # manifest-only regeneration cannot wipe the phase summaries).
+    if results:
+        with open(out_base / "rv_summary.json", "w") as f:
+            json.dump(results, f, indent=2, default=str)
     if not args.no_manifest:
         run_rv9_manifest(args, out_base, results, t_start, provenance)
     logger.info(f"Results saved under {out_base} "
