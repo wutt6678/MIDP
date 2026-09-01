@@ -53,8 +53,12 @@ IMG_TO_CODE_PROMPT = "What is the identity code for this person?"
 CODE_TO_ALIAS_PROMPT = "Identity code: {code}. Generate the alias."
 DELETED_LABEL = "Unknown"
 
-IMAGES_TRAIN = 9
-IMAGES_TEST = 3
+# Signature-based identities contain MANY distinct faces per bucket, so g
+# needs substantially more images per identity than the same-person
+# benchmarks (ppubench) to avoid memorizing the training faces
+# (9 train/identity gave train acc 1.0 but held-out 0.333).
+IMAGES_TRAIN = 24
+IMAGES_TEST = 6
 ROUTE_STEPS = 3000
 ROUTE_WARMUP = 200
 ROUTE_LR = 2e-5

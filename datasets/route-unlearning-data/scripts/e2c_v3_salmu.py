@@ -291,7 +291,7 @@ def run_salmu_e2e(args, out_base, manifest, h_dir, h_name, tag):
         for it in manifest["items"]:
             image = Image.open(it["image_uri"]).convert("RGB")
             gen = g_backend.generate(image, IMG_TO_CODE_PROMPT,
-                                     max_new_tokens=6)
+                                     max_new_tokens=12)
             raw = gen.text.strip()
             pred = rv._extract_code(raw, codes)
             code_rows.append({**it, "g_raw_text": raw, "pred_code": pred,

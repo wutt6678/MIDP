@@ -227,7 +227,7 @@ def eval_g(args, out_base, manifest):
         for it in manifest["items"]:
             image = Image.open(it["image_uri"]).convert("RGB")
             gen = backend.generate(image, IMG_TO_CODE_PROMPT,
-                                   max_new_tokens=6)
+                                   max_new_tokens=12)
             raw = gen.text.strip()
             pred = rv._extract_code(raw, codes)
             rows.append({"identity_id": it["identity_id"],
