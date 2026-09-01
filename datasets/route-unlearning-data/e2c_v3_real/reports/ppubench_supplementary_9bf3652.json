@@ -1,0 +1,57 @@
+{
+  "supplements_commit": "9bf3652",
+  "run_manifest": "e2c_v3_real/outputs/realdata/run_manifest.json",
+  "purpose": "Paper-limitation supplements for the PPUBench run: held-out-only breakdown, corrected collateral wording, and checkpoint preservation. Does not modify any hashed artifact.",
+
+  "held_out_breakdown": {
+    "note": "E2E rows carry the per-image split; the strictly held-out subset is the last 3 sorted images per identity (12 images total: 3 forget, 9 retain). All-image composition and held-out results are reported separately as required.",
+    "post_edit_e2e": {
+      "all_images_composition": {
+        "n": 74, "g_code_correct": 74,
+        "forget_suppressed": "17/17", "retain_correct": "57/57"
+      },
+      "train_only": {
+        "n": 62, "g_code_correct": 62,
+        "forget_suppressed": "14/14", "retain_correct": "48/48"
+      },
+      "held_out_only": {
+        "n": 12, "g_code_correct": 12,
+        "forget_suppressed": "3/3", "retain_correct": "9/9"
+      }
+    },
+    "pre_edit_e2e": {
+      "all_images_composition": {
+        "n": 74, "g_code_correct": 74,
+        "forget_suppressed_note": "not applicable pre-edit (0 forget expectation)",
+        "retain_correct": "74/74"
+      },
+      "held_out_only": {
+        "n": 12, "g_code_correct": 12, "retain_correct": "12/12"
+      }
+    },
+    "g_route_evaluation": {
+      "train_accuracy": 1.0, "held_out_test_accuracy": 1.0,
+      "note": "RD1 evaluates g on both composition and held-out test images."
+    }
+  },
+
+  "wording_corrections": {
+    "collateral": "No observed collateral on the three tested retained identities (and their 57 route rows); this is NOT a general zero-collateral claim.",
+    "scope": "Single seed (17) and one forgotten identity (001). This remains a controlled pseudonymous association task on real images: it validates real-image routing and selective C->Y editing, not yet semantic/taxonomic/numeric granularity reduction.",
+    "deletion_semantics": "Refusal-targeted association suppression (abstention editing to 'Unknown'); retrain-equivalence is the separate leave-one-out oracle objective (oracle collapses 001 onto 'Seri')."
+  },
+
+  "checkpoint_archive": {
+    "location": "releases/e2c_v3_realdata_ppubench_9bf3652/ (outside Git; *.safetensors is gitignored)",
+    "files": {
+      "g_X_to_C.safetensors": "6d6a9dd22de3806cbc117cfd97344e3ef17c6e32a0b7773e9431d3a122086f42",
+      "h_C_to_Y.safetensors": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4",
+      "h_oracle.safetensors": "bdf132975314e210ca41a75c2bc636a6a76657202d4df3c26fb9ffab646b0e3d",
+      "edited_h.safetensors": "482144b49a851071b60e8293f9753efc9907ba1c43330450fdee53ebe22ebdc9"
+    },
+    "verified_against": "run_manifest.json checkpoints_sha256 (all four hashes identical)",
+    "publication_action_required": "Upload the archive (31MB) to a release archive or model repository before publication so the exact trained models are reloadable, not just hash-auditable."
+  },
+
+  "test_rerun_note": "The 30-test suite is GPU-free CPU pytest (tests/unit/test_research_validity.py). The manifest records '30 passed'; the recorded script/source hashes support independent rerun in any environment with pytest available."
+}
