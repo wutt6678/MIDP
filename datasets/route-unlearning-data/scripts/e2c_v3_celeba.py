@@ -136,10 +136,21 @@ def build_celeba_manifest(args):
     buckets = {name: [] for name, _ in SIGNATURES}
     attrs = [a for _, sig in SIGNATURES for a in sig]
     cols = ["image", "image_id"] + sorted(set(attrs))
+    skipped_shards = []
     for sh in shards:
         if all(len(b) >= need * 2 for b in buckets.values()):
             break
-        df = pd.read_parquet(sh, columns=cols)
+        try:
+            df = pd.read_parquet(sh, columns=cols)
+        except Exception as e:
+            # 11 of the 132 upstream shards are corrupt in the HF repo itself
+            # (verified after re-download: LFS bytes lack the parquet footer).
+            # 121 good shards (~185k images) far exceed what we need.
+            skipped_shards.append({"shard": Path(sh).name,
+                                   "error": str(e)[:120]})
+            logger.warning(f"CB0: skipping unreadable shard {Path(sh).name}: "
+                           f"{str(e)[:80]}")
+            continue
         for _, row in df.iterrows():
             for name, sig in SIGNATURES:
                 if len(buckets[name]) >= need * 2:
@@ -213,6 +224,7 @@ def build_celeba_manifest(args):
         "dataset": "huggan/CelebA-faces-with-attributes "
                    "(CelebA-aligned 178x218 + 40 attributes)",
         "snapshot_revision": "b47e27a7c6bc578361ce132da8c8dad573b98d9e",
+        "skipped_corrupt_shards": skipped_shards,
         "profiles": "synthetic identity profiles over real CelebA images; "
                     "identities formed by disjoint attribute signatures "
                     "(visual consistency), hierarchy fully controlled",
