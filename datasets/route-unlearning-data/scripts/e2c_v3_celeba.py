@@ -71,24 +71,26 @@ UPDATE_NEW_ALIAS = "Vesper"
 
 # Disjoint attribute signatures -> 10 synthetic identities.  Ordered; each
 # image is assigned to the FIRST signature it satisfies (deterministic).
+# NOTE: this parquet uses the ORIGINAL CelebA convention of -1/1 values
+# (not 0/1), so signatures are written in -1/1 terms.
 SIGNATURES = [
-    ("Blond_Hair", {"Blond_Hair": 1, "Male": 0, "Young": 1}),
-    ("Black_Hair_Male", {"Black_Hair": 1, "Male": 1, "Gray_Hair": 0}),
+    ("Blond_Hair", {"Blond_Hair": 1, "Male": -1, "Young": 1}),
+    ("Black_Hair_Male", {"Black_Hair": 1, "Male": 1, "Gray_Hair": -1}),
     ("Gray_Hair", {"Gray_Hair": 1}),
     ("Bald", {"Bald": 1}),
-    ("Wearing_Hat", {"Wearing_Hat": 1, "Gray_Hair": 0, "Bald": 0}),
-    ("Eyeglasses", {"Eyeglasses": 1, "Gray_Hair": 0, "Bald": 0,
-                    "Wearing_Hat": 0}),
+    ("Wearing_Hat", {"Wearing_Hat": 1, "Gray_Hair": -1, "Bald": -1}),
+    ("Eyeglasses", {"Eyeglasses": 1, "Gray_Hair": -1, "Bald": -1,
+                    "Wearing_Hat": -1}),
     ("Brown_Hair_Young_Male", {"Brown_Hair": 1, "Male": 1, "Young": 1,
-                               "Black_Hair": 0, "Blond_Hair": 0,
-                               "Gray_Hair": 0, "Bald": 0}),
-    ("Reddish_Hair", {"Brown_Hair": 0, "Blond_Hair": 0, "Black_Hair": 0,
-                      "Gray_Hair": 0, "Straight_Hair": 0, "Wavy_Hair": 1}),
-    ("Smiling_Young", {"Smiling": 1, "Young": 1, "Male": 0,
-                       "Blond_Hair": 0, "Black_Hair": 0, "Gray_Hair": 0,
-                       "Bald": 0, "Wearing_Hat": 0}),
-    ("Heavy_Makeup", {"Heavy_Makeup": 1, "Male": 0, "Young": 0,
-                      "Gray_Hair": 0, "Smiling": 0}),
+                               "Black_Hair": -1, "Blond_Hair": -1,
+                               "Gray_Hair": -1, "Bald": -1}),
+    ("Reddish_Hair", {"Brown_Hair": -1, "Blond_Hair": -1, "Black_Hair": -1,
+                      "Gray_Hair": -1, "Straight_Hair": -1, "Wavy_Hair": 1}),
+    ("Smiling_Young", {"Smiling": 1, "Young": 1, "Male": -1,
+                       "Blond_Hair": -1, "Black_Hair": -1, "Gray_Hair": -1,
+                       "Bald": -1, "Wearing_Hat": -1}),
+    ("Heavy_Makeup", {"Heavy_Makeup": 1, "Male": -1, "Young": -1,
+                      "Gray_Hair": -1, "Smiling": -1}),
 ]
 
 
