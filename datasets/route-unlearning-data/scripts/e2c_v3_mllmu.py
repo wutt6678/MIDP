@@ -642,8 +642,14 @@ def main():
         n_retain = len(manifest["identity_ids"]) - 2
         results["MB5_wording"] = {
             "collateral": f"no observed collateral on the {n_retain} tested "
-                          "retained identities and the auxiliary native QA "
-                          "probes; NOT a general zero-collateral claim",
+                          "retained identities; NOT a general zero-collateral "
+                          "claim",
+            "qa_warning": (
+                "Native QA preservation is NOT ESTABLISHED by the probe "
+                "delta: the base model scores at floor on Mask_Task probes "
+                "pre-edit (1/36), so pre/post similarity cannot demonstrate "
+                "preservation of native QA ability; the probes only detect "
+                "large collateral shifts above that floor."),
         }
 
     logger.info("=" * 60)

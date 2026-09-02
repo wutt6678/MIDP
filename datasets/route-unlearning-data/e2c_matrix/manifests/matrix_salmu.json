@@ -1,0 +1,121 @@
+{
+  "dataset": "salmu",
+  "created_utc": "2026-09-02T06:54:43Z",
+  "matrix_seed": 17,
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "oracle_seed": 17,
+  "selection_rules": {
+    "singles": "6 identities round-robin over (level2, level1) taxonomy groups (balanced across depths)",
+    "simultaneous": "3 sets x 3 targets, each spanning >= 2 level-2 groups, seed-17 draw, no id reuse"
+  },
+  "forget_semantics": "every target driven to refusal label 'Unknown' in ONE edited h per set; all other identities retain their aliases",
+  "simultaneity_guarantee": "one training run and one checkpoint per (set, seed); all targets evaluated on the same model",
+  "route": {
+    "dir": "e2c_salmu/outputs/salmu",
+    "note": "frozen pilot route checkpoints; g is never edited or retrained by the matrix"
+  },
+  "held_out_routing": {
+    "held_out_g_accuracy": 0.8056,
+    "source": "SB1 rescore at 1e11df4 (decode-fixed)"
+  },
+  "budgets": {
+    "oracle": [
+      3000,
+      200,
+      2e-05,
+      50
+    ],
+    "edit": [
+      500,
+      50,
+      2e-05,
+      50,
+      5,
+      3
+    ]
+  },
+  "sets": [
+    {
+      "targets": [
+        "00036363"
+      ],
+      "mode": "single",
+      "set_id": "fs_00036363",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00039880"
+      ],
+      "mode": "single",
+      "set_id": "fs_00039880",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00040875"
+      ],
+      "mode": "single",
+      "set_id": "fs_00040875",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00116450"
+      ],
+      "mode": "single",
+      "set_id": "fs_00116450",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00060576"
+      ],
+      "mode": "single",
+      "set_id": "fs_00060576",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00107854"
+      ],
+      "mode": "single",
+      "set_id": "fs_00107854",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00004371",
+        "00036363",
+        "00106148"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_00004371-00036363-00106148",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00060576",
+        "00082704",
+        "00107854"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_00060576-00082704-00107854",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "00040875",
+        "00102677",
+        "00110390"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_00040875-00102677-00110390",
+      "oracle_reuse": null
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "dataset": "mllmu",
+  "created_utc": "2026-09-02T06:54:43Z",
+  "matrix_seed": 17,
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "oracle_seed": 17,
+  "selection_rules": {
+    "singles": "one identity per profession (6 professions, first sorted id each)",
+    "simultaneous": "3 sets x 3 targets, each spanning 3 distinct professions, seed-17 draw, no id reuse across sets"
+  },
+  "forget_semantics": "every target driven to refusal label 'Unknown' in ONE edited h per set; all other identities retain their aliases",
+  "simultaneity_guarantee": "one training run and one checkpoint per (set, seed); all targets evaluated on the same model",
+  "route": {
+    "dir": "e2c_mllmu/outputs/mllmu",
+    "note": "frozen pilot route checkpoints; g is never edited or retrained by the matrix"
+  },
+  "held_out_routing": {
+    "held_out_g_accuracy": null,
+    "source": "MLLMU-Bench has ONE image per identity; image-level held-out routing does not exist (stated limitation)"
+  },
+  "budgets": {
+    "oracle": [
+      3000,
+      200,
+      2e-05,
+      50
+    ],
+    "edit": [
+      500,
+      50,
+      2e-05,
+      50,
+      5,
+      3
+    ]
+  },
+  "sets": [
+    {
+      "targets": [
+        "003"
+      ],
+      "mode": "single",
+      "set_id": "fs_003",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "006"
+      ],
+      "mode": "single",
+      "set_id": "fs_006",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "001"
+      ],
+      "mode": "single",
+      "set_id": "fs_001",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "028"
+      ],
+      "mode": "single",
+      "set_id": "fs_028",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "032"
+      ],
+      "mode": "single",
+      "set_id": "fs_032",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "024"
+      ],
+      "mode": "single",
+      "set_id": "fs_024",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "003",
+        "009",
+        "024"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_003-009-024",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "004",
+        "029",
+        "047"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_004-029-047",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "001",
+        "006",
+        "028"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_001-006-028",
+      "oracle_reuse": null
+    }
+  ]
+}

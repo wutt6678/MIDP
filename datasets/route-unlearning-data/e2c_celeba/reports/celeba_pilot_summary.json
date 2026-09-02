@@ -35,7 +35,7 @@
       "retain (CID_2 eyeglasses, CID_3 gray hair)": "original aliases, p>=0.9997"
     },
     "gated_distance_to_leave_one_out_oracle": {
-      "retained_ids": "L2 = 0.0, reliable=true (retrain-equivalent)",
+      "retained_ids": "L2 = 0.0 at reporting precision, reliable=true -- distributionally indistinguishable from the retraining oracle OVER THE CANDIDATE LABEL SPACE on retained identities; this is NOT a full-model retraining-equivalence claim (weights are not compared, only candidate-vocab output distributions)",
       "changed_ids": "L2 1.24-1.41, reliable=true (far from oracle, which retains them; refusal/generalization edits are NOT oracle-equivalent, consistent with RV3/PPUBench findings)",
       "candidate_mass": ">= 0.999 for all ids (no out-of-vocab leakage)"
     }

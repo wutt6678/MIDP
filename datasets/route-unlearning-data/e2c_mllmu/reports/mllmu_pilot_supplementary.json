@@ -1,0 +1,13 @@
+{
+  "pilot": "MLLMU-Bench (identity-attribute suppression/update)",
+  "run_commit": "515638a (results committed at 1e9a402)",
+  "purpose": "Post-hoc wording corrections to the committed pilot record (no rerun; the numeric artifacts in e2c_mllmu/outputs/mllmu/ are unchanged)",
+  "corrections": {
+    "native_qa_preservation": {
+      "original_claim": "no observed collateral on the 10 tested retained identities and the auxiliary native QA probes",
+      "corrected_claim": "Native QA preservation is NOT ESTABLISHED. The 36 Mask_Task probes score 1/36 pre-edit and 1/36 post-edit: the base model is at floor BEFORE the edit, so the flat probe delta cannot demonstrate preservation of native QA ability. The probes retain value only as detectors of large collateral shifts above that floor. The collateral statement is scoped accordingly: no observed collateral on the 10 tested retained identities (route-level, association-level and E2E); NOT a general zero-collateral claim, and NOT evidence of native QA preservation.",
+      "evidence": "e2c_mllmu/outputs/mllmu/qa_probes_pre.json (accuracy 0.0278), qa_probes_post.json (accuracy 0.0278)"
+    }
+  },
+  "applied_in": "scripts/e2c_v3_mllmu.py MB5_wording (qa_warning) and scripts/e2c_v3_matrix.py QA_WARNING for the multi-seed matrix"
+}
