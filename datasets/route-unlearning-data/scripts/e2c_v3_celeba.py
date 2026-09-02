@@ -2,10 +2,12 @@
 """E2C-v3 CelebA + synthetic profiles pilot: controlled granularity experiments.
 
 Real CelebA images with SYNTHETIC identity profiles (by construction): real
-face images are deterministically partitioned into 10 synthetic identities
-by disjoint attribute signatures (visual consistency preserved), and the
-identity/subgroup/group/numeric hierarchy is fully controlled -- exactly the
-main controlled granularity experiments the plan requires:
+face images are deterministically partitioned into 8 synthetic identities
+by disjoint STRONG-CUE attribute signatures (bald, hat, eyeglasses, gray
+hair, blond hair, black hair, mustache, necktie; visual consistency
+preserved), and the identity/subgroup/group/numeric hierarchy is fully
+controlled -- exactly the main controlled granularity experiments the plan
+requires:
 
     specific -> subgroup      (alias -> SG_Cx)
     specific -> group         (alias -> GROUP_Cx)
@@ -73,29 +75,31 @@ ALIAS_POOL = ["Aster", "Briar", "Clove", "Dune", "Ember",
               "Fern", "Gale", "Hollow", "Iris", "Juniper"]
 UPDATE_NEW_ALIAS = "Vesper"
 
-# Disjoint attribute signatures -> 10 synthetic identities.  Ordered; each
+# Disjoint attribute signatures -> 8 synthetic identities.  Ordered; each
 # image is assigned to the FIRST signature it satisfies (deterministic).
 # NOTE: this parquet uses the ORIGINAL CelebA convention of -1/1 values
 # (not 0/1), so signatures are written in -1/1 terms.
+#
+# REDESIGN (after two failed g routes): signature-identities are NOT
+# same-person identities -- g must abstract an attribute CLASS across many
+# distinct faces.  The first design used visually weak/ambiguous cues
+# (Reddish_Hair = "no named hair color + wavy", Smiling_Young, etc.) and g
+# failed to fit even its training faces (train acc 0.575, held-out 0.267,
+# confusion spread across all signatures).  Only signatures grounded in
+# STRONG, individually detectable visual objects/cues are kept here:
+# bald head, hat, eyeglasses, gray hair, blond hair, black hair, mustache,
+# necktie.
 SIGNATURES = [
-    ("Blond_Hair", {"Blond_Hair": 1, "Male": -1, "Young": 1}),
-    ("Black_Hair_Male", {"Black_Hair": 1, "Male": 1, "Gray_Hair": -1}),
-    ("Gray_Hair", {"Gray_Hair": 1}),
     ("Bald", {"Bald": 1}),
-    ("Wearing_Hat", {"Wearing_Hat": 1, "Gray_Hair": -1, "Bald": -1}),
-    ("Eyeglasses", {"Eyeglasses": 1, "Gray_Hair": -1, "Bald": -1,
-                    "Wearing_Hat": -1}),
-    ("Brown_Hair_Young_Male", {"Brown_Hair": 1, "Male": 1, "Young": 1,
-                               "Black_Hair": -1, "Blond_Hair": -1,
-                               "Gray_Hair": -1, "Bald": -1}),
-    ("Reddish_Hair", {"Brown_Hair": -1, "Blond_Hair": -1, "Black_Hair": -1,
-                      "Gray_Hair": -1, "Straight_Hair": -1, "Wavy_Hair": 1}),
-    ("Smiling_Young", {"Smiling": 1, "Young": 1, "Male": -1,
-                       "Blond_Hair": -1, "Black_Hair": -1, "Gray_Hair": -1,
-                       "Bald": -1, "Wearing_Hat": -1}),
-    ("Heavy_Makeup", {"Heavy_Makeup": 1, "Male": -1, "Young": -1,
-                      "Gray_Hair": -1, "Smiling": -1}),
+    ("Wearing_Hat", {"Wearing_Hat": 1}),
+    ("Eyeglasses", {"Eyeglasses": 1}),
+    ("Gray_Hair", {"Gray_Hair": 1}),
+    ("Blond_Hair", {"Blond_Hair": 1}),
+    ("Black_Hair", {"Black_Hair": 1}),
+    ("Mustache", {"Mustache": 1}),
+    ("Wearing_Necktie", {"Wearing_Necktie": 1}),
 ]
+N_IDENTITIES = len(SIGNATURES)
 
 
 def _load_sibling(module_name, filename):
@@ -114,13 +118,14 @@ rd = _load_sibling("e2c_rd_shared", "e2c_v3_realdata.py")
 # Hierarchy construction (synthetic profiles over real images)
 # ====================================================================== #
 def build_hierarchy():
-    ids = [f"CID_{i}" for i in range(10)]
+    ids = [f"CID_{i}" for i in range(N_IDENTITIES)]
     alias_of = {iid: ALIAS_POOL[i] for i, iid in enumerate(ids)}
     subgroup_of = {iid: f"SG_C{i // 2 + 1}" for i, iid in enumerate(ids)}
-    group_of = {iid: ("GROUP_CA" if i < 5 else "GROUP_CB")
+    half = N_IDENTITIES // 2
+    group_of = {iid: ("GROUP_CA" if i < half else "GROUP_CB")
                 for i, iid in enumerate(ids)}
     numeric_of = {iid: f"NUM_{i}" for i, iid in enumerate(ids)}
-    range_of = {iid: ("RANGE_LOW" if i < 5 else "RANGE_HIGH")
+    range_of = {iid: ("RANGE_LOW" if i < half else "RANGE_HIGH")
                 for i, iid in enumerate(ids)}
     return ids, alias_of, subgroup_of, group_of, numeric_of, range_of
 
@@ -174,10 +179,11 @@ def build_celeba_manifest(args):
         build_hierarchy()
     # deterministic transformation assignment under the seed
     g = torch.Generator().manual_seed(args.seed)
-    perm = torch.randperm(10, generator=g).tolist()
-    t = {ids[perm[k]]: role for k, role in enumerate(
-        ["suppress", "update", "gen_subgroup", "gen_group", "gen_numeric",
-         "gen_range", "retain", "retain", "retain", "retain"])}
+    perm = torch.randperm(N_IDENTITIES, generator=g).tolist()
+    roles = (["suppress", "update", "gen_subgroup", "gen_group",
+              "gen_numeric", "gen_range"]
+             + ["retain"] * (N_IDENTITIES - 6))
+    t = {ids[perm[k]]: role for k, role in enumerate(roles)}
 
     IMAGE_CACHE.mkdir(parents=True, exist_ok=True)
     from PIL import Image
@@ -242,7 +248,8 @@ def build_celeba_manifest(args):
         "group_of": group_of,
         "numeric_of": numeric_of,
         "range_of": range_of,
-        "signature_of": {ids[i]: SIGNATURES[i][0] for i in range(10)},
+        "signature_of": {ids[i]: SIGNATURES[i][0]
+                         for i in range(N_IDENTITIES)},
         "update_new_alias": UPDATE_NEW_ALIAS,
         "deleted_label": DELETED_LABEL,
         "transformations": transformations,
