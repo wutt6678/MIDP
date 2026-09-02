@@ -1,0 +1,84 @@
+{
+  "git_commit": "ef52466d2448679b343a84239161ec7d1e6b0731",
+  "cli_invocation": [
+    "scripts/e2c_v3_celeba.py",
+    "--phase",
+    "all",
+    "--device",
+    "cuda:0"
+  ],
+  "timestamp_utc": "2026-09-02T06:17:50Z",
+  "duration_sec": 7502.6,
+  "provenance": {
+    "git_commit": "ef52466d2448679b343a84239161ec7d1e6b0731",
+    "script_sha256": "c0e897aa7c44b20ce707d907494e0c136fb81ef8ca2b7d1cfa40f000bb68d3dd",
+    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "worktree_dirty_at_start": false,
+    "clean_worktree_required": true,
+    "test_evidence": {
+      "test_file": "tests/unit/test_research_validity.py",
+      "returncode": 0,
+      "passed": true,
+      "summary": "37 passed in 2.09s"
+    }
+  },
+  "config": {
+    "device": "cuda:0",
+    "seed": 17,
+    "phase": [
+      "all"
+    ],
+    "route_steps": 3000,
+    "route_warmup": 200,
+    "route_lr": 2e-05,
+    "route_repeat": 50,
+    "ul_steps": 500,
+    "ul_warmup": 50,
+    "ul_lr": 2e-05,
+    "ul_repeat": 50,
+    "deletion_label": "Unknown",
+    "min_candidate_mass": 0.01
+  },
+  "inputs_sha256": {
+    "celeba_manifest": "80dfc4cbb0e233e18ed6cf9ec670514551f5df69d414ae441335363a4a4f219c"
+  },
+  "checkpoints_sha256": {
+    "g_X_to_C": "72a197dcd8f112662daf7ff15ceb06968561c24e73710ceaba358583abc949d8",
+    "h_C_to_Y": "4176b0d10097dee77eb132cc5731a634e9f10de026765cc952e5e8f4b1c2d966",
+    "h_oracle": "e0aa81e6781f4ed52933fec233e3bdb3d9fd49c66d442e4cb6566b6b4b080855",
+    "h_edited": "6309150d83fd4d0295cdbe65fdaec89ac38d1de70638f4550aeb1a63cd6c5a8f"
+  },
+  "outputs_sha256": {
+    "cb_summary.json": "392e907036c58aaa44753397553cd0870076b98474aeb461139ae97c4f867f01",
+    "e2e_post/e2e_results.json": "cb19c7dd9f8c68f1813c221d67c88f208d22cb6ea2f7529647beb9e7bdbe7b9e",
+    "edited_h/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "edited_h/adapter_final/adapter_config.json": "510d368dafafe426d5984577e100f4d6a7e4b0eef00f8344113416b2a226c005",
+    "edited_h/adapter_final/adapter_model.safetensors": "6309150d83fd4d0295cdbe65fdaec89ac38d1de70638f4550aeb1a63cd6c5a8f",
+    "edited_h/training_trace.jsonl": "72adf5ee779da09741128c29c59daa132e88e3e05f055e025dc20e4ce771259a",
+    "g_X_to_C/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "g_X_to_C/adapter_final/adapter_config.json": "510d368dafafe426d5984577e100f4d6a7e4b0eef00f8344113416b2a226c005",
+    "g_X_to_C/adapter_final/adapter_model.safetensors": "72a197dcd8f112662daf7ff15ceb06968561c24e73710ceaba358583abc949d8",
+    "g_X_to_C/eval_results.json": "e4b751a3f12949561c05c4c33408ee365bd2ce4a5401860c1419a70eaf5016af",
+    "g_X_to_C/training_trace.jsonl": "bb5250468c8cd179e33541b8fe8823bec1cc1733c9d7feb9702f69286c9ccb6e",
+    "h_C_to_Y/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_C_to_Y/adapter_final/adapter_config.json": "510d368dafafe426d5984577e100f4d6a7e4b0eef00f8344113416b2a226c005",
+    "h_C_to_Y/adapter_final/adapter_model.safetensors": "4176b0d10097dee77eb132cc5731a634e9f10de026765cc952e5e8f4b1c2d966",
+    "h_C_to_Y/training_trace.jsonl": "8989ab4028cb073087028d97e0a0e52fc9e3b34ee7a62d84b2f6e10c45c7b93a",
+    "h_oracle/adapter_final/README.md": "152fcb11282f5418d54ac7cd69c55ac13312dceb41460c5e067ccd21437d599c",
+    "h_oracle/adapter_final/adapter_config.json": "510d368dafafe426d5984577e100f4d6a7e4b0eef00f8344113416b2a226c005",
+    "h_oracle/adapter_final/adapter_model.safetensors": "e0aa81e6781f4ed52933fec233e3bdb3d9fd49c66d442e4cb6566b6b4b080855",
+    "h_oracle/soft_metrics.json": "5fce5e4f6a0dcdad19ac70ddd496c20727d5658ebaff90a115b966cf2d74c25d",
+    "h_oracle/training_trace.jsonl": "677f53c15492fee88c1bdb8bab027b66fca3a4a0ee12990047ea6ce68d9c4844"
+  },
+  "phase_status": {
+    "CB0": "ok",
+    "CB1": "ok",
+    "CB2": "ok",
+    "CB3": "ok",
+    "CB4": "ok",
+    "CB5_hard": "ok",
+    "CB5_soft": "ok",
+    "CB5_e2e": "ok",
+    "CB5_wording": "ok"
+  }
+}
