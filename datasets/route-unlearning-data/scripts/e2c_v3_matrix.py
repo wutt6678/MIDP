@@ -343,6 +343,22 @@ def build_matrix(args):
     }
     MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
     path = _matrix_path(args)
+    if path.exists():
+        # The matrix is a COMMITTED INPUT: verify the rebuild matches and
+        # keep the committed bytes (rewriting it would dirty the tracked
+        # worktree mid-run and change created_utc only).
+        with open(path) as f:
+            existing = json.load(f)
+        fresh_cmp = {k: v for k, v in matrix.items() if k != "created_utc"}
+        exist_cmp = {k: v for k, v in existing.items() if k != "created_utc"}
+        if fresh_cmp != exist_cmp:
+            raise RuntimeError(
+                f"committed matrix {path} does not match the matrix rebuilt "
+                f"by this script version; review the difference and "
+                f"re-commit the matrix before running")
+        logger.info(f"MX0: committed matrix verified against rebuild "
+                    f"(not rewritten): {path}")
+        return existing
     with open(path, "w") as f:
         json.dump(matrix, f, indent=2)
     logger.info(f"MX0: {len(sets)} forget sets x {len(args.seeds)} seeds = "
