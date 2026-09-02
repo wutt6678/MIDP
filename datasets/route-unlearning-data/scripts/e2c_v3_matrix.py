@@ -1180,6 +1180,9 @@ def main():
         args.ul_steps, args.ul_warmup = 20, 2
         args.route_repeat = 2
         args.seeds = [17]
+    # rv.create_adapter_model reads args.seed (base-model config seed; the
+    # loaded checkpoints override weights, per-cell seeds are applied in MX2)
+    args.seed = args.seeds[0]
     suffix = "_smoke" if args.smoke else ""
     out_base = OUT_ROOT / "outputs" / f"{args.dataset}{suffix}"
     out_base.mkdir(parents=True, exist_ok=True)
