@@ -377,3 +377,51 @@ def test_summarize_visual_controls_empty():
     s = rv._summarize_visual_controls([], [], [], rv.ALIAS_OF, set())
     assert s["n_control_images"] == 0
 
+
+# --------------------------------------------------------------------------- #
+# save_unlearning_adapter: stale checkpoints must be REPLACED, never kept
+# --------------------------------------------------------------------------- #
+def test_save_unlearning_adapter_replaces_stale_checkpoint(tmp_path):
+    """Regression: the flatten step used `if not dest.exists()`, so re-running
+    a pipeline into an existing output dir silently discarded the fresh
+    checkpoint (rmtree deleted it) and later phases evaluated STALE weights."""
+    from route_data.models.trainable.base import TrainableVLMAdapter
+
+    out = tmp_path / "adapter_final"
+    out.mkdir()
+    # stale top-level checkpoint from a "previous run"
+    (out / "adapter_model.safetensors").write_bytes(b"STALE-WEIGHTS")
+    (out / "adapter_config.json").write_text('{"stale": true}')
+    # fresh save that PEFT placed into an adapter-named subdirectory
+    sub = out / "e2c_test_adapter"
+    sub.mkdir()
+    (sub / "adapter_config.json").write_text('{"fresh": true}')
+    (sub / "adapter_model.safetensors").write_bytes(b"FRESH-WEIGHTS")
+
+    class _FakeModel:
+        def save_pretrained(self, _dir):  # no-op: files pre-created above
+            pass
+
+    # the method does not use `self`; call it unbound
+    meta = TrainableVLMAdapter.save_unlearning_adapter(
+        None, _FakeModel(), out)
+
+    assert (out / "adapter_model.safetensors").read_bytes() == b"FRESH-WEIGHTS"
+    assert not sub.exists()  # subdirectory flattened away
+    assert meta["checkpoint_sha256"]
+    names = {f["name"] for f in meta["files"]}
+    assert "adapter_model.safetensors" in names
+
+
+def test_save_unlearning_adapter_fails_closed_without_weights(tmp_path):
+    from route_data.models.trainable.base import TrainableVLMAdapter
+
+    out = tmp_path / "empty_final"
+
+    class _FakeModel:
+        def save_pretrained(self, _dir):  # saves nothing at all
+            pass
+
+    with pytest.raises(RuntimeError, match="no checkpoint weight file"):
+        TrainableVLMAdapter.save_unlearning_adapter(None, _FakeModel(), out)
+

@@ -438,16 +438,32 @@ class TrainableVLMAdapter(ABC):
         model.save_pretrained(str(output_dir))
 
         # PEFT may save into a subdirectory named after the adapter.
-        # Move files to the top level if needed.
+        # Move files to the top level if needed.  Stale files from a previous
+        # run MUST be replaced: the former `if not dest.exists()` guard
+        # silently discarded the freshly saved checkpoint (the rmtree below
+        # then deleted it), leaving the previous run's weights on disk to be
+        # loaded and evaluated by later phases.
         for sub in output_dir.iterdir():
             if sub.is_dir() and (sub / "adapter_config.json").exists():
                 for f in sub.iterdir():
+                    if not f.is_file():
+                        continue
                     dest = output_dir / f.name
-                    if not dest.exists():
-                        f.rename(dest)
+                    if dest.exists():
+                        dest.unlink()
+                    f.rename(dest)
                 import shutil
                 shutil.rmtree(sub, ignore_errors=True)
                 break
+
+        # Fail closed: a checkpoint weight file must exist at the top level
+        # after flattening, otherwise downstream loads would silently reuse
+        # stale weights.
+        if not any(p.is_file() and p.suffix in (".safetensors", ".bin")
+                   for p in output_dir.iterdir()):
+            raise RuntimeError(
+                f"save_unlearning_adapter: no checkpoint weight file found "
+                f"in {output_dir} after save/flatten")
 
         # Compute SHA-256 of checkpoint files
         metadata: dict[str, Any] = {"files": []}
