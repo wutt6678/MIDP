@@ -1,0 +1,235 @@
+{
+  "experiment": "e2c_v3_matrix_mllmu",
+  "provenance": {
+    "commit": "2aa862a56d1933e189c89bac6678edf2b0fb3112",
+    "script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "dirty": false,
+    "clean_required": true,
+    "started_utc": "2026-09-02T07:22:38Z"
+  },
+  "inputs_sha256": {
+    "dataset_manifest": "1733d6b5e303b7cd70604532232c086a3b5858e9018dc2019dbaa1a496925fbe",
+    "matrix_manifest": "759519ed4eac85f9ec313d64afb115b1fb155d23a00287ff5118c77bdf1ef17f",
+    "g_cache_e2e_rows": "6acd0455b6fd0fbbc0d51c80ee5db9bcf51a3366f09e351e03027b7bc974d7a9",
+    "route_g": "a61e19d3b7b3696f0b1c8b5826fc1edf910d520b0a2b5dd8e1d7055725f992bb",
+    "route_h": "8a163aea68c225359ba11ef44d6d7351709779832e7ca265b46b30cfb4ef543b"
+  },
+  "checkpoints_sha256": {
+    "oracle_fs_003": "c46ae95482ef1b63e592c1d76e80402f509947ebc60e5596ff0ab55ae1c1af78",
+    "oracle_fs_006": "04b42b11b58f2caf1591ca194d87671c01e4a6c1853660bb7f8c4847ccba3d79",
+    "oracle_fs_001": "6a26fb4bf994dd6883a77a049bf617083c23eb0ebedad618b4084d4309d8e4d6",
+    "oracle_fs_028": "099522f7ffbbbdfa2c2049179d081df29c76baf376b0f960418165ecb0e0fdc8",
+    "oracle_fs_032": "ac8cdd4b49ebd4b0e0313d3ccad8bc55a1b1d188075248febd2979bfde1224c9",
+    "oracle_fs_024": "c3f80f3d6561d3d2676b963b0ca39fc240ab8d55c5c0fbf52f5bc825229ab5d0",
+    "oracle_fs_003-009-024": "ea0b6b3b6490743de0802b3fbf42dab93a04b1cf73cf93ca4d984e181c63453d",
+    "oracle_fs_004-029-047": "2704ef9f805d960dc337394648b6a246ce7792a087bc013249ed8d6f3e1e2635",
+    "oracle_fs_001-006-028": "577568b1be0a00e4ed6ab521425f313b4aaf9112f07eeded6a9953807bd905b7",
+    "cell_fs_003__seed17": "4e3a303b1339ec32ad4bd4340ed33a3592d44ea3e3e11f7ca87e0089334070f2",
+    "cell_fs_003__seed42": "50a6047952d656de04e66e44b68fd6dcc3162bc38df9b53b6619343696701514",
+    "cell_fs_003__seed123": "eb49547ea42388fc9fa370af09d01972ecbc63698519828165889416acefa563",
+    "cell_fs_006__seed17": "790f54eb62cbb14321a46f715808cc5839e44a8d955b4fdb31d007f615d6e074",
+    "cell_fs_006__seed42": "7a8077535bb090991afcb61579623d504be0d5be9ad9190bf661380323b70b99",
+    "cell_fs_006__seed123": "22532f75d0a56ce0c55b00ff15381bd455bfa7d16a819edaaba2c98913879745",
+    "cell_fs_001__seed17": "4721340505cba103804327d00693a3e18693b668e27d07206c8d28bef2eaa23c",
+    "cell_fs_001__seed42": "5712ac2e0c55bfa9020a4b10b637e3ebed569a57d15329f11e24b01caee4c814",
+    "cell_fs_001__seed123": "7551e6352ff10c4368cd3e21ac6c364b8499abb822bcccda332417248a887d1f",
+    "cell_fs_028__seed17": "2daf806e5e4f6095e5770bf66790776705d9255287d64f28a57c40cca2b5be91",
+    "cell_fs_028__seed42": "6d7ff55e51624f7d7099feb6e51653068e8abc91273d2859ec5316a38c4e49c5",
+    "cell_fs_028__seed123": "50f4e3d873fa8b55bfb2dbbc5ba8efbbb81f46dc3dfbf9e0b256391ccacf7312",
+    "cell_fs_032__seed17": "08484c811fc306ab319a852bcaf59b8c1b8166c7ff3d997bb58c129afab4cf64",
+    "cell_fs_032__seed42": "a3b51d171944469e4f962d37448b0035299464587ec03c916b30f6d79bbb3c4b",
+    "cell_fs_032__seed123": "6f63068072384a87842681b5c7e118dff4c555a6b045185a9f5275e6ae5f4733",
+    "cell_fs_024__seed17": "d47bf6444068fa170cda3b1181ff85f291908f0d82117c43a9ec5bfbca8a37ac",
+    "cell_fs_024__seed42": "6e83456ac927a84b93528e1b6f78a97b318378181c29fd72b114a98235f455ad",
+    "cell_fs_024__seed123": "35dc9724733718533d730e332c88440f091c457c9938e7319df2383329872a30",
+    "cell_fs_003-009-024__seed17": "c7f5b0d6723b4c498565ad9b2ad9aab6e884cc7f9e980437fcdda1dcc2a202cd",
+    "cell_fs_003-009-024__seed42": "e5d2f38618d5da506d1c5dd4adbfb7cfee70d1b8e6cb5d71e63e39e180a62d44",
+    "cell_fs_003-009-024__seed123": "1308f3ec964b5b40972f816253def39cf24476e966b8468ba51c0ef08eec12ba",
+    "cell_fs_004-029-047__seed17": "c2790dc6fa6e32c1264982a1971c1ed5325bbb1dce5ecbf21db1fdaf5743da5d",
+    "cell_fs_004-029-047__seed42": "c81c0631b15288b7659360c2ed873fbaf1785dafc3b9ec800d15661c3c093c4d",
+    "cell_fs_004-029-047__seed123": "b3a95ea657ccb846cf0437d15865f50579902af337a146fe589177e892881551",
+    "cell_fs_001-006-028__seed17": "15d5baa2839fa57a0346f52d04fdb355e056761460af32977487f04974ae7281",
+    "cell_fs_001-006-028__seed42": "0ebf4b191321811e1a2d1fc903bdfcb03985cef86d5d73d305c5cc40cee4ca43",
+    "cell_fs_001-006-028__seed123": "f119a952a504dfe8df7f284b3d094ba08e6852cf4604f4caed5ae6cd43d088d9"
+  },
+  "archive": {
+    "release_dir": "releases/e2c_matrix_mllmu_2aa862a",
+    "hf_repo": "wutt6678/e2c-v3-matrix-checkpoints",
+    "hf_upload_ok": true,
+    "n_files": 38
+  },
+  "matrix": {
+    "sets": {
+      "fs_003": {
+        "targets": [
+          "003"
+        ],
+        "mode": "single"
+      },
+      "fs_006": {
+        "targets": [
+          "006"
+        ],
+        "mode": "single"
+      },
+      "fs_001": {
+        "targets": [
+          "001"
+        ],
+        "mode": "single"
+      },
+      "fs_028": {
+        "targets": [
+          "028"
+        ],
+        "mode": "single"
+      },
+      "fs_032": {
+        "targets": [
+          "032"
+        ],
+        "mode": "single"
+      },
+      "fs_024": {
+        "targets": [
+          "024"
+        ],
+        "mode": "single"
+      },
+      "fs_003-009-024": {
+        "targets": [
+          "003",
+          "009",
+          "024"
+        ],
+        "mode": "simultaneous"
+      },
+      "fs_004-029-047": {
+        "targets": [
+          "004",
+          "029",
+          "047"
+        ],
+        "mode": "simultaneous"
+      },
+      "fs_001-006-028": {
+        "targets": [
+          "001",
+          "006",
+          "028"
+        ],
+        "mode": "simultaneous"
+      }
+    },
+    "edit_seeds": [
+      17,
+      42,
+      123
+    ],
+    "oracle_seed": 17
+  },
+  "results": {
+    "dataset_level": {
+      "cells_total": 27,
+      "cell_pass_total": 27,
+      "catastrophic_total": 0,
+      "leak_total": 0,
+      "retain_broken_total": 0,
+      "cell_pass_rate": 1.0
+    },
+    "per_set_pass": {
+      "fs_003": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_006": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_001": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_028": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_032": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_024": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_003-009-024": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_004-029-047": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      },
+      "fs_001-006-028": {
+        "cells": 3,
+        "leak": 0,
+        "soft_leak": 0,
+        "suppress_incomplete": 0,
+        "retain_broken": 0,
+        "oov_garbage": 0,
+        "catastrophic": 0,
+        "cell_pass": 3
+      }
+    }
+  },
+  "elapsed_sec": 34280.2,
+  "gpu": "NVIDIA RTX 6000 Ada Generation"
+}

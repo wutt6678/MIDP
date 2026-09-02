@@ -1,0 +1,100 @@
+{
+  "dataset": "ppubench",
+  "created_utc": "2026-09-02T07:05:52Z",
+  "matrix_seed": 17,
+  "edit_seeds": [
+    17
+  ],
+  "oracle_seed": 17,
+  "selection_rules": {
+    "singles": "all 4 identity rotations",
+    "simultaneous": "seed-17 draw of 3 of the 6 pairwise 2-target stress sets"
+  },
+  "forget_semantics": "every target driven to refusal label 'Unknown' in ONE edited h per set; all other identities retain their aliases",
+  "simultaneity_guarantee": "one training run and one checkpoint per (set, seed); all targets evaluated on the same model",
+  "route": {
+    "dir": "e2c_v3_real/outputs/realdata",
+    "note": "frozen pilot route checkpoints; g is never edited or retrained by the matrix"
+  },
+  "held_out_routing": {
+    "held_out_g_accuracy": 1.0,
+    "source": "RD1 gate, commit 9bf3652"
+  },
+  "budgets": {
+    "oracle": [
+      3000,
+      200,
+      2e-05,
+      50
+    ],
+    "edit": [
+      20,
+      2,
+      2e-05,
+      50,
+      5,
+      3
+    ]
+  },
+  "sets": [
+    {
+      "targets": [
+        "001"
+      ],
+      "mode": "single",
+      "set_id": "fs_001",
+      "oracle_reuse": "e2c_v3_real/outputs/realdata/h_oracle"
+    },
+    {
+      "targets": [
+        "002"
+      ],
+      "mode": "single",
+      "set_id": "fs_002",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "003"
+      ],
+      "mode": "single",
+      "set_id": "fs_003",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "004"
+      ],
+      "mode": "single",
+      "set_id": "fs_004",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "002",
+        "003"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_002-003",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "001",
+        "003"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_001-003",
+      "oracle_reuse": null
+    },
+    {
+      "targets": [
+        "003",
+        "004"
+      ],
+      "mode": "simultaneous",
+      "set_id": "fs_003-004",
+      "oracle_reuse": null
+    }
+  ]
+}
