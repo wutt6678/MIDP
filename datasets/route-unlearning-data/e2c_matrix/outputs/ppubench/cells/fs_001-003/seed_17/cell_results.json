@@ -1,0 +1,1256 @@
+{
+  "cell_id": "fs_001-003__seed17",
+  "dataset": "ppubench",
+  "set_id": "fs_001-003",
+  "mode": "simultaneous",
+  "targets": [
+    "001",
+    "003"
+  ],
+  "seed": 17,
+  "checkpoint_sha256": "dc909fae0c62738cca81204ece93a526fbaeb86169c7e59158d0e1707dfa0bb8",
+  "post_edit_expectation_accuracy": 1.0,
+  "hard_preds": [
+    {
+      "identity_id": "001",
+      "raw": "Unknown",
+      "parsed_label": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "role": "target",
+      "expected_post_edit": "Unknown",
+      "correct_post_edit": true,
+      "old_alias_leaked": false
+    },
+    {
+      "identity_id": "002",
+      "raw": "Seri",
+      "parsed_label": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "role": "retain",
+      "expected_post_edit": "Seri",
+      "correct_post_edit": true,
+      "old_alias_leaked": false
+    },
+    {
+      "identity_id": "003",
+      "raw": "Unknown",
+      "parsed_label": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "role": "target",
+      "expected_post_edit": "Unknown",
+      "correct_post_edit": true,
+      "old_alias_leaked": false
+    },
+    {
+      "identity_id": "004",
+      "raw": "Dax",
+      "parsed_label": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "role": "retain",
+      "expected_post_edit": "Dax",
+      "correct_post_edit": true,
+      "old_alias_leaked": false
+    }
+  ],
+  "soft": {
+    "001": {
+      "p_original_alias": 7.33603041371773e-07,
+      "p_unknown": 0.9998727006874217,
+      "candidate_mass": 0.9998970736376445,
+      "other_mass": 0.00010292636235553765
+    },
+    "002": {
+      "p_original_alias": 0.9998547009995117,
+      "p_unknown": 9.61012034789791e-05,
+      "candidate_mass": 0.9999508338595999,
+      "other_mass": 4.9166140400069835e-05
+    },
+    "003": {
+      "p_original_alias": 4.5765450214831415e-06,
+      "p_unknown": 0.9998642390469163,
+      "candidate_mass": 0.9998709459277991,
+      "other_mass": 0.00012905407220087373
+    },
+    "004": {
+      "p_original_alias": 0.9998884294617357,
+      "p_unknown": 3.120127812593431e-05,
+      "candidate_mass": 0.9999196874333817,
+      "other_mass": 8.031256661833464e-05
+    }
+  },
+  "soft_log_probs": {
+    "001": {
+      "Dax": -11.625853274599649,
+      "Kael": -17.073279097676277,
+      "Oden": -14.125297770195175,
+      "Seri": -11.129793111234903,
+      "Unknown": -0.00012730741582345217
+    },
+    "002": {
+      "Dax": -17.329502250999212,
+      "Kael": -21.911836087703705,
+      "Oden": -20.269556909799576,
+      "Seri": -0.00014530955741065554,
+      "Unknown": -9.25010871887207
+    },
+    "003": {
+      "Dax": -15.129725515376776,
+      "Kael": -12.294566206634045,
+      "Oden": -17.815020725131035,
+      "Seri": -13.203938966616988,
+      "Unknown": -0.0001357701694360003
+    },
+    "004": {
+      "Dax": -0.00011157676271977834,
+      "Kael": -22.35752497985959,
+      "Oden": -22.409236647188663,
+      "Seri": -16.692337604705244,
+      "Unknown": -10.375051498413086
+    }
+  },
+  "gated_distance_to_oracle": {
+    "001": {
+      "distance": {
+        "l2": 1.4141957381957198,
+        "cosine": 0.9999992663026434,
+        "js": 0.693141351739397
+      },
+      "reliable": true,
+      "reason": null
+    },
+    "002": {
+      "distance": {
+        "l2": 0.00013593471825849556,
+        "cosine": 4.619063243005428e-09,
+        "js": 3.331603844013866e-05
+      },
+      "reliable": true,
+      "reason": null
+    },
+    "003": {
+      "distance": null,
+      "reliable": false,
+      "reason": "candidate mass too small to renormalize (model=9.999e-01, oracle=1.047e-03, threshold=1.000e-02); output lies outside the recognized label set, distance not established"
+    },
+    "004": {
+      "distance": {
+        "l2": 4.4165245220557484e-05,
+        "cosine": 4.868698777471536e-10,
+        "js": 1.0828865466368223e-05
+      },
+      "reliable": true,
+      "reason": null
+    }
+  },
+  "e2e": {
+    "n_images": 74,
+    "g_routed": 74,
+    "g_routing_failures": 0,
+    "g_code_correct": 74,
+    "e2e_unconditional_ok": 74,
+    "e2e_unconditional_acc": 1.0,
+    "e2e_conditional_ok": 74,
+    "e2e_conditional_n": 74,
+    "e2e_conditional_acc": 1.0,
+    "h_unparseable_outputs": 0,
+    "h_multi_label_ambiguous_outputs": 0,
+    "by_split": {
+      "test": {
+        "n": 12,
+        "e2e_unconditional_acc": 1.0
+      },
+      "train": {
+        "n": 62,
+        "e2e_unconditional_acc": 1.0
+      }
+    }
+  },
+  "e2e_rows": [
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "train",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "test",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "test",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "001",
+      "split": "test",
+      "pred_code": "RID_001",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "train",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "test",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "test",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "002",
+      "split": "test",
+      "pred_code": "RID_002",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Seri",
+      "pred_alias": "Seri",
+      "recognized_labels": [
+        "Seri"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "train",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "test",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "test",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "003",
+      "split": "test",
+      "pred_code": "RID_003",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Unknown",
+      "pred_alias": "Unknown",
+      "recognized_labels": [
+        "Unknown"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "train",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "test",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "test",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    },
+    {
+      "identity_id": "004",
+      "split": "test",
+      "pred_code": "RID_004",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "Dax",
+      "pred_alias": "Dax",
+      "recognized_labels": [
+        "Dax"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true
+    }
+  ],
+  "failure_flags": {
+    "retain_acc": 1.0,
+    "worst_retained_identity": "002",
+    "worst_retained_p_alias": 0.9998547009995117,
+    "hard_leaks": [],
+    "soft_leaks": [],
+    "suppress_incomplete": [],
+    "oov_garbage_ids": [],
+    "ambiguous_ids": [],
+    "leak": false,
+    "retain_broken": false,
+    "catastrophic": false,
+    "cell_pass": true
+  },
+  "per_transformation": {
+    "suppress": {
+      "001": {
+        "hard": true,
+        "p_original": 7.33603041371773e-07,
+        "p_unknown": 0.9998727006874217
+      },
+      "003": {
+        "hard": true,
+        "p_original": 4.5765450214831415e-06,
+        "p_unknown": 0.9998642390469163
+      }
+    },
+    "retain": {
+      "002": {
+        "hard": true,
+        "p_alias": 0.9998547009995117
+      },
+      "004": {
+        "hard": true,
+        "p_alias": 0.9998884294617357
+      }
+    }
+  }
+}

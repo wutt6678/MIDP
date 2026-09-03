@@ -1,0 +1,79 @@
+{
+  "experiment": "E2C-v3 multi-seed x multi-forget-set matrix (PPUBench, MLLMU-Bench, SALMUBench)",
+  "runner_commit": "2aa862a56d1933e189c89bac6678edf2b0fb3112",
+  "results_commits": {"salmu+mllmu": "b638f49", "ppubench": "this commit"},
+  "design": {
+    "edit_seeds": [17, 42, 123],
+    "oracle_seed": 17,
+    "routes": "frozen committed pilot checkpoints (g never edited or retrained)",
+    "forget_semantics": "every target driven to refusal label 'Unknown' in ONE edited h per (set, seed); all other identities retain their route aliases",
+    "simultaneity_guarantee": "one training run and one checkpoint per (set, seed); all targets evaluated on the same model; per-cell checkpoint SHA-256 recorded in cells_index.json and the run manifest",
+    "sets": {
+      "ppubench": "4 single rotations + 3 seed-17-drawn pairwise stress sets = 7 sets x 3 seeds = 21 cells; pilot oracle reused for {001} (exact exclusion match)",
+      "mllmu": "6 singles (one per profession) + 3 simultaneous 3-target sets spanning distinct professions = 9 sets x 3 seeds = 27 cells; 9 fresh leave-one-out oracles",
+      "salmu": "6 singles round-robin over (level2, level1) taxonomy groups + 3 simultaneous 3-target sets each spanning >=2 level-2 groups = 9 sets x 3 seeds = 27 cells; 9 fresh leave-one-out oracles"
+    }
+  },
+  "headline_results": {
+    "cells_total": 75,
+    "cell_pass_total": 75,
+    "cell_pass_rate": 1.0,
+    "leaks": 0,
+    "soft_leaks": 0,
+    "suppress_incomplete": 0,
+    "retain_broken_cells": 0,
+    "oov_garbage_cells": 0,
+    "catastrophic_cells": 0,
+    "worst_seed_visible": "per-seed values recorded for every set; no set passed on some seeds and failed on others (std = 0 on pass/fail criteria across all sets)"
+  },
+  "per_dataset": {
+    "ppubench": {
+      "cells": "21/21 pass",
+      "retain_acc": "1.000 (mean and min over all cells)",
+      "max_target_p_original_over_all_cells": 6.96e-06,
+      "e2e_conditional": 1.0,
+      "e2e_unconditional": 1.0,
+      "held_out_g_routing": "1.000 (frozen route, RD1 gate)",
+      "unparseable_h_outputs": 0,
+      "multi_label_outputs": 0,
+      "oracle_distance_targets_mean_l2": 1.4108,
+      "oracle_distance_retained_max_l2_example_cell": 0.000154
+    },
+    "mllmu": {
+      "cells": "27/27 pass",
+      "retain_acc": "1.000 (mean and min over all cells)",
+      "max_target_p_original_over_all_cells": 1.47e-05,
+      "e2e_conditional": 1.0,
+      "e2e_unconditional": 1.0,
+      "held_out_g_routing": null,
+      "held_out_g_routing_note": "MLLMU-Bench has ONE image per identity; image-level held-out routing does not exist (stated limitation)",
+      "qa_probes_post_accuracy_all_cells": 0.0278,
+      "qa_warning": "Native QA preservation is NOT ESTABLISHED: base model is at floor (1/36) pre-edit, so the flat probe delta (1/36 post in all 27 cells) only rules out large collateral shifts above that floor",
+      "unparseable_h_outputs": 0,
+      "multi_label_outputs": 0,
+      "oracle_distance_targets_mean_l2": 1.4098
+    },
+    "salmu": {
+      "cells": "27/27 pass",
+      "retain_acc": "1.000 (mean and min over all cells)",
+      "max_target_p_original_over_all_cells": 2.1e-07,
+      "e2e_conditional": 1.0,
+      "e2e_unconditional": "0.947-0.970 (bounded by frozen-g routing: 125/132 code-correct, 1 unroutable held-out image from the pilot)",
+      "held_out_g_routing": "0.8056 (frozen route, decode-fixed rescore; gate FAIL at 0.90 reported as pilot limitation)",
+      "unparseable_h_outputs": "0 true h-side; the committed per-cell h_unparseable_outputs=1 counts the single unrouted row where h was never queried (metric definition fixed in the runner post-run; g_routing_failures is the correct field)",
+      "multi_label_outputs": 0,
+      "oracle_distance_targets_mean_l2": 1.3029
+    }
+  },
+  "interpretation": {
+    "simultaneous_multi_target": "3-target (MLLMU/SALMU) and 2-target (PPUBench) simultaneous suppression in a single edited h matches single-target reliability exactly: 100% pass, retention 1.000, target original-label probability <= 1.5e-05, across all three seeds",
+    "seed_stability": "no seed-dependent failures: pass/fail identical across seeds 17/42/123 for every set; failure counts (leak, retain-broken, OOV, catastrophic) are zero everywhere, so no catastrophic-single-seed events exist to hide",
+    "oracle_semantics": "retained identities are distributionally indistinguishable from the leave-one-out retraining oracle over the candidate label space (L2 <= 2e-4); targets are far from the oracle (L2 ~1.3-1.4) because the oracle does not know excluded codes while the edit maps them to refusal - refusal edits are NOT oracle-equivalent, consistent with RV3/PPUBench pilots",
+    "e2e_scoping": "unconditional E2E equals conditional E2E wherever g routes all images (PPUBench, MLLMU); on SALMU the gap (1.000 vs ~0.95) is entirely frozen-g held-out routing, not the edit"
+  },
+  "checkpoint_durability": {
+    "archive_repo": "https://huggingface.co/wutt6678/e2c-v3-matrix-checkpoints",
+    "uploads": ["pilots_60e5c15/ (16 pilot checkpoints)", "matrix_salmu_2aa862a/ (38)", "matrix_mllmu_2aa862a/ (38)", "matrix_ppubench_b638f49/ (30)"],
+    "integrity": "every archived file has SHA-256 in CHECKSUMS.txt + archive_manifest.json with immutable HF resolve URI; per-cell checkpoint_sha256 in cell_results.json matches the archive entry; results are exactly reloadable"
+  }
+}

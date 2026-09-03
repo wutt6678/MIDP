@@ -598,10 +598,12 @@ def _e2e_replay(session, manifest, vocab, targets, g_rows, max_new_tokens):
         "e2e_conditional_n": len(cond),
         "e2e_conditional_acc": sum(r["outcome_ok"] for r in cond)
         / max(len(cond), 1),
+        # h-side output health counted ONLY over rows where h was actually
+        # queried (g routed); unrouted rows are g failures, tracked above
         "h_unparseable_outputs": sum(
-            1 for r in rows if r["pred_alias"] is None),
+            1 for r in routed if r["pred_alias"] is None),
         "h_multi_label_ambiguous_outputs": sum(
-            1 for r in rows if r.get("multi_label_ambiguous")),
+            1 for r in routed if r.get("multi_label_ambiguous")),
         "by_split": {},
     }
     for split in sorted({r["split"] for r in rows}):
