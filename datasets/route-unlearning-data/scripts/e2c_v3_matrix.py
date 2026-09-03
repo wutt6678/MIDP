@@ -6,8 +6,16 @@ records BOTH the training seed and the forget-set identity for every cell.
 
 Matrix design (per dataset, deterministic under --seed for set selection)
 =========================================================================
-- seeds: 17, 42, 123 (edit-training seeds; routes are the frozen, already
-  validated per-dataset checkpoints from the committed pilot runs).
+- seeds: 17, 42, 123.  SCOPE OF "MULTI-SEED": only the ASSOCIATION-EDIT
+  training varies across seeds ("three edit-training seeds"); the image
+  router g, the baseline h, the cached routing predictions, the forget-set
+  selection, and the oracle seed are FIXED.  Results are therefore
+  "stable across three edit-training seeds", NOT three fully independent
+  end-to-end training repetitions.
+- SCOPE OF TRANSFORMATIONS: this matrix evaluates REFUSAL SUPPRESSION
+  (targets -> 'Unknown') only; the granularity transformations
+  (subgroup/group/numeric/range, update) are evaluated in the CelebA and
+  dataset pilots, not here.
 - single-target sets:
     * PPUBench: ALL 4 identity rotations.
     * MLLMU: 6 identities, one per profession (balanced over professions).
@@ -49,8 +57,11 @@ is reused when its exclusion set matches exactly (PPUBench {001}).
 
 Checkpoint archival: every oracle and every cell checkpoint is archived
 under releases/ with SHA-256 and, when Hugging Face authentication is
-available, uploaded to an immutable HF repo referenced by URI + SHA-256,
-so results are exactly reloadable, not merely auditable.
+available, uploaded to an HF repo.  Archive URIs are REVISION-PINNED
+(resolve/<hf_commit_sha>/..., never resolve/main/..., which is mutable);
+the pinning revision is recorded in each archive manifest.  SHA-256
+provides integrity; the pinned revision provides immutability of the
+reference.  External archives are verified separately before publication.
 
 Phases: MX0 matrix manifest | MX1 oracles | MX2 cells | MX3 aggregate
         MX4 archive (+HF upload) | MX5 run manifest.
@@ -989,13 +1000,13 @@ def archive_checkpoints(args, out_base, matrix, oracle_results, all_cells):
              f"cells/{cell['set_id']}/seed_{cell['seed']}.safetensors",
              "cell", cell_id)
 
-    hf_ok, hf_repo = False, None
+    hf_ok, hf_repo, hf_revision = False, None, None
     try:
         from huggingface_hub import HfApi, whoami
         whoami()
         api = HfApi()
         api.create_repo(HF_ARCHIVE_REPO, repo_type="model", exist_ok=True)
-        api.upload_folder(
+        commit_url = api.upload_folder(
             folder_path=str(rel), repo_id=HF_ARCHIVE_REPO,
             path_in_repo=f"matrix_{args.dataset}_{commit[:7]}",
             repo_type="model",
@@ -1003,12 +1014,17 @@ def archive_checkpoints(args, out_base, matrix, oracle_results, all_cells):
                            f"@ {commit[:7]}")
         hf_ok = True
         hf_repo = HF_ARCHIVE_REPO
+        # upload_folder returns the commit URL; pin URIs to that revision
+        # (resolve/main is MUTABLE and must never be cited as immutable)
+        hf_revision = (commit_url.rstrip("/").rsplit("/", 1)[-1]
+                       if commit_url else None)
         for e in entries:
+            e["hf_revision"] = hf_revision
             e["hf_uri"] = (f"https://huggingface.co/{HF_ARCHIVE_REPO}/"
-                           f"resolve/main/matrix_{args.dataset}_"
+                           f"resolve/{hf_revision}/matrix_{args.dataset}_"
                            f"{commit[:7]}/{e['file']}")
-        logger.info(f"MX4: uploaded to HF {HF_ARCHIVE_REPO} "
-                    f"(immutable URIs recorded)")
+        logger.info(f"MX4: uploaded to HF {HF_ARCHIVE_REPO} revision "
+                    f"{hf_revision} (revision-pinned URIs recorded)")
     except Exception as exc:
         logger.warning(f"MX4: HF upload unavailable ({str(exc)[:120]}); "
                        f"local archive + SHA-256 retained, upload before "
@@ -1021,6 +1037,9 @@ def archive_checkpoints(args, out_base, matrix, oracle_results, all_cells):
         "release_dir": str(rel),
         "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "hf_repo": hf_repo, "hf_upload_ok": hf_ok,
+        "hf_revision": hf_revision,
+        "uri_immutability_note": "hf_uri values are pinned to hf_revision; "
+                                 "resolve/main is mutable and is never used",
         "n_files": len(entries),
         "entries": entries,
         "reload_note": "each cell_results.json checkpoint_sha256 matches the "
@@ -1077,22 +1096,26 @@ def archive_pilots(args):
                 "source_path": str(src.resolve()),
                 "local_uri": dest.resolve().as_uri(),
             })
-    hf_ok, hf_repo = False, None
+    hf_ok, hf_repo, hf_revision = False, None, None
     try:
         from huggingface_hub import HfApi, whoami
         whoami()
         api = HfApi()
         api.create_repo(HF_ARCHIVE_REPO, repo_type="model", exist_ok=True)
-        api.upload_folder(
+        commit_url = api.upload_folder(
             folder_path=str(rel), repo_id=HF_ARCHIVE_REPO,
             path_in_repo=f"pilots_{commit[:7]}", repo_type="model",
             commit_message=f"E2C-v3 pilot checkpoints @ {commit[:7]}")
         hf_ok, hf_repo = True, HF_ARCHIVE_REPO
+        hf_revision = (commit_url.rstrip("/").rsplit("/", 1)[-1]
+                       if commit_url else None)
         for e in entries:
+            e["hf_revision"] = hf_revision
             e["hf_uri"] = (f"https://huggingface.co/{HF_ARCHIVE_REPO}/"
-                           f"resolve/main/pilots_{commit[:7]}/{e['file']}")
+                           f"resolve/{hf_revision}/pilots_{commit[:7]}/"
+                           f"{e['file']}")
         logger.info(f"MX4P: uploaded {len(entries)} pilot checkpoints to "
-                    f"HF {HF_ARCHIVE_REPO}")
+                    f"HF {HF_ARCHIVE_REPO} revision {hf_revision}")
     except Exception as exc:
         logger.warning(f"MX4P: HF upload unavailable ({str(exc)[:120]}); "
                        f"local archive + SHA-256 retained")
@@ -1101,7 +1124,8 @@ def archive_pilots(args):
             f.write(f"{e['sha256']}  {e['file']}\n")
     manifest = {"kind": "pilot_archive", "git_commit": commit,
                 "release_dir": str(rel), "hf_repo": hf_repo,
-                "hf_upload_ok": hf_ok, "n_files": len(entries),
+                "hf_upload_ok": hf_ok, "hf_revision": hf_revision,
+                "n_files": len(entries),
                 "entries": entries}
     with open(rel / "archive_manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
@@ -1138,6 +1162,7 @@ def run_manifest(args, out_base, matrix, oracle_results, all_cells, summary,
         "archive": {"release_dir": archive.get("release_dir"),
                     "hf_repo": archive["hf_repo"],
                     "hf_upload_ok": archive["hf_upload_ok"],
+                    "hf_revision": archive.get("hf_revision"),
                     "n_files": archive["n_files"]},
         "matrix": {"sets": {e["set_id"]: {"targets": e["targets"],
                                           "mode": e["mode"]}
@@ -1212,12 +1237,19 @@ def main():
     commit = rv.git_commit_sha()
     dirty = rv.git_worktree_dirty()
     provenance = {
-        "commit": commit, "script_sha256": rv.script_sha256(),
+        "commit": commit,
+        # hash of the EXECUTED matrix runner itself (this file)
+        "matrix_script_sha256": rv.sha256_file(Path(__file__).resolve()),
+        # hash of the shared scoring library (rv.script_sha256 hashes the
+        # research_validity module -- keep the two explicitly separated)
+        "shared_scoring_script_sha256": rv.script_sha256(),
         "dirty": dirty, "clean_required": not args.smoke,
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     logger.info(f"Provenance: commit={commit} "
-                f"script_sha256={provenance['script_sha256'][:12]} "
+                f"matrix_script_sha256={provenance['matrix_script_sha256'][:12]} "
+                f"shared_scoring_script_sha256="
+                f"{provenance['shared_scoring_script_sha256'][:12]} "
                 f"dirty={dirty} clean_required={not args.smoke}")
     if dirty and not args.smoke:
         raise RuntimeError(
@@ -1262,7 +1294,7 @@ def main():
     if args.phase in ("all", "MX3") and all_cells:
         summary = aggregate(args, out_base, matrix, all_cells)
     archive = {"entries": [], "hf_repo": None, "hf_upload_ok": False,
-               "n_files": 0, "release_dir": None}
+               "n_files": 0, "release_dir": None, "hf_revision": None}
     if args.phase in ("all", "MX4") and not args.smoke and all_cells:
         archive = archive_checkpoints(args, out_base, matrix, oracle_results,
                                       all_cells)

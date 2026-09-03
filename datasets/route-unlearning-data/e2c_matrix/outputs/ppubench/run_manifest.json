@@ -2,10 +2,12 @@
   "experiment": "e2c_v3_matrix_ppubench",
   "provenance": {
     "commit": "2aa862a56d1933e189c89bac6678edf2b0fb3112",
-    "script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "matrix_script_sha256": "7bce1a60e2f86d9562add80c3936114cba6661af1c9bfd8fb07b30a49c405178",
+    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
     "dirty": false,
     "clean_required": true,
-    "started_utc": "2026-09-02T16:54:01Z"
+    "started_utc": "2026-09-02T16:54:01Z",
+    "provenance_correction": "Corrected 2026-09-03: the original 'script_sha256' field was the hash of the shared scoring library scripts/e2c_v3_research_validity.py (rv.script_sha256()), not of the executed matrix runner. The executed runner is scripts/e2c_v3_matrix.py at commit 2aa862a, sha256 7bce1a60e2f86d9562add80c3936114cba6661af1c9bfd8fb07b30a49c405178 (recomputed from the git object; the runner at e6d530a after the SALMU counting fix hashes to 514607c96f29133964bbad1dde33f08ad470ef61d791370431fd61bc01face60). Experiment identity remains recoverable via commit + clean-worktree binding."
   },
   "inputs_sha256": {
     "dataset_manifest": "be45a797022e822049fb6f672725605d9a1c12889d5c0253a01d5a0b2e30c161",
