@@ -156,7 +156,7 @@ def build_or_verify(ds, args):
     if ds == "salmu":
         with open(SALMU_MANIFEST) as f:
             sm = json.load(f)
-        matrix, ctx = gx.build_salmu_matrix(sm)
+        matrix, _builder_ctx = gx.build_salmu_matrix(sm)
         path = MANIFEST_DIR / "matrix_salmu.json"
     else:
         nm = gx.build_numeric_manifest()
@@ -172,13 +172,8 @@ def build_or_verify(ds, args):
             with open(nm_path, "w") as f:
                 json.dump(nm, f, indent=2)
         matrix = gx.build_numeric_matrix(nm)
-        ctx = {"kind": "numeric", "identity_ids": nm["identity_ids"],
-               "baseline_alias_of": nm["alias_of"], "schema": nm["schema"],
-               "vocab": sorted(set(nm["alias_of"].values())
-                               | {a["target"] for e in matrix["sets"]
-                                  for a in e["assignments"].values()}
-                               | {gx.DELETED_LABEL})}
         path = MANIFEST_DIR / "matrix_celeba_numeric.json"
+    ctx = dataset_ctx(ds, matrix)
 
     # GX0 validation (hard gate before anything else)
     issues, notes = [], {}
@@ -225,7 +220,8 @@ def build_or_verify(ds, args):
         "hard_collisions": collisions["hard_collisions"],
         "control_notes": notes,
         "pass_criteria": gx.PASS_CRITERIA,
-        "validated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        # deterministic bytes: NO timestamp -- this file is committed and
+        # must not dirty the tracked worktree on re-runs
     }
     return matrix, ctx, validation
 
