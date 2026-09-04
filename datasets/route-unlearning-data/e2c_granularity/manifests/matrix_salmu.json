@@ -1,0 +1,1630 @@
+{
+  "dataset": "salmu",
+  "kind": "taxonomic",
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "vocab": [
+    "Unknown",
+    "aid worker",
+    "animal technologist",
+    "broadcast presenter",
+    "careers information officer",
+    "communications professional",
+    "design professional",
+    "education",
+    "educational psychologist",
+    "engineering",
+    "engineering professional",
+    "fashion/clothing designer",
+    "forensic psychologist",
+    "government",
+    "healthcare",
+    "higher education lecturer",
+    "higher-education professional",
+    "information professional",
+    "laboratory scientist",
+    "legal",
+    "legal professional",
+    "licensed conveyancer",
+    "lobbyist",
+    "media",
+    "media professional",
+    "petroleum engineer",
+    "science",
+    "social-services professional",
+    "textile designer",
+    "therapy professional"
+  ],
+  "dag": {
+    "fashion/clothing designer": [
+      "design professional"
+    ],
+    "design professional": [
+      "media"
+    ],
+    "forensic psychologist": [
+      "therapy professional"
+    ],
+    "therapy professional": [
+      "healthcare"
+    ],
+    "educational psychologist": [
+      "therapy professional"
+    ],
+    "animal technologist": [
+      "laboratory scientist"
+    ],
+    "laboratory scientist": [
+      "science"
+    ],
+    "careers information officer": [
+      "information professional"
+    ],
+    "information professional": [
+      "media"
+    ],
+    "petroleum engineer": [
+      "engineering professional"
+    ],
+    "engineering professional": [
+      "engineering"
+    ],
+    "lobbyist": [
+      "communications professional"
+    ],
+    "communications professional": [
+      "government"
+    ],
+    "textile designer": [
+      "design professional"
+    ],
+    "aid worker": [
+      "social-services professional"
+    ],
+    "social-services professional": [
+      "government"
+    ],
+    "broadcast presenter": [
+      "media professional"
+    ],
+    "media professional": [
+      "media"
+    ],
+    "higher education lecturer": [
+      "higher-education professional"
+    ],
+    "higher-education professional": [
+      "education"
+    ],
+    "licensed conveyancer": [
+      "legal professional"
+    ],
+    "legal professional": [
+      "legal"
+    ]
+  },
+  "groups": {
+    "A_level1": [
+      "00036363",
+      "00107854",
+      "00040875",
+      "00060576",
+      "00082704",
+      "00110390"
+    ],
+    "B_level2": [
+      "00039880",
+      "00004371",
+      "00116450",
+      "00102677",
+      "00106148",
+      "00041286"
+    ]
+  },
+  "sets": [
+    {
+      "set_id": "gx_sal_s_L1_00036363",
+      "mode": "single_level1",
+      "assignments": {
+        "00036363": {
+          "operation": "taxonomic",
+          "source": "higher education lecturer",
+          "target": "higher-education professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00036363": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00036363": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L1_00107854",
+      "mode": "single_level1",
+      "assignments": {
+        "00107854": {
+          "operation": "taxonomic",
+          "source": "licensed conveyancer",
+          "target": "legal professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00107854": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00107854": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L1_00040875",
+      "mode": "single_level1",
+      "assignments": {
+        "00040875": {
+          "operation": "taxonomic",
+          "source": "lobbyist",
+          "target": "communications professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00040875": {
+          "sibling": [],
+          "cousin": [
+            "00116450"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390"
+          ]
+        }
+      },
+      "control_notes": {
+        "00040875": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L1_00060576",
+      "mode": "single_level1",
+      "assignments": {
+        "00060576": {
+          "operation": "taxonomic",
+          "source": "forensic psychologist",
+          "target": "therapy professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00060576": {
+          "sibling": [
+            "00102677"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L1_00082704",
+      "mode": "single_level1",
+      "assignments": {
+        "00082704": {
+          "operation": "taxonomic",
+          "source": "textile designer",
+          "target": "design professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00082704": {
+          "sibling": [
+            "00106148"
+          ],
+          "cousin": [
+            "00041286",
+            "00110390"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00060576",
+            "00102677",
+            "00107854",
+            "00116450"
+          ]
+        }
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L1_00110390",
+      "mode": "single_level1",
+      "assignments": {
+        "00110390": {
+          "operation": "taxonomic",
+          "source": "careers information officer",
+          "target": "information professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00110390": {
+          "sibling": [],
+          "cousin": [
+            "00041286",
+            "00082704",
+            "00106148"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00060576",
+            "00102677",
+            "00107854",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00110390": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L2_00039880",
+      "mode": "single_level2",
+      "assignments": {
+        "00039880": {
+          "operation": "taxonomic",
+          "source": "petroleum engineer",
+          "target": "engineering",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00039880": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00039880": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L2_00004371",
+      "mode": "single_level2",
+      "assignments": {
+        "00004371": {
+          "operation": "taxonomic",
+          "source": "animal technologist",
+          "target": "science",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00004371": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00004371": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L2_00116450",
+      "mode": "single_level2",
+      "assignments": {
+        "00116450": {
+          "operation": "taxonomic",
+          "source": "aid worker",
+          "target": "government",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00116450": {
+          "sibling": [],
+          "cousin": [
+            "00040875"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390"
+          ]
+        }
+      },
+      "control_notes": {
+        "00116450": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L2_00102677",
+      "mode": "single_level2",
+      "assignments": {
+        "00102677": {
+          "operation": "taxonomic",
+          "source": "educational psychologist",
+          "target": "healthcare",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00102677": {
+          "sibling": [
+            "00060576"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L2_00106148",
+      "mode": "single_level2",
+      "assignments": {
+        "00106148": {
+          "operation": "taxonomic",
+          "source": "fashion/clothing designer",
+          "target": "media",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00106148": {
+          "sibling": [
+            "00082704"
+          ],
+          "cousin": [
+            "00041286",
+            "00110390"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00060576",
+            "00102677",
+            "00107854",
+            "00116450"
+          ]
+        }
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L2_00041286",
+      "mode": "single_level2",
+      "assignments": {
+        "00041286": {
+          "operation": "taxonomic",
+          "source": "broadcast presenter",
+          "target": "media",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00041286": {
+          "sibling": [],
+          "cousin": [
+            "00082704",
+            "00106148",
+            "00110390"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00060576",
+            "00102677",
+            "00107854",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00041286": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_sim_L1_0",
+      "mode": "simultaneous_same_depth_l1",
+      "assignments": {
+        "00036363": {
+          "operation": "taxonomic",
+          "source": "higher education lecturer",
+          "target": "higher-education professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00107854": {
+          "operation": "taxonomic",
+          "source": "licensed conveyancer",
+          "target": "legal professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00040875": {
+          "operation": "taxonomic",
+          "source": "lobbyist",
+          "target": "communications professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00082704",
+        "00116450",
+        "00041286"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00107854": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00039880",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00040875": {
+          "sibling": [],
+          "cousin": [
+            "00116450"
+          ],
+          "unrelated": [
+            "00004371",
+            "00039880",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00110390"
+          ]
+        },
+        "00036363": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00039880",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00107854": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00040875": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00036363": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_sim_L1_1",
+      "mode": "simultaneous_same_depth_l1",
+      "assignments": {
+        "00060576": {
+          "operation": "taxonomic",
+          "source": "forensic psychologist",
+          "target": "therapy professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00082704": {
+          "operation": "taxonomic",
+          "source": "textile designer",
+          "target": "design professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00110390": {
+          "operation": "taxonomic",
+          "source": "careers information officer",
+          "target": "information professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00102677",
+        "00004371",
+        "00039880",
+        "00040875",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00060576": {
+          "sibling": [
+            "00102677"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00106148",
+            "00107854",
+            "00116450"
+          ]
+        },
+        "00082704": {
+          "sibling": [
+            "00106148"
+          ],
+          "cousin": [
+            "00041286"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00102677",
+            "00107854",
+            "00116450"
+          ]
+        },
+        "00110390": {
+          "sibling": [],
+          "cousin": [
+            "00041286",
+            "00106148"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00102677",
+            "00107854",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00110390": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_sim_L1_2",
+      "mode": "simultaneous_same_depth_l1",
+      "assignments": {
+        "00036363": {
+          "operation": "taxonomic",
+          "source": "higher education lecturer",
+          "target": "higher-education professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00060576": {
+          "operation": "taxonomic",
+          "source": "forensic psychologist",
+          "target": "therapy professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00082704": {
+          "operation": "taxonomic",
+          "source": "textile designer",
+          "target": "design professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00116450",
+        "00041286",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00060576": {
+          "sibling": [
+            "00102677"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00082704": {
+          "sibling": [
+            "00106148"
+          ],
+          "cousin": [
+            "00041286",
+            "00110390"
+          ],
+          "unrelated": [
+            "00004371",
+            "00039880",
+            "00040875",
+            "00102677",
+            "00107854",
+            "00116450"
+          ]
+        },
+        "00036363": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00036363": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_sim_L2_0",
+      "mode": "simultaneous_same_depth_l2",
+      "assignments": {
+        "00039880": {
+          "operation": "taxonomic",
+          "source": "petroleum engineer",
+          "target": "engineering",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00004371": {
+          "operation": "taxonomic",
+          "source": "animal technologist",
+          "target": "science",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00116450": {
+          "operation": "taxonomic",
+          "source": "aid worker",
+          "target": "government",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00110390",
+        "00040875",
+        "00082704",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00116450": {
+          "sibling": [],
+          "cousin": [
+            "00040875"
+          ],
+          "unrelated": [
+            "00036363",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390"
+          ]
+        },
+        "00004371": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00036363",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390"
+          ]
+        },
+        "00039880": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00036363",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390"
+          ]
+        }
+      },
+      "control_notes": {
+        "00116450": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00004371": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00039880": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_sim_L2_1",
+      "mode": "simultaneous_same_depth_l2",
+      "assignments": {
+        "00102677": {
+          "operation": "taxonomic",
+          "source": "educational psychologist",
+          "target": "healthcare",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00106148": {
+          "operation": "taxonomic",
+          "source": "fashion/clothing designer",
+          "target": "media",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00041286": {
+          "operation": "taxonomic",
+          "source": "broadcast presenter",
+          "target": "media",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00060576",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00102677": {
+          "sibling": [
+            "00060576"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00082704",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00106148": {
+          "sibling": [
+            "00082704"
+          ],
+          "cousin": [
+            "00110390"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00060576",
+            "00107854",
+            "00116450"
+          ]
+        },
+        "00041286": {
+          "sibling": [],
+          "cousin": [
+            "00082704",
+            "00110390"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00060576",
+            "00107854",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00041286": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_sim_L2_2",
+      "mode": "simultaneous_same_depth_l2",
+      "assignments": {
+        "00039880": {
+          "operation": "taxonomic",
+          "source": "petroleum engineer",
+          "target": "engineering",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00102677": {
+          "operation": "taxonomic",
+          "source": "educational psychologist",
+          "target": "healthcare",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00106148": {
+          "operation": "taxonomic",
+          "source": "fashion/clothing designer",
+          "target": "media",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "retain_ids": [
+        "00060576",
+        "00004371",
+        "00110390",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00102677": {
+          "sibling": [
+            "00060576"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00106148": {
+          "sibling": [
+            "00082704"
+          ],
+          "cousin": [
+            "00041286",
+            "00110390"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00040875",
+            "00060576",
+            "00107854",
+            "00116450"
+          ]
+        },
+        "00039880": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00039880": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_mix_0",
+      "mode": "simultaneous_mixed_depth",
+      "assignments": {
+        "00036363": {
+          "operation": "taxonomic",
+          "source": "higher education lecturer",
+          "target": "higher-education professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00039880": {
+          "operation": "taxonomic",
+          "source": "petroleum engineer",
+          "target": "engineering",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00060576": {
+          "operation": "refusal",
+          "source": "forensic psychologist",
+          "target": "Unknown",
+          "source_depth": 0,
+          "target_depth": null
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00060576": {
+          "sibling": [
+            "00102677"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00036363": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00039880": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00036363": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00039880": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_mix_1",
+      "mode": "simultaneous_mixed_depth",
+      "assignments": {
+        "00107854": {
+          "operation": "taxonomic",
+          "source": "licensed conveyancer",
+          "target": "legal professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00004371": {
+          "operation": "taxonomic",
+          "source": "animal technologist",
+          "target": "science",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00082704": {
+          "operation": "refusal",
+          "source": "textile designer",
+          "target": "Unknown",
+          "source_depth": 0,
+          "target_depth": null
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00116450",
+        "00041286",
+        "00036363"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00107854": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00102677",
+            "00106148",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00004371": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00102677",
+            "00106148",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00082704": {
+          "sibling": [
+            "00106148"
+          ],
+          "cousin": [
+            "00041286",
+            "00110390"
+          ],
+          "unrelated": [
+            "00036363",
+            "00039880",
+            "00040875",
+            "00060576",
+            "00102677",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00107854": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00004371": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_sal_mix_2",
+      "mode": "simultaneous_mixed_depth",
+      "assignments": {
+        "00040875": {
+          "operation": "taxonomic",
+          "source": "lobbyist",
+          "target": "communications professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00116450": {
+          "operation": "taxonomic",
+          "source": "aid worker",
+          "target": "government",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00110390": {
+          "operation": "refusal",
+          "source": "careers information officer",
+          "target": "Unknown",
+          "source_depth": 0,
+          "target_depth": null
+        }
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00039880",
+        "00082704",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "00110390": {
+          "sibling": [],
+          "cousin": [
+            "00041286",
+            "00082704",
+            "00106148"
+          ],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00060576",
+            "00102677",
+            "00107854"
+          ]
+        },
+        "00116450": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854"
+          ]
+        },
+        "00040875": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854"
+          ]
+        }
+      },
+      "control_notes": {
+        "00110390": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00116450": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00040875": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    }
+  ],
+  "n_sets": 21,
+  "n_cells": 63
+}

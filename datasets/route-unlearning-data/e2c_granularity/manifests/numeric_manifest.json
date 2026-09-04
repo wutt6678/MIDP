@@ -1,0 +1,714 @@
+{
+  "dataset": "celeba_numeric_profiles",
+  "level": "association (C->Y); no image router -- CelebA g redesign is a separate future task",
+  "schema": {
+    "years_experience": {
+      "unit": "years",
+      "ordered": true,
+      "domain": [
+        0,
+        39
+      ],
+      "narrow": {
+        "width": 5,
+        "anchor": 0
+      },
+      "broad": {
+        "width": 10,
+        "anchor": 0
+      },
+      "category": {
+        "entry-level": [
+          0,
+          19
+        ],
+        "experienced": [
+          20,
+          39
+        ]
+      },
+      "rounding": {
+        "to": 5,
+        "ties": "up"
+      },
+      "label_format": {
+        "exact": "{v} {unit}",
+        "bin": "{a}\u2013{b} {unit}",
+        "category": "{c}"
+      },
+      "binning_policy": "fixed_before_experiments"
+    },
+    "activity_count": {
+      "unit": "activities",
+      "ordered": true,
+      "domain": [
+        0,
+        999
+      ],
+      "narrow": {
+        "width": 10,
+        "anchor": 0
+      },
+      "broad": {
+        "width": 100,
+        "anchor": 0
+      },
+      "category": {
+        "low": [
+          0,
+          332
+        ],
+        "moderate": [
+          333,
+          665
+        ],
+        "high": [
+          666,
+          999
+        ]
+      },
+      "rounding": {
+        "to": 10,
+        "ties": "up"
+      },
+      "label_format": {
+        "exact": "{v} {unit}",
+        "bin": "{a}\u2013{b} {unit}",
+        "category": "{c}"
+      },
+      "binning_policy": "fixed_before_experiments"
+    }
+  },
+  "identity_ids": [
+    "00",
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23"
+  ],
+  "code_of": {
+    "00": "GRN_00",
+    "01": "GRN_01",
+    "02": "GRN_02",
+    "03": "GRN_03",
+    "04": "GRN_04",
+    "05": "GRN_05",
+    "06": "GRN_06",
+    "07": "GRN_07",
+    "08": "GRN_08",
+    "09": "GRN_09",
+    "10": "GRN_10",
+    "11": "GRN_11",
+    "12": "GRN_12",
+    "13": "GRN_13",
+    "14": "GRN_14",
+    "15": "GRN_15",
+    "16": "GRN_16",
+    "17": "GRN_17",
+    "18": "GRN_18",
+    "19": "GRN_19",
+    "20": "GRN_20",
+    "21": "GRN_21",
+    "22": "GRN_22",
+    "23": "GRN_23"
+  },
+  "alias_of": {
+    "00": "14 years",
+    "01": "15 years",
+    "02": "19 years",
+    "03": "20 years",
+    "04": "17 years",
+    "05": "38 years",
+    "06": "0 years",
+    "07": "12 years",
+    "08": "13 years",
+    "09": "30\u201334 years",
+    "10": "5\u20139 years",
+    "11": "35\u201339 years",
+    "12": "126 activities",
+    "13": "120 activities",
+    "14": "129 activities",
+    "15": "199 activities",
+    "16": "200 activities",
+    "17": "977 activities",
+    "18": "125 activities",
+    "19": "42 activities",
+    "20": "348 activities",
+    "21": "260\u2013269 activities",
+    "22": "990\u2013999 activities",
+    "23": "0\u20139 activities"
+  },
+  "profiles": {
+    "00": {
+      "profile_id": "Y01",
+      "field": "years_experience",
+      "exact_value": 14,
+      "baseline_kind": "exact",
+      "rationale": "dense-region interior",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        10,
+        14
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level"
+    },
+    "01": {
+      "profile_id": "Y02",
+      "field": "years_experience",
+      "exact_value": 15,
+      "baseline_kind": "exact",
+      "rationale": "narrow_lower of 15-19",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level"
+    },
+    "02": {
+      "profile_id": "Y03",
+      "field": "years_experience",
+      "exact_value": 19,
+      "baseline_kind": "exact",
+      "rationale": "narrow_upper 15-19 AND broad_upper 10-19; adjacent to 20",
+      "unit": "years",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_upper",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 20,
+      "category": "entry-level"
+    },
+    "03": {
+      "profile_id": "Y04",
+      "field": "years_experience",
+      "exact_value": 20,
+      "baseline_kind": "exact",
+      "rationale": "broad_lower 20-29; adjacent across boundary from 19",
+      "unit": "years",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_lower",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        20,
+        24
+      ],
+      "broad_bin": [
+        20,
+        29
+      ],
+      "rounded": 20,
+      "category": "experienced"
+    },
+    "04": {
+      "profile_id": "Y05",
+      "field": "years_experience",
+      "exact_value": 17,
+      "baseline_kind": "exact",
+      "rationale": "interior of 15-19 / 10-19",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level"
+    },
+    "05": {
+      "profile_id": "Y06",
+      "field": "years_experience",
+      "exact_value": 38,
+      "baseline_kind": "exact",
+      "rationale": "sparse region near domain top",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        35,
+        39
+      ],
+      "broad_bin": [
+        30,
+        39
+      ],
+      "rounded": 40,
+      "category": "experienced"
+    },
+    "06": {
+      "profile_id": "Y07",
+      "field": "years_experience",
+      "exact_value": 0,
+      "baseline_kind": "exact",
+      "rationale": "domain lower edge",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_lower",
+        "narrow_lower",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        0,
+        4
+      ],
+      "broad_bin": [
+        0,
+        9
+      ],
+      "rounded": 0,
+      "category": "entry-level"
+    },
+    "07": {
+      "profile_id": "Y08",
+      "field": "years_experience",
+      "exact_value": 12,
+      "baseline_kind": "exact",
+      "rationale": "rounds down (12->10)",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        10,
+        14
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 10,
+      "category": "entry-level"
+    },
+    "08": {
+      "profile_id": "Y09",
+      "field": "years_experience",
+      "exact_value": 13,
+      "baseline_kind": "exact",
+      "rationale": "rounds up (13->15)",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        10,
+        14
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level"
+    },
+    "09": {
+      "profile_id": "Y10",
+      "field": "years_experience",
+      "exact_value": 34,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source: 30-34 -> 30-39",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        30,
+        34
+      ],
+      "broad_bin": [
+        30,
+        39
+      ],
+      "rounded": 35,
+      "category": "experienced"
+    },
+    "10": {
+      "profile_id": "Y11",
+      "field": "years_experience",
+      "exact_value": 7,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source: 5-9 -> 0-9",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        5,
+        9
+      ],
+      "broad_bin": [
+        0,
+        9
+      ],
+      "rounded": 5,
+      "category": "entry-level"
+    },
+    "11": {
+      "profile_id": "Y12",
+      "field": "years_experience",
+      "exact_value": 39,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source at domain top: 35-39 -> 30-39",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_upper",
+        "narrow_upper",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        35,
+        39
+      ],
+      "broad_bin": [
+        30,
+        39
+      ],
+      "rounded": 40,
+      "category": "experienced"
+    },
+    "12": {
+      "profile_id": "A01",
+      "field": "activity_count",
+      "exact_value": 126,
+      "baseline_kind": "exact",
+      "rationale": "dense interior 120-129",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 130,
+      "category": "low"
+    },
+    "13": {
+      "profile_id": "A02",
+      "field": "activity_count",
+      "exact_value": 120,
+      "baseline_kind": "exact",
+      "rationale": "narrow_lower of 120-129",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 120,
+      "category": "low"
+    },
+    "14": {
+      "profile_id": "A03",
+      "field": "activity_count",
+      "exact_value": 129,
+      "baseline_kind": "exact",
+      "rationale": "narrow_upper of 120-129",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 130,
+      "category": "low"
+    },
+    "15": {
+      "profile_id": "A04",
+      "field": "activity_count",
+      "exact_value": 199,
+      "baseline_kind": "exact",
+      "rationale": "broad_upper 100-199; adjacent to 200",
+      "unit": "activities",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_upper",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        190,
+        199
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 200,
+      "category": "low"
+    },
+    "16": {
+      "profile_id": "A05",
+      "field": "activity_count",
+      "exact_value": 200,
+      "baseline_kind": "exact",
+      "rationale": "broad_lower 200-299; adjacent across boundary from 199",
+      "unit": "activities",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_lower",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        200,
+        209
+      ],
+      "broad_bin": [
+        200,
+        299
+      ],
+      "rounded": 200,
+      "category": "low"
+    },
+    "17": {
+      "profile_id": "A06",
+      "field": "activity_count",
+      "exact_value": 977,
+      "baseline_kind": "exact",
+      "rationale": "sparse region near domain top",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        970,
+        979
+      ],
+      "broad_bin": [
+        900,
+        999
+      ],
+      "rounded": 980,
+      "category": "high"
+    },
+    "18": {
+      "profile_id": "A07",
+      "field": "activity_count",
+      "exact_value": 125,
+      "baseline_kind": "exact",
+      "rationale": "rounding ties-up case (125->130)",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 130,
+      "category": "low"
+    },
+    "19": {
+      "profile_id": "A08",
+      "field": "activity_count",
+      "exact_value": 42,
+      "baseline_kind": "exact",
+      "rationale": "interior 40-49 / 0-99",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        40,
+        49
+      ],
+      "broad_bin": [
+        0,
+        99
+      ],
+      "rounded": 40,
+      "category": "low"
+    },
+    "20": {
+      "profile_id": "A09",
+      "field": "activity_count",
+      "exact_value": 348,
+      "baseline_kind": "exact",
+      "rationale": "mid-domain interior 340-349",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        340,
+        349
+      ],
+      "broad_bin": [
+        300,
+        399
+      ],
+      "rounded": 350,
+      "category": "moderate"
+    },
+    "21": {
+      "profile_id": "A10",
+      "field": "activity_count",
+      "exact_value": 264,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source: 260-269 -> 200-299",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        260,
+        269
+      ],
+      "broad_bin": [
+        200,
+        299
+      ],
+      "rounded": 260,
+      "category": "low"
+    },
+    "22": {
+      "profile_id": "A11",
+      "field": "activity_count",
+      "exact_value": 995,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad at domain top: 990-999 -> 900-999",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        990,
+        999
+      ],
+      "broad_bin": [
+        900,
+        999
+      ],
+      "rounded": 1000,
+      "category": "high"
+    },
+    "23": {
+      "profile_id": "A12",
+      "field": "activity_count",
+      "exact_value": 3,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad at domain bottom: 0-9 -> 0-99",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        0,
+        9
+      ],
+      "broad_bin": [
+        0,
+        99
+      ],
+      "rounded": 0,
+      "category": "low"
+    }
+  },
+  "deleted_label": "Unknown",
+  "pass_criteria": {
+    "strict_expected_accuracy": 1.0,
+    "min_target_p_desired": 0.9,
+    "max_target_p_source": 0.01,
+    "min_candidate_mass": 0.99,
+    "retained_strict_accuracy": 1.0,
+    "sibling_strict_accuracy": 1.0,
+    "max_wrong_branch_rate": 0.0,
+    "max_unparseable_outputs": 0,
+    "max_multi_label_outputs": 0,
+    "e2e_policy": "unconditional E2E is NOT a pass requirement where the frozen route failed its held-out gate; association and routing conclusions are gated separately"
+  }
+}
