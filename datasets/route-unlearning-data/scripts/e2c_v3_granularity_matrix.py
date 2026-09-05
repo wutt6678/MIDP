@@ -362,8 +362,9 @@ def fresh_reinit_lora(named_params, seed):
 
 
 def session_reset_fresh(session):
+    # mx.ModelSession exposes the live PeftModel as .model
     n_a, n_b = fresh_reinit_lora(
-        list(session.adapter_model.named_parameters()), ORACLE_SEED)
+        list(session.model.named_parameters()), ORACLE_SEED)
     logger.info("reset_fresh(): LoRA re-initialized fresh "
                 "(A kaiming / B zeros, seed %d; %d/%d tensors)",
                 ORACLE_SEED, n_a, n_b)

@@ -137,12 +137,12 @@ class _StubSessionFresh:
     def __init__(self):
         self.a = torch.nn.Parameter(torch.full((2, 2), 0.4))
         self.b = torch.nn.Parameter(torch.full((2, 2), 0.9))
-        self.adapter_model = _StubAdapterModel(
+        # mx.ModelSession exposes the live PeftModel as .model
+        self.model = _StubAdapterModel(
             [("l.lora_A.w", self.a), ("l.lora_B.w", self.b)])
         # attributes consumed by the (monkeypatched) training helpers
         self.adapter = object()
         self.processor = object()
-        self.model = object()
 
 
 def test_session_reset_fresh_overwrites_trained_state():
@@ -154,8 +154,7 @@ def test_session_reset_fresh_overwrites_trained_state():
 
 def test_session_reset_fresh_fail_closed_without_lora():
     class Empty:
-        adapter_model = _StubAdapterModel([("dense.weight",
-                                            torch.zeros(2, 2))])
+        model = _StubAdapterModel([("dense.weight", torch.zeros(2, 2))])
     with pytest.raises(RuntimeError, match="unexpected LoRA layout"):
         gxm.session_reset_fresh(Empty())
 
