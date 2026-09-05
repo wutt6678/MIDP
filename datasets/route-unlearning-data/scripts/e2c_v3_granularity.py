@@ -408,7 +408,9 @@ def validate_set(entry, ctx):
                 issues.append(f"{iid}: numeric validity: {why}")
     # sibling specificity: retained siblings keep their own labels
     if ctx["kind"] == "taxonomic":
-        for iid in targets:
+        # sorted(): set iteration order varies with PYTHONHASHSEED and made
+        # the committed gx0_validation.json bytes non-deterministic
+        for iid in sorted(targets):
             if ctx["hierarchy_of"].get(iid) is None:
                 continue
             ctl = sibling_controls(iid, ctx["hierarchy_of"], targets)
