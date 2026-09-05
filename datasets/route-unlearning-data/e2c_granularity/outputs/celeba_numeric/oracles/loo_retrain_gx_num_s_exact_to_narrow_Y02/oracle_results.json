@@ -1,0 +1,17 @@
+{
+  "family": "loo_retrain",
+  "init": "fresh_lora",
+  "protocol": {
+    "steps": 3000,
+    "warmup": 200,
+    "lr": 2e-05,
+    "repeat": 50,
+    "target_boost": 0,
+    "seed": 17
+  },
+  "set_id": "gx_num_s_exact_to_narrow_Y02",
+  "strict_fit_scope": "retained_only(targets_never_seen)",
+  "strict_all_expected": 1.0,
+  "min_candidate_mass": 0.9040176200755554,
+  "fit_ok": true
+}

@@ -1,24 +1,60 @@
 {
   "gx_num_s_exact_to_narrow_Y02": {
     "set_id": "gx_num_s_exact_to_narrow_Y02",
-    "matched": {
-      "mode": "trained",
+    "matched_finetune": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/matched_gx_num_s_exact_to_narrow_Y02",
+      "mode": "cached",
       "sha256": "2d03bcadff029d4d5b0ff6eb497bf012bf99383c5a483fa227e22c9f72e960ff"
     },
-    "loo": {
-      "mode": "null",
-      "reason": "numeric experiment: deletion reference not applicable to granularity policy; matched oracle is the reference"
+    "loo_finetune": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/loo_gx_num_s_exact_to_narrow_Y02",
+      "mode": "trained",
+      "sha256": "b1db730fa4a07792580a738ed4ecb284f987d147026943773a0927e4bcf7f733"
+    },
+    "matched_retrain": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/matched_retrain_gx_num_s_exact_to_narrow_Y02",
+      "sha256": "1bb73a106778d26d1160ffebf9144fff0c546dfe30ae8dd68a58ed661592f6d7",
+      "mode": "trained_fresh",
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9999604042574824,
+      "fit_ok": true
+    },
+    "loo_retrain": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/loo_retrain_gx_num_s_exact_to_narrow_Y02",
+      "sha256": "c7488d62dafd50d80dce06cebd163d8cb9ed557d4a082f2be6aa36b502e3524a",
+      "mode": "trained_fresh",
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9040176200755554,
+      "fit_ok": true
     }
   },
   "gx_num_s_exact_to_broad_Y04": {
     "set_id": "gx_num_s_exact_to_broad_Y04",
-    "matched": {
-      "mode": "trained",
+    "matched_finetune": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/matched_gx_num_s_exact_to_broad_Y04",
+      "mode": "cached",
       "sha256": "1a592db1e1a7b9e4bdd499a55864407de3f34fb389e593a983cb38159bce7bb4"
     },
-    "loo": {
-      "mode": "null",
-      "reason": "numeric experiment: deletion reference not applicable to granularity policy; matched oracle is the reference"
+    "loo_finetune": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/loo_gx_num_s_exact_to_broad_Y04",
+      "mode": "trained",
+      "sha256": "db53561ff9424cec7f530b5b8983bd06a5728e53da7dc32ee329d3f126a034b4"
+    },
+    "matched_retrain": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/matched_retrain_gx_num_s_exact_to_broad_Y04",
+      "sha256": "707db381e60cc372b92fc4966c1fe11daae3025e9981a7a5f8aaa1877834cbe1",
+      "mode": "trained_fresh",
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9999748653681005,
+      "fit_ok": true
+    },
+    "loo_retrain": {
+      "dir": "e2c_granularity/outputs/celeba_numeric/oracles/loo_retrain_gx_num_s_exact_to_broad_Y04",
+      "sha256": "9c525980626523390db65555dbb6f82eaa1a7429b95552610f3166ca72832fd9",
+      "mode": "trained_fresh",
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9997134232103534,
+      "fit_ok": true
     }
   }
 }
