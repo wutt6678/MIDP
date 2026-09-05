@@ -1,5 +1,14 @@
 {
   "dataset": "salmu",
+  "configured_full_seeds": [
+    17,
+    42,
+    123
+  ],
+  "executed_seeds": [
+    17
+  ],
+  "run_stage": "G3_single_seed_pilot(+G3.1_reevaluation)",
   "edit_seeds": [
     17,
     42,
@@ -7,8 +16,113 @@
   ],
   "n_sets": 21,
   "cells_evaluated": 5,
+  "full_matrix_cells_expected": 63,
   "cells_expected": 63,
   "cell_pass_total": 5,
+  "oracle_family_definitions": {
+    "matched_finetune": "trained baseline h init; transformed full mapping (continued fine-tuning reference)",
+    "loo_finetune": "trained baseline h init; retained mapping only (deletion-as-fine-tuning reference)",
+    "matched_retrain": "FRESH base + fresh LoRA; transformed full mapping; original route-h protocol (3000/200/2e-5, targets x5, retained x50, seed 17)",
+    "loo_retrain": "FRESH base + fresh LoRA; retained mapping only; same route-h protocol",
+    "delta_ft_l2": "D(edit, loo_finetune) - D(edit, matched_finetune)",
+    "delta_retrain_l2": "D(edit, loo_retrain) - D(edit, matched_retrain)"
+  },
+  "correction": {
+    "corrects_commit": "a1df9be",
+    "issue": "G3 described edits as 'policy-matched-retraining equivalent', but its matched/LOO oracles were continued fine-tuning from the trained baseline h, not fresh retraining; aggregation also let the refusal control contribute to the granularity headline and reported sibling accuracy without coverage.",
+    "repair": "G3.1: four named oracle families, separate Delta_FT / Delta_retrain, taxonomic-vs-refusal blocks, sibling coverage counts, configured-vs-executed seed fields, numeric LOO reference, CPU re-evaluation of existing edited checkpoints (weights untouched)."
+  },
+  "g3_1_gate": {
+    "status": "retrain_oracles_not_yet_trained",
+    "n_transformation_targets": 6,
+    "per_target": [
+      {
+        "cell_id": "gx_sal_mix_0__seed17",
+        "target": "00036363",
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      },
+      {
+        "cell_id": "gx_sal_mix_0__seed17",
+        "target": "00039880",
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      },
+      {
+        "cell_id": "gx_sal_s_L1_00036363__seed17",
+        "target": "00036363",
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      },
+      {
+        "cell_id": "gx_sal_s_L1_00060576__seed17",
+        "target": "00060576",
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      },
+      {
+        "cell_id": "gx_sal_s_L2_00039880__seed17",
+        "target": "00039880",
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      },
+      {
+        "cell_id": "gx_sal_s_L2_00116450__seed17",
+        "target": "00116450",
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      }
+    ]
+  },
+  "claims": {
+    "supported_finetune_reference": "Over the evaluated code prompts and candidate-label space, the edit is extremely close to a transformation-matched CONTINUED-FINE-TUNING reference (baseline-h init) and far from the corresponding leave-one-out fine-tuning reference. L2-to-matched_finetune mean=3e-06 (n=6), Delta_FT mean=1.323072 (min=1.2138887).",
+    "retraining_claim": "'Close to policy-matched retraining' is NOT yet supported: retrain-family oracles are missing or the G3.1 gate has not passed (status=retrain_oracles_not_yet_trained).",
+    "equivalence_scope": "A tiny L2 between two nearly one-hot distributions over the evaluated candidate set does NOT establish global functional or parameter equivalence; every proximity claim is scoped to the evaluated code prompts and candidate-label space.",
+    "sibling_coverage": "The available sibling control(s) passed 2/2; all other retained controls passed. Targets without a retained sibling (unique branch or co-targeted) have a null sibling metric, never a vacuous 1.0.",
+    "refusal_separation": "Refusal controls are reported in a separate block and never contribute to the granularity (transformation) headline."
+  },
   "scope": {
     "multi_seed_meaning": "stable across three EDIT-TRAINING seeds; router, baseline h, cached routing predictions, set selection and oracle seed are fixed",
     "transformations": "granularity (taxonomic/numeric) + refusal controls; see per-mode breakdown"
@@ -49,7 +163,12 @@
         "max": 1.0,
         "n": 1
       },
-      "sibling_cells_with_controls": 1,
+      "sibling_coverage": {
+        "cells_with_sibling_controls": 1,
+        "n_cells": 1,
+        "sibling_controls_total": 1,
+        "note": "sibling metric is null (never vacuous 1.0) for targets whose sibling is co-targeted or unique in the sampled hierarchy; coverage must always be reported next to any sibling accuracy"
+      },
       "min_target_p_desired": {
         "mean": 0.999555,
         "std": 0.0,
@@ -75,19 +194,101 @@
         "refusal": 1,
         "correct": 2
       },
-      "oracle_target_l2_to_matched": {
-        "mean": 3e-06,
-        "std": 2e-06,
-        "min": 1.08e-06,
-        "max": 4.46e-06,
-        "n": 3
+      "transformation_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 4e-06,
+          "std": 1e-06,
+          "min": 3.74e-06,
+          "max": 4.46e-06,
+          "n": 2
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.28791,
+          "std": 0.104676,
+          "min": 1.21389316,
+          "max": 1.3619274,
+          "n": 2
+        },
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": {
+          "mean": 1.287906,
+          "std": 0.104677,
+          "min": 1.2138887,
+          "max": 1.36192366,
+          "n": 2
+        },
+        "delta_retrain_l2": null
       },
-      "delta_oracle_l2": {
-        "mean": 1.291539,
-        "std": 0.074284,
-        "min": 1.2138887,
-        "max": 1.36192366,
-        "n": 3
+      "refusal_controls": {
+        "l2_to_matched_finetune": {
+          "mean": 1e-06,
+          "std": 0.0,
+          "min": 1.08e-06,
+          "max": 1.08e-06,
+          "n": 1
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.298804,
+          "std": 0.0,
+          "min": 1.29880448,
+          "max": 1.29880448,
+          "n": 1
+        },
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": {
+          "mean": 1.298803,
+          "std": 0.0,
+          "min": 1.2988034,
+          "max": 1.2988034,
+          "n": 1
+        },
+        "delta_retrain_l2": null
+      },
+      "all_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 3e-06,
+          "std": 2e-06,
+          "min": 1.08e-06,
+          "max": 4.46e-06,
+          "n": 3
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.291542,
+          "std": 0.074284,
+          "min": 1.21389316,
+          "max": 1.3619274,
+          "n": 3
+        },
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": {
+          "mean": 1.291539,
+          "std": 0.074284,
+          "min": 1.2138887,
+          "max": 1.36192366,
+          "n": 3
+        },
+        "delta_retrain_l2": null
+      },
+      "retained_l2_max_by_family": {
+        "matched_finetune": {
+          "mean": 5.7e-05,
+          "std": 0.0,
+          "min": 5.713e-05,
+          "max": 5.713e-05,
+          "n": 1
+        },
+        "loo_finetune": {
+          "mean": 5.8e-05,
+          "std": 0.0,
+          "min": 5.795e-05,
+          "max": 5.795e-05,
+          "n": 1
+        },
+        "matched_retrain": null,
+        "loo_retrain": null
       },
       "per_seed": {
         "17": {
@@ -157,7 +358,12 @@
         "max": 1.0,
         "n": 1
       },
-      "sibling_cells_with_controls": 1,
+      "sibling_coverage": {
+        "cells_with_sibling_controls": 1,
+        "n_cells": 2,
+        "sibling_controls_total": 1,
+        "note": "sibling metric is null (never vacuous 1.0) for targets whose sibling is co-targeted or unique in the sampled hierarchy; coverage must always be reported next to any sibling accuracy"
+      },
       "min_target_p_desired": {
         "mean": 0.999803,
         "std": 8.1e-05,
@@ -182,19 +388,83 @@
       "target_classification_counts": {
         "correct": 2
       },
-      "oracle_target_l2_to_matched": {
-        "mean": 3e-06,
-        "std": 3e-06,
-        "min": 6.2e-07,
-        "max": 4.48e-06,
-        "n": 2
+      "transformation_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 3e-06,
+          "std": 3e-06,
+          "min": 6.2e-07,
+          "max": 4.48e-06,
+          "n": 2
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.302298,
+          "std": 0.037949,
+          "min": 1.27546374,
+          "max": 1.32913215,
+          "n": 2
+        },
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": {
+          "mean": 1.302295,
+          "std": 0.037952,
+          "min": 1.27545925,
+          "max": 1.32913153,
+          "n": 2
+        },
+        "delta_retrain_l2": null
       },
-      "delta_oracle_l2": {
-        "mean": 1.302295,
-        "std": 0.037952,
-        "min": 1.27545925,
-        "max": 1.32913153,
-        "n": 2
+      "refusal_controls": {
+        "l2_to_matched_finetune": null,
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
+      },
+      "all_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 3e-06,
+          "std": 3e-06,
+          "min": 6.2e-07,
+          "max": 4.48e-06,
+          "n": 2
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.302298,
+          "std": 0.037949,
+          "min": 1.27546374,
+          "max": 1.32913215,
+          "n": 2
+        },
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": {
+          "mean": 1.302295,
+          "std": 0.037952,
+          "min": 1.27545925,
+          "max": 1.32913153,
+          "n": 2
+        },
+        "delta_retrain_l2": null
+      },
+      "retained_l2_max_by_family": {
+        "matched_finetune": {
+          "mean": 3e-05,
+          "std": 2.5e-05,
+          "min": 1.221e-05,
+          "max": 4.728e-05,
+          "n": 2
+        },
+        "loo_finetune": {
+          "mean": 3.1e-05,
+          "std": 2.7e-05,
+          "min": 1.167e-05,
+          "max": 5.002e-05,
+          "n": 2
+        },
+        "matched_retrain": null,
+        "loo_retrain": null
       },
       "per_seed": {
         "17": {
@@ -258,7 +528,12 @@
         "n": 2
       },
       "sibling_acc": null,
-      "sibling_cells_with_controls": 0,
+      "sibling_coverage": {
+        "cells_with_sibling_controls": 0,
+        "n_cells": 2,
+        "sibling_controls_total": 0,
+        "note": "sibling metric is null (never vacuous 1.0) for targets whose sibling is co-targeted or unique in the sampled hierarchy; coverage must always be reported next to any sibling accuracy"
+      },
       "min_target_p_desired": {
         "mean": 0.99994,
         "std": 6e-06,
@@ -283,19 +558,83 @@
       "target_classification_counts": {
         "correct": 2
       },
-      "oracle_target_l2_to_matched": {
-        "mean": 3e-06,
-        "std": 2e-06,
-        "min": 1.87e-06,
-        "max": 4.29e-06,
-        "n": 2
+      "transformation_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 3e-06,
+          "std": 2e-06,
+          "min": 1.87e-06,
+          "max": 4.29e-06,
+          "n": 2
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.379018,
+          "std": 0.025921,
+          "min": 1.36068893,
+          "max": 1.39734656,
+          "n": 2
+        },
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": {
+          "mean": 1.379015,
+          "std": 0.025919,
+          "min": 1.36068706,
+          "max": 1.39734227,
+          "n": 2
+        },
+        "delta_retrain_l2": null
       },
-      "delta_oracle_l2": {
-        "mean": 1.379015,
-        "std": 0.025919,
-        "min": 1.36068706,
-        "max": 1.39734227,
-        "n": 2
+      "refusal_controls": {
+        "l2_to_matched_finetune": null,
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
+      },
+      "all_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 3e-06,
+          "std": 2e-06,
+          "min": 1.87e-06,
+          "max": 4.29e-06,
+          "n": 2
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.379018,
+          "std": 0.025921,
+          "min": 1.36068893,
+          "max": 1.39734656,
+          "n": 2
+        },
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": {
+          "mean": 1.379015,
+          "std": 0.025919,
+          "min": 1.36068706,
+          "max": 1.39734227,
+          "n": 2
+        },
+        "delta_retrain_l2": null
+      },
+      "retained_l2_max_by_family": {
+        "matched_finetune": {
+          "mean": 2.8e-05,
+          "std": 8e-06,
+          "min": 2.308e-05,
+          "max": 3.383e-05,
+          "n": 2
+        },
+        "loo_finetune": {
+          "mean": 3e-05,
+          "std": 7e-06,
+          "min": 2.552e-05,
+          "max": 3.508e-05,
+          "n": 2
+        },
+        "matched_retrain": null,
+        "loo_retrain": null
       },
       "per_seed": {
         "17": {
