@@ -1,0 +1,335 @@
+{
+  "dataset": "salmu",
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "n_sets": 21,
+  "cells_evaluated": 5,
+  "cells_expected": 63,
+  "cell_pass_total": 5,
+  "scope": {
+    "multi_seed_meaning": "stable across three EDIT-TRAINING seeds; router, baseline h, cached routing predictions, set selection and oracle seed are fixed",
+    "transformations": "granularity (taxonomic/numeric) + refusal controls; see per-mode breakdown"
+  },
+  "per_mode": {
+    "simultaneous_mixed_depth": {
+      "n_cells": 1,
+      "cell_pass": 1,
+      "criterion_fail_counts": {
+        "strict_expected_accuracy==1.0": 0,
+        "min_target_p_desired>=0.90": 0,
+        "max_target_p_source<=0.01": 0,
+        "min_candidate_mass>=0.99": 0,
+        "retained_strict_accuracy==1.0": 0,
+        "sibling_strict_accuracy==1.0": 0,
+        "wrong_branch_rate==0": 0,
+        "unparseable_outputs==0": 0,
+        "multi_label_outputs==0": 0
+      },
+      "strict_expected_accuracy": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "retain_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "sibling_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "sibling_cells_with_controls": 1,
+      "min_target_p_desired": {
+        "mean": 0.999555,
+        "std": 0.0,
+        "min": 0.99955477,
+        "max": 0.99955477,
+        "n": 1
+      },
+      "max_target_p_source": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 1e-08,
+        "max": 1e-08,
+        "n": 1
+      },
+      "min_candidate_mass": {
+        "mean": 0.99896,
+        "std": 0.0,
+        "min": 0.99896034,
+        "max": 0.99896034,
+        "n": 1
+      },
+      "target_classification_counts": {
+        "refusal": 1,
+        "correct": 2
+      },
+      "oracle_target_l2_to_matched": {
+        "mean": 3e-06,
+        "std": 2e-06,
+        "min": 1.08e-06,
+        "max": 4.46e-06,
+        "n": 3
+      },
+      "delta_oracle_l2": {
+        "mean": 1.291539,
+        "std": 0.074284,
+        "min": 1.2138887,
+        "max": 1.36192366,
+        "n": 3
+      },
+      "per_seed": {
+        "17": {
+          "cell_pass": true,
+          "strict": 1.0,
+          "failed_criteria": [],
+          "checkpoint_sha256": "e09716e7ab5491e0f2737b8c153a630cd5e9db47c234b111666054b784f9a065"
+        }
+      },
+      "e2e_strict_conditional": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "e2e_strict_unconditional": {
+        "mean": 0.94697,
+        "std": 0.0,
+        "min": 0.9469697,
+        "max": 0.9469697,
+        "n": 1
+      },
+      "no_source_leak_conditional": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "h_unparseable_total": 0,
+      "h_multi_label_total": 0,
+      "g_routing_failures_total": 1
+    },
+    "single_level1": {
+      "n_cells": 2,
+      "cell_pass": 2,
+      "criterion_fail_counts": {
+        "strict_expected_accuracy==1.0": 0,
+        "min_target_p_desired>=0.90": 0,
+        "max_target_p_source<=0.01": 0,
+        "min_candidate_mass>=0.99": 0,
+        "retained_strict_accuracy==1.0": 0,
+        "sibling_strict_accuracy==1.0": 0,
+        "wrong_branch_rate==0": 0,
+        "unparseable_outputs==0": 0,
+        "multi_label_outputs==0": 0
+      },
+      "strict_expected_accuracy": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "retain_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "sibling_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "sibling_cells_with_controls": 1,
+      "min_target_p_desired": {
+        "mean": 0.999803,
+        "std": 8.1e-05,
+        "min": 0.99974506,
+        "max": 0.99986006,
+        "n": 2
+      },
+      "max_target_p_source": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 3.5e-07,
+        "n": 2
+      },
+      "min_candidate_mass": {
+        "mean": 0.999634,
+        "std": 9.1e-05,
+        "min": 0.99957005,
+        "max": 0.99969809,
+        "n": 2
+      },
+      "target_classification_counts": {
+        "correct": 2
+      },
+      "oracle_target_l2_to_matched": {
+        "mean": 3e-06,
+        "std": 3e-06,
+        "min": 6.2e-07,
+        "max": 4.48e-06,
+        "n": 2
+      },
+      "delta_oracle_l2": {
+        "mean": 1.302295,
+        "std": 0.037952,
+        "min": 1.27545925,
+        "max": 1.32913153,
+        "n": 2
+      },
+      "per_seed": {
+        "17": {
+          "cell_pass": true,
+          "strict": 1.0,
+          "failed_criteria": [],
+          "checkpoint_sha256": "13a3ad006703f1ba1d216855e2d4a3b1ed769212a8809f636d56783eb9293907"
+        }
+      },
+      "e2e_strict_conditional": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "e2e_strict_unconditional": {
+        "mean": 0.94697,
+        "std": 0.0,
+        "min": 0.9469697,
+        "max": 0.9469697,
+        "n": 2
+      },
+      "no_source_leak_conditional": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "h_unparseable_total": 0,
+      "h_multi_label_total": 0,
+      "g_routing_failures_total": 2
+    },
+    "single_level2": {
+      "n_cells": 2,
+      "cell_pass": 2,
+      "criterion_fail_counts": {
+        "strict_expected_accuracy==1.0": 0,
+        "min_target_p_desired>=0.90": 0,
+        "max_target_p_source<=0.01": 0,
+        "min_candidate_mass>=0.99": 0,
+        "retained_strict_accuracy==1.0": 0,
+        "sibling_strict_accuracy==1.0": 0,
+        "wrong_branch_rate==0": 0,
+        "unparseable_outputs==0": 0,
+        "multi_label_outputs==0": 0
+      },
+      "strict_expected_accuracy": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "retain_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "sibling_acc": null,
+      "sibling_cells_with_controls": 0,
+      "min_target_p_desired": {
+        "mean": 0.99994,
+        "std": 6e-06,
+        "min": 0.99993599,
+        "max": 0.99994457,
+        "n": 2
+      },
+      "max_target_p_source": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 9e-08,
+        "n": 2
+      },
+      "min_candidate_mass": {
+        "mean": 0.999625,
+        "std": 8.2e-05,
+        "min": 0.99956755,
+        "max": 0.99968318,
+        "n": 2
+      },
+      "target_classification_counts": {
+        "correct": 2
+      },
+      "oracle_target_l2_to_matched": {
+        "mean": 3e-06,
+        "std": 2e-06,
+        "min": 1.87e-06,
+        "max": 4.29e-06,
+        "n": 2
+      },
+      "delta_oracle_l2": {
+        "mean": 1.379015,
+        "std": 0.025919,
+        "min": 1.36068706,
+        "max": 1.39734227,
+        "n": 2
+      },
+      "per_seed": {
+        "17": {
+          "cell_pass": true,
+          "strict": 1.0,
+          "failed_criteria": [],
+          "checkpoint_sha256": "8bb3236d29ed930bca1a28a02095fe9cb1d558e746c5ac986737fe6229a6e362"
+        }
+      },
+      "e2e_strict_conditional": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "e2e_strict_unconditional": {
+        "mean": 0.94697,
+        "std": 0.0,
+        "min": 0.9469697,
+        "max": 0.9469697,
+        "n": 2
+      },
+      "no_source_leak_conditional": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 2
+      },
+      "h_unparseable_total": 0,
+      "h_multi_label_total": 0,
+      "g_routing_failures_total": 2
+    }
+  },
+  "boundary_analysis": {}
+}

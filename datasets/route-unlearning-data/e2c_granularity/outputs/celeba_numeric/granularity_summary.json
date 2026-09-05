@@ -1,0 +1,182 @@
+{
+  "dataset": "celeba_numeric",
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "n_sets": 28,
+  "cells_evaluated": 2,
+  "cells_expected": 84,
+  "cell_pass_total": 2,
+  "scope": {
+    "multi_seed_meaning": "stable across three EDIT-TRAINING seeds; router, baseline h, cached routing predictions, set selection and oracle seed are fixed",
+    "transformations": "granularity (taxonomic/numeric) + refusal controls; see per-mode breakdown"
+  },
+  "per_mode": {
+    "single_exact_to_broad": {
+      "n_cells": 1,
+      "cell_pass": 1,
+      "criterion_fail_counts": {
+        "strict_expected_accuracy==1.0": 0,
+        "min_target_p_desired>=0.90": 0,
+        "max_target_p_source<=0.01": 0,
+        "min_candidate_mass>=0.99": 0,
+        "retained_strict_accuracy==1.0": 0,
+        "sibling_strict_accuracy==1.0": 0,
+        "wrong_branch_rate==0": 0,
+        "unparseable_outputs==0": 0,
+        "multi_label_outputs==0": 0
+      },
+      "strict_expected_accuracy": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "retain_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "sibling_acc": null,
+      "sibling_cells_with_controls": 0,
+      "min_target_p_desired": {
+        "mean": 0.99981,
+        "std": 0.0,
+        "min": 0.99980953,
+        "max": 0.99980953,
+        "n": 1
+      },
+      "max_target_p_source": {
+        "mean": 1e-06,
+        "std": 0.0,
+        "min": 6.5e-07,
+        "max": 6.5e-07,
+        "n": 1
+      },
+      "min_candidate_mass": {
+        "mean": 0.999757,
+        "std": 0.0,
+        "min": 0.99975734,
+        "max": 0.99975734,
+        "n": 1
+      },
+      "target_classification_counts": {
+        "correct": 1
+      },
+      "oracle_target_l2_to_matched": {
+        "mean": 4.4e-05,
+        "std": 0.0,
+        "min": 4.443e-05,
+        "max": 4.443e-05,
+        "n": 1
+      },
+      "delta_oracle_l2": null,
+      "per_seed": {
+        "17": {
+          "cell_pass": true,
+          "strict": 1.0,
+          "failed_criteria": [],
+          "checkpoint_sha256": "e5d9e578916fec4c922d6dd1fc339ae80ba889dad2b77fc0a6f18b1f7b9c9859"
+        }
+      }
+    },
+    "single_exact_to_narrow": {
+      "n_cells": 1,
+      "cell_pass": 1,
+      "criterion_fail_counts": {
+        "strict_expected_accuracy==1.0": 0,
+        "min_target_p_desired>=0.90": 0,
+        "max_target_p_source<=0.01": 0,
+        "min_candidate_mass>=0.99": 0,
+        "retained_strict_accuracy==1.0": 0,
+        "sibling_strict_accuracy==1.0": 0,
+        "wrong_branch_rate==0": 0,
+        "unparseable_outputs==0": 0,
+        "multi_label_outputs==0": 0
+      },
+      "strict_expected_accuracy": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "retain_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 1
+      },
+      "sibling_acc": null,
+      "sibling_cells_with_controls": 0,
+      "min_target_p_desired": {
+        "mean": 0.999871,
+        "std": 0.0,
+        "min": 0.99987079,
+        "max": 0.99987079,
+        "n": 1
+      },
+      "max_target_p_source": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "n": 1
+      },
+      "min_candidate_mass": {
+        "mean": 0.999657,
+        "std": 0.0,
+        "min": 0.9996567,
+        "max": 0.9996567,
+        "n": 1
+      },
+      "target_classification_counts": {
+        "correct": 1
+      },
+      "oracle_target_l2_to_matched": {
+        "mean": 1e-06,
+        "std": 0.0,
+        "min": 5.3e-07,
+        "max": 5.3e-07,
+        "n": 1
+      },
+      "delta_oracle_l2": null,
+      "per_seed": {
+        "17": {
+          "cell_pass": true,
+          "strict": 1.0,
+          "failed_criteria": [],
+          "checkpoint_sha256": "295bee83b64dd92e99b675e1c5aab74e27501f6fe8c6caeb78852475e5c4043a"
+        }
+      }
+    }
+  },
+  "boundary_analysis": {
+    "adjacent_across_broad_boundary": {
+      "n": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    "broad_lower": {
+      "n": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    "narrow_lower": {
+      "n": 2,
+      "correct": 2,
+      "accuracy": 1.0
+    },
+    "broad_interior": {
+      "n": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    }
+  }
+}

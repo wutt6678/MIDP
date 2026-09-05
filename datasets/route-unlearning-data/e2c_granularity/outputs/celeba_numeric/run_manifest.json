@@ -1,0 +1,46 @@
+{
+  "experiment": "e2c_v3_granularity_celeba_numeric",
+  "provenance": {
+    "commit": "61623fce934888c217d17c47e4d2ba77061207d9",
+    "runner_script_sha256": "36eb6674a0b7058924fc7824837778686782b7e1dc5fc0beb0e04ffad9502df1",
+    "granularity_lib_sha256": "5c5728bfb606b8fcc7d2582a9c03a4b598721925a4edfae257a7ea7300b7101e",
+    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "dirty": false,
+    "clean_required": true,
+    "started_utc": "2026-09-04T03:57:03Z"
+  },
+  "inputs_sha256": {
+    "matrix_manifest": "a8d894f80bb24b34d16a74f8fb34248c80275722e180b943e63b2ce9ad1046e2",
+    "baseline_h": "56e84a2f8c6758737a24b9009c53c67a16d49b593f2a21e8e647920dcebc88ad",
+    "numeric_manifest": "150783ba179988acf78a3f525d6542fcd17995aa15423a79aa51cc3224459888"
+  },
+  "checkpoints_sha256": {
+    "oracle_matched_gx_num_s_exact_to_narrow_Y02": "2d03bcadff029d4d5b0ff6eb497bf012bf99383c5a483fa227e22c9f72e960ff",
+    "oracle_matched_gx_num_s_exact_to_broad_Y04": "1a592db1e1a7b9e4bdd499a55864407de3f34fb389e593a983cb38159bce7bb4",
+    "cell_gx_num_s_exact_to_broad_Y04__seed17": "e5d9e578916fec4c922d6dd1fc339ae80ba889dad2b77fc0a6f18b1f7b9c9859",
+    "cell_gx_num_s_exact_to_narrow_Y02__seed17": "295bee83b64dd92e99b675e1c5aab74e27501f6fe8c6caeb78852475e5c4043a"
+  },
+  "archive": {
+    "release_dir": "releases/e2c_granularity_celeba_numeric_61623fc",
+    "hf_repo": "wutt6678/e2c-v3-matrix-checkpoints",
+    "hf_upload_ok": true,
+    "hf_revision": "8dd1aceac195255d4bcf121c39a374fe2aedab23",
+    "n_files": 5
+  },
+  "results": {
+    "cells_evaluated": 2,
+    "cell_pass_total": 2,
+    "per_mode_pass": {
+      "single_exact_to_broad": [
+        1,
+        1
+      ],
+      "single_exact_to_narrow": [
+        1,
+        1
+      ]
+    }
+  },
+  "elapsed_sec": 6822.0,
+  "gpu": "NVIDIA RTX 6000 Ada Generation"
+}
