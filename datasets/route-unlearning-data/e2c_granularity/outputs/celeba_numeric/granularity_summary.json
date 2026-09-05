@@ -1,5 +1,14 @@
 {
   "dataset": "celeba_numeric",
+  "configured_full_seeds": [
+    17,
+    42,
+    123
+  ],
+  "executed_seeds": [
+    17
+  ],
+  "run_stage": "G3_single_seed_pilot(+G3.1_reevaluation)",
   "edit_seeds": [
     17,
     42,
@@ -7,8 +16,62 @@
   ],
   "n_sets": 28,
   "cells_evaluated": 2,
+  "full_matrix_cells_expected": 84,
   "cells_expected": 84,
   "cell_pass_total": 2,
+  "oracle_family_definitions": {
+    "matched_finetune": "trained baseline h init; transformed full mapping (continued fine-tuning reference)",
+    "loo_finetune": "trained baseline h init; retained mapping only (deletion-as-fine-tuning reference)",
+    "matched_retrain": "FRESH base + fresh LoRA; transformed full mapping; original route-h protocol (3000/200/2e-5, targets x5, retained x50, seed 17)",
+    "loo_retrain": "FRESH base + fresh LoRA; retained mapping only; same route-h protocol",
+    "delta_ft_l2": "D(edit, loo_finetune) - D(edit, matched_finetune)",
+    "delta_retrain_l2": "D(edit, loo_retrain) - D(edit, matched_retrain)"
+  },
+  "correction": {
+    "corrects_commit": "a1df9be",
+    "issue": "G3 described edits as 'policy-matched-retraining equivalent', but its matched/LOO oracles were continued fine-tuning from the trained baseline h, not fresh retraining; aggregation also let the refusal control contribute to the granularity headline and reported sibling accuracy without coverage.",
+    "repair": "G3.1: four named oracle families, separate Delta_FT / Delta_retrain, taxonomic-vs-refusal blocks, sibling coverage counts, configured-vs-executed seed fields, numeric LOO reference, CPU re-evaluation of existing edited checkpoints (weights untouched)."
+  },
+  "g3_1_gate": {
+    "status": "retrain_oracles_not_yet_trained",
+    "n_transformation_targets": 2,
+    "per_target": [
+      {
+        "cell_id": "gx_num_s_exact_to_broad_Y04__seed17",
+        "target": "03",
+        "operation": "exact_to_broad",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      },
+      {
+        "cell_id": "gx_num_s_exact_to_narrow_Y02__seed17",
+        "target": "01",
+        "operation": "exact_to_narrow",
+        "matched_retrain_fit_ok": null,
+        "matched_retrain_strict": null,
+        "matched_retrain_mass": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_retrain_l2": null,
+        "delta_material": false,
+        "closer_to_matched_retrain": false
+      }
+    ]
+  },
+  "claims": {
+    "supported_finetune_reference": "Over the evaluated code prompts and candidate-label space, the edit is extremely close to a transformation-matched CONTINUED-FINE-TUNING reference (baseline-h init) and far from the corresponding leave-one-out fine-tuning reference.",
+    "retraining_claim": "'Close to policy-matched retraining' is NOT yet supported: retrain-family oracles are missing or the G3.1 gate has not passed (status=retrain_oracles_not_yet_trained).",
+    "equivalence_scope": "A tiny L2 between two nearly one-hot distributions over the evaluated candidate set does NOT establish global functional or parameter equivalence; every proximity claim is scoped to the evaluated code prompts and candidate-label space.",
+    "sibling_coverage": "The available sibling control(s) passed 0/0; all other retained controls passed. Targets without a retained sibling (unique branch or co-targeted) have a null sibling metric, never a vacuous 1.0.",
+    "refusal_separation": "Refusal controls are reported in a separate block and never contribute to the granularity (transformation) headline.",
+    "numeric_boundary": "Boundary wording: report lower/interior boundary targets that passed, including any member of a frozen adjacent-boundary pair; 'adjacent-boundary pair passed' is reserved for the full matrix once BOTH members (e.g. 19 and 20) are jointly evaluated. The pilot edits values individually and does not jointly edit and test both sides of a boundary."
+  },
   "scope": {
     "multi_seed_meaning": "stable across three EDIT-TRAINING seeds; router, baseline h, cached routing predictions, set selection and oracle seed are fixed",
     "transformations": "granularity (taxonomic/numeric) + refusal controls; see per-mode breakdown"
@@ -43,7 +106,12 @@
         "n": 1
       },
       "sibling_acc": null,
-      "sibling_cells_with_controls": 0,
+      "sibling_coverage": {
+        "cells_with_sibling_controls": 0,
+        "n_cells": 1,
+        "sibling_controls_total": 0,
+        "note": "sibling metric is null (never vacuous 1.0) for targets whose sibling is co-targeted or unique in the sampled hierarchy; coverage must always be reported next to any sibling accuracy"
+      },
       "min_target_p_desired": {
         "mean": 0.99981,
         "std": 0.0,
@@ -68,14 +136,54 @@
       "target_classification_counts": {
         "correct": 1
       },
-      "oracle_target_l2_to_matched": {
-        "mean": 4.4e-05,
-        "std": 0.0,
-        "min": 4.443e-05,
-        "max": 4.443e-05,
-        "n": 1
+      "transformation_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 4.4e-05,
+          "std": 0.0,
+          "min": 4.443e-05,
+          "max": 4.443e-05,
+          "n": 1
+        },
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
       },
-      "delta_oracle_l2": null,
+      "refusal_controls": {
+        "l2_to_matched_finetune": null,
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
+      },
+      "all_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 4.4e-05,
+          "std": 0.0,
+          "min": 4.443e-05,
+          "max": 4.443e-05,
+          "n": 1
+        },
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
+      },
+      "retained_l2_max_by_family": {
+        "matched_finetune": {
+          "mean": 9e-05,
+          "std": 0.0,
+          "min": 9.032e-05,
+          "max": 9.032e-05,
+          "n": 1
+        },
+        "loo_finetune": null,
+        "matched_retrain": null,
+        "loo_retrain": null
+      },
       "per_seed": {
         "17": {
           "cell_pass": true,
@@ -114,7 +222,12 @@
         "n": 1
       },
       "sibling_acc": null,
-      "sibling_cells_with_controls": 0,
+      "sibling_coverage": {
+        "cells_with_sibling_controls": 0,
+        "n_cells": 1,
+        "sibling_controls_total": 0,
+        "note": "sibling metric is null (never vacuous 1.0) for targets whose sibling is co-targeted or unique in the sampled hierarchy; coverage must always be reported next to any sibling accuracy"
+      },
       "min_target_p_desired": {
         "mean": 0.999871,
         "std": 0.0,
@@ -139,14 +252,54 @@
       "target_classification_counts": {
         "correct": 1
       },
-      "oracle_target_l2_to_matched": {
-        "mean": 1e-06,
-        "std": 0.0,
-        "min": 5.3e-07,
-        "max": 5.3e-07,
-        "n": 1
+      "transformation_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 1e-06,
+          "std": 0.0,
+          "min": 5.3e-07,
+          "max": 5.3e-07,
+          "n": 1
+        },
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
       },
-      "delta_oracle_l2": null,
+      "refusal_controls": {
+        "l2_to_matched_finetune": null,
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
+      },
+      "all_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 1e-06,
+          "std": 0.0,
+          "min": 5.3e-07,
+          "max": 5.3e-07,
+          "n": 1
+        },
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
+      },
+      "retained_l2_max_by_family": {
+        "matched_finetune": {
+          "mean": 4.4e-05,
+          "std": 0.0,
+          "min": 4.397e-05,
+          "max": 4.397e-05,
+          "n": 1
+        },
+        "loo_finetune": null,
+        "matched_retrain": null,
+        "loo_retrain": null
+      },
       "per_seed": {
         "17": {
           "cell_pass": true,
