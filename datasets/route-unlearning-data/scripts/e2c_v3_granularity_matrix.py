@@ -23,22 +23,37 @@ Datasets
                      externally justified and audited; the validator
                      refuses unaudited hierarchies.
 
-Oracles (plan section 9): TWO references per set --
-  matched : retrained from the baseline protocol with target rows
-            RELABELED to the desired abstraction (ideal retraining under
-            the new granularity policy);
-  loo     : leave-one-out (trained WITHOUT the target rows) -- deletion
-            reference; reused from the suppression matrix when the
-            exclusion set matches exactly, else trained, else explicitly
-            null with a reason (pilot only).
-Delta_oracle = D_l2(edit, loo) - D_l2(edit, matched); positive means the
-edit is closer to policy-matched retraining than to deletion.
+Oracles (plan section 9, CORRECTED in G3.1): FOUR named families per set,
+distinguishing initialization AND data --
+  matched_finetune : trained-baseline-h init; transformed full mapping
+                     (continued fine-tuning reference);
+  loo_finetune     : trained-baseline-h init; retained mapping only
+                     (deletion-as-fine-tuning reference; salmu reuses
+                     suppression-matrix LOO oracles on exact set match);
+  matched_retrain  : FRESH base + fresh LoRA; transformed full mapping;
+                     ORIGINAL route-h protocol (3000/200/2e-5, targets x5,
+                     retained x50, seed 17);
+  loo_retrain      : FRESH base + fresh LoRA; retained mapping only;
+                     same route-h protocol.
+Delta_FT     = D(edit, loo_finetune) - D(edit, matched_finetune)
+Delta_retrain= D(edit, loo_retrain)  - D(edit, matched_retrain)
+Positive delta = the edit is closer to the transformation-matched
+reference than to the deletion reference of the SAME family.  G3's
+"matched/loo" oracles were finetune-family references; the
+"policy-matched-retraining equivalent" wording of commit a1df9be was
+therefore too strong and is superseded: only the retrain families
+support retraining claims, and even then proximity is scoped to the
+evaluated code prompts and candidate-label space (a tiny L2 between
+nearly one-hot distributions does not establish global functional or
+parameter equivalence).
 
 Phases: GX0 validate schemas/matrices | GX1 freeze matrix files
-        GX1R numeric baseline route h | GX2 oracles
+        GX1R numeric baseline route h | GX2 oracle families
+        GX2R CPU re-evaluation of stored cells vs all families
         GX3 single cells | GX4 same-depth simultaneous | GX5 mixed
         GX6 (inside cells: conditional/unconditional E2E)
-        GX7 aggregate + archive (revision-pinned HF) + manifest
+        GX7 aggregate (+G3.1 gate, scoped claims) + archive
+            (revision-pinned HF) + manifest
 """
 import argparse
 import importlib.util
@@ -87,6 +102,19 @@ HF_ARCHIVE_REPO = mx.HF_ARCHIVE_REPO
 TARGET_BOOST = 5
 RETAIN_REPEAT = 3
 MIN_CANDIDATE_MASS = 0.01
+# G3.1 correction: the families below distinguish initialization AND data.
+# matched/loo *_finetune = trained-baseline-h init (continued fine-tuning);
+# matched/loo *_retrain  = FRESH base + fresh LoRA, trained with the
+# ORIGINAL route-h protocol (3000/200/2e-5, repeat 50, seed 17).
+# Only the retrain families support retraining claims.
+RETRAIN_STEPS = 3000
+RETRAIN_WARMUP = 200
+RETRAIN_LR = 2e-5
+RETRAIN_REPEAT = 50             # original route retained repetition
+RETRAIN_TARGET_BOOST = 5        # original route target oversampling
+DELTA_RETRAIN_MIN_MARGIN = 0.5  # G3.1 materiality margin (L2)
+ORACLE_FAMILIES = ("matched_finetune", "loo_finetune",
+                   "matched_retrain", "loo_retrain")
 
 SINGLE_MODES = {"single_level1", "single_level2", "single_exact_to_narrow",
                 "single_exact_to_broad", "single_exact_to_rounded"}
@@ -285,7 +313,12 @@ def _strict_accuracy(session, ctx, expected_of, args):
 
 
 # ====================================================================== #
-# GX2: dual oracles per set (matched + leave-one-out)
+# GX2: oracle FAMILIES (G3.1 correction)
+#   matched_finetune / loo_finetune: trained-baseline-h init (continued
+#     fine-tuning references -- what G3 mistakenly called "retraining");
+#   matched_retrain / loo_retrain: FRESH LoRA init (lora_A kaiming,
+#     lora_B zeros) + the ORIGINAL route-h protocol (3000/200/2e-5,
+#     targets x5, retained x50, seed 17).
 # ====================================================================== #
 def matched_pairs(ctx, entry):
     pairs = []
@@ -296,12 +329,146 @@ def matched_pairs(ctx, entry):
     return pairs
 
 
+def retained_pairs(ctx, entry):
+    return [{"prompt": rd.CODE_TO_ALIAS_PROMPT.format(
+                 code=ctx["code_of"][i]),
+             "answer": ctx["baseline_alias_of"][i]}
+            for i in ctx["identity_ids"] if i not in entry["assignments"]]
+
+
+def fresh_reinit_lora(named_params, seed):
+    """In-place FRESH LoRA initialization replicating peft
+    get_peft_model(init_lora_weights=True): lora_A ~ kaiming_uniform(a=sqrt5),
+    lora_B = zeros, under the given seed.  Never reads any checkpoint --
+    this is the property that distinguishes *_retrain from *_finetune.
+    Fail-closed on layout and on the zero-B fresh-init signature."""
+    import math as _math
+    mx.seed_everything(seed)
+    params = list(named_params)   # materialize ONCE (may be a generator)
+    a_params = [(n, p) for n, p in params if "lora_A" in n]
+    b_params = [(n, p) for n, p in params if "lora_B" in n]
+    if not a_params or len(a_params) != len(b_params):
+        raise RuntimeError(
+            f"fresh_reinit_lora: unexpected LoRA layout "
+            f"({len(a_params)} A / {len(b_params)} B)")
+    with torch.no_grad():
+        for _, p in a_params:
+            torch.nn.init.kaiming_uniform_(p, a=_math.sqrt(5))
+        for _, p in b_params:
+            p.zero_()
+    if any(torch.count_nonzero(p).item() != 0 for _, p in b_params):
+        raise RuntimeError("fresh_reinit_lora: lora_B nonzero after re-init")
+    return len(a_params), len(b_params)
+
+
+def session_reset_fresh(session):
+    n_a, n_b = fresh_reinit_lora(
+        list(session.adapter_model.named_parameters()), ORACLE_SEED)
+    logger.info("reset_fresh(): LoRA re-initialized fresh "
+                "(A kaiming / B zeros, seed %d; %d/%d tensors)",
+                ORACLE_SEED, n_a, n_b)
+
+
+def _fit_metrics_from_soft(soft, ctx, entry):
+    """CPU fit proxy for cached oracles: argmax over the full vocab per
+    identity vs the expected (transformed / retained) label.  ``soft`` is
+    the _soft_all output keyed by IDENTITY ID."""
+    ok = n = 0
+    mass_min = 1.0
+    for iid in ctx["identity_ids"]:
+        summ = soft.get(iid)
+        if not summ:
+            continue
+        dist = summ.get("probs", summ)
+        exp = expected_label(ctx, entry, iid)
+        ok += int(max(dist, key=dist.get) == exp)
+        n += 1
+        if iid in entry["assignments"]:
+            mass_min = min(mass_min, summ.get(
+                "candidate_mass",
+                sum(dist.get(v, 0.0) for v in ctx["vocab"])))
+    return {"fit_proxy_argmax": (ok / n) if n else None,
+            "fit_proxy_n": n, "min_candidate_mass_proxy": mass_min}
+
+
+def _write_oracle_results(out_dir, family, init, protocol, extra=None):
+    res = {"family": family, "init": init, "protocol": protocol}
+    if extra:
+        res.update(extra)
+    with open(out_dir / "oracle_results.json", "w") as f:
+        json.dump(res, f, indent=2)
+    return res
+
+
+def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args):
+    """Fresh-init retraining oracle under the ORIGINAL route-h protocol."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    session_reset_fresh(session)
+    mx.seed_everything(ORACLE_SEED)
+    items = []
+    if family == "matched_retrain":
+        assign = [{"prompt": rd.CODE_TO_ALIAS_PROMPT.format(
+                       code=ctx["code_of"][i]),
+                   "answer": expected_label(ctx, entry, i)}
+                  for i in sorted(entry["assignments"])] * RETRAIN_TARGET_BOOST
+        items += rv.build_supervised_items(
+            session.adapter, session.processor, assign,
+            repeat=RETRAIN_REPEAT)
+    items += rv.build_supervised_items(
+        session.adapter, session.processor, retained_pairs(ctx, entry),
+        repeat=RETRAIN_REPEAT)
+    rv.train_supervised(f"{family}_{entry['set_id']}", session.adapter,
+                        session.model, session.processor, items, out_dir,
+                        args.device, steps=RETRAIN_STEPS,
+                        warmup=RETRAIN_WARMUP, lr=RETRAIN_LR)
+    soft = _soft_all(session, ctx, args)
+    with open(out_dir / "oracle_soft.json", "w") as f:
+        json.dump(soft, f, indent=2)
+    # G3.1 gate inputs.  matched_retrain must fit ALL transformed AND
+    # retained mappings; loo_retrain never saw the targets, so its fit
+    # check covers the RETAINED mapping only (targets are expected to
+    # drift -- that is the deletion reference).
+    if family == "matched_retrain":
+        fit_ids = list(ctx["identity_ids"])
+    else:
+        fit_ids = [i for i in ctx["identity_ids"]
+                   if i not in entry["assignments"]]
+    strict = _strict_accuracy(session, ctx,
+                              {i: expected_label(ctx, entry, i)
+                               for i in fit_ids}, args)
+    masses = []
+    for iid in entry["assignments"]:
+        dist = soft[iid].get("probs", {})
+        masses.append(sum(dist.get(l, 0.0) for l in ctx["vocab"]))
+    mass = min(masses) if masses else None
+    if family == "matched_retrain":
+        fit_ok = bool(strict == 1.0 and (mass is None or mass >= 0.99))
+        scope = "all_transformed_and_retained"
+    else:
+        fit_ok = bool(strict == 1.0)
+        scope = "retained_only(targets_never_seen)"
+    _write_oracle_results(
+        out_dir, family, "fresh_lora",
+        {"steps": RETRAIN_STEPS, "warmup": RETRAIN_WARMUP,
+         "lr": RETRAIN_LR, "repeat": RETRAIN_REPEAT,
+         "target_boost": RETRAIN_TARGET_BOOST if family == "matched_retrain"
+         else 0, "seed": ORACLE_SEED},
+        {"set_id": entry["set_id"], "strict_fit_scope": scope,
+         "strict_all_expected": strict,
+         "min_candidate_mass": mass, "fit_ok": fit_ok})
+    logger.info("GX2[%s]: %s trained (fresh init; strict=%.4f mass=%s "
+                "fit_ok=%s)", entry["set_id"], family, strict,
+                f"{mass:.4f}" if mass is not None else "n/a", fit_ok)
+    return {"mode": "trained_fresh", "strict_all_expected": strict,
+            "min_candidate_mass": mass, "fit_ok": fit_ok}
+
+
 def loo_reuse_path(ds, entry):
-    """Exact-match reuse of a suppression-matrix LOO oracle (salmu only)."""
+    """Exact-match reuse of a suppression-matrix LOO oracle (salmu only).
+    These were trained from the trained baseline h (finetune family)."""
     if ds != "salmu":
         return None
     targets = sorted(entry["assignments"])
-    # a suppression LOO excluded exactly these ids and changed nothing else
     cand = SUPPRESSION_LOO_DIR / ("fs_" + "-".join(targets))
     ck = cand / "adapter_final" / "adapter_model.safetensors"
     soft = cand / "oracle_soft.json"
@@ -310,9 +477,16 @@ def loo_reuse_path(ds, entry):
     return None
 
 
+FT_PROTOCOL = {"steps": 3000, "warmup": 200, "lr": 2e-5, "repeat": 50,
+               "seed": ORACLE_SEED,
+               "note": "route-protocol continued fine-tuning from the "
+                       "trained baseline h (as executed in G3)"}
+
+
 def run_oracles(args, ds, ctx, matrix, out_base):
     logger.info("=" * 60)
-    logger.info(f"GX2: ORACLES ({ds}) -- matched (+LOO where reusable)")
+    logger.info(f"GX2: ORACLE FAMILIES ({ds}) -- finetune (baseline-h init) "
+                "+ retrain (fresh LoRA init, route protocol)")
     logger.info("=" * 60)
     oracle_root = out_base / "oracles"
     oracle_root.mkdir(parents=True, exist_ok=True)
@@ -322,90 +496,136 @@ def run_oracles(args, ds, ctx, matrix, out_base):
     results = {}
     session = None
     only = set(args.only_sets) if args.only_sets else None
+
+    def _sess():
+        nonlocal session
+        if session is None:
+            session = mx.ModelSession(args_o, f"e2c_gx_{ds}_oracle")
+        return session
+
     for entry in matrix["sets"]:
         sid = entry["set_id"]
         if only and sid not in only:
             continue
         rec = {"set_id": sid}
-        # ---- matched oracle ----
+        # ---- matched_finetune (G3 dirs: matched_<sid>) ----
         mdir = oracle_root / f"matched_{sid}"
         mckpt = mdir / "adapter_final" / "adapter_model.safetensors"
         msoft = mdir / "oracle_soft.json"
         if mckpt.exists() and msoft.exists():
-            rec["matched"] = {"mode": "cached",
-                              "sha256": rv.sha256_file(mckpt)}
+            if not (mdir / "oracle_results.json").exists():
+                with open(msoft) as f:
+                    soft = json.load(f)
+                _write_oracle_results(
+                    mdir, "matched_finetune", "baseline_h", FT_PROTOCOL,
+                    {"set_id": sid,
+                     **_fit_metrics_from_soft(soft, ctx, entry)})
+            rec["matched_finetune"] = {
+                "dir": str(mdir), "mode": "cached",
+                "sha256": rv.sha256_file(mckpt)}
         else:
             mdir.mkdir(parents=True, exist_ok=True)
-            if session is None:
-                session = mx.ModelSession(args_o, f"e2c_gx_{ds}_oracle")
-            session.reset_to(baseline)
+            s = _sess()
+            s.reset_to(baseline)
             mx.seed_everything(ORACLE_SEED)
             items = rv.build_supervised_items(
-                session.adapter, session.processor,
-                matched_pairs(ctx, entry), repeat=args.route_repeat)
-            rv.train_supervised(f"matched_{sid}", session.adapter,
-                                session.model, session.processor, items,
-                                mdir, args.device, steps=args.route_steps,
-                                warmup=args.route_warmup, lr=args.route_lr)
-            soft = _soft_all(session, ctx, args_o)
+                s.adapter, s.processor, matched_pairs(ctx, entry),
+                repeat=RETRAIN_REPEAT)
+            rv.train_supervised(f"matched_ft_{sid}", s.adapter, s.model,
+                                s.processor, items, mdir, args.device,
+                                steps=RETRAIN_STEPS, warmup=RETRAIN_WARMUP,
+                                lr=RETRAIN_LR)
+            soft = _soft_all(s, ctx, args_o)
             with open(msoft, "w") as f:
                 json.dump(soft, f, indent=2)
-            rec["matched"] = {"mode": "trained",
-                              "sha256": rv.sha256_file(mckpt)}
-            logger.info(f"GX2[{sid}]: matched oracle trained "
-                        f"({rec['matched']['sha256'][:12]})")
-        # ---- LOO oracle ----
+            _write_oracle_results(mdir, "matched_finetune", "baseline_h",
+                                  FT_PROTOCOL, {"set_id": sid})
+            rec["matched_finetune"] = {
+                "dir": str(mdir), "mode": "trained",
+                "sha256": rv.sha256_file(mckpt)}
+            logger.info(f"GX2[{sid}]: matched_finetune trained")
+        # ---- loo_finetune (G3 dirs: loo_<sid>; suppression reuse) ----
         reuse = loo_reuse_path(ds, entry)
         ldir = oracle_root / f"loo_{sid}"
         lckpt = ldir / "adapter_final" / "adapter_model.safetensors"
         lsoft = ldir / "oracle_soft.json"
         if reuse is not None:
             ldir.mkdir(parents=True, exist_ok=True)
-            if session is None:
-                session = mx.ModelSession(args_o, f"e2c_gx_{ds}_oracle")
+            s = _sess()
             src_ckpt = reuse / "adapter_final" / "adapter_model.safetensors"
-            session.reset_to(src_ckpt)
-            mx.seed_everything(ORACLE_SEED)
-            soft = _soft_all(session, ctx, args_o)
-            with open(lsoft, "w") as f:
-                json.dump(soft, f, indent=2)
+            if not lsoft.exists():
+                s.reset_to(src_ckpt)
+                mx.seed_everything(ORACLE_SEED)
+                soft = _soft_all(s, ctx, args_o)
+                with open(lsoft, "w") as f:
+                    json.dump(soft, f, indent=2)
             (ldir / "adapter_final").mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_ckpt, ldir / "adapter_final"
                          / "adapter_model.safetensors")
-            rec["loo"] = {"mode": "reused_suppression_matrix",
-                          "source": str(reuse),
-                          "sha256": rv.sha256_file(src_ckpt)}
-            logger.info(f"GX2[{sid}]: LOO reused from {reuse}")
+            if not (ldir / "oracle_results.json").exists():
+                with open(lsoft) as f:
+                    soft = json.load(f)
+                _write_oracle_results(
+                    ldir, "loo_finetune", "baseline_h", FT_PROTOCOL,
+                    {"set_id": sid, "reused_from": str(reuse),
+                     **_fit_metrics_from_soft(soft, ctx, entry)})
+            rec["loo_finetune"] = {
+                "dir": str(ldir), "mode": "reused_suppression_matrix",
+                "source": str(reuse), "sha256": rv.sha256_file(src_ckpt)}
         elif lckpt.exists() and lsoft.exists():
-            rec["loo"] = {"mode": "cached", "sha256": rv.sha256_file(lckpt)}
-        elif ds == "salmu":
+            if not (ldir / "oracle_results.json").exists():
+                with open(lsoft) as f:
+                    soft = json.load(f)
+                _write_oracle_results(
+                    ldir, "loo_finetune", "baseline_h", FT_PROTOCOL,
+                    {"set_id": sid, **_fit_metrics_from_soft(soft, ctx,
+                                                             entry)})
+            rec["loo_finetune"] = {"dir": str(ldir), "mode": "cached",
+                                   "sha256": rv.sha256_file(lckpt)}
+        else:
+            # trained loo_finetune (salmu mixed sets AND numeric -- G3.1
+            # adds the numeric LOO reference for symmetry)
             ldir.mkdir(parents=True, exist_ok=True)
-            if session is None:
-                session = mx.ModelSession(args_o, f"e2c_gx_{ds}_oracle")
-            session.reset_to(baseline)
+            s = _sess()
+            s.reset_to(baseline)
             mx.seed_everything(ORACLE_SEED)
-            pairs = [{"prompt": rd.CODE_TO_ALIAS_PROMPT.format(
-                          code=ctx["code_of"][i]),
-                      "answer": ctx["baseline_alias_of"][i]}
-                     for i in ctx["identity_ids"]
-                     if i not in entry["assignments"]]
             items = rv.build_supervised_items(
-                session.adapter, session.processor, pairs,
-                repeat=args.route_repeat)
-            rv.train_supervised(f"loo_{sid}", session.adapter, session.model,
-                                session.processor, items, ldir, args.device,
-                                steps=args.route_steps,
-                                warmup=args.route_warmup, lr=args.route_lr)
-            soft = _soft_all(session, ctx, args_o)
+                s.adapter, s.processor, retained_pairs(ctx, entry),
+                repeat=RETRAIN_REPEAT)
+            rv.train_supervised(f"loo_ft_{sid}", s.adapter, s.model,
+                                s.processor, items, ldir, args.device,
+                                steps=RETRAIN_STEPS, warmup=RETRAIN_WARMUP,
+                                lr=RETRAIN_LR)
+            soft = _soft_all(s, ctx, args_o)
             with open(lsoft, "w") as f:
                 json.dump(soft, f, indent=2)
-            rec["loo"] = {"mode": "trained", "sha256": rv.sha256_file(lckpt)}
-            logger.info(f"GX2[{sid}]: LOO oracle trained")
-        else:
-            rec["loo"] = {"mode": "null",
-                          "reason": "numeric experiment: deletion reference "
-                                    "not applicable to granularity policy; "
-                                    "matched oracle is the reference"}
+            _write_oracle_results(ldir, "loo_finetune", "baseline_h",
+                                  FT_PROTOCOL, {"set_id": sid})
+            rec["loo_finetune"] = {"dir": str(ldir), "mode": "trained",
+                                   "sha256": rv.sha256_file(lckpt)}
+            logger.info(f"GX2[{sid}]: loo_finetune trained")
+        # ---- retrain families (fresh init, route protocol) ----
+        for family in ("matched_retrain", "loo_retrain"):
+            rdir = oracle_root / f"{family}_{sid}"
+            rckpt = (rdir / "adapter_final" / "adapter_model.safetensors")
+            rres = rdir / "oracle_results.json"
+            if rckpt.exists() and (rdir / "oracle_soft.json").exists() \
+                    and rres.exists():
+                with open(rres) as f:
+                    rr = json.load(f)
+                rec[family] = {"dir": str(rdir), "mode": "cached",
+                               "sha256": rv.sha256_file(rckpt),
+                               "fit_ok": rr.get("fit_ok"),
+                               "strict_all_expected":
+                                   rr.get("strict_all_expected"),
+                               "min_candidate_mass":
+                                   rr.get("min_candidate_mass")}
+            else:
+                s = _sess()
+                rr = train_oracle_retrain(s, ds, ctx, entry, family, rdir,
+                                          args_o)
+                rec[family] = {"dir": str(rdir),
+                               "sha256": rv.sha256_file(rckpt), **rr}
         results[sid] = rec
     if session is not None:
         session.release()
@@ -549,33 +769,115 @@ def _e2e_replay_gx(session, ctx, entry, g_rows, args):
     }, rows
 
 
-def _dual_oracle_distances(soft, entry, ctx, oracle_root, sid):
-    """Gated L2/JS/cosine to BOTH oracles + Delta_oracle (plan §11)."""
+ORACLE_DIR_BY_FAMILY = {
+    "matched_finetune": "matched_{sid}",       # G3 legacy dir names
+    "loo_finetune": "loo_{sid}",
+    "matched_retrain": "matched_retrain_{sid}",
+    "loo_retrain": "loo_retrain_{sid}",
+}
+
+
+def load_oracle_soft(oracle_root, family, sid):
+    p = (oracle_root / ORACLE_DIR_BY_FAMILY[family].format(sid=sid)
+         / "oracle_soft.json")
+    if not p.exists():
+        return None
+    with open(p) as f:
+        return json.load(f)
+
+
+def oracle_family_distances(edit_summaries, entry, ctx, oracle_root, sid):
+    """G3.1: gated distances to all FOUR oracle families + separate deltas.
+
+    delta_ft_l2      = D(edit, loo_finetune)  - D(edit, matched_finetune)
+    delta_retrain_l2 = D(edit, loo_retrain)   - D(edit, matched_retrain)
+    Positive delta = the edit is CLOSER to the transformation-matched
+    reference than to the leave-one-out (deletion) reference OF THE SAME
+    FAMILY.  ``edit_summaries`` maps identity id -> candidate summary
+    (as produced by _soft_all / rebuildable from soft_probs_full).
+    Legacy keys: "matched"/"loo" alias the finetune families and
+    "delta_oracle_l2" aliases delta_ft_l2 (G3 reports used them).
+    """
+    softs = {fam: load_oracle_soft(oracle_root, fam, sid)
+             for fam in ORACLE_FAMILIES}
     out = {}
-    def load(name):
-        p = oracle_root / f"{name}_{sid}" / "oracle_soft.json"
-        if not p.exists():
-            return None
-        with open(p) as f:
-            return json.load(f)
-    matched, loo = load("matched"), load("loo")
     for iid in ctx["identity_ids"]:
         rec = {}
-        for oname, osoft in (("matched", matched), ("loo", loo)):
-            if osoft is None:
-                rec[oname] = {"distance": None, "reliable": False,
-                              "reason": "oracle not available"}
+        for fam in ORACLE_FAMILIES:
+            o = softs[fam]
+            if o is None or iid not in o:
+                rec[fam] = {"distance": None, "reliable": False,
+                            "reason": "oracle not available"}
                 continue
-            d, rel, why = rv.gated_distance(soft[iid], osoft[iid],
+            d, rel, why = rv.gated_distance(edit_summaries[iid], o[iid],
                                             "candidate", ctx["vocab"],
                                             MIN_CANDIDATE_MASS)
-            rec[oname] = {"distance": d, "reliable": rel, "reason": why}
-        dm, dl = rec["matched"]["distance"], rec["loo"]["distance"]
-        rec["delta_oracle_l2"] = ((dl["l2"] - dm["l2"])
-                                  if dm and dl else None)
-        rec["delta_reliable"] = bool(dm and dl)
+            rec[fam] = {"distance": d, "reliable": rel, "reason": why}
+        rec["matched"] = rec["matched_finetune"]   # legacy alias
+        rec["loo"] = rec["loo_finetune"]           # legacy alias
+
+        def _l2(fam, _rec=rec):
+            dd = _rec[fam]["distance"]
+            return dd["l2"] if dd else None
+        mf, lf = _l2("matched_finetune"), _l2("loo_finetune")
+        mr, lr = _l2("matched_retrain"), _l2("loo_retrain")
+        rec["delta_ft_l2"] = ((lf - mf) if mf is not None
+                              and lf is not None else None)
+        rec["delta_retrain_l2"] = ((lr - mr) if mr is not None
+                                   and lr is not None else None)
+        rec["delta_oracle_l2"] = rec["delta_ft_l2"]   # legacy alias
+        rec["delta_reliable"] = rec["delta_ft_l2"] is not None
+        rec["delta_retrain_reliable"] = rec["delta_retrain_l2"] is not None
         out[iid] = rec
     return out
+
+
+def summaries_from_probs(probs_by_iid, ctx):
+    """CPU rebuild of _soft_all-style summaries from stored probs."""
+    return {iid: rv.build_candidate_summary(probs, ctx["vocab"],
+                                            gx.DELETED_LABEL)
+            for iid, probs in probs_by_iid.items()}
+
+
+def reevaluate_oracles_cpu(ds, ctx, matrix, out_base):
+    """GX2R (G3.1): recompute the oracle-family block of EXISTING cell
+    results from STORED distributions.  Edited checkpoints are untouched;
+    this is CPU-only.  Rewrites cell_results.json with 'oracle_families'
+    (legacy 'dual_oracle' kept as the finetune-only G3 view)."""
+    logger.info("=" * 60)
+    logger.info(f"GX2R: CPU re-evaluation of stored cells against all "
+                f"four oracle families ({ds})")
+    logger.info("=" * 60)
+    oracle_root = out_base / "oracles"
+    n = 0
+    for p in sorted((out_base / "cells").glob("*/seed_*/cell_results.json")):
+        with open(p) as f:
+            cell = json.load(f)
+        probs = cell.get("soft_probs_full")
+        if not probs:
+            logger.warning("GX2R[%s]: no soft_probs_full; skipped",
+                           cell["cell_id"])
+            continue
+        entry = next((e for e in matrix["sets"]
+                      if e["set_id"] == cell["set_id"]), None)
+        if entry is None:
+            continue
+        fam = oracle_family_distances(summaries_from_probs(probs, ctx),
+                                      entry, ctx, oracle_root,
+                                      cell["set_id"])
+        cell["oracle_families"] = fam
+        cell["oracle_block_version"] = "g3_1"
+        cell["oracle_reevaluation_note"] = (
+            "G3.1 CPU re-evaluation: distances recomputed from stored "
+            "candidate-label distributions; edited checkpoint and its "
+            "metrics unchanged; families distinguish baseline-h "
+            "fine-tuning references from fresh-init retraining references")
+        with open(p, "w") as f:
+            json.dump(cell, f, indent=2)
+        n += 1
+        logger.info("GX2R[%s]: families recomputed", cell["cell_id"])
+    logger.info(f"GX2R: {n} cell files re-evaluated")
+    return n
 
 
 def _pass_criteria(hard, soft, entry, ctx):
@@ -702,8 +1004,8 @@ def run_cells(args, ds, ctx, matrix, out_base):
                 hard = _hard_eval(session, ctx, entry, args)
                 soft = _soft_all(session, ctx, args_c)
                 criteria = _pass_criteria(hard, soft, entry, ctx)
-                dist = _dual_oracle_distances(soft, entry, ctx, oracle_root,
-                                              sid)
+                dist = oracle_family_distances(soft, entry, ctx,
+                                               oracle_root, sid)
                 e2e, e2e_rows = ({"level": "association-only",
                                   "reason": "no image router for numeric "
                                             "profiles (CelebA g redesign "
@@ -729,6 +1031,8 @@ def run_cells(args, ds, ctx, matrix, out_base):
                     "soft_probs_full": {i: soft[i]["probs"]
                                         for i in ctx["identity_ids"]},
                     "dual_oracle": dist,
+                    "oracle_families": dist,
+                    "oracle_block_version": "g3_1",
                     "e2e": e2e, "e2e_rows": e2e_rows,
                     "criteria": criteria,
                 }
@@ -758,7 +1062,22 @@ def load_all_cells(out_base):
     return cells
 
 
-def aggregate_gx(ds, out_base, matrix):
+def _oracle_block(c):
+    return c.get("oracle_families") or c.get("dual_oracle") or {}
+
+
+def _fam_l2(c, t, fam):
+    r = _oracle_block(c).get(t, {}).get(fam, {})
+    if r.get("reliable") and r.get("distance"):
+        return r["distance"]["l2"]
+    return None
+
+
+def _fam_delta(c, t, key):
+    return _oracle_block(c).get(t, {}).get(key)
+
+
+def aggregate_gx(ds, out_base, matrix, args=None):
     logger.info("=" * 60)
     logger.info(f"GX7: AGGREGATE ({ds})")
     logger.info("=" * 60)
@@ -777,6 +1096,28 @@ def aggregate_gx(ds, out_base, matrix):
                 "min": round(min(vals), 8), "max": round(max(vals), 8),
                 "n": len(vals)}
 
+    def is_transformation(op):
+        return op != "refusal"
+
+    def oracle_metrics(cs, op_filter=None):
+        """Per-family L2 + deltas over target identities, optionally
+        restricted to transformations or refusal controls (G3.1: refusal
+        targets must NOT contribute to the granularity headline)."""
+        out = {}
+        for fam in ORACLE_FAMILIES:
+            out[f"l2_to_{fam}"] = msd(
+                [_fam_l2(c, t, fam) for c in cs for t, a in
+                 c["assignments"].items()
+                 if op_filter is None or is_transformation(a["operation"])
+                 == op_filter])
+        for key in ("delta_ft_l2", "delta_retrain_l2"):
+            out[key] = msd(
+                [_fam_delta(c, t, key) for c in cs for t, a in
+                 c["assignments"].items()
+                 if op_filter is None or is_transformation(a["operation"])
+                 == op_filter])
+        return out
+
     per_mode = {}
     for mode, cs in sorted(by_mode.items()):
         cls_counts = {}
@@ -788,13 +1129,16 @@ def aggregate_gx(ds, out_base, matrix):
         crit_names = cs[0]["criteria"]["checks"]
         fails = {k: sum(not c["criteria"]["checks"][k] for c in cs)
                  for k in crit_names}
-        deltas = [c["dual_oracle"][t]["delta_oracle_l2"]
-                  for c in cs for t in c["assignments"]
-                  if c["dual_oracle"][t]["delta_reliable"]]
-        matched_target_l2 = [
-            c["dual_oracle"][t]["matched"]["distance"]["l2"]
-            for c in cs for t in c["assignments"]
-            if c["dual_oracle"][t]["matched"]["reliable"]]
+        sib_ids_total = sum(len(c["criteria"]["sibling_ids"]) for c in cs)
+        retain_l2 = {
+            fam: msd([max((_fam_l2(c, r, fam) or 0.0)
+                          for r in c["soft_probs_full"]
+                          if r not in c["assignments"])
+                      for c in cs
+                      if any(_fam_l2(c, r, fam) is not None
+                             for r in c["soft_probs_full"]
+                             if r not in c["assignments"])])
+            for fam in ORACLE_FAMILIES}
         per_mode[mode] = {
             "n_cells": len(cs),
             "cell_pass": sum(c["criteria"]["cell_pass"] for c in cs),
@@ -803,8 +1147,16 @@ def aggregate_gx(ds, out_base, matrix):
                 [c["criteria"]["strict_expected_accuracy"] for c in cs]),
             "retain_acc": msd([c["criteria"]["retain_acc"] for c in cs]),
             "sibling_acc": msd([c["criteria"]["sibling_acc"] for c in cs]),
-            "sibling_cells_with_controls": sum(
-                1 for c in cs if c["criteria"]["sibling_ids"]),
+            "sibling_coverage": {
+                "cells_with_sibling_controls": sum(
+                    1 for c in cs if c["criteria"]["sibling_ids"]),
+                "n_cells": len(cs),
+                "sibling_controls_total": sib_ids_total,
+                "note": "sibling metric is null (never vacuous 1.0) for "
+                        "targets whose sibling is co-targeted or unique in "
+                        "the sampled hierarchy; coverage must always be "
+                        "reported next to any sibling accuracy",
+            },
             "min_target_p_desired": msd(
                 [c["criteria"]["min_target_p_desired"] for c in cs]),
             "max_target_p_source": msd(
@@ -812,8 +1164,12 @@ def aggregate_gx(ds, out_base, matrix):
             "min_candidate_mass": msd(
                 [c["criteria"]["min_candidate_mass"] for c in cs]),
             "target_classification_counts": cls_counts,
-            "oracle_target_l2_to_matched": msd(matched_target_l2),
-            "delta_oracle_l2": msd(deltas),
+            # G3.1: separate blocks -- refusal controls never contribute
+            # to the granularity (transformation) headline
+            "transformation_targets": oracle_metrics(cs, True),
+            "refusal_controls": oracle_metrics(cs, False),
+            "all_targets": oracle_metrics(cs, None),
+            "retained_l2_max_by_family": retain_l2,
             "per_seed": {str(c["seed"]): {
                 "cell_pass": c["criteria"]["cell_pass"],
                 "strict": c["criteria"]["strict_expected_accuracy"],
@@ -849,13 +1205,182 @@ def aggregate_gx(ds, out_base, matrix):
         for b in boundary.values():
             b["accuracy"] = b["correct"] / max(b["n"], 1)
 
+    # ---------------- G3.1 promotion gate (transformation targets) ----
+    gate_per = []
+    for c in cells:
+        for t, a in c["assignments"].items():
+            if a["operation"] == "refusal":
+                continue
+            r = _oracle_block(c).get(t, {})
+            dmr = (r.get("matched_retrain") or {}).get("distance")
+            dlr = (r.get("loo_retrain") or {}).get("distance")
+            delta = r.get("delta_retrain_l2")
+            fitp = (out_base / "oracles"
+                    / f"matched_retrain_{c['set_id']}"
+                    / "oracle_results.json")
+            fit = {}
+            if fitp.exists():
+                with open(fitp) as f:
+                    fit = json.load(f)
+            gate_per.append({
+                "cell_id": c["cell_id"], "target": t,
+                "operation": a["operation"],
+                "matched_retrain_fit_ok": fit.get("fit_ok"),
+                "matched_retrain_strict": fit.get("strict_all_expected"),
+                "matched_retrain_mass": fit.get("min_candidate_mass"),
+                "l2_to_matched_retrain": dmr["l2"] if dmr else None,
+                "l2_to_loo_retrain": dlr["l2"] if dlr else None,
+                "delta_retrain_l2": delta,
+                "delta_material": (delta is not None
+                                   and delta >= DELTA_RETRAIN_MIN_MARGIN),
+                "closer_to_matched_retrain": bool(
+                    dmr and dlr and dmr["l2"] < dlr["l2"]),
+            })
+    have = [p for p in gate_per if p["delta_retrain_l2"] is not None]
+    if not gate_per:
+        g3_1_gate = {"status": "no_transformation_targets_evaluated"}
+    elif not have:
+        g3_1_gate = {"status": "retrain_oracles_not_yet_trained",
+                     "n_transformation_targets": len(gate_per),
+                     "per_target": gate_per}
+    else:
+        ok = (len(have) == len(gate_per) and all(
+            p["matched_retrain_fit_ok"]
+            and (p["matched_retrain_mass"] or 0) >= 0.99
+            and p["delta_material"] and p["closer_to_matched_retrain"]
+            for p in have))
+        g3_1_gate = {
+            "status": "evaluated", "passed": bool(ok),
+            "margin_l2": DELTA_RETRAIN_MIN_MARGIN,
+            "n_transformation_targets": len(gate_per),
+            "n_with_retrain_oracles": len(have),
+            "conditions": [
+                ("matched_retrain fits ALL transformed and retained "
+                 "mappings (strict 1.0)"),
+                "matched_retrain candidate mass >= 0.99",
+                "delta_retrain_l2 >= margin (material separation)",
+                "D(edit, matched_retrain) < D(edit, loo_retrain)",
+                ("holds for EVERY transformation target, refusal controls "
+                 "excluded")],
+            "per_target": gate_per}
+
+    # ---------------- scoped claims (G3.1 wording discipline) ----------
+    def _trans_msd(key):
+        return msd([_fam_delta(c, t, key) if key.startswith("delta")
+                    else _fam_l2(c, t, key)
+                    for c in cells for t, a in c["assignments"].items()
+                    if a["operation"] != "refusal"])
+    sib_tot = sum(len(c["criteria"]["sibling_ids"]) for c in cells)
+    sib_ok = 0
+    for c in cells:
+        hp = {p["identity_id"]: p for p in c["hard_preds"]}
+        sib_ok += sum(hp[i]["correct_post_edit"]
+                      for i in c["criteria"]["sibling_ids"] if i in hp)
+    l2_mf, l2_mr = _trans_msd("matched_finetune"), _trans_msd(
+        "matched_retrain")
+    d_ft, d_rt = _trans_msd("delta_ft_l2"), _trans_msd("delta_retrain_l2")
+    claims = {
+        "supported_finetune_reference": (
+            "Over the evaluated code prompts and candidate-label space, the "
+            "edit is extremely close to a transformation-matched "
+            "CONTINUED-FINE-TUNING reference (baseline-h init) and far from "
+            "the corresponding leave-one-out fine-tuning reference."
+            + (f" L2-to-matched_finetune mean={l2_mf['mean']} (n={l2_mf['n']}),"
+               f" Delta_FT mean={d_ft['mean']} (min={d_ft['min']})."
+               if l2_mf and d_ft else "")),
+        "retraining_claim": (
+            ("Additionally, the edit is materially closer to a FRESH-init "
+             "transformation-matched RETRAINING reference than to the "
+             "fresh-init leave-one-out retraining reference "
+             + (f"(Delta_retrain mean={d_rt['mean']}, min={d_rt['min']}, "
+                f"margin>={DELTA_RETRAIN_MIN_MARGIN}; L2-to-matched_retrain "
+                f"mean={l2_mr['mean']})." if d_rt and l2_mr else "")
+             + " 'Close to policy-matched retraining' is supported, scoped "
+               "to the evaluated code prompts and candidate-label space.")
+            if g3_1_gate.get("passed") else
+            "'Close to policy-matched retraining' is NOT yet supported: "
+            "retrain-family oracles are missing or the G3.1 gate has not "
+            f"passed (status={g3_1_gate.get('status')})."),
+        "equivalence_scope": (
+            "A tiny L2 between two nearly one-hot distributions over the "
+            "evaluated candidate set does NOT establish global functional "
+            "or parameter equivalence; every proximity claim is scoped to "
+            "the evaluated code prompts and candidate-label space."),
+        "sibling_coverage": (
+            f"The available sibling control(s) passed {sib_ok}/{sib_tot}; "
+            "all other retained controls passed. Targets without a retained "
+            "sibling (unique branch or co-targeted) have a null sibling "
+            "metric, never a vacuous 1.0."),
+        "refusal_separation": (
+            "Refusal controls are reported in a separate block and never "
+            "contribute to the granularity (transformation) headline."),
+    }
+    if ds == "celeba_numeric":
+        claims["numeric_boundary"] = (
+            "Boundary wording: report lower/interior boundary targets that "
+            "passed, including any member of a frozen adjacent-boundary "
+            "pair; 'adjacent-boundary pair passed' is reserved for the full "
+            "matrix once BOTH members (e.g. 19 and 20) are jointly "
+            "evaluated. The pilot edits values individually and does not "
+            "jointly edit and test both sides of a boundary.")
+
+    executed_seeds = sorted({c["seed"] for c in cells})
+    configured_seeds = list(matrix["edit_seeds"])
+    if len(cells) == 0:
+        run_stage = "no_cells"
+    elif (len(cells) == matrix["n_cells"]
+          and executed_seeds == sorted(configured_seeds)):
+        run_stage = "full_matrix"
+    elif len(executed_seeds) == 1:
+        run_stage = "G3_single_seed_pilot(+G3.1_reevaluation)"
+    else:
+        run_stage = "partial_matrix"
+
     summary = {
         "dataset": ds,
-        "edit_seeds": matrix["edit_seeds"],
+        "configured_full_seeds": configured_seeds,
+        "executed_seeds": executed_seeds,
+        "run_stage": run_stage,
+        "edit_seeds": configured_seeds,      # legacy alias
         "n_sets": matrix["n_sets"],
         "cells_evaluated": len(cells),
-        "cells_expected": matrix["n_cells"],
+        "full_matrix_cells_expected": matrix["n_cells"],
+        "cells_expected": matrix["n_cells"],  # legacy alias
         "cell_pass_total": sum(c["criteria"]["cell_pass"] for c in cells),
+        "oracle_family_definitions": {
+            "matched_finetune": "trained baseline h init; transformed full "
+                                "mapping (continued fine-tuning reference)",
+            "loo_finetune": "trained baseline h init; retained mapping "
+                            "only (deletion-as-fine-tuning reference)",
+            "matched_retrain": "FRESH base + fresh LoRA; transformed full "
+                               "mapping; original route-h protocol "
+                               "(3000/200/2e-5, targets x5, retained x50, "
+                               "seed 17)",
+            "loo_retrain": "FRESH base + fresh LoRA; retained mapping "
+                           "only; same route-h protocol",
+            "delta_ft_l2": "D(edit, loo_finetune) - D(edit, "
+                           "matched_finetune)",
+            "delta_retrain_l2": "D(edit, loo_retrain) - D(edit, "
+                                "matched_retrain)",
+        },
+        "correction": {
+            "corrects_commit": "a1df9be",
+            "issue": "G3 described edits as 'policy-matched-retraining "
+                     "equivalent', but its matched/LOO oracles were "
+                     "continued fine-tuning from the trained baseline h, "
+                     "not fresh retraining; aggregation also let the "
+                     "refusal control contribute to the granularity "
+                     "headline and reported sibling accuracy without "
+                     "coverage.",
+            "repair": "G3.1: four named oracle families, separate "
+                      "Delta_FT / Delta_retrain, taxonomic-vs-refusal "
+                      "blocks, sibling coverage counts, "
+                      "configured-vs-executed seed fields, numeric LOO "
+                      "reference, CPU re-evaluation of existing edited "
+                      "checkpoints (weights untouched).",
+        },
+        "g3_1_gate": g3_1_gate,
+        "claims": claims,
         "scope": {
             "multi_seed_meaning": "stable across three EDIT-TRAINING seeds; "
                                   "router, baseline h, cached routing "
@@ -870,7 +1395,10 @@ def aggregate_gx(ds, out_base, matrix):
     with open(out_base / "granularity_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
     logger.info(f"GX7: {summary['cell_pass_total']}/{len(cells)} cells pass "
-                f"(expected {matrix['n_cells']} when complete)")
+                f"(expected {matrix['n_cells']} when complete); G3.1 gate: "
+                f"{g3_1_gate.get('status')}"
+                + (f" passed={g3_1_gate['passed']}"
+                   if "passed" in g3_1_gate else ""))
     return summary
 
 
@@ -904,13 +1432,17 @@ def archive_gx(args, ds, out_base, matrix, oracle_results):
     else:
         _add(SALMU_ROUTE_H, "route/h_C_to_Y.safetensors", "route",
              "salmu_pilot_h")
+    legacy_name = {"matched_finetune": "matched", "loo_finetune": "loo"}
     for sid, rec in oracle_results.items():
-        for kind in ("matched", "loo"):
-            if rec.get(kind, {}).get("mode") in ("trained", "cached",
-                                                 "reused_suppression_matrix"):
-                _add(out_base / "oracles" / f"{kind}_{sid}"
+        for fam in ORACLE_FAMILIES:
+            fr = rec.get(fam) or rec.get(legacy_name.get(fam, ""), {})
+            if fr.get("sha256") or fr.get("mode") in (
+                    "trained", "cached", "trained_fresh",
+                    "reused_suppression_matrix"):
+                _add(out_base / "oracles"
+                     / ORACLE_DIR_BY_FAMILY[fam].format(sid=sid)
                      / "adapter_final" / "adapter_model.safetensors",
-                     f"oracles/{kind}_{sid}.safetensors", f"oracle_{kind}",
+                     f"oracles/{fam}_{sid}.safetensors", f"oracle_{fam}",
                      sid)
     for c in load_all_cells(out_base):
         _add(out_base / "cells" / c["set_id"] / f"seed_{c['seed']}"
@@ -970,10 +1502,12 @@ def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
         inputs["numeric_manifest"] = rv.sha256_file(
             MANIFEST_DIR / "numeric_manifest.json")
     ckpts = {}
+    legacy_name = {"matched_finetune": "matched", "loo_finetune": "loo"}
     for sid, rec in oracle_results.items():
-        for kind in ("matched", "loo"):
-            if rec.get(kind, {}).get("sha256"):
-                ckpts[f"oracle_{kind}_{sid}"] = rec[kind]["sha256"]
+        for fam in ORACLE_FAMILIES:
+            fr = rec.get(fam) or rec.get(legacy_name.get(fam, ""), {})
+            if fr.get("sha256"):
+                ckpts[f"oracle_{fam}_{sid}"] = fr["sha256"]
     for c in load_all_cells(out_base):
         ckpts[f"cell_{c['cell_id']}"] = c["checkpoint_sha256"]
     manifest = {
@@ -988,6 +1522,10 @@ def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
                     "n_files": archive.get("n_files", 0)},
         "results": {"cells_evaluated": summary["cells_evaluated"],
                     "cell_pass_total": summary["cell_pass_total"],
+                    "run_stage": summary["run_stage"],
+                    "executed_seeds": summary["executed_seeds"],
+                    "g3_1_gate_status": summary["g3_1_gate"].get("status"),
+                    "g3_1_gate_passed": summary["g3_1_gate"].get("passed"),
                     "per_mode_pass": {m: [v["cell_pass"], v["n_cells"]]
                                       for m, v in
                                       summary["per_mode"].items()}},
@@ -1007,8 +1545,8 @@ def parse_args():
     p.add_argument("--dataset", required=True,
                    choices=["salmu", "celeba_numeric"])
     p.add_argument("--phase", default="all",
-                   choices=["all", "GX0", "GX1R", "GX2", "GX3", "GX4",
-                            "GX5", "GX7"])
+                   choices=["all", "GX0", "GX1R", "GX2", "GX2R", "GX3",
+                            "GX4", "GX5", "GX7"])
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--seeds", type=int, nargs="+",
                    default=gx.SEEDS_DEFAULT)
@@ -1090,15 +1628,21 @@ def main():
                 oracle_results = json.load(f)
     if args.phase in ("all", "GX3", "GX4", "GX5"):
         run_cells(args, ds, ctx, matrix, out_base)
+    if args.phase in ("all", "GX2R"):
+        # G3.1: CPU re-evaluation of stored cells vs all four families
+        reevaluate_oracles_cpu(ds, ctx, matrix, out_base)
     summary = None
-    if args.phase in ("all", "GX7"):
-        summary = aggregate_gx(ds, out_base, matrix)
-        archive = {"release_dir": None, "hf_repo": None,
-                   "hf_upload_ok": False, "hf_revision": None, "n_files": 0}
-        if not args.smoke:
-            archive = archive_gx(args, ds, out_base, matrix, oracle_results)
-        run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
-                        archive, t_start, provenance)
+    if args.phase in ("all", "GX2R", "GX7"):
+        summary = aggregate_gx(ds, out_base, matrix, args)
+        if args.phase in ("all", "GX7"):
+            archive = {"release_dir": None, "hf_repo": None,
+                       "hf_upload_ok": False, "hf_revision": None,
+                       "n_files": 0}
+            if not args.smoke:
+                archive = archive_gx(args, ds, out_base, matrix,
+                                     oracle_results)
+            run_manifest_gx(args, ds, out_base, matrix, oracle_results,
+                            summary, archive, t_start, provenance)
     logger.info("=" * 60)
     logger.info(f"GRANULARITY RUN ({ds}) PHASE {args.phase} COMPLETE "
                 f"({round(time.time() - t_start, 1)}s)")
