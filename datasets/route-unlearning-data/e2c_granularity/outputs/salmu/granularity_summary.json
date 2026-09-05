@@ -33,92 +33,102 @@
     "repair": "G3.1: four named oracle families, separate Delta_FT / Delta_retrain, taxonomic-vs-refusal blocks, sibling coverage counts, configured-vs-executed seed fields, numeric LOO reference, CPU re-evaluation of existing edited checkpoints (weights untouched)."
   },
   "g3_1_gate": {
-    "status": "retrain_oracles_not_yet_trained",
+    "status": "evaluated",
+    "passed": true,
+    "margin_l2": 0.5,
     "n_transformation_targets": 6,
+    "n_with_retrain_oracles": 6,
+    "conditions": [
+      "matched_retrain fits ALL transformed and retained mappings (strict 1.0)",
+      "matched_retrain candidate mass >= 0.99",
+      "delta_retrain_l2 >= margin (material separation)",
+      "D(edit, matched_retrain) < D(edit, loo_retrain)",
+      "holds for EVERY transformation target, refusal controls excluded"
+    ],
     "per_target": [
       {
         "cell_id": "gx_sal_mix_0__seed17",
         "target": "00036363",
         "operation": "taxonomic",
-        "matched_retrain_fit_ok": null,
-        "matched_retrain_strict": null,
-        "matched_retrain_mass": null,
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
-        "delta_retrain_l2": null,
-        "delta_material": false,
-        "closer_to_matched_retrain": false
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.999850815025811,
+        "l2_to_matched_retrain": 4.8100779748843116e-06,
+        "l2_to_loo_retrain": 1.1531881705494251,
+        "delta_retrain_l2": 1.1531833604714503,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
       },
       {
         "cell_id": "gx_sal_mix_0__seed17",
         "target": "00039880",
         "operation": "taxonomic",
-        "matched_retrain_fit_ok": null,
-        "matched_retrain_strict": null,
-        "matched_retrain_mass": null,
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
-        "delta_retrain_l2": null,
-        "delta_material": false,
-        "closer_to_matched_retrain": false
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.999850815025811,
+        "l2_to_matched_retrain": 3.940347002013062e-06,
+        "l2_to_loo_retrain": 1.20267760127774,
+        "delta_retrain_l2": 1.202673660930738,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
       },
       {
         "cell_id": "gx_sal_s_L1_00036363__seed17",
         "target": "00036363",
         "operation": "taxonomic",
-        "matched_retrain_fit_ok": null,
-        "matched_retrain_strict": null,
-        "matched_retrain_mass": null,
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
-        "delta_retrain_l2": null,
-        "delta_material": false,
-        "closer_to_matched_retrain": false
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9999205834385527,
+        "l2_to_matched_retrain": 6.109291953663537e-07,
+        "l2_to_loo_retrain": 1.267539378718274,
+        "delta_retrain_l2": 1.2675387677890786,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
       },
       {
         "cell_id": "gx_sal_s_L1_00060576__seed17",
         "target": "00060576",
         "operation": "taxonomic",
-        "matched_retrain_fit_ok": null,
-        "matched_retrain_strict": null,
-        "matched_retrain_mass": null,
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
-        "delta_retrain_l2": null,
-        "delta_material": false,
-        "closer_to_matched_retrain": false
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9999734838386426,
+        "l2_to_matched_retrain": 5.063307837433055e-06,
+        "l2_to_loo_retrain": 1.1237244384503466,
+        "delta_retrain_l2": 1.1237193751425092,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
       },
       {
         "cell_id": "gx_sal_s_L2_00039880__seed17",
         "target": "00039880",
         "operation": "taxonomic",
-        "matched_retrain_fit_ok": null,
-        "matched_retrain_strict": null,
-        "matched_retrain_mass": null,
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
-        "delta_retrain_l2": null,
-        "delta_material": false,
-        "closer_to_matched_retrain": false
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.999986792055639,
+        "l2_to_matched_retrain": 4.706825091924143e-06,
+        "l2_to_loo_retrain": 1.2153580152597647,
+        "delta_retrain_l2": 1.2153533084346728,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
       },
       {
         "cell_id": "gx_sal_s_L2_00116450__seed17",
         "target": "00116450",
         "operation": "taxonomic",
-        "matched_retrain_fit_ok": null,
-        "matched_retrain_strict": null,
-        "matched_retrain_mass": null,
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
-        "delta_retrain_l2": null,
-        "delta_material": false,
-        "closer_to_matched_retrain": false
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.999988609972529,
+        "l2_to_matched_retrain": 1.7951102919462967e-06,
+        "l2_to_loo_retrain": 1.241620952302589,
+        "delta_retrain_l2": 1.241619157192297,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
       }
     ]
   },
   "claims": {
     "supported_finetune_reference": "Over the evaluated code prompts and candidate-label space, the edit is extremely close to a transformation-matched CONTINUED-FINE-TUNING reference (baseline-h init) and far from the corresponding leave-one-out fine-tuning reference. L2-to-matched_finetune mean=3e-06 (n=6), Delta_FT mean=1.323072 (min=1.2138887).",
-    "retraining_claim": "'Close to policy-matched retraining' is NOT yet supported: retrain-family oracles are missing or the G3.1 gate has not passed (status=retrain_oracles_not_yet_trained).",
+    "retraining_claim": "Additionally, the edit is materially closer to a FRESH-init transformation-matched RETRAINING reference than to the fresh-init leave-one-out retraining reference (Delta_retrain mean=1.200681, min=1.12371938, margin>=0.5; L2-to-matched_retrain mean=3e-06). 'Close to policy-matched retraining' is supported, scoped to the evaluated code prompts and candidate-label space.",
     "equivalence_scope": "A tiny L2 between two nearly one-hot distributions over the evaluated candidate set does NOT establish global functional or parameter equivalence; every proximity claim is scoped to the evaluated code prompts and candidate-label space.",
     "sibling_coverage": "The available sibling control(s) passed 2/2; all other retained controls passed. Targets without a retained sibling (unique branch or co-targeted) have a null sibling metric, never a vacuous 1.0.",
     "refusal_separation": "Refusal controls are reported in a separate block and never contribute to the granularity (transformation) headline."
@@ -209,8 +219,20 @@
           "max": 1.3619274,
           "n": 2
         },
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
+        "l2_to_matched_retrain": {
+          "mean": 4e-06,
+          "std": 1e-06,
+          "min": 3.94e-06,
+          "max": 4.81e-06,
+          "n": 2
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.177933,
+          "std": 0.034994,
+          "min": 1.15318817,
+          "max": 1.2026776,
+          "n": 2
+        },
         "delta_ft_l2": {
           "mean": 1.287906,
           "std": 0.104677,
@@ -218,7 +240,13 @@
           "max": 1.36192366,
           "n": 2
         },
-        "delta_retrain_l2": null
+        "delta_retrain_l2": {
+          "mean": 1.177929,
+          "std": 0.034995,
+          "min": 1.15318336,
+          "max": 1.20267366,
+          "n": 2
+        }
       },
       "refusal_controls": {
         "l2_to_matched_finetune": {
@@ -235,8 +263,20 @@
           "max": 1.29880448,
           "n": 1
         },
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
+        "l2_to_matched_retrain": {
+          "mean": 1e-06,
+          "std": 0.0,
+          "min": 1.1e-06,
+          "max": 1.1e-06,
+          "n": 1
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.266685,
+          "std": 0.0,
+          "min": 1.26668491,
+          "max": 1.26668491,
+          "n": 1
+        },
         "delta_ft_l2": {
           "mean": 1.298803,
           "std": 0.0,
@@ -244,7 +284,13 @@
           "max": 1.2988034,
           "n": 1
         },
-        "delta_retrain_l2": null
+        "delta_retrain_l2": {
+          "mean": 1.266684,
+          "std": 0.0,
+          "min": 1.2666838,
+          "max": 1.2666838,
+          "n": 1
+        }
       },
       "all_targets": {
         "l2_to_matched_finetune": {
@@ -261,8 +307,20 @@
           "max": 1.3619274,
           "n": 3
         },
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
+        "l2_to_matched_retrain": {
+          "mean": 3e-06,
+          "std": 2e-06,
+          "min": 1.1e-06,
+          "max": 4.81e-06,
+          "n": 3
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.207517,
+          "std": 0.056903,
+          "min": 1.15318817,
+          "max": 1.26668491,
+          "n": 3
+        },
         "delta_ft_l2": {
           "mean": 1.291539,
           "std": 0.074284,
@@ -270,7 +328,13 @@
           "max": 1.36192366,
           "n": 3
         },
-        "delta_retrain_l2": null
+        "delta_retrain_l2": {
+          "mean": 1.207514,
+          "std": 0.056905,
+          "min": 1.15318336,
+          "max": 1.2666838,
+          "n": 3
+        }
       },
       "retained_l2_max_by_family": {
         "matched_finetune": {
@@ -287,8 +351,20 @@
           "max": 5.795e-05,
           "n": 1
         },
-        "matched_retrain": null,
-        "loo_retrain": null
+        "matched_retrain": {
+          "mean": 7.9e-05,
+          "std": 0.0,
+          "min": 7.937e-05,
+          "max": 7.937e-05,
+          "n": 1
+        },
+        "loo_retrain": {
+          "mean": 3.6e-05,
+          "std": 0.0,
+          "min": 3.573e-05,
+          "max": 3.573e-05,
+          "n": 1
+        }
       },
       "per_seed": {
         "17": {
@@ -403,8 +479,20 @@
           "max": 1.32913215,
           "n": 2
         },
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
+        "l2_to_matched_retrain": {
+          "mean": 3e-06,
+          "std": 3e-06,
+          "min": 6.1e-07,
+          "max": 5.06e-06,
+          "n": 2
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.195632,
+          "std": 0.101693,
+          "min": 1.12372444,
+          "max": 1.26753938,
+          "n": 2
+        },
         "delta_ft_l2": {
           "mean": 1.302295,
           "std": 0.037952,
@@ -412,7 +500,13 @@
           "max": 1.32913153,
           "n": 2
         },
-        "delta_retrain_l2": null
+        "delta_retrain_l2": {
+          "mean": 1.195629,
+          "std": 0.101696,
+          "min": 1.12371938,
+          "max": 1.26753877,
+          "n": 2
+        }
       },
       "refusal_controls": {
         "l2_to_matched_finetune": null,
@@ -437,8 +531,20 @@
           "max": 1.32913215,
           "n": 2
         },
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
+        "l2_to_matched_retrain": {
+          "mean": 3e-06,
+          "std": 3e-06,
+          "min": 6.1e-07,
+          "max": 5.06e-06,
+          "n": 2
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.195632,
+          "std": 0.101693,
+          "min": 1.12372444,
+          "max": 1.26753938,
+          "n": 2
+        },
         "delta_ft_l2": {
           "mean": 1.302295,
           "std": 0.037952,
@@ -446,7 +552,13 @@
           "max": 1.32913153,
           "n": 2
         },
-        "delta_retrain_l2": null
+        "delta_retrain_l2": {
+          "mean": 1.195629,
+          "std": 0.101696,
+          "min": 1.12371938,
+          "max": 1.26753877,
+          "n": 2
+        }
       },
       "retained_l2_max_by_family": {
         "matched_finetune": {
@@ -463,8 +575,20 @@
           "max": 5.002e-05,
           "n": 2
         },
-        "matched_retrain": null,
-        "loo_retrain": null
+        "matched_retrain": {
+          "mean": 4.5e-05,
+          "std": 1.6e-05,
+          "min": 3.35e-05,
+          "max": 5.67e-05,
+          "n": 2
+        },
+        "loo_retrain": {
+          "mean": 7.1e-05,
+          "std": 3.3e-05,
+          "min": 4.759e-05,
+          "max": 9.448e-05,
+          "n": 2
+        }
       },
       "per_seed": {
         "17": {
@@ -573,8 +697,20 @@
           "max": 1.39734656,
           "n": 2
         },
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
+        "l2_to_matched_retrain": {
+          "mean": 3e-06,
+          "std": 2e-06,
+          "min": 1.8e-06,
+          "max": 4.71e-06,
+          "n": 2
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.228489,
+          "std": 0.018571,
+          "min": 1.21535802,
+          "max": 1.24162095,
+          "n": 2
+        },
         "delta_ft_l2": {
           "mean": 1.379015,
           "std": 0.025919,
@@ -582,7 +718,13 @@
           "max": 1.39734227,
           "n": 2
         },
-        "delta_retrain_l2": null
+        "delta_retrain_l2": {
+          "mean": 1.228486,
+          "std": 0.018573,
+          "min": 1.21535331,
+          "max": 1.24161916,
+          "n": 2
+        }
       },
       "refusal_controls": {
         "l2_to_matched_finetune": null,
@@ -607,8 +749,20 @@
           "max": 1.39734656,
           "n": 2
         },
-        "l2_to_matched_retrain": null,
-        "l2_to_loo_retrain": null,
+        "l2_to_matched_retrain": {
+          "mean": 3e-06,
+          "std": 2e-06,
+          "min": 1.8e-06,
+          "max": 4.71e-06,
+          "n": 2
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.228489,
+          "std": 0.018571,
+          "min": 1.21535802,
+          "max": 1.24162095,
+          "n": 2
+        },
         "delta_ft_l2": {
           "mean": 1.379015,
           "std": 0.025919,
@@ -616,7 +770,13 @@
           "max": 1.39734227,
           "n": 2
         },
-        "delta_retrain_l2": null
+        "delta_retrain_l2": {
+          "mean": 1.228486,
+          "std": 0.018573,
+          "min": 1.21535331,
+          "max": 1.24161916,
+          "n": 2
+        }
       },
       "retained_l2_max_by_family": {
         "matched_finetune": {
@@ -633,8 +793,20 @@
           "max": 3.508e-05,
           "n": 2
         },
-        "matched_retrain": null,
-        "loo_retrain": null
+        "matched_retrain": {
+          "mean": 9.4e-05,
+          "std": 6e-06,
+          "min": 9.041e-05,
+          "max": 9.849e-05,
+          "n": 2
+        },
+        "loo_retrain": {
+          "mean": 4.5e-05,
+          "std": 1.1e-05,
+          "min": 3.768e-05,
+          "max": 5.282e-05,
+          "n": 2
+        }
       },
       "per_seed": {
         "17": {
