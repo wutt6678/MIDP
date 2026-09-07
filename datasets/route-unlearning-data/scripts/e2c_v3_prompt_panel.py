@@ -1897,11 +1897,20 @@ def update_run_manifest(ds, ds_out, panel, provenance, route, results,
 # Frozen inputs and entry point
 # ====================================================================== #
 def _load_matrix(ds):
-    """The committed matrix, verified against the frozen builder in code.
+    """The committed matrix, re-derived and GX0-validated, or a hard stop.
 
-    Verify-not-rewrite, as in the granularity runner: the matrix is a
-    committed input to a held-out evaluation, so a difference between the file
-    and the builder is a stop, not a regeneration.
+    Verify-not-rewrite, as in the granularity runner: the matrix is a committed
+    input to a held-out evaluation, so a difference between the file and the
+    builder is a stop, not a regeneration.
+
+    One subtlety decides whether that comparison means anything.
+    ``gx.validate_set`` POPULATES ``entry["controls"]`` and
+    ``entry["control_notes"]`` as a side effect, so the committed matrix equals
+    the builder's output only AFTER a GX0 pass has run over it.  Comparing
+    first would report drift where there is none; skipping the validation to
+    make the comparison pass would let a panel be evaluated against a matrix
+    the project's own hard gate rejects.  Running the same pass in the same
+    order avoids both.
     """
     path = gxm.MANIFEST_DIR / f"matrix_{ds}.json"
     if not path.exists():
@@ -1910,12 +1919,31 @@ def _load_matrix(ds):
             f"before evaluating a prompt panel against it")
     committed = json.loads(path.read_text(encoding="utf-8"))
     with open(gxm.SALMU_MANIFEST, encoding="utf-8") as f:
-        rebuilt = gx.build_salmu_matrix(json.load(f))
+        # build_salmu_matrix returns (matrix, builder_ctx); only the matrix is
+        # the committed artifact, exactly as the granularity runner compares it
+        rebuilt, _builder_ctx = gx.build_salmu_matrix(json.load(f))
+    ctx = gxm.dataset_ctx(ds, rebuilt)
+    issues = []
+    for entry in rebuilt["sets"]:
+        issues.extend(f"{entry['set_id']}: {issue}"
+                      for issue in gx.validate_set(entry, ctx))
+    vocab_issues, _collisions = gx.validate_vocab(ctx["vocab"])
+    issues.extend(vocab_issues)
+    if issues:
+        for issue in issues:
+            logger.error("GX0 ISSUE: %s", issue)
+        raise RuntimeError(
+            f"the granularity matrix failed GX0 validation with {len(issues)} "
+            f"issue(s); a held-out panel must not be evaluated against a "
+            f"matrix the project's own hard gate rejects")
     if rebuilt != committed:
         raise RuntimeError(
             f"{path} differs from the frozen builder in code; the matrix is a "
             f"committed input and must not drift under a held-out panel")
-    return committed
+    logger.info("matrix %s: GX0 validation passed and the committed file "
+                "matches the frozen builder (%d sets, vocab %d)", ds,
+                len(rebuilt["sets"]), len(ctx["vocab"]))
+    return rebuilt
 
 
 #: The code this runner executes.  Provenance binds to THESE files being

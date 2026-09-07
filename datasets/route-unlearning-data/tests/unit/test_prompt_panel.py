@@ -147,6 +147,67 @@ def test_the_matrix_really_has_21_sets_and_3_edit_seeds(real):
     assert matrix["edit_seeds"] == [17, 42, 123]
 
 
+def test_load_matrix_verifies_the_committed_matrix_against_the_builder():
+    """The matrix is a committed input to a held-out panel, so it is verified
+    against the frozen builder rather than trusted -- and rebuilt, never
+    rewritten.  ``build_salmu_matrix`` returns ``(matrix, builder_ctx)``, and
+    only the matrix is the artifact; comparing the tuple would always differ."""
+    matrix = pp._load_matrix("salmu")
+    assert matrix["dataset"] == "salmu"
+    assert len(matrix["sets"]) == 21
+    assert matrix["edit_seeds"] == [17, 42, 123]
+
+
+def test_load_matrix_runs_the_gx0_pass_that_populates_controls():
+    """``gx.validate_set`` fills ``controls`` / ``control_notes`` IN PLACE, so
+    the committed matrix only equals the builder's output after that pass.
+    Comparing before validating reports drift where there is none."""
+    with open(gxm.SALMU_MANIFEST, encoding="utf-8") as f:
+        raw, _builder_ctx = gx.build_salmu_matrix(json.load(f))
+    assert all(entry.get("controls") is None for entry in raw["sets"]), \
+        "fixture stale: the builder now populates controls itself"
+    matrix = pp._load_matrix("salmu")
+    assert all(entry["controls"] for entry in matrix["sets"])
+    committed = json.loads((gxm.MANIFEST_DIR / "matrix_salmu.json").read_text(
+        encoding="utf-8"))
+    assert matrix == committed
+
+
+def test_a_matrix_that_fails_gx0_is_refused(monkeypatch):
+    """A held-out panel must not be evaluated against a matrix the project's
+    own hard gate rejects -- and GX0 is a precondition, not a comment."""
+    real_builder = gx.build_salmu_matrix
+
+    def broken(manifest):
+        matrix, builder_ctx = real_builder(manifest)
+        entry = matrix["sets"][0]
+        iid = next(iter(entry["assignments"]))
+        entry["assignments"][iid]["target"] = "a label nobody froze"
+        return matrix, builder_ctx
+
+    monkeypatch.setattr(gx, "build_salmu_matrix", broken)
+    with pytest.raises(RuntimeError, match="failed GX0 validation"):
+        pp._load_matrix("salmu")
+
+
+def test_a_drifted_matrix_is_refused(tmp_path, monkeypatch):
+    body = json.loads((gxm.MANIFEST_DIR / "matrix_salmu.json").read_text(
+        encoding="utf-8"))
+    body["vocab"] = sorted(body["vocab"] + ["a label nobody froze"])
+    monkeypatch.setattr(gxm, "MANIFEST_DIR", tmp_path)
+    (tmp_path / "matrix_salmu.json").write_text(json.dumps(body, indent=2),
+                                                encoding="utf-8")
+    with pytest.raises(RuntimeError, match="must not drift"):
+        pp._load_matrix("salmu")
+
+
+def test_a_missing_matrix_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(gxm, "MANIFEST_DIR", tmp_path)
+    with pytest.raises(RuntimeError,
+                       match="build and commit the granularity matrix"):
+        pp._load_matrix("salmu")
+
+
 def test_distractor_decoy_is_neutral_for_every_set(real):
     """A decoy that is ever a source / target / expected label is a leak."""
     panel, ctx, matrix = real["panel"], real["ctx"], real["matrix"]
