@@ -1,0 +1,179 @@
+{
+  "kind": "balanced_matched_retrain_ablation",
+  "dataset": "salmu",
+  "provenance": {
+    "commit": "febc6621d37330453913382976bdd2976329356f",
+    "runner_script_sha256": "5135202aff0b4352d2b6a9526929acb6fee247bb6f621d1a1bb67b5aa7d876f6",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "dirty": true,
+    "clean_required": true,
+    "started_utc": "2026-09-07T05:19:40Z",
+    "parallel_run_dirty_outputs_ok": true
+  },
+  "representative_sets": [
+    "gx_sal_s_L1_00060576",
+    "gx_sal_s_L2_00039880",
+    "gx_sal_mix_0"
+  ],
+  "balanced_oracles": {
+    "gx_sal_s_L1_00060576": {
+      "sha256": "ad74ea9e6a5ce9458f43d2ed3d7e2eb4441bde0a33d5fb694cc8ba1ed047862c",
+      "mode": "trained_fresh",
+      "target_boost": 1,
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9998958590100605,
+      "fit_ok": true
+    },
+    "gx_sal_s_L2_00039880": {
+      "sha256": "4a0d2d4c2ff6aab680caf467fb3610d6d9864c93f3a1c488cecb30aa17cdc4ac",
+      "mode": "trained_fresh",
+      "target_boost": 1,
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9999278500300169,
+      "fit_ok": true
+    },
+    "gx_sal_mix_0": {
+      "sha256": "03ebe620b06a9364e3c34cc0c4c487ab2335453973e514ecee478a6ba635b4e0",
+      "mode": "trained_fresh",
+      "target_boost": 1,
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9995717000298068,
+      "fit_ok": true
+    }
+  },
+  "comparison": {
+    "dataset": "salmu",
+    "ablation": "balanced matched_retrain (target_boost=1) vs weighted (target_boost=5) vs LOO retrain; same edited cells E",
+    "distance_metric": "gated candidate-space L2 (unreliable -> null)",
+    "margin_l2": 0.5,
+    "protocol_identical": {
+      "steps": 3000,
+      "warmup": 200,
+      "lr": 2e-05,
+      "repeat": 50,
+      "seed": 17,
+      "only_difference": "target_boost 1 (balanced) vs 5 (weighted)"
+    },
+    "promotion_conditions": [
+      "balanced matched oracle FITS transformed + retained mappings (strict 1.0, mass >= 0.99)",
+      "D(E, M_x1) < D(E, L) for every transformation target",
+      "Delta_x1 = D(E,L) - D(E,M_x1) >= margin (0.5)",
+      "conclusion agrees across ALL representative transformation types (refusal controls reported separately, not gating)"
+    ],
+    "per_set": {
+      "gx_sal_s_L1_00060576": {
+        "mode": "single_level1",
+        "balanced_fit": {
+          "strict_all_expected": 1.0,
+          "min_candidate_mass": 0.9998958590100605,
+          "fit_ok": true,
+          "target_boost": 1
+        },
+        "transformation_targets": [
+          {
+            "target": "00060576",
+            "operation": "taxonomic",
+            "d_E_Mx1": 1.3068885966766579e-05,
+            "d_E_Mx5": 5.063307837433055e-06,
+            "d_E_L": 1.1237244384503466,
+            "delta_x1": 1.12371136956438,
+            "delta_x5": 1.1237193751425092,
+            "Mx1_closer_than_L": true,
+            "delta_x1_material": true,
+            "Mx1_vs_Mx5": "weighted_closer"
+          }
+        ],
+        "refusal_controls": [],
+        "set_promotes": true,
+        "failed_conditions": []
+      },
+      "gx_sal_s_L2_00039880": {
+        "mode": "single_level2",
+        "balanced_fit": {
+          "strict_all_expected": 1.0,
+          "min_candidate_mass": 0.9999278500300169,
+          "fit_ok": true,
+          "target_boost": 1
+        },
+        "transformation_targets": [
+          {
+            "target": "00039880",
+            "operation": "taxonomic",
+            "d_E_Mx1": 1.0444454790604985e-05,
+            "d_E_Mx5": 4.706825091924143e-06,
+            "d_E_L": 1.2153580152597647,
+            "delta_x1": 1.2153475708049741,
+            "delta_x5": 1.2153533084346728,
+            "Mx1_closer_than_L": true,
+            "delta_x1_material": true,
+            "Mx1_vs_Mx5": "weighted_closer"
+          }
+        ],
+        "refusal_controls": [],
+        "set_promotes": true,
+        "failed_conditions": []
+      },
+      "gx_sal_mix_0": {
+        "mode": "simultaneous_mixed_depth",
+        "balanced_fit": {
+          "strict_all_expected": 1.0,
+          "min_candidate_mass": 0.9995717000298068,
+          "fit_ok": true,
+          "target_boost": 1
+        },
+        "transformation_targets": [
+          {
+            "target": "00036363",
+            "operation": "taxonomic",
+            "d_E_Mx1": 2.5913471205003202e-05,
+            "d_E_Mx5": 4.8100779748843116e-06,
+            "d_E_L": 1.1531881705494251,
+            "delta_x1": 1.15316225707822,
+            "delta_x5": 1.1531833604714503,
+            "Mx1_closer_than_L": true,
+            "delta_x1_material": true,
+            "Mx1_vs_Mx5": "weighted_closer"
+          },
+          {
+            "target": "00039880",
+            "operation": "taxonomic",
+            "d_E_Mx1": 2.8006667088248508e-05,
+            "d_E_Mx5": 3.940347002013062e-06,
+            "d_E_L": 1.20267760127774,
+            "delta_x1": 1.2026495946106517,
+            "delta_x5": 1.202673660930738,
+            "Mx1_closer_than_L": true,
+            "delta_x1_material": true,
+            "Mx1_vs_Mx5": "weighted_closer"
+          }
+        ],
+        "refusal_controls": [
+          {
+            "target": "00060576",
+            "operation": "refusal",
+            "d_E_Mx1": 5.383373326528302e-07,
+            "d_E_Mx5": 1.1021190379474285e-06,
+            "d_E_L": 1.2666849060364358,
+            "delta_x1": 1.266684367699103,
+            "delta_x5": 1.2666838039173978,
+            "Mx1_closer_than_L": true,
+            "delta_x1_material": true,
+            "Mx1_vs_Mx5": "balanced_closer"
+          }
+        ],
+        "set_promotes": true,
+        "failed_conditions": []
+      }
+    },
+    "promotes_all": true
+  },
+  "archive": {
+    "release_dir": "releases/e2c_gran_balanced_salmu_febc662",
+    "hf_upload_ok": true,
+    "hf_revision": "5cf119e6d29fb69bedcc1259402d8b41169c8bae",
+    "n_files": 3
+  },
+  "promotes_all": true,
+  "elapsed_sec": 5654.5
+}

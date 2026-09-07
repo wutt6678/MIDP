@@ -1,0 +1,121 @@
+{
+  "kind": "balanced_matched_retrain_ablation",
+  "dataset": "celeba_numeric",
+  "provenance": {
+    "commit": "2a274a6d63fc9b7e92939e42d3eb480129ccf0e2",
+    "runner_script_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "dirty": true,
+    "clean_required": true,
+    "started_utc": "2026-09-07T06:53:57Z",
+    "parallel_run_dirty_outputs_ok": true
+  },
+  "representative_sets": [
+    "gx_num_s_exact_to_narrow_Y02",
+    "gx_num_s_exact_to_broad_Y04"
+  ],
+  "balanced_oracles": {
+    "gx_num_s_exact_to_narrow_Y02": {
+      "sha256": "1be76f6faa1f5ea93b0f5c0c509c078cb6376afbf90053260df82e211d479838",
+      "mode": "trained_fresh",
+      "target_boost": 1,
+      "oracle_seed": 17,
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9998422179861234,
+      "fit_ok": true
+    },
+    "gx_num_s_exact_to_broad_Y04": {
+      "sha256": "81245103d03124aa0ecde1d89f6416e97d1f9d4905bc36405e82d4d1cf295a6b",
+      "mode": "trained_fresh",
+      "target_boost": 1,
+      "oracle_seed": 17,
+      "strict_all_expected": 1.0,
+      "min_candidate_mass": 0.9998655729075633,
+      "fit_ok": true
+    }
+  },
+  "comparison": {
+    "dataset": "celeba_numeric",
+    "ablation": "balanced matched_retrain (target_boost=1) vs weighted (target_boost=5) vs LOO retrain; same edited cells E",
+    "distance_metric": "gated candidate-space L2 (unreliable -> null)",
+    "margin_l2": 0.5,
+    "protocol_identical": {
+      "steps": 3000,
+      "warmup": 200,
+      "lr": 2e-05,
+      "repeat": 50,
+      "seed": 17,
+      "only_difference": "target_boost 1 (balanced) vs 5 (weighted)"
+    },
+    "promotion_conditions": [
+      "balanced matched oracle FITS transformed + retained mappings (strict 1.0, mass >= 0.99)",
+      "D(E, M_x1) < D(E, L) for every transformation target",
+      "Delta_x1 = D(E,L) - D(E,M_x1) >= margin (0.5)",
+      "conclusion agrees across ALL representative transformation types (refusal controls reported separately, not gating)"
+    ],
+    "per_set": {
+      "gx_num_s_exact_to_narrow_Y02": {
+        "mode": "single_exact_to_narrow",
+        "balanced_fit": {
+          "strict_all_expected": 1.0,
+          "min_candidate_mass": 0.9998422179861234,
+          "fit_ok": true,
+          "target_boost": 1
+        },
+        "transformation_targets": [
+          {
+            "target": "01",
+            "operation": "exact_to_narrow",
+            "d_E_Mx1": 3.0345439425388053e-05,
+            "d_E_Mx5": 7.685306842418116e-06,
+            "d_E_L": 1.4123192986922444,
+            "delta_x1": 1.412288953252819,
+            "delta_x5": 1.412311613385402,
+            "Mx1_closer_than_L": true,
+            "delta_x1_material": true,
+            "Mx1_vs_Mx5": "weighted_closer"
+          }
+        ],
+        "refusal_controls": [],
+        "set_promotes": true,
+        "failed_conditions": []
+      },
+      "gx_num_s_exact_to_broad_Y04": {
+        "mode": "single_exact_to_broad",
+        "balanced_fit": {
+          "strict_all_expected": 1.0,
+          "min_candidate_mass": 0.9998655729075633,
+          "fit_ok": true,
+          "target_boost": 1
+        },
+        "transformation_targets": [
+          {
+            "target": "03",
+            "operation": "exact_to_broad",
+            "d_E_Mx1": 1.7786102732607793e-05,
+            "d_E_Mx5": 5.343467502983657e-05,
+            "d_E_L": 1.2506614693532878,
+            "delta_x1": 1.2506436832505552,
+            "delta_x5": 1.250608034678258,
+            "Mx1_closer_than_L": true,
+            "delta_x1_material": true,
+            "Mx1_vs_Mx5": "balanced_closer"
+          }
+        ],
+        "refusal_controls": [],
+        "set_promotes": true,
+        "failed_conditions": []
+      }
+    },
+    "promotes_all": true
+  },
+  "archive": {
+    "release_dir": "releases/e2c_gran_balanced_celeba_numeric_2a274a6",
+    "hf_upload_ok": true,
+    "hf_revision": "8630d8e122197f3bdcc7dc56d29240ce35827bbc",
+    "n_files": 2
+  },
+  "promotes_all": true,
+  "elapsed_sec": 4633.6
+}
