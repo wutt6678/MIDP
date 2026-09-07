@@ -546,10 +546,21 @@ def restore_lora(model, snap):
 # ====================================================================== #
 # Corrected soft metrics: FULL-SEQUENCE alias probabilities
 # ====================================================================== #
-def _build_prompt_ids(processor, code_id):
-    prompt_text = CODE_TO_ALIAS_PROMPT.format(code=code_id)
+def _build_prompt_ids(processor, code_id, *, prompt_text=None):
+    """Token ids for one code->alias prompt.
+
+    ``prompt_text`` replaces the canonical template.  It exists for the
+    held-out prompt-robustness panel (``scripts/e2c_v3_prompt_panel.py``),
+    which scores the same code under paraphrases so that an edit's robustness
+    can be measured rather than assumed.  The default path is untouched: every
+    artifact already on disk was produced by ``CODE_TO_ALIAS_PROMPT`` and still
+    is, so template results stay comparable to the canonical-prompt numbers
+    instead of being measured on a second, subtly different rendering.
+    """
+    text = (CODE_TO_ALIAS_PROMPT.format(code=code_id) if prompt_text is None
+            else prompt_text)
     chat = processor.tokenizer.apply_chat_template(
-        [{"role": "user", "content": prompt_text}],
+        [{"role": "user", "content": text}],
         tokenize=False, add_generation_prompt=True, enable_thinking=False)
     ids = processor.tokenizer(chat, return_tensors="pt",
                               add_special_tokens=False).input_ids[0]
@@ -557,15 +568,20 @@ def _build_prompt_ids(processor, code_id):
 
 
 def full_sequence_label_probs(adapter, model, processor, code_id,
-                              candidate_labels, device):
+                              candidate_labels, device, *, prompt_text=None):
     """Return FULL-SEQUENCE probability for each candidate label.
 
     P(label | prompt) = prod_t P(token_t | prompt, tokens_<t), computed by a
     single teacher-forced forward over (prompt + label) and summing the log
     probability at each label-token prediction position.  This replaces the
     previous first-token-only scoring which mis-scored multi-token aliases.
+
+    ``prompt_text`` overrides the canonical prompt; see
+    :func:`_build_prompt_ids`.  Keyword-only so the six call sites that pass
+    these arguments positionally are unaffected.
     """
-    prompt_ids = _build_prompt_ids(processor, code_id).to(device)
+    prompt_ids = _build_prompt_ids(processor, code_id,
+                                   prompt_text=prompt_text).to(device)
     plen = prompt_ids.shape[0]
     model.eval()
     results = {}
