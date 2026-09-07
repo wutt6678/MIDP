@@ -651,8 +651,8 @@ def test_the_support_profile_separates_an_edit_collapse_from_a_route_collapse():
     assert prof["templates_where_only_edited_models_are_off_support"] == \
         ["question_form"]
     assert prof["templates_where_the_baseline_is_off_support"] == []
-    assert prof["classes_off_support_by_template"]["question_form"] == \
-        ["edited"]
+    assert prof["classes_any_model_off_support_by_template"][
+        "question_form"] == ["edited"]
     assert prof["is_a_gate"] is False
     assert "min_candidate_mass" in prof["criterion"]
 
@@ -664,9 +664,11 @@ def test_the_support_profile_separates_an_edit_collapse_from_a_route_collapse():
     assert prof2["templates_where_only_edited_models_are_off_support"] == []
     assert prof2["templates_where_the_baseline_is_off_support"] == \
         ["question_form"]
-    assert set(prof2["classes_on_support_by_template"]["canonical"]) == {
+    assert set(prof2["classes_all_models_on_support_by_template"][
+        "canonical"]) == {
         "baseline", "edited", "matched_retrain", "loo_retrain"}
-    assert prof2["classes_on_support_by_template"]["question_form"] == []
+    assert prof2["classes_all_models_on_support_by_template"][
+        "question_form"] == []
 
 
 def test_the_support_profile_reports_accuracy_and_invalid_rates_per_class():
@@ -674,14 +676,15 @@ def test_the_support_profile_reports_accuracy_and_invalid_rates_per_class():
     _off_support(results["baseline_h"], "distractor")
     prof = pp.support_profile_by_class(results)["per_class"]
     assert prof["baseline"]["canonical"]["strict_accuracy"] == 1.0
-    assert prof["baseline"]["canonical"][
-        "meets_frozen_support_criterion"] is True
+    assert prof["baseline"]["canonical"]["all_models_on_support"] is True
+    assert prof["baseline"]["canonical"]["any_model_off_support"] is False
     assert prof["baseline"]["distractor"]["strict_accuracy"] == 0.0
     assert prof["baseline"]["distractor"]["unparseable_rate"] == 1.0
     assert prof["baseline"]["distractor"][
         "min_candidate_mass"] == pytest.approx(0.2)
-    assert prof["baseline"]["distractor"][
-        "meets_frozen_support_criterion"] is False
+    assert prof["baseline"]["distractor"]["all_models_on_support"] is False
+    assert prof["baseline"]["distractor"]["models_off_support"] == [
+        "baseline_h"]
     # loo_retrain has no desired label for the target, so it scores fewer rows
     assert prof["loo_retrain"]["canonical"]["n_scored"] == 3
     assert prof["baseline"]["canonical"]["n_scored"] == 4
@@ -703,12 +706,24 @@ def test_off_support_templates_are_reported_but_not_interpreted():
     assert set(cell["delta_retrain_by_template"]) == set(pp.TEMPLATE_ROLES)
     assert cell["delta_retrain_by_template"]["question_form"] is not None
     # but excluded from the interpretable subset
-    assert "question_form" not in cell["delta_retrain_on_supported_templates"]
-    assert cell["delta_retrain_sign_preserved_on_supported_templates"] is True
+    assert "question_form" not in cell[
+        "delta_retrain_on_interpretable_templates"]
+    assert cell["templates_interpretable_for_retraining"] == [
+        r for r in pp.TEMPLATE_ROLES if r != "question_form"]
+    assert cell["delta_retrain_sign_preserved_on_interpretable_templates"] \
+        is True
     assert cell["distance_to_oracle_by_template"]["question_form"][
         "cell_on_support"] is False
     assert cell["distance_to_oracle_by_template"]["canonical"][
         "cell_on_support"] is True
+    # the comparison-level verdict, and why it was refused
+    qf = cell["distance_to_oracle_by_template"]["question_form"]
+    assert qf["n_compared"] == 1 and qf["n_interpretable"] == 0
+    assert qf["per_target"]["i1"]["interpretable"] is False
+    assert "min_candidate_mass" in qf["per_target"]["i1"][
+        "interpretability_reason"]
+    assert cell["distance_to_oracle_by_template"]["canonical"][
+        "n_interpretable"] == 1
 
 
 def test_expected_of_gives_loo_retrain_no_desired_label_for_a_target():
@@ -1235,8 +1250,8 @@ def test_claims_say_when_the_sign_is_not_preserved():
     route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
                                    SYN_ENTRIES)
     claims = pp.build_claims("salmu", route_h, None, {}, _syn_panel())
-    assert "not established beyond the templates that remain on support" \
-        in claims["route_h"]
+    assert "not established beyond the templates whose comparisons remain " \
+        "interpretable" in claims["route_h"]
     assert claims["route_g_baseline"] == \
         "route g baseline: not evaluated in this run"
     assert claims["route_g_cross_route_spillover"] == \
@@ -1251,18 +1266,155 @@ def test_the_route_h_claim_keeps_off_support_deltas_out_of_the_headline():
                                    SYN_ENTRIES)
     claims = pp.build_claims("salmu", route_h, None, {}, _syn_panel())
     text = claims["route_h"]
-    assert "5 template(s)" in text
+    assert "which is 5 of the 6 templates" in text
     assert "question_form" not in text, \
         "an off-support template must not appear in the interpreted list"
     for role in ("canonical", "concise_paraphrase", "instruction_form",
                  "format_variation", "distractor"):
         assert role in text
     assert "reported and not interpreted" in text
-    assert "robust across the templates that remain on support" in text
+    assert "robust across the templates whose comparisons remain " \
+        "interpretable" in text
     support = claims["route_h_prompt_support"]
-    assert "off support on 1 of 6 templates (question_form)" in support
+    assert "off support on 1 of 6 templates [question_form (1/1 models)]" \
+        in support
     assert "0 template(s) are off support for edited models" in support
     assert "property of how route h is TRAINED" in support
+
+
+def test_a_dipping_oracle_does_not_disqualify_a_template_for_every_cell():
+    """The regression this criterion exists to prevent.
+
+    ``loo_retrain`` is a deletion reference: it never saw the target mapping,
+    so its target row is EXPECTED to drift, and the project's own oracle fit
+    gate holds it to ``strict == 1.0`` alone while holding ``matched_retrain``
+    to ``mass >= 0.99``.  A class-wide minimum over every row of every model
+    reads that one drift as "canonical is unsupported", which produced a claim
+    of zero interpretable templates sitting next to a quoted canonical delta.
+    Interpretability belongs to the three rows a comparison reads.
+    """
+    results = _syn_h_results()
+    loo = results["loo_retrain__s1"]
+    for role in pp.TEMPLATE_ROLES:
+        # candidate_mass is what the criterion reads, and it is stored per row;
+        # _probs always sums to 1.0, so the dip has to be written directly.
+        # Leaving the distribution alone keeps the distance computable, which
+        # is exactly the real situation: the delta exists, the question is only
+        # whether it may be quoted.
+        loo["rows"][role]["i1"]["candidate_mass"] = 0.9759
+    # the rows the comparison is actually about stayed on support
+    out = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                               SYN_ENTRIES)
+    cell = out["edited_cells"]["edited__s1__seed17"]
+    dist = cell["distance_to_oracle_by_template"]
+    assert dist["canonical"]["n_interpretable"] == 1
+    assert dist["canonical"]["per_target"]["i1"]["interpretable"] is True
+    assert cell["templates_interpretable_for_retraining"] == \
+        list(pp.TEMPLATE_ROLES)
+    # ... and the dip is still visible, per model, where a reader can find it
+    prof = out["prompt_support_profile"]
+    assert prof["per_class"]["loo_retrain"]["canonical"][
+        "any_model_off_support"] is True
+    assert prof["per_class"]["loo_retrain"]["canonical"][
+        "models_off_support"] == ["loo_retrain__s1"]
+    assert "loo_retrain" not in prof[
+        "classes_all_models_on_support_by_template"]["canonical"]
+    # the claim must not contradict itself the way the class-wide rule did
+    claims = pp.build_claims("salmu", out, None, {}, _syn_panel())
+    assert "0 of the 6 templates" not in claims["route_h"]
+    assert "which is 6 of the 6 templates" in claims["route_h"]
+    assert "canonical 1/1 cells" in claims["route_h"]
+    assert "loo is held to the gate alone" in claims["route_h_prompt_support"]
+    # loo is the deletion reference, so its dip is expected drift and loses no
+    # comparison.  Saying "every model class stays on the candidate space"
+    # would be false, and saying "no comparison is available on canonical"
+    # would contradict the twelve canonical comparisons the same claim quotes.
+    support = claims["route_h_prompt_support"]
+    assert "only loo_retrain moved off the candidate space" in support
+    assert "no comparison was lost" in support
+    assert "every model class stays on the candidate space" not in support
+    assert "confined to the retrain reference models" not in support
+
+
+def test_a_matched_reference_dipping_is_a_lost_comparison_and_says_so():
+    """The other reference: matched_retrain DOES carry the 0.99 criterion.
+
+    ``gxm.train_oracle_retrain`` gates it on ``strict == 1.0 and mass >= 0.99``,
+    so a dip there makes the comparison unavailable rather than merely noisy,
+    and the claim has to say that instead of reporting the template as fine.
+    """
+    results = _syn_h_results()
+    matched = results["matched_retrain__s1"]
+    for role in pp.TEMPLATE_ROLES:
+        matched["rows"][role]["i1"]["candidate_mass"] = 0.9759
+    out = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                               SYN_ENTRIES)
+    cell = out["edited_cells"]["edited__s1__seed17"]
+    # the comparison is refused on every template, and named as refused
+    assert cell["templates_interpretable_for_retraining"] == []
+    assert cell["distance_to_oracle_by_template"]["canonical"][
+        "n_compared"] == 1
+    assert cell["distance_to_oracle_by_template"]["canonical"][
+        "n_interpretable"] == 0
+    assert "matched_retrain=0.9759" in cell["distance_to_oracle_by_template"][
+        "canonical"]["per_target"]["i1"]["interpretability_reason"]
+    support = pp.build_claims("salmu", out, None, {},
+                              _syn_panel())["route_h_prompt_support"]
+    assert "the collapse is confined to the retrain reference models" in support
+    assert "no comparison is available there rather than a comparison having " \
+        "failed" in support
+    assert "only loo_retrain moved off the candidate space" not in support
+
+
+def test_the_loo_deletion_reference_is_held_to_the_distance_gate_alone():
+    """Criterion B, stated directly: which rows carry the 0.99 criterion."""
+    crit = gx.PASS_CRITERIA["min_candidate_mass"]
+    assert pp.INTERPRETABLE_MASS_ROWS == ("edit", "matched_retrain")
+    ok, why = pp.comparison_interpretable(
+        {"edit": crit, "matched_retrain": crit,
+         "loo_retrain": pp.MIN_CANDIDATE_MASS}, True)
+    assert ok is True and why is None
+    # loo far below the criterion but above the gate: still interpretable
+    assert pp.comparison_interpretable(
+        {"edit": 1.0, "matched_retrain": 1.0, "loo_retrain": 0.10}, True)[0] \
+        is True
+    # either criterion-bearing row dipping: not interpretable, and named
+    for fam in pp.INTERPRETABLE_MASS_ROWS:
+        masses = {"edit": 1.0, "matched_retrain": 1.0, "loo_retrain": 1.0}
+        masses[fam] = 0.4672
+        ok, why = pp.comparison_interpretable(masses, True)
+        assert ok is False
+        assert fam in why and "0.4672" in why
+    # the distance gate still comes first and says so
+    ok, why = pp.comparison_interpretable(
+        {"edit": 1.0, "matched_retrain": 1.0, "loo_retrain": 1.0}, False)
+    assert ok is False and "distance gate" in why
+
+
+def test_a_cell_with_no_interpretable_template_is_not_a_broken_sign():
+    """A cell where nothing can be compared contributes None, not a failure.
+
+    Counting it in the denominator would report "the sign broke" for a cell
+    where no comparison could be made at all -- a different and much stronger
+    statement than the evidence supports.
+    """
+    results = _syn_h_results()
+    for rec in results.values():
+        for role in pp.TEMPLATE_ROLES:
+            _off_support(rec, role)
+    route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                                   SYN_ENTRIES)
+    cell = route_h["edited_cells"]["edited__s1__seed17"]
+    assert cell["templates_interpretable_for_retraining"] == []
+    assert cell["n_interpretable_target_comparisons"] == 0
+    assert cell["n_target_comparisons"] == len(pp.TEMPLATE_ROLES)
+    assert cell[
+        "delta_retrain_sign_preserved_on_interpretable_templates"] is None
+    text = pp.build_claims("salmu", route_h, None, {}, _syn_panel())["route_h"]
+    assert "stays positive in 0 of 0 cells" in text
+    assert "1 of 1 cells have no template on which the comparison is " \
+        "interpretable at all" in text
+    assert "which is 0 of the 6 templates [none]" in text
 
 
 def test_an_edit_specific_collapse_is_named_as_such():

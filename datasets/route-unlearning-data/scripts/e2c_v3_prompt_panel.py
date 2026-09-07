@@ -1037,6 +1037,53 @@ def _summary_from_probs(probs, vocab):
     return rv.build_candidate_summary(probs, vocab, gx.DELETED_LABEL)
 
 
+#: Which rows of one ``Delta_retrain`` comparison must clear the frozen
+#: ``min_candidate_mass`` criterion for that comparison to mean anything.  The
+#: third row, ``loo_retrain``, only has to clear the project-wide distance gate.
+#:
+#: The asymmetry is the project's own rule, not a relaxation invented here.
+#: ``gxm.train_oracle_retrain`` gates ``matched_retrain`` on
+#: ``strict == 1.0 and mass >= 0.99`` but ``loo_retrain`` on ``strict == 1.0``
+#: alone, with the comment that loo never saw the targets so "targets are
+#: expected to drift -- that is the deletion reference".  Requiring 0.99 on the
+#: loo TARGET row would apply the criterion to exactly the row the project
+#: exempts, and would throw away comparisons the existing canonical-prompt
+#: evidence already accepted: in this sweep loo_retrain's canonical mass dips to
+#: 0.9759 and 0.9322 on the target row while its eleven non-target rows stay
+#: above 0.9994, which is that expected drift and nothing else.
+INTERPRETABLE_MASS_ROWS = ("edit", "matched_retrain")
+
+
+def comparison_interpretable(masses, reliable):
+    """Can ONE (template, target) ``Delta_retrain`` be interpreted?
+
+    ``masses`` maps row family to the candidate mass of the row that comparison
+    actually reads.  Two conditions, both existing project rules and neither a
+    new threshold: the distance gate ``rv.gated_distance`` already applied
+    (below ``MIN_CANDIDATE_MASS`` a renormalized distance is not computable at
+    all), and the frozen ``min_candidate_mass`` criterion on the rows that
+    carry it per ``INTERPRETABLE_MASS_ROWS``.
+
+    Decided PER COMPARISON rather than per model class.  A class-wide minimum
+    over every row of every model is a different and much more brittle
+    question: one oracle dipping on one identity disqualifies the template for
+    all 63 cells, including cells whose three rows are all above the criterion.
+    Interpretability is a property of the three rows being compared, so that is
+    where it is measured.
+    """
+    if not reliable:
+        return False, ("distance gate not cleared (candidate_mass < "
+                       f"{MIN_CANDIDATE_MASS})")
+    crit = gx.PASS_CRITERIA["min_candidate_mass"]
+    bad = sorted(k for k in INTERPRETABLE_MASS_ROWS
+                 if masses.get(k) is not None and masses[k] < crit)
+    if bad:
+        return False, ("candidate mass below the frozen min_candidate_mass="
+                       f"{crit} criterion for {', '.join(bad)}: "
+                       + ", ".join(f"{k}={masses[k]:.4f}" for k in bad))
+    return True, None
+
+
 def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
                                  entry):
     """D(edit, matched_retrain) and D(edit, loo_retrain), per template.
@@ -1045,7 +1092,13 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
     distributions, and gated on candidate mass exactly as everywhere else in
     this project: below the threshold the distance is null ("not established")
     rather than a small number that looks like proximity.
+
+    Each comparison also carries ``interpretable``, which is the distance gate
+    plus the frozen support criterion on the rows it applies to.  Every
+    unrestricted number stays in the output; ``interpretable`` says which of
+    them a claim may quote.
     """
+    crit = gx.PASS_CRITERIA["min_candidate_mass"]
     targets = [i for i, g in (cell_rec.get("groups") or {}).items()
                if g == "transformation_target"]
     out = {}
@@ -1054,15 +1107,21 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
         for iid in targets:
             e_rows = cell_rec["rows"][role][iid]
             rec = {"matched_retrain": None, "loo_retrain": None,
-                   "delta_retrain": None, "reliable": False, "reason": None}
+                   "delta_retrain": None, "reliable": False, "reason": None,
+                   "interpretable": False, "interpretability_reason": None,
+                   "candidate_mass_compared": None}
+            masses = {"edit": e_rows["candidate_mass"]}
             summaries = {"edit": _summary_from_probs(e_rows["probs"], vocab)}
             for fam, other in (("matched_retrain", matched_rec),
                                ("loo_retrain", loo_rec)):
                 if other is None:
                     rec["reason"] = f"{fam} not evaluated"
+                    rec["interpretability_reason"] = rec["reason"]
                     continue
+                masses[fam] = other["rows"][role][iid]["candidate_mass"]
                 summaries[fam] = _summary_from_probs(
                     other["rows"][role][iid]["probs"], vocab)
+            rec["candidate_mass_compared"] = masses
             if "matched_retrain" in summaries and "loo_retrain" in summaries:
                 d_m, ok_m, why_m = rv.gated_distance(
                     summaries["edit"], summaries["matched_retrain"],
@@ -1077,9 +1136,18 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
                 if rec["reliable"]:
                     rec["delta_retrain"] = (rec["loo_retrain"]
                                             - rec["matched_retrain"])
+                rec["interpretable"], why_i = comparison_interpretable(
+                    masses, rec["reliable"])
+                rec["interpretability_reason"] = None if rec[
+                    "interpretable"] else why_i
             per_target[iid] = rec
         deltas = [v["delta_retrain"] for v in per_target.values()
                   if v["delta_retrain"] is not None]
+        # The subset a claim may quote: comparisons whose three rows are all
+        # where the frozen criteria say a renormalized distance describes
+        # behavior rather than an artifact of renormalizing.
+        interp = [v["delta_retrain"] for v in per_target.values()
+                  if v["interpretable"]]
         out[role] = {
             "per_target": per_target,
             "worst_case_delta_retrain": min(deltas) if deltas else None,
@@ -1088,6 +1156,19 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
             "closer_to_matched_than_loo": all(
                 v["delta_retrain"] > 0 for v in per_target.values()
                 if v["delta_retrain"] is not None) if deltas else None,
+            "support_criterion": (
+                f"edit and matched_retrain candidate_mass >= {crit}; "
+                f"loo_retrain >= {MIN_CANDIDATE_MASS} (the deletion reference "
+                f"is expected to drift on target rows, per "
+                f"gxm.train_oracle_retrain's own fit gate)"),
+            "n_compared": len(deltas),
+            "n_interpretable": len(interp),
+            "all_interpretable": ((len(interp) == len(deltas))
+                                  if deltas else None),
+            "worst_case_delta_retrain_interpretable": (
+                min(interp) if interp else None),
+            "closer_to_matched_than_loo_interpretable": (
+                all(v > 0 for v in interp) if interp else None),
         }
     return out
 
@@ -1105,6 +1186,13 @@ def support_profile_by_class(results):
 
     Uses ``gx.PASS_CRITERIA["min_candidate_mass"]`` -- the project's own frozen
     criterion, not a new threshold and not a gate.
+
+    Support is decided PER MODEL and the counts are reported, not collapsed into
+    one class-wide boolean.  A single class-wide ``min`` over every row of every
+    model answers a question nobody asked and gets it wrong: one oracle dipping
+    on one identity would mark the whole class, and every template it touches,
+    as unsupported -- which is how a claim ended up saying that zero templates
+    were interpretable while quoting a canonical delta of 1.2233.
     """
     crit = gx.PASS_CRITERIA["min_candidate_mass"]
     by_class = {}
@@ -1119,10 +1207,13 @@ def support_profile_by_class(results):
                 continue
             masses, unparsable, multi, echoed, n_rows = [], 0, 0, 0, 0
             ok, scored = 0, 0
+            off_models, model_min = [], {}
             for rec in usable:
                 expected = rec["expected_of"]
+                own = []
                 for iid, row in rec["rows"][role].items():
                     masses.append(row["candidate_mass"])
+                    own.append(row["candidate_mass"])
                     unparsable += bool(row["unparseable"])
                     multi += bool(row["multi_label_invalid"])
                     echoed += bool(row["distractor_echoed"])
@@ -1130,6 +1221,9 @@ def support_profile_by_class(results):
                     if expected.get(iid) is not None:
                         scored += 1
                         ok += row["parsed_label"] == expected[iid]
+                model_min[rec["model_id"]] = min(own) if own else None
+                if own and min(own) < crit:
+                    off_models.append(rec["model_id"])
             per_template[role] = {
                 "n_models": len(usable), "n_rows": n_rows,
                 "mean_candidate_mass": (sum(masses) / len(masses)
@@ -1140,35 +1234,43 @@ def support_profile_by_class(results):
                 "unparseable_rate": unparsable / n_rows if n_rows else None,
                 "multi_label_invalid_rate": multi / n_rows if n_rows else None,
                 "distractor_echo_rate": echoed / n_rows if n_rows else None,
-                "meets_frozen_support_criterion": (
-                    bool(masses) and min(masses) >= crit),
+                # Per model, so a mixed class is visible as mixed instead of
+                # being reported as one all-or-nothing verdict.
+                "models_on_support": len(usable) - len(off_models),
+                "models_off_support": sorted(off_models),
+                "rate_models_on_support": ((len(usable) - len(off_models))
+                                           / len(usable)),
+                "all_models_on_support": not off_models,
+                "any_model_off_support": bool(off_models),
+                "min_candidate_mass_by_model": model_min,
             }
         profile[klass] = per_template
 
-    def classes_on(role):
+    def classes_all_on(role):
         return sorted(k for k, pt in profile.items()
-                      if pt.get(role, {}).get(
-                          "meets_frozen_support_criterion"))
+                      if pt.get(role, {}).get("all_models_on_support"))
 
-    def classes_off(role):
+    def classes_any_off(role):
         return sorted(k for k, pt in profile.items()
-                      if role in pt
-                      and not pt[role]["meets_frozen_support_criterion"])
+                      if pt.get(role, {}).get("any_model_off_support"))
 
-    baseline_off = [r for r in TEMPLATE_ROLES if "baseline" in classes_off(r)]
-    edited_off = [r for r in TEMPLATE_ROLES if "edited" in classes_off(r)]
-    # Edit-specific would mean: the edited models are off support on a template
-    # where the never-edited baseline is still on it.
+    baseline_off = [r for r in TEMPLATE_ROLES if "baseline" in classes_any_off(r)]
+    edited_off = [r for r in TEMPLATE_ROLES if "edited" in classes_any_off(r)]
+    # Edit-specific would mean: an edited model is off support on a template
+    # where no baseline model is.  "Any" rather than "all" is the conservative
+    # reading for attribution -- it takes the weakest evidence that the
+    # baseline also collapses, which is what weakens an edit-specific claim.
     edit_specific = [r for r in edited_off if r not in baseline_off]
     return {
-        "criterion": ("min over that template's rows of candidate_mass >= "
-                      f"gx.PASS_CRITERIA['min_candidate_mass'] = {crit}"),
+        "criterion": ("a model is on support for a template when the min of "
+                      "candidate_mass over its own rows for that template is "
+                      f">= gx.PASS_CRITERIA['min_candidate_mass'] = {crit}"),
         "is_a_gate": False,
         "per_class": profile,
-        "classes_on_support_by_template": {
-            r: classes_on(r) for r in TEMPLATE_ROLES},
-        "classes_off_support_by_template": {
-            r: classes_off(r) for r in TEMPLATE_ROLES},
+        "classes_all_models_on_support_by_template": {
+            r: classes_all_on(r) for r in TEMPLATE_ROLES},
+        "classes_any_model_off_support_by_template": {
+            r: classes_any_off(r) for r in TEMPLATE_ROLES},
         "templates_where_the_baseline_is_off_support": baseline_off,
         "templates_where_only_edited_models_are_off_support": edit_specific,
         "collapse_is_edit_specific": bool(edit_specific),
@@ -1178,7 +1280,10 @@ def support_profile_by_class(results):
             "compares two artifacts rather than two behaviors; where the "
             "never-edited baseline is off support too, the collapse is a "
             "property of how the route was trained and this panel cannot "
-            "attribute it to the edit"),
+            "attribute it to the edit.  This profile describes WHICH MODELS "
+            "leave the candidate space; whether a given Delta_retrain may be "
+            "quoted is decided per comparison, in "
+            "distance_to_oracle_by_template[*].per_target[*].interpretable"),
     }
 
 
@@ -1203,16 +1308,27 @@ def aggregate_route_h(ds, results, pending, expected_models, ctx,
                   for role in TEMPLATE_ROLES}
         present = [v for v in deltas.values() if v is not None]
         # Which templates this cell's OWN output stayed on the candidate space
-        # for, by the project's frozen criterion.  A renormalized distance on a
-        # template outside this list compares two artifacts rather than two
-        # behaviors, so the unrestricted numbers are kept -- nothing is hidden
-        # -- but the interpretable subset is reported beside them.
+        # for, by the project's frozen criterion.  Descriptive: it says whether
+        # the edited model itself left the candidate space, which is the
+        # finding, and it is reported for every cell either way.
         on_support = [role for role in TEMPLATE_ROLES
                       if per_template[role]["candidate_support"]["on_support"]]
         for role in TEMPLATE_ROLES:
             dist[role]["cell_on_support"] = role in on_support
-        supported = {role: deltas[role] for role in on_support}
-        supported_present = [v for v in supported.values() if v is not None]
+        # Which templates a RETRAINING COMPARISON may be quoted on.  Not the
+        # same list, and deriving it from this cell alone is the bug that
+        # produced a claim of "0 interpretable templates" beside a quoted
+        # canonical delta: a comparison reads three rows (this cell, its
+        # matched_retrain, its loo_retrain) for one target identity, so it is
+        # interpretable exactly when those three rows clear the criteria that
+        # apply to them.  oracle_distances_by_template decides that per
+        # comparison; this only collects the verdicts.
+        interpretable = [role for role in TEMPLATE_ROLES
+                         if dist[role]["n_interpretable"]]
+        interp_deltas = {
+            role: dist[role]["worst_case_delta_retrain_interpretable"]
+            for role in interpretable}
+        interp_present = [v for v in interp_deltas.values() if v is not None]
         cells[model_id] = {
             "set_id": sid, "seed": seed, "mode": entry["mode"],
             "checkpoint_sha256": rec["checkpoint_sha256"],
@@ -1228,12 +1344,18 @@ def aggregate_route_h(ds, results, pending, expected_models, ctx,
             "delta_retrain_worst_case": min(present) if present else None,
             "delta_retrain_sign_preserved_across_templates": (
                 all(v > 0 for v in present) if present else None),
-            "delta_retrain_on_supported_templates": supported,
-            "delta_retrain_worst_case_on_supported_templates": (
-                min(supported_present) if supported_present else None),
-            "delta_retrain_sign_preserved_on_supported_templates": (
-                all(v > 0 for v in supported_present)
-                if supported_present else None),
+            "templates_interpretable_for_retraining": interpretable,
+            "n_templates_interpretable_for_retraining": len(interpretable),
+            "n_interpretable_target_comparisons": sum(
+                dist[r]["n_interpretable"] for r in TEMPLATE_ROLES),
+            "n_target_comparisons": sum(
+                dist[r]["n_compared"] for r in TEMPLATE_ROLES),
+            "delta_retrain_on_interpretable_templates": interp_deltas,
+            "delta_retrain_worst_case_on_interpretable_templates": (
+                min(interp_present) if interp_present else None),
+            "delta_retrain_sign_preserved_on_interpretable_templates": (
+                all(v > 0 for v in interp_present)
+                if interp_present else None),
             "oracles_evaluated": {"matched_retrain": matched is not None,
                                   "loo_retrain": loo is not None},
         }
@@ -2000,9 +2122,6 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
     signs = [c["delta_retrain_sign_preserved_across_templates"]
              for c in cells.values()]
     deltas = _nums([c["delta_retrain_worst_case"] for c in cells.values()])
-    canonical = _nums([
-        c["distance_to_oracle_by_template"]["canonical"][
-            "worst_case_delta_retrain"] for c in cells.values()])
     target_acc = _nums([
         c["template_worst_case"][
             "desired_label_accuracy.transformation_targets"]
@@ -2015,17 +2134,49 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
     # ---- prompt support: the fact that decides how the rest may be read ---- #
     profile = (route_h or {}).get("prompt_support_profile") or {}
     per_class = profile.get("per_class") or {}
-    on_by_role = profile.get("classes_on_support_by_template") or {}
     crit = gx.PASS_CRITERIA["min_candidate_mass"]
-    # A template can carry a retraining comparison only if the three model
-    # classes being compared are all still on the candidate space there.
-    supported_roles = [r for r in TEMPLATE_ROLES
-                       if {"edited", "matched_retrain", "loo_retrain"}
-                       <= set(on_by_role.get(r, []))]
+    # Which templates a retraining comparison may be quoted on, collected from
+    # the cells.  This used to be read off the class-level support profile,
+    # which asks a different question -- is EVERY row of EVERY model in these
+    # three classes on support -- and one oracle dipping to 0.9759 on one
+    # identity answered "no" for canonical across the board.  That produced a
+    # claim of zero interpretable templates sitting next to a quoted canonical
+    # delta of 1.2233, which is self-contradictory on its face.  A comparison
+    # reads three rows, so interpretability is collected per comparison.
+    interp_roles = sorted(
+        {r for c in cells.values()
+         for r in c["templates_interpretable_for_retraining"]},
+        key=TEMPLATE_ROLES.index)
+    n_cells = len(cells)
+    interp_cells_by_role = {
+        r: sum(1 for c in cells.values()
+               if r in c["templates_interpretable_for_retraining"])
+        for r in TEMPLATE_ROLES}
+    interp_detail = ("; ".join(
+        f"{r} {interp_cells_by_role[r]}/{n_cells} cells"
+        for r in interp_roles) or "none")
     baseline_off = profile.get(
         "templates_where_the_baseline_is_off_support") or []
     edit_specific = profile.get(
         "templates_where_only_edited_models_are_off_support") or []
+    any_off_by_role = profile.get(
+        "classes_any_model_off_support_by_template") or {}
+    # Templates where ONLY a reference model that the interpretability
+    # criterion actually holds to 0.99 left the candidate space -- which is
+    # matched_retrain, never loo_retrain.  A third cause, and not the same
+    # statement as either of the other two: the edit and the never-edited
+    # baseline both behave there, so the comparison is unavailable rather than
+    # failed.
+    #
+    # Including loo here would contradict the claim's own criterion.  loo is
+    # held to the distance gate alone, so a loo dip below 0.99 loses no
+    # comparison, and reporting canonical as "no comparison available" beside a
+    # sentence quoting twelve canonical comparisons is the same class of
+    # self-contradiction this whole function exists to remove.
+    reference_only = [r for r in TEMPLATE_ROLES
+                      if "matched_retrain" in any_off_by_role.get(r, [])
+                      and "baseline" not in any_off_by_role.get(r, [])
+                      and "edited" not in any_off_by_role.get(r, [])]
     base = per_class.get("baseline") or {}
 
     def _class_stat(klass, role, field):
@@ -2039,14 +2190,30 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
                     for r in TEMPLATE_ROLES}
         off_acc = _nums([v for r, v in base_acc.items() if r != "canonical"])
         best_off_acc = _f(max(off_acc), 3) if off_acc else "not established"
+        # Per-model counts, so one dipping model reads as one dipping model
+        # rather than as a verdict on the whole class.
+        base_off_detail = ", ".join(
+            "{r} ({n_off}/{n} models)".format(
+                r=r,
+                n_off=(_class_stat("baseline", r, "n_models")
+                       - _class_stat("baseline", r, "models_on_support")),
+                n=_class_stat("baseline", r, "n_models"))
+            for r in baseline_off) or "none"
         # The attribution has to follow the data.  Asserting "a property of how
-        # the route is trained" when nothing collapsed, or "specific to the
-        # edit" when the baseline collapsed too, would each be a conclusion the
-        # numbers do not support.
-        if not baseline_off and not edit_specific:
+        # the route is trained" when nothing collapsed, "specific to the edit"
+        # when the baseline collapsed too, or "every model class stays on the
+        # candidate space" when an oracle did not, would each be a conclusion
+        # the numbers do not support.
+        if not any_off_by_role or not any(any_off_by_role.values()):
             attribution = (f"every model class stays on the candidate space on "
                            f"all {n_roles} templates, so no collapse was "
                            f"observed in this sweep")
+        elif reference_only and not baseline_off and not edit_specific:
+            attribution = (
+                f"the collapse is confined to the retrain reference models on "
+                f"{', '.join(reference_only)}, where the edited cells and the "
+                f"never-edited baseline both stay on support, so no comparison "
+                f"is available there rather than a comparison having failed")
         elif baseline_off and not edit_specific:
             attribution = ("prompt sensitivity in this sweep is a property of "
                            "how route h is TRAINED and the panel cannot "
@@ -2055,53 +2222,92 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
             attribution = ("the collapse IS specific to the edited models, on "
                            f"{', '.join(edit_specific)}, where the "
                            "never-edited baseline stays on support")
-        else:
+        elif baseline_off and edit_specific:
             attribution = (
                 f"{', '.join(baseline_off)} collapse for the baseline too and "
                 f"so are a route-training property, while "
                 f"{', '.join(edit_specific)} collapse only for edited models "
                 f"and so are edit-specific")
+        else:
+            # Only loo_retrain moved, which the criterion does not hold to
+            # 0.99.  The previous fall-through printed both other branch texts
+            # with empty lists interpolated, which reads as a sentence about
+            # nothing; and calling expected drift a lost comparison would
+            # contradict the interpretability rule stated above it.
+            attribution = (
+                f"only loo_retrain moved off the candidate space, on "
+                f"{', '.join(r for r in TEMPLATE_ROLES if any_off_by_role.get(r))}"
+                f", which is the expected drift of a deletion reference that "
+                f"never saw the target mapping; it is held to the "
+                f"{MIN_CANDIDATE_MASS} distance gate alone, so no comparison "
+                f"was lost and neither the edited cells nor the never-edited "
+                f"baseline left the candidate space on any template")
+        if reference_only and (baseline_off or edit_specific):
+            attribution += (f"; separately, {', '.join(reference_only)} "
+                            f"collapse only for the retrain reference models, "
+                            f"so no comparison is available there rather than "
+                            f"a comparison having failed")
         route_h_support_claim = (
             f"route h prompt support (read this before any other route-h "
-            f"number): {len(supported_roles)} of the {n_roles} templates "
-            f"({', '.join(supported_roles) or 'none'}) leave the edited cells "
-            f"AND both retrain references on the candidate space under the "
-            f"frozen min_candidate_mass={crit} criterion.  The never-edited "
-            f"baseline_h is off support on {len(baseline_off)} of {n_roles} "
-            f"templates ({', '.join(baseline_off) or 'none'}), reaching a "
-            f"minimum candidate mass of {_f(worst_base_mass)} away from "
-            f"canonical, where its strict accuracy is "
-            f"{_f(base_acc.get('canonical'))} on canonical and at best "
-            f"{best_off_acc} on the other {n_roles - 1}.  "
-            f"{len(edit_specific)} template(s) are off support for edited "
-            f"models but not for the baseline: {attribution}.")
+            f"number): {len(interp_roles)} of the {n_roles} templates carry an "
+            f"interpretable retraining comparison for at least one edited cell "
+            f"[{interp_detail}].  A comparison is interpretable when the edit "
+            f"and matched_retrain rows clear the frozen "
+            f"min_candidate_mass={crit} criterion and the loo_retrain row "
+            f"clears the {MIN_CANDIDATE_MASS} distance gate; loo is held to "
+            f"the gate alone because it never saw the target mapping and its "
+            f"drift there is the deletion reference the project's own oracle "
+            f"fit gate already expects, so requiring {crit} of it would apply "
+            f"the criterion to the one row the project exempts.  The "
+            f"never-edited baseline_h is off support on {len(baseline_off)} of "
+            f"{n_roles} templates [{base_off_detail}], reaching a minimum "
+            f"candidate mass of {_f(worst_base_mass)} away from canonical, "
+            f"where its strict accuracy is {_f(base_acc.get('canonical'))} on "
+            f"canonical and at best {best_off_acc} on the other "
+            f"{n_roles - 1}.  {len(edit_specific)} template(s) are off support "
+            f"for edited models but not for the baseline: {attribution}.")
     else:
         route_h_support_claim = (
             "route h prompt support: not evaluated in this run")
 
-    sup_signs = [c["delta_retrain_sign_preserved_on_supported_templates"]
+    sup_signs = [c["delta_retrain_sign_preserved_on_interpretable_templates"]
                  for c in cells.values()]
     sup_deltas = _nums([
-        c["delta_retrain_worst_case_on_supported_templates"]
+        c["delta_retrain_worst_case_on_interpretable_templates"]
         for c in cells.values()])
+    canon_interp = _nums([
+        c["distance_to_oracle_by_template"]["canonical"][
+            "worst_case_delta_retrain_interpretable"] for c in cells.values()])
     sup_true = sum(1 for s in sup_signs if s is True)
-    robust = bool(sup_deltas) and sup_true == len(sup_signs)
+    # A cell with no interpretable template contributes None, not a failure:
+    # counting it in the denominator would report "the sign broke" for a cell
+    # where no comparison could be made at all.
+    n_sup_cells = sum(1 for s in sup_signs if s is not None)
+    n_no_interp = len(sup_signs) - n_sup_cells
+    robust = n_sup_cells > 0 and sup_true == n_sup_cells
+    verdict = ("robust across the templates whose comparisons remain "
+               "interpretable" if robust else
+               "not established beyond the templates whose comparisons remain "
+               "interpretable")
+    no_interp_note = (
+        "" if not n_no_interp else
+        f"  {n_no_interp} of {len(sup_signs)} cells have no template on which "
+        f"the comparison is interpretable at all, and are counted in neither "
+        f"figure.")
     route_h_claim = (
         f"route h (code -> alias): Delta_retrain = D(edit, loo_retrain) - "
-        f"D(edit, matched_retrain) is interpreted only on the "
-        f"{len(supported_roles)} template(s) where the edited cell and both "
-        f"retrain references are all on the candidate space "
-        f"({', '.join(supported_roles) or 'none'}); there it stays positive in "
-        f"{sup_true} of {len(sup_signs)} cells with a worst case of "
+        f"D(edit, matched_retrain) is interpreted only where the compared rows "
+        f"support it, which is {len(interp_roles)} of the {n_roles} templates "
+        f"[{interp_detail}]; there it stays positive in {sup_true} of "
+        f"{n_sup_cells} cells with a worst case of "
         f"{_f(min(sup_deltas) if sup_deltas else None)}, against "
-        f"{_f(min(canonical) if canonical else None)} on the canonical prompt "
-        f"alone, so the retraining-equivalence finding is "
-        f"{'robust across the templates that remain on support' if robust else 'not established beyond the templates that remain on support'}"
-        f".  The unrestricted worst case over all {n_roles} templates is "
-        f"{_f(min(deltas) if deltas else None)} with the sign holding in "
-        f"{sign_true} of {len(signs)} cells, but the templates that make it "
-        f"worse are off support, where a renormalized distance compares two "
-        f"artifacts rather than two behaviors, so those values are reported "
+        f"{_f(min(canon_interp) if canon_interp else None)} on the canonical "
+        f"prompt alone, so the retraining-equivalence finding is {verdict}."
+        f"{no_interp_note}  The unrestricted worst case over all {n_roles} "
+        f"templates is {_f(min(deltas) if deltas else None)} with the sign "
+        f"holding in {sign_true} of {len(signs)} cells, but the templates that "
+        f"make it worse are off support, where a renormalized distance compares "
+        f"two artifacts rather than two behaviors, so those values are reported "
         f"and not interpreted.  Worst-case strict desired-label accuracy on "
         f"transformation targets is "
         f"{_f(min(target_acc) if target_acc else None)} and worst-case hard "
