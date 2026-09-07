@@ -923,6 +923,19 @@ def h_template_block(role_rows, expected_of, groups, entry, vocab):
                                             for r in all_rows) / len(all_rows),
             "distractor_echoed": [i for i in ids
                                   if role_rows[i]["distractor_echoed"]],
+            "distractor_echo_rate": sum(
+                r["distractor_echoed"] for r in all_rows) / len(all_rows),
+            # Does this template's output distribution meet the project's OWN
+            # frozen support criterion (gx.PASS_CRITERIA["min_candidate_mass"])?
+            # Not a new threshold and not a gate: it separates templates whose
+            # renormalized distances mean something from templates where every
+            # model has fallen off the candidate space and a distance is noise.
+            "on_support": (min(r["candidate_mass"] for r in all_rows)
+                           >= gx.PASS_CRITERIA["min_candidate_mass"]),
+            "off_support_ids": [
+                i for i in ids
+                if role_rows[i]["candidate_mass"]
+                < gx.PASS_CRITERIA["min_candidate_mass"]],
         },
     }
 
@@ -940,6 +953,7 @@ H_WORST_METRICS = (
     ("candidate_support.min_candidate_mass", "min"),
     ("candidate_support.unparseable_rate", "max"),
     ("candidate_support.multi_label_invalid_rate", "max"),
+    ("candidate_support.distractor_echo_rate", "max"),
 )
 
 
@@ -1078,6 +1092,96 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
     return out
 
 
+def support_profile_by_class(results):
+    """Per model class and template: does output stay on the candidate space?
+
+    This decides how every other number should be read.  If only the EDITED
+    models fall off the candidate space away from the canonical prompt, that is
+    a property of the edit.  If the unedited baseline and both retrain
+    references fall off it too, it is a property of how route h is TRAINED, and
+    the panel cannot separate the two -- a much narrower claim, and the honest
+    one.  Reporting the second case as the first would blame the unlearning
+    operation for the route.
+
+    Uses ``gx.PASS_CRITERIA["min_candidate_mass"]`` -- the project's own frozen
+    criterion, not a new threshold and not a gate.
+    """
+    crit = gx.PASS_CRITERIA["min_candidate_mass"]
+    by_class = {}
+    for rec in results.values():
+        by_class.setdefault(rec["model_class"], []).append(rec)
+    profile = {}
+    for klass, recs in sorted(by_class.items()):
+        per_template = {}
+        for role in TEMPLATE_ROLES:
+            usable = [r for r in recs if role in (r.get("rows") or {})]
+            if not usable:
+                continue
+            masses, unparsable, multi, echoed, n_rows = [], 0, 0, 0, 0
+            ok, scored = 0, 0
+            for rec in usable:
+                expected = rec["expected_of"]
+                for iid, row in rec["rows"][role].items():
+                    masses.append(row["candidate_mass"])
+                    unparsable += bool(row["unparseable"])
+                    multi += bool(row["multi_label_invalid"])
+                    echoed += bool(row["distractor_echoed"])
+                    n_rows += 1
+                    if expected.get(iid) is not None:
+                        scored += 1
+                        ok += row["parsed_label"] == expected[iid]
+            per_template[role] = {
+                "n_models": len(usable), "n_rows": n_rows,
+                "mean_candidate_mass": (sum(masses) / len(masses)
+                                        if masses else None),
+                "min_candidate_mass": min(masses) if masses else None,
+                "strict_accuracy": (ok / scored) if scored else None,
+                "n_scored": scored,
+                "unparseable_rate": unparsable / n_rows if n_rows else None,
+                "multi_label_invalid_rate": multi / n_rows if n_rows else None,
+                "distractor_echo_rate": echoed / n_rows if n_rows else None,
+                "meets_frozen_support_criterion": (
+                    bool(masses) and min(masses) >= crit),
+            }
+        profile[klass] = per_template
+
+    def classes_on(role):
+        return sorted(k for k, pt in profile.items()
+                      if pt.get(role, {}).get(
+                          "meets_frozen_support_criterion"))
+
+    def classes_off(role):
+        return sorted(k for k, pt in profile.items()
+                      if role in pt
+                      and not pt[role]["meets_frozen_support_criterion"])
+
+    baseline_off = [r for r in TEMPLATE_ROLES if "baseline" in classes_off(r)]
+    edited_off = [r for r in TEMPLATE_ROLES if "edited" in classes_off(r)]
+    # Edit-specific would mean: the edited models are off support on a template
+    # where the never-edited baseline is still on it.
+    edit_specific = [r for r in edited_off if r not in baseline_off]
+    return {
+        "criterion": ("min over that template's rows of candidate_mass >= "
+                      f"gx.PASS_CRITERIA['min_candidate_mass'] = {crit}"),
+        "is_a_gate": False,
+        "per_class": profile,
+        "classes_on_support_by_template": {
+            r: classes_on(r) for r in TEMPLATE_ROLES},
+        "classes_off_support_by_template": {
+            r: classes_off(r) for r in TEMPLATE_ROLES},
+        "templates_where_the_baseline_is_off_support": baseline_off,
+        "templates_where_only_edited_models_are_off_support": edit_specific,
+        "collapse_is_edit_specific": bool(edit_specific),
+        "reading": (
+            "off-support templates are ones where the model's output mass has "
+            "left the candidate space, so a renormalized distance there "
+            "compares two artifacts rather than two behaviors; where the "
+            "never-edited baseline is off support too, the collapse is a "
+            "property of how the route was trained and this panel cannot "
+            "attribute it to the edit"),
+    }
+
+
 def aggregate_route_h(ds, results, pending, expected_models, ctx,
                       entry_by_id):
     """Per-cell blocks, worst cases, spreads and oracle distances."""
@@ -1098,6 +1202,17 @@ def aggregate_route_h(ds, results, pending, expected_models, ctx,
         deltas = {role: dist[role]["worst_case_delta_retrain"]
                   for role in TEMPLATE_ROLES}
         present = [v for v in deltas.values() if v is not None]
+        # Which templates this cell's OWN output stayed on the candidate space
+        # for, by the project's frozen criterion.  A renormalized distance on a
+        # template outside this list compares two artifacts rather than two
+        # behaviors, so the unrestricted numbers are kept -- nothing is hidden
+        # -- but the interpretable subset is reported beside them.
+        on_support = [role for role in TEMPLATE_ROLES
+                      if per_template[role]["candidate_support"]["on_support"]]
+        for role in TEMPLATE_ROLES:
+            dist[role]["cell_on_support"] = role in on_support
+        supported = {role: deltas[role] for role in on_support}
+        supported_present = [v for v in supported.values() if v is not None]
         cells[model_id] = {
             "set_id": sid, "seed": seed, "mode": entry["mode"],
             "checkpoint_sha256": rec["checkpoint_sha256"],
@@ -1106,11 +1221,19 @@ def aggregate_route_h(ds, results, pending, expected_models, ctx,
             **worst_case_and_spread(per_template, H_WORST_METRICS),
             "criteria_readonly": {role: criteria_readonly(per_template[role])
                                   for role in TEMPLATE_ROLES},
+            "templates_on_support": on_support,
+            "n_templates_on_support": len(on_support),
             "distance_to_oracle_by_template": dist,
             "delta_retrain_by_template": deltas,
             "delta_retrain_worst_case": min(present) if present else None,
             "delta_retrain_sign_preserved_across_templates": (
                 all(v > 0 for v in present) if present else None),
+            "delta_retrain_on_supported_templates": supported,
+            "delta_retrain_worst_case_on_supported_templates": (
+                min(supported_present) if supported_present else None),
+            "delta_retrain_sign_preserved_on_supported_templates": (
+                all(v > 0 for v in supported_present)
+                if supported_present else None),
             "oracles_evaluated": {"matched_retrain": matched is not None,
                                   "loo_retrain": loo is not None},
         }
@@ -1142,6 +1265,10 @@ def aggregate_route_h(ds, results, pending, expected_models, ctx,
             # incomplete rather than looking like a smaller matrix that passed.
             "expected_models": expected_models,
             "complete": expected_models is None or len(results) >= expected_models,
+            # Read this before any per-template number: it says which templates
+            # every model class stayed on the candidate space for, and whether
+            # a collapse is specific to the edit or shared with the baseline.
+            "prompt_support_profile": support_profile_by_class(results),
             "edited_cells": cells, "reference_models": others}
 
 
@@ -1884,18 +2011,100 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
         c["template_worst_case"]["source_label_leakage.hard_leak_rate"]
         for c in cells.values()])
     sign_true = sum(1 for s in signs if s is True)
-    robust = bool(deltas) and sign_true == len(signs) and len(signs) > 0
+
+    # ---- prompt support: the fact that decides how the rest may be read ---- #
+    profile = (route_h or {}).get("prompt_support_profile") or {}
+    per_class = profile.get("per_class") or {}
+    on_by_role = profile.get("classes_on_support_by_template") or {}
+    crit = gx.PASS_CRITERIA["min_candidate_mass"]
+    # A template can carry a retraining comparison only if the three model
+    # classes being compared are all still on the candidate space there.
+    supported_roles = [r for r in TEMPLATE_ROLES
+                       if {"edited", "matched_retrain", "loo_retrain"}
+                       <= set(on_by_role.get(r, []))]
+    baseline_off = profile.get(
+        "templates_where_the_baseline_is_off_support") or []
+    edit_specific = profile.get(
+        "templates_where_only_edited_models_are_off_support") or []
+    base = per_class.get("baseline") or {}
+
+    def _class_stat(klass, role, field):
+        return ((per_class.get(klass) or {}).get(role) or {}).get(field)
+
+    if base:
+        off_mass = _nums([_class_stat("baseline", r, "min_candidate_mass")
+                          for r in TEMPLATE_ROLES if r != "canonical"])
+        worst_base_mass = min(off_mass) if off_mass else None
+        base_acc = {r: _class_stat("baseline", r, "strict_accuracy")
+                    for r in TEMPLATE_ROLES}
+        off_acc = _nums([v for r, v in base_acc.items() if r != "canonical"])
+        best_off_acc = _f(max(off_acc), 3) if off_acc else "not established"
+        # The attribution has to follow the data.  Asserting "a property of how
+        # the route is trained" when nothing collapsed, or "specific to the
+        # edit" when the baseline collapsed too, would each be a conclusion the
+        # numbers do not support.
+        if not baseline_off and not edit_specific:
+            attribution = (f"every model class stays on the candidate space on "
+                           f"all {n_roles} templates, so no collapse was "
+                           f"observed in this sweep")
+        elif baseline_off and not edit_specific:
+            attribution = ("prompt sensitivity in this sweep is a property of "
+                           "how route h is TRAINED and the panel cannot "
+                           "attribute it to the edit")
+        elif edit_specific and not baseline_off:
+            attribution = ("the collapse IS specific to the edited models, on "
+                           f"{', '.join(edit_specific)}, where the "
+                           "never-edited baseline stays on support")
+        else:
+            attribution = (
+                f"{', '.join(baseline_off)} collapse for the baseline too and "
+                f"so are a route-training property, while "
+                f"{', '.join(edit_specific)} collapse only for edited models "
+                f"and so are edit-specific")
+        route_h_support_claim = (
+            f"route h prompt support (read this before any other route-h "
+            f"number): {len(supported_roles)} of the {n_roles} templates "
+            f"({', '.join(supported_roles) or 'none'}) leave the edited cells "
+            f"AND both retrain references on the candidate space under the "
+            f"frozen min_candidate_mass={crit} criterion.  The never-edited "
+            f"baseline_h is off support on {len(baseline_off)} of {n_roles} "
+            f"templates ({', '.join(baseline_off) or 'none'}), reaching a "
+            f"minimum candidate mass of {_f(worst_base_mass)} away from "
+            f"canonical, where its strict accuracy is "
+            f"{_f(base_acc.get('canonical'))} on canonical and at best "
+            f"{best_off_acc} on the other {n_roles - 1}.  "
+            f"{len(edit_specific)} template(s) are off support for edited "
+            f"models but not for the baseline: {attribution}.")
+    else:
+        route_h_support_claim = (
+            "route h prompt support: not evaluated in this run")
+
+    sup_signs = [c["delta_retrain_sign_preserved_on_supported_templates"]
+                 for c in cells.values()]
+    sup_deltas = _nums([
+        c["delta_retrain_worst_case_on_supported_templates"]
+        for c in cells.values()])
+    sup_true = sum(1 for s in sup_signs if s is True)
+    robust = bool(sup_deltas) and sup_true == len(sup_signs)
     route_h_claim = (
-        f"route h (code -> alias): across {len(cells)} edited cells, "
-        f"Delta_retrain = D(edit, loo_retrain) - D(edit, matched_retrain) "
-        f"stays positive on every one of the {n_roles} templates in "
-        f"{sign_true} of {len(signs)} cells; the worst case over all cells and "
-        f"templates is {_f(min(deltas) if deltas else None)} against "
+        f"route h (code -> alias): Delta_retrain = D(edit, loo_retrain) - "
+        f"D(edit, matched_retrain) is interpreted only on the "
+        f"{len(supported_roles)} template(s) where the edited cell and both "
+        f"retrain references are all on the candidate space "
+        f"({', '.join(supported_roles) or 'none'}); there it stays positive in "
+        f"{sup_true} of {len(sup_signs)} cells with a worst case of "
+        f"{_f(min(sup_deltas) if sup_deltas else None)}, against "
         f"{_f(min(canonical) if canonical else None)} on the canonical prompt "
         f"alone, so the retraining-equivalence finding is "
-        f"{'robust to paraphrase within this panel' if robust else 'NOT uniformly robust to paraphrase within this panel'}"
-        f"; worst-case strict desired-label accuracy on transformation targets "
-        f"is {_f(min(target_acc) if target_acc else None)} and worst-case hard "
+        f"{'robust across the templates that remain on support' if robust else 'not established beyond the templates that remain on support'}"
+        f".  The unrestricted worst case over all {n_roles} templates is "
+        f"{_f(min(deltas) if deltas else None)} with the sign holding in "
+        f"{sign_true} of {len(signs)} cells, but the templates that make it "
+        f"worse are off support, where a renormalized distance compares two "
+        f"artifacts rather than two behaviors, so those values are reported "
+        f"and not interpreted.  Worst-case strict desired-label accuracy on "
+        f"transformation targets is "
+        f"{_f(min(target_acc) if target_acc else None)} and worst-case hard "
         f"source leakage is {_f(max(leak) if leak else None)}")
 
     if g_baseline:
@@ -1947,6 +2156,7 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
     ]
     return {
         "scope": scope,
+        "route_h_prompt_support": route_h_support_claim,
         "route_h": route_h_claim,
         "route_g_baseline": route_g_baseline_claim,
         "route_g_cross_route_spillover": route_g_spillover_claim,
@@ -1955,7 +2165,8 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
 
 
 def _log_headline(report):
-    for key in ("route_h", "route_g_baseline", "route_g_cross_route_spillover"):
+    for key in ("route_h_prompt_support", "route_h", "route_g_baseline",
+                "route_g_cross_route_spillover"):
         logger.info("CLAIM %s: %s", key, report["claims"][key])
 
 

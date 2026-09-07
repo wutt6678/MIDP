@@ -618,6 +618,99 @@ def _syn_h_results():
             for s in specs}
 
 
+def _off_support(record, role, mass=0.2):
+    """Push one template's rows off the FROZEN support criterion.
+
+    ``mass`` sits above ``MIN_CANDIDATE_MASS`` (0.01, the distance gate) and
+    below ``PASS_CRITERIA['min_candidate_mass']`` (0.99, the interpretability
+    criterion).  That gap is the real-data situation: a renormalized distance is
+    still computable there, and still meaningless.
+    """
+    for row in record["rows"][role].values():
+        row["probs"] = {label: mass / len(SYN_VOCAB) for label in SYN_VOCAB}
+        row["candidate_mass"] = mass
+        row["other_mass"] = 1.0 - mass
+        row["parsed_label"] = None
+        row["recognized_labels"] = []
+        row["unparseable"] = True
+    return record
+
+
+def test_the_support_profile_separates_an_edit_collapse_from_a_route_collapse():
+    """The distinction the whole route-h reading turns on.
+
+    If only the edited models leave the candidate space, that is a property of
+    the edit.  If the never-edited baseline leaves it too, it is a property of
+    how the route was trained and the panel cannot attribute it to the edit --
+    reporting the second as the first would blame unlearning for the route.
+    """
+    edit_only = _syn_h_results()
+    _off_support(edit_only["edited__s1__seed17"], "question_form")
+    prof = pp.support_profile_by_class(edit_only)
+    assert prof["collapse_is_edit_specific"] is True
+    assert prof["templates_where_only_edited_models_are_off_support"] == \
+        ["question_form"]
+    assert prof["templates_where_the_baseline_is_off_support"] == []
+    assert prof["classes_off_support_by_template"]["question_form"] == \
+        ["edited"]
+    assert prof["is_a_gate"] is False
+    assert "min_candidate_mass" in prof["criterion"]
+
+    everything = _syn_h_results()
+    for rec in everything.values():
+        _off_support(rec, "question_form")
+    prof2 = pp.support_profile_by_class(everything)
+    assert prof2["collapse_is_edit_specific"] is False
+    assert prof2["templates_where_only_edited_models_are_off_support"] == []
+    assert prof2["templates_where_the_baseline_is_off_support"] == \
+        ["question_form"]
+    assert set(prof2["classes_on_support_by_template"]["canonical"]) == {
+        "baseline", "edited", "matched_retrain", "loo_retrain"}
+    assert prof2["classes_on_support_by_template"]["question_form"] == []
+
+
+def test_the_support_profile_reports_accuracy_and_invalid_rates_per_class():
+    results = _syn_h_results()
+    _off_support(results["baseline_h"], "distractor")
+    prof = pp.support_profile_by_class(results)["per_class"]
+    assert prof["baseline"]["canonical"]["strict_accuracy"] == 1.0
+    assert prof["baseline"]["canonical"][
+        "meets_frozen_support_criterion"] is True
+    assert prof["baseline"]["distractor"]["strict_accuracy"] == 0.0
+    assert prof["baseline"]["distractor"]["unparseable_rate"] == 1.0
+    assert prof["baseline"]["distractor"][
+        "min_candidate_mass"] == pytest.approx(0.2)
+    assert prof["baseline"]["distractor"][
+        "meets_frozen_support_criterion"] is False
+    # loo_retrain has no desired label for the target, so it scores fewer rows
+    assert prof["loo_retrain"]["canonical"]["n_scored"] == 3
+    assert prof["baseline"]["canonical"]["n_scored"] == 4
+
+
+def test_off_support_templates_are_reported_but_not_interpreted():
+    """A renormalized distance off the candidate space compares two artifacts,
+    not two behaviors -- so it stays in the report and stays out of the claim."""
+    results = _syn_h_results()
+    for rec in results.values():
+        _off_support(rec, "question_form")
+    out = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                               SYN_ENTRIES)
+    cell = out["edited_cells"]["edited__s1__seed17"]
+    assert cell["templates_on_support"] == [
+        r for r in pp.TEMPLATE_ROLES if r != "question_form"]
+    assert cell["n_templates_on_support"] == len(pp.TEMPLATE_ROLES) - 1
+    # still reported, unrestricted
+    assert set(cell["delta_retrain_by_template"]) == set(pp.TEMPLATE_ROLES)
+    assert cell["delta_retrain_by_template"]["question_form"] is not None
+    # but excluded from the interpretable subset
+    assert "question_form" not in cell["delta_retrain_on_supported_templates"]
+    assert cell["delta_retrain_sign_preserved_on_supported_templates"] is True
+    assert cell["distance_to_oracle_by_template"]["question_form"][
+        "cell_on_support"] is False
+    assert cell["distance_to_oracle_by_template"]["canonical"][
+        "cell_on_support"] is True
+
+
 def test_expected_of_gives_loo_retrain_no_desired_label_for_a_target():
     """LOO never saw the transformation, so scoring it as an accuracy failure
     would be a claim about a model that was never asked to do the thing."""
@@ -1113,7 +1206,8 @@ def test_claims_are_scoped_and_separate_h_from_g():
         _g_record("edited", _perfect, set_id="s1", seed=17), frozen, SYN_CTX,
         SYN_ENTRIES)}
     claims = pp.build_claims("salmu", route_h, baseline, spill, _syn_panel())
-    assert set(claims) == {"scope", "route_h", "route_g_baseline",
+    assert set(claims) == {"scope", "route_h_prompt_support", "route_h",
+                           "route_g_baseline",
                            "route_g_cross_route_spillover", "not_claimed"}
     assert "6 pre-frozen prompt templates" in claims["scope"]
     assert "held-out" in claims["scope"] or "frozen" in claims["scope"]
@@ -1121,6 +1215,10 @@ def test_claims_are_scoped_and_separate_h_from_g():
     assert "retraining-equivalence" in claims["route_h"]
     assert "frozen g_X_to_C" in claims["route_g_baseline"]
     assert "frozen base g" in claims["route_g_cross_route_spillover"]
+    assert "no collapse was observed in this sweep" \
+        in claims["route_h_prompt_support"], \
+        "nothing is off support in this fixture, so the claim must say so " \
+        "rather than attributing a collapse to anything"
     # the guard the report applies to these very strings
     pp._guard_g_vocabulary(claims["route_g_baseline"], "claims")
     pp._guard_g_vocabulary(claims["route_g_cross_route_spillover"], "claims")
@@ -1137,11 +1235,68 @@ def test_claims_say_when_the_sign_is_not_preserved():
     route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
                                    SYN_ENTRIES)
     claims = pp.build_claims("salmu", route_h, None, {}, _syn_panel())
-    assert "NOT uniformly robust to paraphrase" in claims["route_h"]
+    assert "not established beyond the templates that remain on support" \
+        in claims["route_h"]
     assert claims["route_g_baseline"] == \
         "route g baseline: not evaluated in this run"
     assert claims["route_g_cross_route_spillover"] == \
         "route g spillover: not evaluated in this run"
+
+
+def test_the_route_h_claim_keeps_off_support_deltas_out_of_the_headline():
+    results = _syn_h_results()
+    for rec in results.values():
+        _off_support(rec, "question_form")
+    route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                                   SYN_ENTRIES)
+    claims = pp.build_claims("salmu", route_h, None, {}, _syn_panel())
+    text = claims["route_h"]
+    assert "5 template(s)" in text
+    assert "question_form" not in text, \
+        "an off-support template must not appear in the interpreted list"
+    for role in ("canonical", "concise_paraphrase", "instruction_form",
+                 "format_variation", "distractor"):
+        assert role in text
+    assert "reported and not interpreted" in text
+    assert "robust across the templates that remain on support" in text
+    support = claims["route_h_prompt_support"]
+    assert "off support on 1 of 6 templates (question_form)" in support
+    assert "0 template(s) are off support for edited models" in support
+    assert "property of how route h is TRAINED" in support
+
+
+def test_an_edit_specific_collapse_is_named_as_such():
+    """The other direction: when the baseline holds and the edit does not, the
+    claim must say so instead of hiding behind the route-training excuse."""
+    results = _syn_h_results()
+    _off_support(results["edited__s1__seed17"], "question_form")
+    route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                                   SYN_ENTRIES)
+    support = pp.build_claims("salmu", route_h, None, {},
+                              _syn_panel())["route_h_prompt_support"]
+    assert "1 template(s) are off support for edited models" in support
+    assert "the collapse IS specific to the edited models, on question_form" \
+        in support
+    assert "property of how route h is TRAINED" not in support
+
+
+def test_a_mixed_collapse_separates_the_two_causes():
+    results = _syn_h_results()
+    for rec in results.values():
+        _off_support(rec, "question_form")          # route-wide
+    _off_support(results["edited__s1__seed17"], "distractor")   # edit only
+    route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                                   SYN_ENTRIES)
+    prof = route_h["prompt_support_profile"]
+    assert prof["collapse_is_edit_specific"] is True
+    assert prof["templates_where_the_baseline_is_off_support"] == \
+        ["question_form"]
+    assert prof["templates_where_only_edited_models_are_off_support"] == \
+        ["distractor"]
+    support = pp.build_claims("salmu", route_h, None, {},
+                              _syn_panel())["route_h_prompt_support"]
+    assert "question_form collapse for the baseline too" in support
+    assert "distractor collapse only for edited models" in support
 
 
 def test_not_claimed_names_what_the_design_cannot_support():
