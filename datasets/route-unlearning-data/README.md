@@ -128,6 +128,15 @@ pytest -q
 python tests/run_all.py
 ```
 
+## Experiment directories
+
+The E2C route experiments live beside the pipeline and document themselves.
+[`e2c_prompt_panel/README.md`](e2c_prompt_panel/README.md) covers the held-out
+prompt-robustness panel: what is frozen, what it measures, how to reproduce it,
+and the claims it may not make. That panel is evaluation-only — no gate or
+promotion criterion in this repository reads its output, and no threshold moves
+because of what it finds.
+
 ## Licensing notes
 
 - CelebA is restricted to non-commercial research and is **never** downloaded,
