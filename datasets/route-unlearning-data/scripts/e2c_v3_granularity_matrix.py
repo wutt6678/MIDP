@@ -60,10 +60,24 @@ the balanced oracle FITS transformed+retained mappings, D(E,M_x1) < D(E,L),
 Delta_x1 = D(E,L)-D(E,M_x1) >= 0.5, and the conclusion agrees across ALL
 representative transformation types (refusal controls reported separately).
 
+GX2S oracle-seed sensitivity: the full matrices vary the EDIT seed but hold
+the fresh-retrain references at seed 17.  GX2S trains matched_retrain +
+loo_retrain at ORACLE seeds 42 and 123 too (same protocol, seed 17 dirs
+reused) for the same representative sets, and reports the paired
+(edit_seed x oracle_seed) table Set | Edit seed | Oracle seed | D_matched |
+D_LOO | Delta (worst-case transformation target per row).  The robust claim
+rests on the SIGN/MARGIN of Delta, not exact distance equality: gate A =
+every edit seed closer to every matched-oracle seed than to the
+corresponding LOO oracle; gate B = worst-case Delta stays positive
+(preferably >= 0.5); passed = A OR B, passed_strong = A AND worst >= 0.5.
+Missing edit seeds (e.g. numeric 42/123 before G5 completes cells) are
+reported as pending and the CPU comparison can be re-run to fill the table.
+
 Phases: GX0 validate schemas/matrices | GX1 freeze matrix files
         GX1R numeric baseline route h | GX2 oracle families
         GX2R CPU re-evaluation of stored cells vs all families
         GX2B balanced matched-retrain ablation (target_boost=1) + report
+        GX2S oracle-seed sensitivity (matched/LOO retrain @ seeds 42,123)
         GX3 single cells | GX4 same-depth simultaneous | GX5 mixed
         GX6 (inside cells: conditional/unconditional E2E)
         GX7 aggregate (+G3.1 gate, scoped claims) + archive
@@ -153,6 +167,25 @@ BALANCED_REP_SETS = {
     "celeba_numeric": ["gx_num_s_exact_to_narrow_Y02",  # exact->narrow
                        "gx_num_s_exact_to_broad_Y04"],  # exact->broad
 }
+
+# GX2S oracle-seed sensitivity.  The full matrices vary the EDIT seed but
+# hold the fresh-retrain references at ORACLE_SEED=17.  GX2S additionally
+# trains matched_retrain + loo_retrain at these oracle seeds for the same
+# representative sets and reports the paired (edit_seed x oracle_seed)
+# Delta table.  The robust claim rests on the SIGN and MARGIN of Delta, not
+# exact distance equality across seeds.
+ORACLE_SEEDS_SENSITIVITY = (17, 42, 123)
+
+
+def retrain_oracle_dir(family, sid, oracle_seed):
+    """Directory name for a fresh-retrain oracle at a given oracle seed.
+
+    Seed 17 (ORACLE_SEED) keeps the EXISTING unsuffixed name so the main
+    matrix / G3.1 artifacts are reused; other seeds get an explicit
+    ``__oseed<N>`` suffix (matched_retrain_<sid>__oseed42, etc.).
+    """
+    base = f"{family}_{sid}"
+    return base if oracle_seed == ORACLE_SEED else f"{base}__oseed{oracle_seed}"
 
 SINGLE_MODES = {"single_level1", "single_level2", "single_exact_to_narrow",
                 "single_exact_to_broad", "single_exact_to_rounded"}
@@ -399,13 +432,15 @@ def fresh_reinit_lora(named_params, seed):
     return len(a_params), len(b_params)
 
 
-def session_reset_fresh(session):
-    # mx.ModelSession exposes the live PeftModel as .model
+def session_reset_fresh(session, seed=ORACLE_SEED):
+    # mx.ModelSession exposes the live PeftModel as .model.  ``seed`` sets
+    # the fresh-init RNG (GX2S oracle-seed sensitivity varies it; the main
+    # matrix and GX2B use the default ORACLE_SEED).
     n_a, n_b = fresh_reinit_lora(
-        list(session.model.named_parameters()), ORACLE_SEED)
+        list(session.model.named_parameters()), seed)
     logger.info("reset_fresh(): LoRA re-initialized fresh "
                 "(A kaiming / B zeros, seed %d; %d/%d tensors)",
-                ORACLE_SEED, n_a, n_b)
+                seed, n_a, n_b)
 
 
 def _fit_metrics_from_soft(soft, ctx, entry):
@@ -440,20 +475,23 @@ def _write_oracle_results(out_dir, family, init, protocol, extra=None):
 
 
 def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args,
-                         target_boost=None):
+                         target_boost=None, oracle_seed=None):
     """Fresh-init retraining oracle under the ORIGINAL route-h protocol.
 
     ``target_boost`` oversamples the transformed targets.  None ->
     RETRAIN_TARGET_BOOST (x5, the 'weighted' matched reference).  The
     GX2B balanced ablation passes target_boost=1 so the transformed
     mapping appears exactly once per epoch like each retained mapping.
-    steps/warmup/lr/repeat/LoRA-config/seed are IDENTICAL either way.
+    ``oracle_seed`` sets the fresh-init + training RNG.  None ->
+    ORACLE_SEED (17, the main matrix).  GX2S oracle-seed sensitivity
+    passes 42 / 123.  steps/warmup/lr/repeat/LoRA-config are IDENTICAL.
     """
     is_matched = family.startswith("matched_retrain")
     boost = RETRAIN_TARGET_BOOST if target_boost is None else target_boost
+    oseed = ORACLE_SEED if oracle_seed is None else oracle_seed
     out_dir.mkdir(parents=True, exist_ok=True)
-    session_reset_fresh(session)
-    mx.seed_everything(ORACLE_SEED)
+    session_reset_fresh(session, oseed)
+    mx.seed_everything(oseed)
     items = []
     if is_matched:
         assign = [{"prompt": rd.CODE_TO_ALIAS_PROMPT.format(
@@ -500,16 +538,16 @@ def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args,
         out_dir, family, "fresh_lora",
         {"steps": RETRAIN_STEPS, "warmup": RETRAIN_WARMUP,
          "lr": RETRAIN_LR, "repeat": RETRAIN_REPEAT,
-         "target_boost": boost if is_matched else 0, "seed": ORACLE_SEED},
+         "target_boost": boost if is_matched else 0, "seed": oseed},
         {"set_id": entry["set_id"], "strict_fit_scope": scope,
          "strict_all_expected": strict,
          "min_candidate_mass": mass, "fit_ok": fit_ok})
-    logger.info("GX2[%s]: %s trained (fresh init; boost=%d strict=%.4f "
-                "mass=%s fit_ok=%s)", entry["set_id"], family, boost,
-                strict, f"{mass:.4f}" if mass is not None else "n/a",
-                fit_ok)
+    logger.info("GX2[%s]: %s trained (fresh init; seed=%d boost=%d "
+                "strict=%.4f mass=%s fit_ok=%s)", entry["set_id"], family,
+                oseed, boost, strict,
+                f"{mass:.4f}" if mass is not None else "n/a", fit_ok)
     return {"mode": "trained_fresh", "target_boost": boost,
-            "strict_all_expected": strict,
+            "oracle_seed": oseed, "strict_all_expected": strict,
             "min_candidate_mass": mass, "fit_ok": fit_ok}
 
 
@@ -1224,6 +1262,315 @@ def run_gx2b(args, ds, ctx, matrix, out_base, provenance, commit, t_start):
     return 0
 
 
+# ====================================================================== #
+# GX2S: ORACLE-SEED SENSITIVITY
+#   The full matrices vary the EDIT seed but hold the fresh-retrain
+#   references at ORACLE_SEED=17.  GX2S trains matched_retrain +
+#   loo_retrain at seeds 42/123 too, for the same representative sets, and
+#   reports the paired (edit_seed x oracle_seed) Delta table.  The robust
+#   claim rests on the SIGN/MARGIN of Delta, not exact distance equality.
+# ====================================================================== #
+def _load_soft(dir_path):
+    p = Path(dir_path) / "oracle_soft.json"
+    if not p.exists():
+        return None
+    with open(p) as f:
+        return json.load(f)
+
+
+def _gated_l2(e_summ, o_summ, t, ctx):
+    if o_summ is None or t not in o_summ or t not in e_summ:
+        return None
+    d, rel, _ = rv.gated_distance(e_summ[t], o_summ[t], "candidate",
+                                  ctx["vocab"], MIN_CANDIDATE_MASS)
+    return d["l2"] if (rel and d) else None
+
+
+def run_oracle_seed_sensitivity(args, ds, ctx, matrix, out_base, set_ids,
+                                oracle_seeds=ORACLE_SEEDS_SENSITIVITY):
+    logger.info("=" * 60)
+    logger.info(f"GX2S: ORACLE-SEED SENSITIVITY ({ds}) seeds={oracle_seeds} "
+                f"sets={set_ids}")
+    logger.info("=" * 60)
+    oracle_root = out_base / "oracles"
+    oracle_root.mkdir(parents=True, exist_ok=True)
+    args_o = argparse.Namespace(**vars(args))
+    args_o.seed = ORACLE_SEED
+    session = None
+    results = {}
+    for entry in matrix["sets"]:
+        sid = entry["set_id"]
+        if sid not in set_ids:
+            continue
+        for oseed in oracle_seeds:
+            for family in ("matched_retrain", "loo_retrain"):
+                odir = oracle_root / retrain_oracle_dir(family, sid, oseed)
+                ockpt = (odir / "adapter_final"
+                         / "adapter_model.safetensors")
+                ores = odir / "oracle_results.json"
+                key = f"{family}_{sid}__oseed{oseed}"
+                if ockpt.exists() and (odir / "oracle_soft.json").exists() \
+                        and ores.exists():
+                    with open(ores) as f:
+                        rr = json.load(f)
+                    results[key] = {
+                        "mode": "cached", "oracle_seed": oseed,
+                        "sha256": rv.sha256_file(ockpt),
+                        "fit_ok": rr.get("fit_ok"),
+                        "strict_all_expected": rr.get("strict_all_expected"),
+                        "min_candidate_mass": rr.get("min_candidate_mass")}
+                    logger.info("GX2S[%s %s oseed=%d]: cached", sid, family,
+                                oseed)
+                    continue
+                if session is None:
+                    session = mx.ModelSession(args_o, f"e2c_gx_{ds}_oseed")
+                rr = train_oracle_retrain(session, ds, ctx, entry, family,
+                                          odir, args_o, oracle_seed=oseed)
+                results[key] = {"sha256": rv.sha256_file(ockpt), **rr}
+    if session is not None:
+        session.release()
+    with open(oracle_root / "oracle_seed_sensitivity_oracles.json", "w") as f:
+        json.dump(results, f, indent=2)
+    return results
+
+
+def compare_oracle_seed_sensitivity(ds, ctx, matrix, out_base, set_ids,
+                                    oracle_seeds=ORACLE_SEEDS_SENSITIVITY):
+    """Paired table: Set | Edit seed | Oracle seed | D_matched | D_LOO |
+    Delta, over every available (edit_seed, oracle_seed) pair.  For a
+    multi-target set the row reports the WORST-CASE transformation target
+    (min Delta) plus the per-target detail and the mean."""
+    oracle_root = out_base / "oracles"
+    rows = []
+    coverage = {}
+    for entry in matrix["sets"]:
+        sid = entry["set_id"]
+        if sid not in set_ids:
+            continue
+        trans = sorted(t for t, a in entry["assignments"].items()
+                       if a["operation"] != "refusal")
+        cell_root = out_base / "cells" / sid
+        edit_seeds = sorted(
+            int(p.parent.name.split("_")[1])
+            for p in cell_root.glob("seed_*/cell_results.json"))
+        coverage[sid] = {"mode": entry["mode"], "edit_seeds": edit_seeds,
+                         "transformation_targets": trans,
+                         "pending_edit_seeds": [
+                             s for s in gx.SEEDS_DEFAULT
+                             if s not in edit_seeds]}
+        for eseed in edit_seeds:
+            cellp = cell_root / f"seed_{eseed}" / "cell_results.json"
+            with open(cellp) as f:
+                cell = json.load(f)
+            e_summ = summaries_from_probs(cell["soft_probs_full"], ctx)
+            for oseed in oracle_seeds:
+                msoft = _load_soft(oracle_root / retrain_oracle_dir(
+                    "matched_retrain", sid, oseed))
+                lsoft = _load_soft(oracle_root / retrain_oracle_dir(
+                    "loo_retrain", sid, oseed))
+                base = {"set": sid, "mode": entry["mode"],
+                        "edit_seed": eseed, "oracle_seed": oseed}
+                if msoft is None or lsoft is None:
+                    rows.append({**base, "status": "oracle_missing",
+                                 "d_matched": None, "d_loo": None,
+                                 "delta": None})
+                    continue
+                per_target = []
+                for t in trans:
+                    dm = _gated_l2(e_summ, msoft, t, ctx)
+                    dl = _gated_l2(e_summ, lsoft, t, ctx)
+                    per_target.append({
+                        "target": t, "d_matched": dm, "d_loo": dl,
+                        "delta": (dl - dm) if dm is not None
+                        and dl is not None else None})
+                valid = [r for r in per_target if r["delta"] is not None]
+                if not valid:
+                    rows.append({**base, "status": "unreliable_mass",
+                                 "d_matched": None, "d_loo": None,
+                                 "delta": None, "per_target": per_target})
+                    continue
+                worst = min(valid, key=lambda r: r["delta"])
+                rows.append({
+                    **base, "status": "ok",
+                    "d_matched": worst["d_matched"],
+                    "d_loo": worst["d_loo"],
+                    "delta": worst["delta"],
+                    "worst_target": worst["target"],
+                    "mean_delta": round(statistics.fmean(
+                        r["delta"] for r in valid), 8),
+                    "all_targets_closer": all(r["delta"] > 0
+                                              for r in valid),
+                    "n_transformation_targets": len(trans),
+                    "per_target": per_target})
+    ok_rows = [r for r in rows if r["status"] == "ok"]
+    if not ok_rows:
+        gate = {"status": "no_valid_pairs", "n_pairs": 0}
+    else:
+        worst_delta = min(r["delta"] for r in ok_rows)
+        gate_a = all(r["all_targets_closer"] for r in ok_rows)
+        gate_b = worst_delta > 0
+        gate = {
+            "status": "evaluated",
+            "n_pairs": len(ok_rows),
+            "all_edit_seeds_closer_to_all_matched_oracle_seeds": gate_a,
+            "worst_case_delta": round(worst_delta, 6),
+            "worst_case_delta_positive": bool(gate_b),
+            "worst_case_delta_ge_margin": bool(
+                worst_delta >= DELTA_RETRAIN_MIN_MARGIN),
+            "margin_l2": DELTA_RETRAIN_MIN_MARGIN,
+            "passed": bool(gate_a or gate_b),
+            "passed_strong": bool(gate_a and
+                                  worst_delta >= DELTA_RETRAIN_MIN_MARGIN),
+            "gate_definition": [
+                ("A: every edit seed is closer to every matched-oracle seed "
+                 "than to the corresponding LOO oracle (all targets)"),
+                ("B: worst-case Delta = D_LOO - D_matched remains positive "
+                 "(preferably >= 0.5)"),
+                "passed = A OR B; passed_strong = A AND worst Delta >= 0.5"],
+        }
+    pending = {sid: c["pending_edit_seeds"] for sid, c in coverage.items()
+               if c["pending_edit_seeds"]}
+    return {
+        "dataset": ds,
+        "oracle_seeds": list(oracle_seeds),
+        "distance_metric": "gated candidate-space L2 (unreliable -> null)",
+        "coverage": coverage,
+        "pending_edit_seeds": pending,
+        "paired_table": [{"set": r["set"], "edit_seed": r["edit_seed"],
+                          "oracle_seed": r["oracle_seed"],
+                          "d_matched": r.get("d_matched"),
+                          "d_loo": r.get("d_loo"), "delta": r.get("delta"),
+                          "status": r["status"]} for r in rows],
+        "rows": rows,
+        "gate": gate,
+    }
+
+
+def archive_oracle_seed_sensitivity(ds, out_base, set_ids, commit,
+                                    oracle_seeds=ORACLE_SEEDS_SENSITIVITY):
+    oracle_root = out_base / "oracles"
+    rel = Path("releases") / f"e2c_gran_oseed_{ds}_{commit[:7]}"
+    rel.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for sid in set_ids:
+        for oseed in oracle_seeds:
+            for family in ("matched_retrain", "loo_retrain"):
+                src = (oracle_root / retrain_oracle_dir(family, sid, oseed)
+                       / "adapter_final" / "adapter_model.safetensors")
+                if not src.exists():
+                    continue
+                name = f"{family}_{sid}__oseed{oseed}.safetensors"
+                dest = rel / name
+                shutil.copy2(src, dest)
+                entries.append({"kind": f"oracle_{family}_oseed", "key": sid,
+                                "oracle_seed": oseed, "file": name,
+                                "sha256": rv.sha256_file(dest),
+                                "bytes": dest.stat().st_size})
+    hf_ok, hf_revision = False, None
+    try:
+        from huggingface_hub import HfApi, whoami
+        whoami()
+        api = HfApi()
+        api.create_repo(HF_ARCHIVE_REPO, repo_type="model", exist_ok=True)
+        url = api.upload_folder(
+            folder_path=str(rel), repo_id=HF_ARCHIVE_REPO,
+            path_in_repo=f"granularity_oseed_{ds}_{commit[:7]}",
+            repo_type="model",
+            commit_message=f"E2C-v3 oracle-seed sensitivity oracles ({ds}) "
+                           f"@ {commit[:7]}")
+        hf_ok = True
+        hf_revision = url.rstrip("/").rsplit("/", 1)[-1] if url else None
+        for e in entries:
+            e["hf_revision"] = hf_revision
+            e["hf_uri"] = (f"https://huggingface.co/{HF_ARCHIVE_REPO}/"
+                           f"resolve/{hf_revision}/granularity_oseed_{ds}_"
+                           f"{commit[:7]}/{e['file']}")
+        logger.info("GX2S: uploaded %d oracle-seed checkpoints, revision %s",
+                    len(entries), hf_revision)
+    except Exception as exc:
+        logger.warning(f"GX2S: HF upload unavailable ({str(exc)[:120]})")
+    with open(rel / "CHECKSUMS.txt", "w") as f:
+        for e in entries:
+            f.write(f"{e['sha256']}  {e['file']}\n")
+    manifest = {"kind": "granularity_oracle_seed_sensitivity_archive",
+                "dataset": ds, "git_commit": commit, "release_dir": str(rel),
+                "hf_repo": HF_ARCHIVE_REPO if hf_ok else None,
+                "hf_upload_ok": hf_ok, "hf_revision": hf_revision,
+                "n_files": len(entries),
+                "uri_immutability_note": "resolve/<hf_commit_sha> pinned",
+                "entries": entries}
+    with open(rel / "archive_manifest.json", "w") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+def run_gx2s(args, ds, ctx, matrix, out_base, provenance, commit, t_start):
+    """GX2S: oracle-seed sensitivity ablation on the representative sets."""
+    logger.info("=" * 60)
+    logger.info(f"GX2S: ORACLE-SEED SENSITIVITY ABLATION ({ds})")
+    logger.info("=" * 60)
+    set_ids = (list(args.only_sets) if args.only_sets
+               else list(BALANCED_REP_SETS.get(ds, [])))
+    if not set_ids:
+        raise RuntimeError(f"GX2S: no representative sets configured "
+                           f"for {ds}")
+    by_id = {e["set_id"]: e for e in matrix["sets"]}
+    for sid in set_ids:
+        if sid not in by_id:
+            raise RuntimeError(f"GX2S: {sid} not in the frozen matrix")
+    trained = run_oracle_seed_sensitivity(args, ds, ctx, matrix, out_base,
+                                          set_ids)
+    cmp = compare_oracle_seed_sensitivity(ds, ctx, matrix, out_base, set_ids)
+    # human-readable paired table in the log
+    logger.info("GX2S paired table (%s):", ds)
+    logger.info("  %-30s %5s %6s %10s %10s %10s", "set", "edit", "oracle",
+                "D_match", "D_LOO", "Delta")
+    for r in cmp["paired_table"]:
+        dm = f"{r['d_matched']:.5f}" if r["d_matched"] is not None else "n/a"
+        dl = f"{r['d_loo']:.5f}" if r["d_loo"] is not None else "n/a"
+        dd = f"{r['delta']:.5f}" if r["delta"] is not None else "n/a"
+        logger.info("  %-30s %5s %6s %10s %10s %10s  %s", r["set"],
+                    r["edit_seed"], r["oracle_seed"], dm, dl, dd,
+                    r["status"])
+    archive = {"release_dir": None, "hf_upload_ok": False,
+               "hf_revision": None, "n_files": 0}
+    if not args.smoke:
+        archive = archive_oracle_seed_sensitivity(ds, out_base, set_ids,
+                                                  commit)
+    report = {
+        "kind": "oracle_seed_sensitivity_ablation",
+        "dataset": ds,
+        "provenance": provenance,
+        "representative_sets": set_ids,
+        "oracle_seeds": cmp["oracle_seeds"],
+        "trained_oracles": trained,
+        "paired_table": cmp["paired_table"],
+        "rows": cmp["rows"],
+        "coverage": cmp["coverage"],
+        "pending_edit_seeds": cmp["pending_edit_seeds"],
+        "gate": cmp["gate"],
+        "archive": {"release_dir": archive.get("release_dir"),
+                    "hf_upload_ok": archive.get("hf_upload_ok"),
+                    "hf_revision": archive.get("hf_revision"),
+                    "n_files": archive.get("n_files", 0)},
+        "elapsed_sec": round(time.time() - t_start, 1),
+    }
+    rep_dir = GRAN_ROOT / "reports"
+    rep_dir.mkdir(parents=True, exist_ok=True)
+    with open(rep_dir / f"oracle_seed_sensitivity_{ds}.json", "w") as f:
+        json.dump(report, f, indent=2)
+    logger.info("GX2S: %s gate=%s (worst Delta=%s, all_closer=%s)", ds,
+                cmp["gate"].get("passed"),
+                cmp["gate"].get("worst_case_delta"),
+                cmp["gate"].get(
+                    "all_edit_seeds_closer_to_all_matched_oracle_seeds"))
+    logger.info("=" * 60)
+    logger.info(f"GRANULARITY RUN ({ds}) PHASE GX2S COMPLETE "
+                f"({round(time.time() - t_start, 1)}s)")
+    logger.info("=" * 60)
+    return 0
+
+
 def _pass_criteria(hard, soft, entry, ctx):
     """Frozen per-cell criteria (plan §12). Every criterion recorded."""
     crit = gx.PASS_CRITERIA
@@ -1890,7 +2237,7 @@ def parse_args():
                    choices=["salmu", "celeba_numeric"])
     p.add_argument("--phase", default="all",
                    choices=["all", "GX0", "GX1R", "GX2", "GX2R", "GX2B",
-                            "GX3", "GX4", "GX5", "GX7"])
+                            "GX2S", "GX3", "GX4", "GX5", "GX7"])
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--seeds", type=int, nargs="+",
                    default=gx.SEEDS_DEFAULT)
@@ -1965,15 +2312,16 @@ def main():
                 f"rv={provenance['shared_scoring_script_sha256'][:12]} "
                 f"dirty={dirty}")
     if dirty and not args.smoke:
-        if args.phase == "GX2B":
+        if args.phase in ("GX2B", "GX2S"):
             dirty_code = _dirty_tracked_code()
             if dirty_code:
                 raise RuntimeError(
-                    f"GX2B: executed CODE not committed: {dirty_code}")
+                    f"{args.phase}: executed CODE not committed: "
+                    f"{dirty_code}")
             provenance["parallel_run_dirty_outputs_ok"] = True
-            logger.warning("GX2B: tracked worktree has uncommitted OUTPUT "
+            logger.warning("%s: tracked worktree has uncommitted OUTPUT "
                            "from a parallel main-matrix run (executed code "
-                           "is committed); proceeding")
+                           "is committed); proceeding", args.phase)
         else:
             raise RuntimeError("tracked worktree dirty; commit before a "
                                "full granularity run")
@@ -1987,6 +2335,11 @@ def main():
         # balanced matched-retrain ablation: independent of the main
         # cell/oracle flow; reuses existing E/M_x5/L, trains only M_x1
         return run_gx2b(args, ds, ctx, matrix, out_base, provenance,
+                        commit, t_start)
+    if args.phase == "GX2S":
+        # oracle-seed sensitivity: reuses existing edited cells E, trains
+        # matched/LOO fresh-retrain references at oracle seeds 42/123
+        return run_gx2s(args, ds, ctx, matrix, out_base, provenance,
                         commit, t_start)
     if args.smoke:  # pilot subset: first single set only, one seed
         matrix = json.loads(json.dumps(matrix))

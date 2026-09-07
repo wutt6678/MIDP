@@ -116,11 +116,12 @@ def test_fresh_reinit_zeroes_trained_lora_B_and_rejects_bad_layout():
 
 def test_fresh_reinit_takes_no_checkpoint_argument():
     """The retrain families must not depend on any checkpoint path: the
-    fresh-init helpers accept ONLY live parameters + a seed."""
+    fresh-init helpers accept ONLY live parameters + a seed (the seed is an
+    RNG seed for the fresh init, never a checkpoint)."""
     sig = inspect.signature(gxm.fresh_reinit_lora)
     assert list(sig.parameters) == ["named_params", "seed"]
     sig2 = inspect.signature(gxm.session_reset_fresh)
-    assert list(sig2.parameters) == ["session"]
+    assert list(sig2.parameters) == ["session", "seed"]
     src = inspect.getsource(gxm.session_reset_fresh)
     assert "safetensors" not in src and "reset_to" not in src
 
@@ -192,7 +193,7 @@ def test_train_oracle_retrain_recipe(monkeypatch, tmp_path):
     monkeypatch.setattr(gxm, "_strict_accuracy",
                         lambda session, c, exp, a: 1.0)
     monkeypatch.setattr(gxm, "session_reset_fresh",
-                        lambda session: calls.__setitem__(
+                        lambda session, seed=17: calls.__setitem__(
                             "fresh", calls["fresh"] + 1))
     session = _StubSessionFresh()
 
@@ -554,7 +555,7 @@ def test_train_oracle_retrain_balanced_boost_is_one(monkeypatch, tmp_path):
         for i in c["identity_ids"]})
     monkeypatch.setattr(gxm, "_strict_accuracy", lambda s, c, e, a: 1.0)
     monkeypatch.setattr(gxm, "session_reset_fresh",
-                        lambda s: calls.__setitem__(
+                        lambda s, seed=17: calls.__setitem__(
                             "fresh", calls["fresh"] + 1))
     session = _StubSessionFresh()
     out = tmp_path / "matched_retrain_balanced_sX"
@@ -682,3 +683,122 @@ def test_compare_matched_boost_excludes_refusal_from_verdict(tmp_path):
     assert [r["target"] for r in s["transformation_targets"]] == ["i1"]
     assert [r["target"] for r in s["refusal_controls"]] == ["i3"]
     assert s["set_promotes"] is True
+
+
+# ------------------------------------------------------------------ #
+# GX2S oracle-seed sensitivity (matched/LOO retrain at seeds 42, 123)
+# ------------------------------------------------------------------ #
+def test_retrain_oracle_dir_naming_and_seeds():
+    assert gxm.ORACLE_SEEDS_SENSITIVITY == (17, 42, 123)
+    # seed 17 keeps the EXISTING unsuffixed dir (main-matrix reuse)
+    assert gxm.retrain_oracle_dir("matched_retrain", "sX", 17) \
+        == "matched_retrain_sX"
+    assert gxm.retrain_oracle_dir("loo_retrain", "sX", 17) \
+        == "loo_retrain_sX"
+    # other seeds get an explicit suffix
+    assert gxm.retrain_oracle_dir("matched_retrain", "sX", 42) \
+        == "matched_retrain_sX__oseed42"
+    assert gxm.retrain_oracle_dir("loo_retrain", "sX", 123) \
+        == "loo_retrain_sX__oseed123"
+
+
+def test_train_oracle_retrain_threads_oracle_seed(monkeypatch, tmp_path):
+    ctx, entry = _ctx(), _entry()
+    seen = {"fresh_seed": []}
+    monkeypatch.setattr(gxm.rv, "build_supervised_items",
+                        lambda a, p, pairs, repeat:
+                        [(x["answer"], repeat) for x in pairs])
+    monkeypatch.setattr(gxm.rv, "train_supervised",
+                        lambda name, a, m, p, items, out_dir, device,
+                        steps, warmup, lr:
+                        (Path(out_dir) / "adapter_final").mkdir(
+                            parents=True, exist_ok=True))
+    monkeypatch.setattr(gxm, "_soft_all", lambda s, c, a: {
+        i: _summary(gxm.expected_label(c, entry, i))
+        for i in c["identity_ids"]})
+    monkeypatch.setattr(gxm, "_strict_accuracy", lambda s, c, e, a: 1.0)
+    monkeypatch.setattr(gxm, "session_reset_fresh",
+                        lambda s, seed=17: seen["fresh_seed"].append(seed))
+    session = _StubSessionFresh()
+    out = tmp_path / "matched_retrain_sX__oseed42"
+    rec = gxm.train_oracle_retrain(
+        session, "salmu", ctx, entry, "matched_retrain", out, _FakeArgs(),
+        oracle_seed=42)
+    # the oracle seed drives BOTH the fresh init and the recorded protocol
+    assert seen["fresh_seed"] == [42]
+    assert rec["oracle_seed"] == 42
+    with open(out / "oracle_results.json") as f:
+        res = json.load(f)
+    assert res["protocol"]["seed"] == 42
+    # weighted (x5) by default -- GX2S varies the SEED, not the boost
+    assert res["protocol"]["target_boost"] == gxm.RETRAIN_TARGET_BOOST == 5
+
+
+def _place_cell(out_base, sid, seed, probs_by_iid):
+    d = out_base / "cells" / sid / f"seed_{seed}"
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / "cell_results.json", "w") as f:
+        json.dump({"cell_id": f"{sid}__seed{seed}", "set_id": sid,
+                   "seed": seed, "soft_probs_full": probs_by_iid}, f)
+
+
+def test_compare_oracle_seed_sensitivity_paired_table_and_gate(tmp_path):
+    ctx, entry = _ctx(), _entry()
+    matrix = {"sets": [entry]}
+    exp = {i: gxm.expected_label(ctx, entry, i) for i in ctx["identity_ids"]}
+    base = dict(ctx["baseline_alias_of"])
+    out_base = tmp_path
+    # edited cells at seeds 17 and 42 (123 pending -> coverage note)
+    for es in (17, 42):
+        _place_cell(out_base, "sX", es,
+                    {i: _summary(exp[i])["probs"]
+                     for i in ctx["identity_ids"]})
+    matched = {i: _summary(exp[i]) for i in ctx["identity_ids"]}
+    loo = {i: _summary(base[i]) for i in ctx["identity_ids"]}
+    for os_ in (17, 42):
+        _place_oracle(out_base, gxm.retrain_oracle_dir(
+            "matched_retrain", "sX", os_), matched)
+        _place_oracle(out_base, gxm.retrain_oracle_dir(
+            "loo_retrain", "sX", os_), loo)
+    cmp = gxm.compare_oracle_seed_sensitivity(
+        "salmu", ctx, matrix, out_base, ["sX"], oracle_seeds=(17, 42))
+    # 2 edit seeds x 2 oracle seeds = 4 paired rows
+    assert len(cmp["paired_table"]) == 4
+    assert all(r["status"] == "ok" for r in cmp["paired_table"])
+    for r in cmp["rows"]:
+        assert r["d_matched"] < 1e-6 and r["d_loo"] > 1.0
+        assert r["delta"] > gxm.DELTA_RETRAIN_MIN_MARGIN
+    g = cmp["gate"]
+    assert g["status"] == "evaluated"
+    assert g["passed"] and g["passed_strong"]
+    assert g["all_edit_seeds_closer_to_all_matched_oracle_seeds"] is True
+    assert g["worst_case_delta"] >= gxm.DELTA_RETRAIN_MIN_MARGIN
+    assert g["worst_case_delta_ge_margin"] is True
+    # coverage: edit seed 123 not yet present
+    assert cmp["pending_edit_seeds"]["sX"] == [123]
+
+
+def test_compare_oracle_seed_sensitivity_missing_oracle_and_negative(tmp_path):
+    ctx, entry = _ctx(), _entry()
+    matrix = {"sets": [entry]}
+    exp = {i: gxm.expected_label(ctx, entry, i) for i in ctx["identity_ids"]}
+    base = dict(ctx["baseline_alias_of"])
+    out_base = tmp_path
+    _place_cell(out_base, "sX", 17,
+                {i: _summary(exp[i])["probs"] for i in ctx["identity_ids"]})
+    matched = {i: _summary(exp[i]) for i in ctx["identity_ids"]}
+    loo = {i: _summary(base[i]) for i in ctx["identity_ids"]}
+    # seed-17 present (matched close, LOO far -> positive delta);
+    # seed-42 oracles absent -> oracle_missing row
+    _place_oracle(out_base, gxm.retrain_oracle_dir(
+        "matched_retrain", "sX", 17), matched)
+    _place_oracle(out_base, gxm.retrain_oracle_dir(
+        "loo_retrain", "sX", 17), loo)
+    cmp = gxm.compare_oracle_seed_sensitivity(
+        "salmu", ctx, matrix, out_base, ["sX"], oracle_seeds=(17, 42))
+    status = {(r["edit_seed"], r["oracle_seed"]): r["status"]
+              for r in cmp["paired_table"]}
+    assert status[(17, 17)] == "ok"
+    assert status[(17, 42)] == "oracle_missing"
+    # gate evaluated on the single ok row only
+    assert cmp["gate"]["n_pairs"] == 1 and cmp["gate"]["passed"] is True
