@@ -1108,7 +1108,8 @@ def _stub_trainers(state):
             "ascent_items": None, "anchor_items": None,
             "steps": steps, "warmup": warmup, "lr": lr})
         _save(output_dir, condition)
-        return {"trace": [{"step": steps}], "train_sec": 12.5,
+        return {"trace": [{"step": steps, "gd_loss": 39.6, "retain_loss": 3e-5,
+                           "target_p": 0.0}], "train_sec": 12.5,
                 "steps_executed": steps}
 
     def ga(condition, adapter, model, processor, forget_items, retain_items,
@@ -1119,7 +1120,7 @@ def _stub_trainers(state):
             "descent_items": list(retain_items), "steps": steps,
             "warmup": warmup, "lr": lr})
         _save(output_dir, condition)
-        return []
+        return [{"step": steps, "forget_loss": 4.2, "retain_loss": 0.01}]
 
     def npo(condition, adapter, model, processor, forget_items, retain_items,
             output_dir, device, steps, warmup, lr, beta=1.0):
@@ -1129,7 +1130,8 @@ def _stub_trainers(state):
             "descent_items": list(retain_items), "beta": beta,
             "steps": steps, "warmup": warmup, "lr": lr})
         _save(output_dir, condition)
-        return []
+        return [{"step": steps, "npo_loss": 0.69, "retain_loss": 0.01,
+                 "diff": 0.0}]
 
     def kl_edit(condition, adapter, model, processor, descent_items,
                 anchor_items, output_dir, device, steps, warmup, lr,
@@ -1140,8 +1142,8 @@ def _stub_trainers(state):
             "anchor_items": list(anchor_items), "beta_kl": beta_kl,
             "steps": steps, "warmup": warmup, "lr": lr})
         _save(output_dir, condition)
-        return {"trace": [{"step": steps}], "train_sec": 9.5,
-                "steps_executed": steps}
+        return {"trace": [{"step": steps, "ce_loss": 3e-5, "kl": 1e-6}],
+                "train_sec": 9.5, "steps_executed": steps}
 
     def kl_ascent(condition, adapter, model, processor, forget_items,
                   retain_items, output_dir, device, steps, warmup, lr,
@@ -1152,7 +1154,7 @@ def _stub_trainers(state):
             "anchor_items": list(retain_items), "beta_kl": beta_kl,
             "steps": steps, "warmup": warmup, "lr": lr})
         _save(output_dir, condition)
-        return []
+        return [{"step": steps, "forget_loss": 4.2, "kl": 1e-6}]
 
     return {"train_gd_target": gd, "train_ga": ga, "train_npo": npo,
             "train_kl_anchored_edit": kl_edit, "train_kl": kl_ascent}
@@ -1410,6 +1412,27 @@ def test_the_retain_side_is_identical_for_every_method(num_run):
     retain = retain_sets[0]
     assert len(retain) == 23
     assert all(r[2] == mx.UL_REPEAT * gxm.RETAIN_REPEAT for r in retain)
+
+
+def test_a_trained_row_carries_its_own_objective_trace(num_run):
+    """A method that fails must be readable: the trace that explains the
+    failure travels with the row instead of staying in a side file."""
+    expected = {"gd_distribution": "gd_loss",
+                "ga_retain_descent": "forget_loss",
+                "npo": "npo_loss",
+                "kl_anchored_edit": "ce_loss",
+                "kl_ascent_anchor": "kl"}
+    for mid, key in expected.items():
+        tr = num_run.rows[(NARROW, mid)]["training"]
+        assert tr["trained"] is True
+        assert tr["loss_trace"], mid
+        assert key in tr["loss_trace"][0], mid
+        assert tr["trace_file"].endswith(
+            f"rows/{NARROW}/{mid}/training_trace.jsonl")
+    # a row that did not train carries no trace and does not pretend to
+    for rid in ("baseline_route", "sft_target", "matched_retrain",
+                "prompt_only__rule_statement"):
+        assert "loss_trace" not in num_run.rows[(NARROW, rid)]["training"]
 
 
 def test_the_alias_row_is_the_sft_measurement_and_trains_nothing(num_run):

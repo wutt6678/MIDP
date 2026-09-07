@@ -1428,15 +1428,15 @@ def _train_row(session, mid, spec, ctx, out_dir, args, t_iids):
                                retain_items, out_dir, args.device,
                                **common)
     elif mid == "ga_retain_descent":
-        rv.train_ga(tag, session.adapter, session.model, session.processor,
-                    source_items, retain_items + target_items, out_dir,
-                    args.device, **common)
-        info = {}
+        info = {"trace": rv.train_ga(
+            tag, session.adapter, session.model, session.processor,
+            source_items, retain_items + target_items, out_dir,
+            args.device, **common)}
     elif mid == "npo":
-        rv.train_npo(tag, session.adapter, session.model, session.processor,
-                     source_items, retain_items + target_items, out_dir,
-                     args.device, beta=MB_METHODS["npo"]["beta"], **common)
-        info = {}
+        info = {"trace": rv.train_npo(
+            tag, session.adapter, session.model, session.processor,
+            source_items, retain_items + target_items, out_dir,
+            args.device, beta=MB_METHODS["npo"]["beta"], **common)}
     elif mid == "kl_anchored_edit":
         info = train_kl_anchored_edit(
             tag, session.adapter, session.model, session.processor,
@@ -1447,12 +1447,10 @@ def _train_row(session, mid, spec, ctx, out_dir, args, t_iids):
         # as shipped for deletion it is the retain set, and it stays that way
         # here so the only difference from the deletion recipe is what the
         # ascent side is pointed at.
-        rv.train_kl(tag, session.adapter, session.model, session.processor,
-                    source_items, retain_items, out_dir,
-                    args.device,
-                    beta_kl=MB_METHODS["kl_ascent_anchor"]["beta_kl"],
-                    **common)
-        info = {}
+        info = {"trace": rv.train_kl(
+            tag, session.adapter, session.model, session.processor,
+            source_items, retain_items, out_dir, args.device,
+            beta_kl=MB_METHODS["kl_ascent_anchor"]["beta_kl"], **common)}
     else:
         raise RuntimeError(f"MB1: no trainer for method {mid!r}")
     return {
@@ -1462,6 +1460,11 @@ def _train_row(session, mid, spec, ctx, out_dir, args, t_iids):
         "steps_requested": budget["steps"], "warmup": budget["warmup"],
         "lr": budget["lr"], "seed": budget["seed"],
         "design_budget": spec["budget"], "design_repeats": spec["repeats"],
+        # the objective's own trace, so a method that failed can be read
+        # (diverging loss? scale asymmetry? anchor fighting the descent?)
+        # without leaving the row record
+        "loss_trace": info.get("trace"),
+        "trace_file": str(out_dir / "training_trace.jsonl"),
         "items": {"target_pairs": len(spec["target_pairs"]),
                   "source_pairs": len(spec["source_pairs"]),
                   "retain_pairs": len(spec["retain_pairs"]),
@@ -2271,10 +2274,16 @@ def run_mb2(args, ds, man, out_base, provenance, commit, t_start,
     logger.info("MB2 CLAIM scope: %s", report["claims"]["scope"])
     logger.info("MB2 CLAIM headline: %s", report["claims"]["headline"])
     for row_id, sc in sorted(agg["screening"].items()):
-        logger.info("MB2 SCREEN %-34s %s (%s/%s sets pass)", row_id,
-                    sc.get("screening_verdict"),
-                    sc.get("n_sets_passing_frozen_criteria", 0),
-                    sc.get("n_sets_evaluated", 0))
+        verdict = sc.get("screening_verdict")
+        # a row that is not screened must not print a pass count: the alias row
+        # carries sft_target's measurement, and a reader would count it twice
+        detail = ("not screened" if verdict in (
+            "reference_row_not_screened",
+            "alias_of_sft_target_not_screened_separately", "no_rows")
+            else f"{sc.get('n_sets_passing_frozen_criteria', 0)}/"
+                 f"{sc.get('n_sets_evaluated', 0)} sets pass the frozen "
+                 f"criteria")
+        logger.info("MB2 SCREEN %-34s %s (%s)", row_id, verdict, detail)
     run_manifest = {
         "experiment": f"e2c_v3_method_baselines_{ds}",
         "produced_by": "scripts/e2c_v3_method_baselines.py",
