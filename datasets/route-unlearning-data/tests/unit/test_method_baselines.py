@@ -1812,6 +1812,7 @@ def test_an_unparseable_output_is_counted_separately_from_a_multi_label(
 def test_the_trainable_parameter_count_is_measured_not_assumed():
     class _Cfg:
         r, lora_alpha, lora_dropout = 8, 16, 0.05
+        peft_type = "LORA"
         target_modules = frozenset({"v_proj", "q_proj", "k_proj", "o_proj"})
 
     class _Fake:
@@ -1828,9 +1829,30 @@ def test_the_trainable_parameter_count_is_measured_not_assumed():
     assert got["trainable_parameters"] == 8
     assert got["total_parameters"] == 24
     assert got["trainable_fraction"] == pytest.approx(1 / 3)
-    assert got["lora"] == {"r": 8, "lora_alpha": 16, "lora_dropout": 0.05,
+    assert got["lora"] == {"adapter_name": "default", "peft_type": "LORA",
+                           "r": 8, "lora_alpha": 16, "lora_dropout": 0.05,
                            "target_modules": ["k_proj", "o_proj", "q_proj",
                                               "v_proj"]}
+
+
+def test_the_adapter_is_found_under_the_name_this_project_loads_it_with():
+    """Production loads the LoRA adapter as ``unlearning``, not ``default``:
+    a lookup that assumes the name silently reports no configuration."""
+    class _Cfg:
+        r, lora_alpha, lora_dropout = 8, 16, 0.05
+        peft_type = "LORA"
+        target_modules = ("q_proj",)
+
+    class _Fake:
+        peft_config: ClassVar[dict] = {"unlearning": _Cfg()}
+
+        def parameters(self):
+            return list(torch.nn.Linear(2, 2, bias=False).parameters())
+
+    got = mb.count_parameters(_Fake())
+    assert got["lora"]["adapter_name"] == "unlearning"
+    assert got["lora"]["r"] == 8
+    assert got["lora"]["target_modules"] == ["q_proj"]
 
 
 def test_a_model_without_a_peft_config_is_reported_not_guessed():
@@ -1841,6 +1863,74 @@ def test_a_model_without_a_peft_config_is_reported_not_guessed():
     got = mb.count_parameters(_Fake())
     assert got["trainable_parameters"] == 4
     assert "unavailable" in got["lora"]
+
+
+def test_label_scores_follows_the_model_device_and_aligns_every_token(
+        monkeypatch):
+    """The GD objective's only new math: one right-padded batched forward, the
+    prompt moved to the model's device, and each label token scored at the
+    position that predicts it."""
+    seen = {}
+
+    class _Tracked(torch.Tensor):
+        def to(self, *a, **k):
+            seen["device"] = a[0] if a else k.get("device")
+            return torch.Tensor.to(self, *a, **k)
+
+    monkeypatch.setattr(mb.rv, "_build_prompt_ids",
+                        lambda processor, code_id, *, prompt_text=None:
+                        torch.tensor([7, 8, 9]).as_subclass(_Tracked))
+
+    class _Tok:
+        pad_token_id, eos_token_id = 0, 1
+        table: ClassVar[dict] = {"hit": [11], "miss": [12], "two": [11, 12]}
+
+        def encode(self, text, add_special_tokens=False):
+            assert add_special_tokens is False
+            return list(self.table[text])
+
+    class _Proc:
+        tokenizer = _Tok()
+
+    class _Out:
+        def __init__(self, logits):
+            self.logits = logits
+
+    class _Model:
+        """A model that always wants to emit token 11 next."""
+
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, ids, attention_mask=None, use_cache=False):
+            self.calls.append((ids, attention_mask, use_cache))
+            _n, seq = ids.shape
+            logits = torch.full((_n, seq, 13), -10.0)
+            logits[:, :, 11] = 10.0
+            return _Out(logits)
+
+    model = _Model()
+    scores = mb._label_scores(model, _Proc(), "a prompt", ["hit", "miss",
+                                                          "two"],
+                              torch.device("cpu"))
+    # the prompt ids come from the frozen scorer on CPU and must follow the
+    # model, or torch.cat fails at the first training step
+    assert seen["device"] == torch.device("cpu")
+    assert scores.shape == (3,)
+    assert float(scores[0]) > -1e-3                  # the wanted token
+    assert float(scores[1]) < -5.0                   # a token it does not want
+    assert float(scores[2]) < float(scores[0])       # two tokens, one wrong
+    ids, mask, use_cache = model.calls[0]
+    assert use_cache is False
+    assert ids.shape == mask.shape == (3, 5)         # right-padded to maxlen
+    assert int(ids[0, 4]) == 0 and int(mask[0, 4]) == 0
+    assert int(mask[2].sum()) == 5
+    assert [int(v) for v in ids[2]] == [7, 8, 9, 11, 12]
+    # right padding is safe under causal attention: the padded row's score is
+    # the same as if it had been scored alone
+    assert float(scores[0]) == pytest.approx(float(mb._label_scores(
+        _Model(), _Proc(), "a prompt", ["hit"], torch.device("cpu"))[0]),
+        abs=1e-5)
 
 
 def test_every_row_carries_the_same_trainable_parameter_count(num_run):
@@ -2506,6 +2596,31 @@ def test_the_executed_commit_is_captured_before_any_artifact_is_written(
     mb.main()
     assert order == ["commit", "mb0", "mb1", "mb2"]
     assert mb.EXECUTING_COMMIT == "c0ffee0"
+
+
+def test_the_dirty_code_gate_is_scoped_to_the_executed_scripts(monkeypatch):
+    monkeypatch.setattr(mb, "MB_CODE", ["scripts/e2c_v3_granularity.py",
+                                        "scripts/e2c_v3_matrix.py"])
+    assert mb._dirty_tracked_code() == []          # committed, so clean
+    # a missing declared script is reported instead of silently widening the
+    # pathspec to the whole worktree (which would blame this comparison for
+    # the edits the parallel granularity/panel/RG runs are making)
+    monkeypatch.setattr(mb, "MB_CODE", ["scripts/does_not_exist.py"])
+    assert mb._dirty_tracked_code() == [
+        "<declared executed code missing: scripts/does_not_exist.py>"]
+
+
+def test_every_script_this_comparison_executes_is_declared():
+    for path in ("scripts/e2c_v3_method_baselines.py",
+                 "scripts/e2c_v3_research_validity.py",
+                 "scripts/e2c_v3_granularity.py",
+                 "scripts/e2c_v3_granularity_matrix.py",
+                 "scripts/e2c_v3_matrix.py",
+                 "scripts/e2c_v3_realdata.py"):
+        assert path in mb.MB_CODE, path
+        assert (_ROOT / path).exists(), path
+    # the shared scorer is an input, so its hash is pinned in the provenance
+    assert mb.MB_CODE[1] == "scripts/e2c_v3_research_validity.py"
 
 
 def test_the_module_documents_the_scoring_limitation_and_the_subset():

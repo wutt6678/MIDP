@@ -872,7 +872,8 @@ def _label_scores(model, processor, prompt_text, labels, device):
     scorer exactly.
     """
     tok = processor.tokenizer
-    prompt_ids = rv._build_prompt_ids(processor, None, prompt_text=prompt_text)
+    prompt_ids = rv._build_prompt_ids(processor, None,
+                                      prompt_text=prompt_text).to(device)
     plen = int(prompt_ids.shape[0])
     rows, spans = [], []
     for lab in labels:
@@ -1039,16 +1040,22 @@ def count_parameters(model):
     """Trainable vs total parameters, plus the LoRA configuration."""
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
-    lora = {}
-    try:
-        cfg = model.peft_config["default"]
-        lora = {"r": getattr(cfg, "r", None),
+    # this project loads its adapter under its own name ("unlearning"), not
+    # "default", so the configuration is found by name rather than assumed
+    configs = getattr(model, "peft_config", None) or {}
+    name = ("default" if "default" in configs
+            else (min(configs) if configs else None))
+    cfg = configs.get(name) if name is not None else None
+    if cfg is None:
+        lora = {"unavailable": "the model exposes no peft_config"}
+    else:
+        lora = {"adapter_name": name,
+                "peft_type": str(getattr(cfg, "peft_type", None)),
+                "r": getattr(cfg, "r", None),
                 "lora_alpha": getattr(cfg, "lora_alpha", None),
                 "lora_dropout": getattr(cfg, "lora_dropout", None),
                 "target_modules": sorted(getattr(cfg, "target_modules", [])
                                          or [])}
-    except Exception as exc:                       # pragma: no cover
-        lora = {"unavailable": str(exc)[:120]}
     return {"trainable_parameters": trainable, "total_parameters": total,
             "trainable_fraction": (trainable / total) if total else None,
             "lora": lora}
@@ -2302,11 +2309,18 @@ MB_CODE = ["scripts/e2c_v3_method_baselines.py",
 
 
 def _dirty_tracked_code():
-    """Tracked-file changes among the EXECUTED code (not result outputs)."""
-    code = [p for p in MB_CODE if Path(p).exists()]
+    """Tracked-file changes among the EXECUTED code (not result outputs).
+
+    A declared script that is not on disk is reported as such: dropping it from
+    the pathspec would silently widen ``git status`` to the WHOLE worktree and
+    blame this comparison for edits made by the parallel runs.
+    """
+    missing = [p for p in MB_CODE if not Path(p).exists()]
+    if missing:
+        return [f"<declared executed code missing: {p}>" for p in missing]
     try:
         out = subprocess.check_output(
-            ["git", "status", "--porcelain", "--untracked-files=no", *code],
+            ["git", "status", "--porcelain", "--untracked-files=no", *MB_CODE],
             text=True)
         return [ln.strip() for ln in out.splitlines() if ln.strip()]
     except Exception:

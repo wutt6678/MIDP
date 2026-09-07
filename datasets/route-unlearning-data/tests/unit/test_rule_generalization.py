@@ -1591,7 +1591,17 @@ def test_the_runner_declares_its_phases_and_its_frozen_recipe():
 
 
 def test_the_dirty_code_gate_looks_only_at_the_executed_scripts(monkeypatch):
-    monkeypatch.setattr(rg, "RG_CODE", ["scripts/e2c_v3_granularity.py"])
+    monkeypatch.setattr(rg, "RG_CODE", ["scripts/e2c_v3_granularity.py",
+                                       "scripts/e2c_v3_matrix.py"])
     assert rg._dirty_tracked_code() == []          # committed, so clean
+    # a declared script that is missing is REPORTED: dropping it from the
+    # pathspec would silently widen git status to the whole worktree and blame
+    # this run for edits the parallel runs are making
     monkeypatch.setattr(rg, "RG_CODE", ["scripts/does_not_exist.py"])
-    assert rg._dirty_tracked_code() == []
+    assert rg._dirty_tracked_code() == [
+        "<declared executed code missing: scripts/does_not_exist.py>"]
+    monkeypatch.setattr(rg, "RG_CODE",
+                        ["scripts/e2c_v3_granularity.py",
+                         "scripts/also_missing.py"])
+    assert rg._dirty_tracked_code() == [
+        "<declared executed code missing: scripts/also_missing.py>"]

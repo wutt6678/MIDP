@@ -1500,11 +1500,18 @@ RG_CODE = ["scripts/e2c_v3_rule_generalization.py",
 
 
 def _dirty_tracked_code():
-    """Tracked-file changes among the EXECUTED code (not result outputs)."""
-    code = [p for p in RG_CODE if Path(p).exists()]
+    """Tracked-file changes among the EXECUTED code (not result outputs).
+
+    A declared script that is not on disk is reported as such: dropping it from
+    the pathspec would silently widen ``git status`` to the WHOLE worktree and
+    blame this run for edits made by the parallel ones.
+    """
+    missing = [p for p in RG_CODE if not Path(p).exists()]
+    if missing:
+        return [f"<declared executed code missing: {p}>" for p in missing]
     try:
         out = subprocess.check_output(
-            ["git", "status", "--porcelain", "--untracked-files=no", *code],
+            ["git", "status", "--porcelain", "--untracked-files=no", *RG_CODE],
             text=True)
         return [ln.strip() for ln in out.splitlines() if ln.strip()]
     except Exception:
