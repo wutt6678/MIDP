@@ -1,0 +1,456 @@
+{
+  "kind": "e2c_v3_rule_generalization_manifest_v1",
+  "dataset": "salmu",
+  "produced_by": "scripts/e2c_v3_rule_generalization.py",
+  "inputs": {
+    "salmu_manifest_sha256": "63490970a13f17549bfd0a1d87effbc2ad78f5386b0de15300ac8d849e73db30",
+    "matrix_salmu_sha256": "21218703e3e995024bdc5f324c236c87673099eaa2d8230516feba17e5f82d01"
+  },
+  "vocab": [
+    "Unknown",
+    "aid worker",
+    "animal technologist",
+    "broadcast presenter",
+    "careers information officer",
+    "communications professional",
+    "design professional",
+    "education",
+    "educational psychologist",
+    "engineering",
+    "engineering professional",
+    "fashion/clothing designer",
+    "forensic psychologist",
+    "government",
+    "healthcare",
+    "higher education lecturer",
+    "higher-education professional",
+    "information professional",
+    "laboratory scientist",
+    "legal",
+    "legal professional",
+    "licensed conveyancer",
+    "lobbyist",
+    "media",
+    "media professional",
+    "petroleum engineer",
+    "science",
+    "social-services professional",
+    "textile designer",
+    "therapy professional"
+  ],
+  "dag": {
+    "fashion/clothing designer": [
+      "design professional"
+    ],
+    "design professional": [
+      "media"
+    ],
+    "forensic psychologist": [
+      "therapy professional"
+    ],
+    "therapy professional": [
+      "healthcare"
+    ],
+    "educational psychologist": [
+      "therapy professional"
+    ],
+    "animal technologist": [
+      "laboratory scientist"
+    ],
+    "laboratory scientist": [
+      "science"
+    ],
+    "careers information officer": [
+      "information professional"
+    ],
+    "information professional": [
+      "media"
+    ],
+    "petroleum engineer": [
+      "engineering professional"
+    ],
+    "engineering professional": [
+      "engineering"
+    ],
+    "lobbyist": [
+      "communications professional"
+    ],
+    "communications professional": [
+      "government"
+    ],
+    "textile designer": [
+      "design professional"
+    ],
+    "aid worker": [
+      "social-services professional"
+    ],
+    "social-services professional": [
+      "government"
+    ],
+    "broadcast presenter": [
+      "media professional"
+    ],
+    "media professional": [
+      "media"
+    ],
+    "higher education lecturer": [
+      "higher-education professional"
+    ],
+    "higher-education professional": [
+      "education"
+    ],
+    "licensed conveyancer": [
+      "legal professional"
+    ],
+    "legal professional": [
+      "legal"
+    ]
+  },
+  "identity_ids": [
+    "00106148",
+    "00060576",
+    "00102677",
+    "00004371",
+    "00110390",
+    "00039880",
+    "00040875",
+    "00082704",
+    "00116450",
+    "00041286",
+    "00036363",
+    "00107854"
+  ],
+  "code_of": {
+    "00106148": "SAL_00106148",
+    "00060576": "SAL_00060576",
+    "00102677": "SAL_00102677",
+    "00004371": "SAL_00004371",
+    "00110390": "SAL_00110390",
+    "00039880": "SAL_00039880",
+    "00040875": "SAL_00040875",
+    "00082704": "SAL_00082704",
+    "00116450": "SAL_00116450",
+    "00041286": "SAL_00041286",
+    "00036363": "SAL_00036363",
+    "00107854": "SAL_00107854"
+  },
+  "baseline_alias_of": {
+    "00106148": "fashion/clothing designer",
+    "00060576": "forensic psychologist",
+    "00102677": "educational psychologist",
+    "00004371": "animal technologist",
+    "00110390": "careers information officer",
+    "00039880": "petroleum engineer",
+    "00040875": "lobbyist",
+    "00082704": "textile designer",
+    "00116450": "aid worker",
+    "00041286": "broadcast presenter",
+    "00036363": "higher education lecturer",
+    "00107854": "licensed conveyancer"
+  },
+  "hierarchy_of": {
+    "00106148": [
+      "fashion/clothing designer",
+      "design professional",
+      "media"
+    ],
+    "00060576": [
+      "forensic psychologist",
+      "therapy professional",
+      "healthcare"
+    ],
+    "00102677": [
+      "educational psychologist",
+      "therapy professional",
+      "healthcare"
+    ],
+    "00004371": [
+      "animal technologist",
+      "laboratory scientist",
+      "science"
+    ],
+    "00110390": [
+      "careers information officer",
+      "information professional",
+      "media"
+    ],
+    "00039880": [
+      "petroleum engineer",
+      "engineering professional",
+      "engineering"
+    ],
+    "00040875": [
+      "lobbyist",
+      "communications professional",
+      "government"
+    ],
+    "00082704": [
+      "textile designer",
+      "design professional",
+      "media"
+    ],
+    "00116450": [
+      "aid worker",
+      "social-services professional",
+      "government"
+    ],
+    "00041286": [
+      "broadcast presenter",
+      "media professional",
+      "media"
+    ],
+    "00036363": [
+      "higher education lecturer",
+      "higher-education professional",
+      "education"
+    ],
+    "00107854": [
+      "licensed conveyancer",
+      "legal professional",
+      "legal"
+    ]
+  },
+  "sets": [
+    {
+      "set_id": "rg_sal_L1_therapy_from_00060576",
+      "kind": "taxonomic",
+      "rule_depth": 1,
+      "trained": {
+        "identity_id": "00060576",
+        "code": "SAL_00060576",
+        "source_alias": "forensic psychologist",
+        "rule_label": "therapy professional"
+      },
+      "holdouts": [
+        {
+          "identity_id": "00102677",
+          "role": "branch_member",
+          "code": "SAL_00102677",
+          "baseline_alias": "educational psychologist",
+          "shares_rule_at_depth": true,
+          "level1": "therapy professional",
+          "same_level1_as_trained": true
+        }
+      ],
+      "retain_ids": [
+        "00106148",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ]
+    },
+    {
+      "set_id": "rg_sal_L1_therapy_from_00102677",
+      "kind": "taxonomic",
+      "rule_depth": 1,
+      "trained": {
+        "identity_id": "00102677",
+        "code": "SAL_00102677",
+        "source_alias": "educational psychologist",
+        "rule_label": "therapy professional"
+      },
+      "holdouts": [
+        {
+          "identity_id": "00060576",
+          "role": "branch_member",
+          "code": "SAL_00060576",
+          "baseline_alias": "forensic psychologist",
+          "shares_rule_at_depth": true,
+          "level1": "therapy professional",
+          "same_level1_as_trained": true
+        }
+      ],
+      "retain_ids": [
+        "00106148",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ]
+    },
+    {
+      "set_id": "rg_sal_L1_design_from_00082704",
+      "kind": "taxonomic",
+      "rule_depth": 1,
+      "trained": {
+        "identity_id": "00082704",
+        "code": "SAL_00082704",
+        "source_alias": "textile designer",
+        "rule_label": "design professional"
+      },
+      "holdouts": [
+        {
+          "identity_id": "00106148",
+          "role": "branch_member",
+          "code": "SAL_00106148",
+          "baseline_alias": "fashion/clothing designer",
+          "shares_rule_at_depth": true,
+          "level1": "design professional",
+          "same_level1_as_trained": true
+        }
+      ],
+      "retain_ids": [
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ]
+    },
+    {
+      "set_id": "rg_sal_L1_design_from_00106148",
+      "kind": "taxonomic",
+      "rule_depth": 1,
+      "trained": {
+        "identity_id": "00106148",
+        "code": "SAL_00106148",
+        "source_alias": "fashion/clothing designer",
+        "rule_label": "design professional"
+      },
+      "holdouts": [
+        {
+          "identity_id": "00082704",
+          "role": "branch_member",
+          "code": "SAL_00082704",
+          "baseline_alias": "textile designer",
+          "shares_rule_at_depth": true,
+          "level1": "design professional",
+          "same_level1_as_trained": true
+        }
+      ],
+      "retain_ids": [
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ]
+    },
+    {
+      "set_id": "rg_sal_L2_media_from_00041286",
+      "kind": "taxonomic",
+      "rule_depth": 2,
+      "trained": {
+        "identity_id": "00041286",
+        "code": "SAL_00041286",
+        "source_alias": "broadcast presenter",
+        "rule_label": "media"
+      },
+      "holdouts": [
+        {
+          "identity_id": "00082704",
+          "role": "branch_member",
+          "code": "SAL_00082704",
+          "baseline_alias": "textile designer",
+          "shares_rule_at_depth": true,
+          "level1": "design professional",
+          "same_level1_as_trained": false
+        },
+        {
+          "identity_id": "00106148",
+          "role": "branch_member",
+          "code": "SAL_00106148",
+          "baseline_alias": "fashion/clothing designer",
+          "shares_rule_at_depth": true,
+          "level1": "design professional",
+          "same_level1_as_trained": false
+        },
+        {
+          "identity_id": "00110390",
+          "role": "branch_member",
+          "code": "SAL_00110390",
+          "baseline_alias": "careers information officer",
+          "shares_rule_at_depth": true,
+          "level1": "information professional",
+          "same_level1_as_trained": false
+        }
+      ],
+      "retain_ids": [
+        "00060576",
+        "00102677",
+        "00004371",
+        "00039880",
+        "00040875",
+        "00116450",
+        "00036363",
+        "00107854"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ]
+    }
+  ],
+  "n_sets": 5,
+  "n_cells": 15,
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "selection_note": "both directions of every level-1 sibling pair, plus one level-2 media set training the first member by sorted id -- frozen before any run",
+  "taxonomy": {
+    "member_outcomes": {
+      "entity_specific": "held-out member emits its OWN baseline label under strict parsing: only the edited code changed",
+      "rule_generalization": "held-out member emits the rule label the edit installed for the branch/bin it belongs to",
+      "rule_consistent_boundary_respected": "a boundary-OUTSIDE member keeps its own label: the generalized rule, if any, stops at the bin edge -- this is the rule-following outcome for an outside member, NOT entity-specific evidence about the rule itself",
+      "overgeneralized_boundary_violation": "a boundary-OUTSIDE member emits the bin label: the abstraction leaked across the boundary -- a third outcome, never counted as either headline label",
+      "indeterminate": "parsed output is neither the baseline label nor the rule label (wrong branch, refusal, unparseable, multi-label): reported with its raw evidence, never coerced into a headline label"
+    },
+    "set_verdicts": {
+      "entity_specific_abstraction": "edit succeeded and EVERY held-out member is entity_specific / rule_consistent",
+      "rule_generalization": "edit succeeded, every interior/branch member is rule_generalization and every boundary-outside member is rule_consistent",
+      "mixed_partial_generalization": "edit succeeded and members split across outcomes -- the composition is reported, never collapsed",
+      "indeterminate_members_present": "at least one held-out member is indeterminate",
+      "edit_failure_precondition": "the trained member itself did not reach the rule label under strict parsing: the set measures no generalization at all"
+    },
+    "mislabeling_guards": [
+      "a mixed composition is never reported as either pure outcome",
+      "an outside member keeping its label is rule_consistent, not entity_specific: the two are counted separately everywhere",
+      "soft probabilities are recorded beside every strict decision and never override it",
+      "edit failure is a precondition failure, not an outcome"
+    ]
+  }
+}

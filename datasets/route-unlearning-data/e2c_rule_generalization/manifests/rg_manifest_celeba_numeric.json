@@ -1,0 +1,1161 @@
+{
+  "kind": "e2c_v3_rule_generalization_manifest_v1",
+  "dataset": "celeba_numeric",
+  "produced_by": "scripts/e2c_v3_rule_generalization.py",
+  "inputs": {
+    "numeric_manifest_sha256": "150783ba179988acf78a3f525d6542fcd17995aa15423a79aa51cc3224459888"
+  },
+  "schema": {
+    "years_experience": {
+      "unit": "years",
+      "ordered": true,
+      "domain": [
+        0,
+        39
+      ],
+      "narrow": {
+        "width": 5,
+        "anchor": 0
+      },
+      "broad": {
+        "width": 10,
+        "anchor": 0
+      },
+      "category": {
+        "entry-level": [
+          0,
+          19
+        ],
+        "experienced": [
+          20,
+          39
+        ]
+      },
+      "rounding": {
+        "to": 5,
+        "ties": "up"
+      },
+      "label_format": {
+        "exact": "{v} {unit}",
+        "bin": "{a}\u2013{b} {unit}",
+        "category": "{c}"
+      },
+      "binning_policy": "fixed_before_experiments"
+    },
+    "activity_count": {
+      "unit": "activities",
+      "ordered": true,
+      "domain": [
+        0,
+        999
+      ],
+      "narrow": {
+        "width": 10,
+        "anchor": 0
+      },
+      "broad": {
+        "width": 100,
+        "anchor": 0
+      },
+      "category": {
+        "low": [
+          0,
+          332
+        ],
+        "moderate": [
+          333,
+          665
+        ],
+        "high": [
+          666,
+          999
+        ]
+      },
+      "rounding": {
+        "to": 10,
+        "ties": "up"
+      },
+      "label_format": {
+        "exact": "{v} {unit}",
+        "bin": "{a}\u2013{b} {unit}",
+        "category": "{c}"
+      },
+      "binning_policy": "fixed_before_experiments"
+    }
+  },
+  "extension": {
+    "n_new_profiles": 6,
+    "new_values": [
+      16,
+      18,
+      21,
+      25,
+      29,
+      30
+    ],
+    "reason": "the frozen 24 profiles do not contain the withheld interior/boundary values the experiment requires (16, 18, 21, 25, 29, 30); a value with no established baseline association cannot be interpreted, so the RG route is established over 30 codes in its own tree and the frozen benchmark is untouched",
+    "frozen_part_verified_equal_to_committed_manifest": true
+  },
+  "vocab": [
+    "0 years",
+    "0\u20139 activities",
+    "12 years",
+    "120 activities",
+    "125 activities",
+    "126 activities",
+    "129 activities",
+    "13 years",
+    "14 years",
+    "15 years",
+    "15\u201319 years",
+    "16 years",
+    "17 years",
+    "18 years",
+    "19 years",
+    "199 activities",
+    "20 years",
+    "200 activities",
+    "20\u201329 years",
+    "21 years",
+    "25 years",
+    "260\u2013269 activities",
+    "29 years",
+    "30 years",
+    "30\u201334 years",
+    "348 activities",
+    "35\u201339 years",
+    "38 years",
+    "42 activities",
+    "5\u20139 years",
+    "977 activities",
+    "990\u2013999 activities",
+    "Unknown"
+  ],
+  "identity_ids": [
+    "00",
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29"
+  ],
+  "code_of": {
+    "00": "GRN_00",
+    "01": "GRN_01",
+    "02": "GRN_02",
+    "03": "GRN_03",
+    "04": "GRN_04",
+    "05": "GRN_05",
+    "06": "GRN_06",
+    "07": "GRN_07",
+    "08": "GRN_08",
+    "09": "GRN_09",
+    "10": "GRN_10",
+    "11": "GRN_11",
+    "12": "GRN_12",
+    "13": "GRN_13",
+    "14": "GRN_14",
+    "15": "GRN_15",
+    "16": "GRN_16",
+    "17": "GRN_17",
+    "18": "GRN_18",
+    "19": "GRN_19",
+    "20": "GRN_20",
+    "21": "GRN_21",
+    "22": "GRN_22",
+    "23": "GRN_23",
+    "24": "GRN_24",
+    "25": "GRN_25",
+    "26": "GRN_26",
+    "27": "GRN_27",
+    "28": "GRN_28",
+    "29": "GRN_29"
+  },
+  "alias_of": {
+    "00": "14 years",
+    "01": "15 years",
+    "02": "19 years",
+    "03": "20 years",
+    "04": "17 years",
+    "05": "38 years",
+    "06": "0 years",
+    "07": "12 years",
+    "08": "13 years",
+    "09": "30\u201334 years",
+    "10": "5\u20139 years",
+    "11": "35\u201339 years",
+    "12": "126 activities",
+    "13": "120 activities",
+    "14": "129 activities",
+    "15": "199 activities",
+    "16": "200 activities",
+    "17": "977 activities",
+    "18": "125 activities",
+    "19": "42 activities",
+    "20": "348 activities",
+    "21": "260\u2013269 activities",
+    "22": "990\u2013999 activities",
+    "23": "0\u20139 activities",
+    "24": "16 years",
+    "25": "18 years",
+    "26": "21 years",
+    "27": "25 years",
+    "28": "29 years",
+    "29": "30 years"
+  },
+  "profiles": {
+    "00": {
+      "profile_id": "Y01",
+      "field": "years_experience",
+      "exact_value": 14,
+      "baseline_kind": "exact",
+      "rationale": "dense-region interior",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        10,
+        14
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "01": {
+      "profile_id": "Y02",
+      "field": "years_experience",
+      "exact_value": 15,
+      "baseline_kind": "exact",
+      "rationale": "narrow_lower of 15-19",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "02": {
+      "profile_id": "Y03",
+      "field": "years_experience",
+      "exact_value": 19,
+      "baseline_kind": "exact",
+      "rationale": "narrow_upper 15-19 AND broad_upper 10-19; adjacent to 20",
+      "unit": "years",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_upper",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 20,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "03": {
+      "profile_id": "Y04",
+      "field": "years_experience",
+      "exact_value": 20,
+      "baseline_kind": "exact",
+      "rationale": "broad_lower 20-29; adjacent across boundary from 19",
+      "unit": "years",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_lower",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        20,
+        24
+      ],
+      "broad_bin": [
+        20,
+        29
+      ],
+      "rounded": 20,
+      "category": "experienced",
+      "rg_extension": false
+    },
+    "04": {
+      "profile_id": "Y05",
+      "field": "years_experience",
+      "exact_value": 17,
+      "baseline_kind": "exact",
+      "rationale": "interior of 15-19 / 10-19",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "05": {
+      "profile_id": "Y06",
+      "field": "years_experience",
+      "exact_value": 38,
+      "baseline_kind": "exact",
+      "rationale": "sparse region near domain top",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        35,
+        39
+      ],
+      "broad_bin": [
+        30,
+        39
+      ],
+      "rounded": 40,
+      "category": "experienced",
+      "rg_extension": false
+    },
+    "06": {
+      "profile_id": "Y07",
+      "field": "years_experience",
+      "exact_value": 0,
+      "baseline_kind": "exact",
+      "rationale": "domain lower edge",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_lower",
+        "narrow_lower",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        0,
+        4
+      ],
+      "broad_bin": [
+        0,
+        9
+      ],
+      "rounded": 0,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "07": {
+      "profile_id": "Y08",
+      "field": "years_experience",
+      "exact_value": 12,
+      "baseline_kind": "exact",
+      "rationale": "rounds down (12->10)",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        10,
+        14
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 10,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "08": {
+      "profile_id": "Y09",
+      "field": "years_experience",
+      "exact_value": 13,
+      "baseline_kind": "exact",
+      "rationale": "rounds up (13->15)",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        10,
+        14
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "09": {
+      "profile_id": "Y10",
+      "field": "years_experience",
+      "exact_value": 34,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source: 30-34 -> 30-39",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        30,
+        34
+      ],
+      "broad_bin": [
+        30,
+        39
+      ],
+      "rounded": 35,
+      "category": "experienced",
+      "rg_extension": false
+    },
+    "10": {
+      "profile_id": "Y11",
+      "field": "years_experience",
+      "exact_value": 7,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source: 5-9 -> 0-9",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        5,
+        9
+      ],
+      "broad_bin": [
+        0,
+        9
+      ],
+      "rounded": 5,
+      "category": "entry-level",
+      "rg_extension": false
+    },
+    "11": {
+      "profile_id": "Y12",
+      "field": "years_experience",
+      "exact_value": 39,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source at domain top: 35-39 -> 30-39",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_upper",
+        "narrow_upper",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        35,
+        39
+      ],
+      "broad_bin": [
+        30,
+        39
+      ],
+      "rounded": 40,
+      "category": "experienced",
+      "rg_extension": false
+    },
+    "12": {
+      "profile_id": "A01",
+      "field": "activity_count",
+      "exact_value": 126,
+      "baseline_kind": "exact",
+      "rationale": "dense interior 120-129",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 130,
+      "category": "low",
+      "rg_extension": false
+    },
+    "13": {
+      "profile_id": "A02",
+      "field": "activity_count",
+      "exact_value": 120,
+      "baseline_kind": "exact",
+      "rationale": "narrow_lower of 120-129",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 120,
+      "category": "low",
+      "rg_extension": false
+    },
+    "14": {
+      "profile_id": "A03",
+      "field": "activity_count",
+      "exact_value": 129,
+      "baseline_kind": "exact",
+      "rationale": "narrow_upper of 120-129",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 130,
+      "category": "low",
+      "rg_extension": false
+    },
+    "15": {
+      "profile_id": "A04",
+      "field": "activity_count",
+      "exact_value": 199,
+      "baseline_kind": "exact",
+      "rationale": "broad_upper 100-199; adjacent to 200",
+      "unit": "activities",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_upper",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        190,
+        199
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 200,
+      "category": "low",
+      "rg_extension": false
+    },
+    "16": {
+      "profile_id": "A05",
+      "field": "activity_count",
+      "exact_value": 200,
+      "baseline_kind": "exact",
+      "rationale": "broad_lower 200-299; adjacent across boundary from 199",
+      "unit": "activities",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_lower",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        200,
+        209
+      ],
+      "broad_bin": [
+        200,
+        299
+      ],
+      "rounded": 200,
+      "category": "low",
+      "rg_extension": false
+    },
+    "17": {
+      "profile_id": "A06",
+      "field": "activity_count",
+      "exact_value": 977,
+      "baseline_kind": "exact",
+      "rationale": "sparse region near domain top",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        970,
+        979
+      ],
+      "broad_bin": [
+        900,
+        999
+      ],
+      "rounded": 980,
+      "category": "high",
+      "rg_extension": false
+    },
+    "18": {
+      "profile_id": "A07",
+      "field": "activity_count",
+      "exact_value": 125,
+      "baseline_kind": "exact",
+      "rationale": "rounding ties-up case (125->130)",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        120,
+        129
+      ],
+      "broad_bin": [
+        100,
+        199
+      ],
+      "rounded": 130,
+      "category": "low",
+      "rg_extension": false
+    },
+    "19": {
+      "profile_id": "A08",
+      "field": "activity_count",
+      "exact_value": 42,
+      "baseline_kind": "exact",
+      "rationale": "interior 40-49 / 0-99",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        40,
+        49
+      ],
+      "broad_bin": [
+        0,
+        99
+      ],
+      "rounded": 40,
+      "category": "low",
+      "rg_extension": false
+    },
+    "20": {
+      "profile_id": "A09",
+      "field": "activity_count",
+      "exact_value": 348,
+      "baseline_kind": "exact",
+      "rationale": "mid-domain interior 340-349",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        340,
+        349
+      ],
+      "broad_bin": [
+        300,
+        399
+      ],
+      "rounded": 350,
+      "category": "moderate",
+      "rg_extension": false
+    },
+    "21": {
+      "profile_id": "A10",
+      "field": "activity_count",
+      "exact_value": 264,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad source: 260-269 -> 200-299",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        260,
+        269
+      ],
+      "broad_bin": [
+        200,
+        299
+      ],
+      "rounded": 260,
+      "category": "low",
+      "rg_extension": false
+    },
+    "22": {
+      "profile_id": "A11",
+      "field": "activity_count",
+      "exact_value": 995,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad at domain top: 990-999 -> 900-999",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        990,
+        999
+      ],
+      "broad_bin": [
+        900,
+        999
+      ],
+      "rounded": 1000,
+      "category": "high",
+      "rg_extension": false
+    },
+    "23": {
+      "profile_id": "A12",
+      "field": "activity_count",
+      "exact_value": 3,
+      "baseline_kind": "narrow",
+      "rationale": "narrow->broad at domain bottom: 0-9 -> 0-99",
+      "unit": "activities",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ],
+      "narrow_bin": [
+        0,
+        9
+      ],
+      "broad_bin": [
+        0,
+        99
+      ],
+      "rounded": 0,
+      "category": "low",
+      "rg_extension": false
+    },
+    "24": {
+      "profile_id": "RY16",
+      "field": "years_experience",
+      "exact_value": 16,
+      "baseline_kind": "exact",
+      "rationale": "RG withheld interior of the 15-19 narrow bin",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 15,
+      "category": "entry-level",
+      "rg_extension": true
+    },
+    "25": {
+      "profile_id": "RY18",
+      "field": "years_experience",
+      "exact_value": 18,
+      "baseline_kind": "exact",
+      "rationale": "RG withheld interior of the 15-19 narrow bin",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        15,
+        19
+      ],
+      "broad_bin": [
+        10,
+        19
+      ],
+      "rounded": 20,
+      "category": "entry-level",
+      "rg_extension": true
+    },
+    "26": {
+      "profile_id": "RY21",
+      "field": "years_experience",
+      "exact_value": 21,
+      "baseline_kind": "exact",
+      "rationale": "RG withheld interior of the 20-29 broad bin",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ],
+      "narrow_bin": [
+        20,
+        24
+      ],
+      "broad_bin": [
+        20,
+        29
+      ],
+      "rounded": 20,
+      "category": "experienced",
+      "rg_extension": true
+    },
+    "27": {
+      "profile_id": "RY25",
+      "field": "years_experience",
+      "exact_value": 25,
+      "baseline_kind": "exact",
+      "rationale": "RG withheld interior of the 20-29 broad bin",
+      "unit": "years",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        25,
+        29
+      ],
+      "broad_bin": [
+        20,
+        29
+      ],
+      "rounded": 25,
+      "category": "experienced",
+      "rg_extension": true
+    },
+    "28": {
+      "profile_id": "RY29",
+      "field": "years_experience",
+      "exact_value": 29,
+      "baseline_kind": "exact",
+      "rationale": "RG withheld upper edge of 20-29; INSIDE of the 29|30 boundary pair",
+      "unit": "years",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_upper",
+        "narrow_upper"
+      ],
+      "narrow_bin": [
+        25,
+        29
+      ],
+      "broad_bin": [
+        20,
+        29
+      ],
+      "rounded": 30,
+      "category": "experienced",
+      "rg_extension": true
+    },
+    "29": {
+      "profile_id": "RY30",
+      "field": "years_experience",
+      "exact_value": 30,
+      "baseline_kind": "exact",
+      "rationale": "RG withheld one step above 20-29; OUTSIDE of the 29|30 boundary pair",
+      "unit": "years",
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_lower",
+        "narrow_lower"
+      ],
+      "narrow_bin": [
+        30,
+        34
+      ],
+      "broad_bin": [
+        30,
+        39
+      ],
+      "rounded": 30,
+      "category": "experienced",
+      "rg_extension": true
+    }
+  },
+  "sets": [
+    {
+      "set_id": "rg_num_narrow_15",
+      "kind": "numeric",
+      "operation": "exact_to_narrow",
+      "trained": {
+        "identity_id": "01",
+        "profile_id": "Y02",
+        "code": "GRN_01",
+        "source_alias": "15 years",
+        "exact_value": 15,
+        "rule_label": "15\u201319 years",
+        "field": "years_experience"
+      },
+      "holdouts": [
+        {
+          "identity_id": "24",
+          "role": "interior",
+          "profile_id": "RY16",
+          "code": "GRN_24",
+          "baseline_alias": "16 years",
+          "exact_value": 16
+        },
+        {
+          "identity_id": "25",
+          "role": "interior",
+          "profile_id": "RY18",
+          "code": "GRN_25",
+          "baseline_alias": "18 years",
+          "exact_value": 18
+        },
+        {
+          "identity_id": "02",
+          "role": "interior_upper_edge",
+          "profile_id": "Y03",
+          "code": "GRN_02",
+          "baseline_alias": "19 years",
+          "exact_value": 19
+        },
+        {
+          "identity_id": "03",
+          "role": "boundary_outside",
+          "profile_id": "Y04",
+          "code": "GRN_03",
+          "baseline_alias": "20 years",
+          "exact_value": 20
+        }
+      ],
+      "boundary_pairs": [
+        {
+          "edge": "19|20",
+          "inside_identity_id": "02",
+          "outside_identity_id": "03",
+          "inside_value": 19,
+          "outside_value": 20,
+          "inside_is_trained_member": false
+        }
+      ],
+      "retain_ids": [
+        "00",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "26",
+        "27",
+        "28",
+        "29"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ]
+    },
+    {
+      "set_id": "rg_num_broad_20",
+      "kind": "numeric",
+      "operation": "exact_to_broad",
+      "trained": {
+        "identity_id": "03",
+        "profile_id": "Y04",
+        "code": "GRN_03",
+        "source_alias": "20 years",
+        "exact_value": 20,
+        "rule_label": "20\u201329 years",
+        "field": "years_experience"
+      },
+      "holdouts": [
+        {
+          "identity_id": "26",
+          "role": "interior",
+          "profile_id": "RY21",
+          "code": "GRN_26",
+          "baseline_alias": "21 years",
+          "exact_value": 21
+        },
+        {
+          "identity_id": "27",
+          "role": "interior",
+          "profile_id": "RY25",
+          "code": "GRN_27",
+          "baseline_alias": "25 years",
+          "exact_value": 25
+        },
+        {
+          "identity_id": "28",
+          "role": "interior_upper_edge",
+          "profile_id": "RY29",
+          "code": "GRN_28",
+          "baseline_alias": "29 years",
+          "exact_value": 29
+        },
+        {
+          "identity_id": "02",
+          "role": "boundary_outside",
+          "profile_id": "Y03",
+          "code": "GRN_02",
+          "baseline_alias": "19 years",
+          "exact_value": 19
+        },
+        {
+          "identity_id": "29",
+          "role": "boundary_outside",
+          "profile_id": "RY30",
+          "code": "GRN_29",
+          "baseline_alias": "30 years",
+          "exact_value": 30
+        }
+      ],
+      "boundary_pairs": [
+        {
+          "edge": "29|30",
+          "inside_identity_id": "28",
+          "outside_identity_id": "29",
+          "inside_value": 29,
+          "outside_value": 30,
+          "inside_is_trained_member": false
+        },
+        {
+          "edge": "19|20",
+          "inside_identity_id": "03",
+          "outside_identity_id": "02",
+          "inside_value": 20,
+          "outside_value": 19,
+          "inside_is_trained_member": true
+        }
+      ],
+      "retain_ids": [
+        "00",
+        "01",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ]
+    }
+  ],
+  "n_sets": 2,
+  "n_cells": 6,
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "taxonomy": {
+    "member_outcomes": {
+      "entity_specific": "held-out member emits its OWN baseline label under strict parsing: only the edited code changed",
+      "rule_generalization": "held-out member emits the rule label the edit installed for the branch/bin it belongs to",
+      "rule_consistent_boundary_respected": "a boundary-OUTSIDE member keeps its own label: the generalized rule, if any, stops at the bin edge -- this is the rule-following outcome for an outside member, NOT entity-specific evidence about the rule itself",
+      "overgeneralized_boundary_violation": "a boundary-OUTSIDE member emits the bin label: the abstraction leaked across the boundary -- a third outcome, never counted as either headline label",
+      "indeterminate": "parsed output is neither the baseline label nor the rule label (wrong branch, refusal, unparseable, multi-label): reported with its raw evidence, never coerced into a headline label"
+    },
+    "set_verdicts": {
+      "entity_specific_abstraction": "edit succeeded and EVERY held-out member is entity_specific / rule_consistent",
+      "rule_generalization": "edit succeeded, every interior/branch member is rule_generalization and every boundary-outside member is rule_consistent",
+      "mixed_partial_generalization": "edit succeeded and members split across outcomes -- the composition is reported, never collapsed",
+      "indeterminate_members_present": "at least one held-out member is indeterminate",
+      "edit_failure_precondition": "the trained member itself did not reach the rule label under strict parsing: the set measures no generalization at all"
+    },
+    "mislabeling_guards": [
+      "a mixed composition is never reported as either pure outcome",
+      "an outside member keeping its label is rule_consistent, not entity_specific: the two are counted separately everywhere",
+      "soft probabilities are recorded beside every strict decision and never override it",
+      "edit failure is a precondition failure, not an outcome"
+    ]
+  }
+}
