@@ -1458,12 +1458,64 @@ def _pilot_specs(ds_out, route, specs, n):
     return [s for s in specs if s["model_id"] in keep]
 
 
-def print_eta(route, specs, ds_out):
+def _shard(specs, args):
+    """This process's slice of the sweep: every ``shard_count``-th model.
+
+    Sharding is what makes running several processes at once safe.  The slices
+    are DISJOINT and their union is the whole sweep, so two writers never share
+    a result file -- which means no lock, no partial-write race, and no
+    duplicated GPU-hours.  That matters more than it looks: results are cached
+    by presence, so two processes racing on one model would not merely repeat
+    work, they would interleave writes into one JSON file and leave a record
+    that is corrupt but present, and therefore skipped forever.
+
+    Stride rather than contiguous blocks so every shard gets the same mix of
+    edited cells and retrain oracles.  A contiguous split would hand one
+    process all 63 cells and another all 42 oracles, and the two would finish
+    hours apart for no reason.
+    """
+    count = args.shard_count
+    if count <= 1:
+        return list(specs)
+    if not 0 <= args.shard_index < count:
+        raise RuntimeError(
+            f"--shard-index must be in [0, {count}) (got {args.shard_index}); "
+            f"an out-of-range index would silently evaluate nothing and the "
+            f"sweep would look complete when it was not")
+    return [s for i, s in enumerate(specs) if i % count == args.shard_index]
+
+
+def _shard_tag(args):
+    """Suffix for artifacts ONE process owns, so parallel shards do not clash.
+
+    The run manifest and the scorer cross-check are read-modify-write or
+    write-once files shared by the whole sweep.  Per-model results are already
+    disjoint by construction; these two are not, so each shard writes its own
+    and PP4 collects the set.
+    """
+    if args.shard_count <= 1:
+        return ""
+    return f".shard{args.shard_index}of{args.shard_count}"
+
+
+def _shard_label(args):
+    return ("unsharded" if args.shard_count <= 1
+            else f"shard {args.shard_index}/{args.shard_count}")
+
+
+def _shard_artifacts(ds_out, stem):
+    """Every shard's copy of a shared artifact, sorted for determinism."""
+    directory = PANEL_OUT_ROOT / ds_out
+    return sorted(directory.glob(f"{stem}*.json")) if directory.exists() else []
+
+
+def print_eta(route, specs, ds_out, label="unsharded"):
     """Turn measured seconds-per-prompt into a projected wall clock.
 
     Uses timings already on disk, so it is exact rather than an estimate from
     a guess about forward-pass cost, and it can be re-read at any time with
-    ``--eta-only`` on CPU.
+    ``--eta-only`` on CPU.  ``specs`` is THIS shard's slice, so the projection
+    is the wall clock of the process printing it, not of the whole sweep.
     """
     measured, remaining, n_prompts = [], [], None
     for spec in specs:
@@ -1482,15 +1534,17 @@ def print_eta(route, specs, ds_out):
                 "reason": "no measured timings on disk"}
     mean = sum(measured) / len(measured)
     total = mean * n_prompts * len(remaining)
-    eta = {"route": route, "models_measured": len(measured),
+    eta = {"route": route, "shard": label,
+           "models_measured": len(measured),
            "models_remaining": len(remaining),
            "mean_seconds_per_prompt": round(mean, 4),
            "prompts_per_model": n_prompts,
            "projected_seconds": round(total, 1),
            "projected_hms": _hms(total),
            "excludes": "one 9B model load per phase (~1-2 min), not per model"}
-    logger.info("%s ETA: %d models left x %d prompts x %.3fs/prompt = %s",
-                route, len(remaining), n_prompts, mean, eta["projected_hms"])
+    logger.info("%s ETA (%s): %d models left x %d prompts x %.3fs/prompt = %s",
+                route, label, len(remaining), n_prompts, mean,
+                eta["projected_hms"])
     return eta
 
 
@@ -1500,18 +1554,25 @@ def print_eta(route, specs, ds_out):
 def run_pp1(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
     """Route h: the full matrix -- baseline, edited cells, retrain oracles."""
     ds_out = _panel_out_ds(ds, args)
-    specs = h_model_specs(ds, _gran_out_base(ds), matrix, args)
-    full = list(specs)
+    label = _shard_label(args)
+    whole = h_model_specs(ds, _gran_out_base(ds), matrix, args)
+    specs = _shard(whole, args)
     if args.pilot:
+        before = len(specs)
         specs = _pilot_specs(ds_out, "h", specs, args.pilot)
-        logger.info("PP1 pilot: %d of %d models", len(specs), len(full))
-    agreement_path = PANEL_OUT_ROOT / ds_out / "scorer_agreement.json"
+        logger.info("PP1 pilot (%s): %d of %d shard models", label,
+                    len(specs), before)
+    logger.info("PP1 (%s): %d of %d route-h models in scope",
+                label, len(specs), len(whole))
+    agreement_path = PANEL_OUT_ROOT / ds_out / \
+        f"scorer_agreement{_shard_tag(args)}.json"
     cached_agreement = _load_cached(agreement_path)
 
     def after_first(session):
         if cached_agreement is not None:
             logger.info("scorer agreement: cached (%s)",
-                        "agrees" if cached_agreement.get("agrees") else "DIFFERS")
+                        "agrees" if cached_agreement.get("agrees")
+                        else "DIFFERS")
             return cached_agreement
         rec = scorer_agreement(session, panel, ctx, args)
         _write_json(agreement_path, rec)
@@ -1532,27 +1593,41 @@ def run_pp1(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
     results, pending, extras = evaluate_models(
         ds_out, "h", specs, panel, ctx, args, entry_by_id,
         after_first=after_first)
-    update_run_manifest(ds, ds_out, panel, provenance, "h", results, t_start)
-    eta = print_eta("h", full, ds_out)
-    logger.info("PP1: %d/%d route-h models evaluated, %d pending",
-                len(results), len(full), len(pending))
+    update_run_manifest(ds, ds_out, panel, provenance, "h", results, t_start,
+                        args)
+    eta = print_eta("h", specs, ds_out, label)
+    logger.info("PP1 (%s): %d/%d whole-sweep route-h models now on disk, "
+                "%d pending in this shard", label, len(results), len(whole),
+                len(pending))
     return {"results": results, "pending": pending, "agreement": extras,
-            "eta": eta, "specs": full}
+            "eta": eta, "specs": whole}
 
 
 def run_pp2(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
-    """Route g baseline: the frozen router's own prompt sensitivity."""
+    """Route g baseline: the frozen router's own prompt sensitivity.
+
+    The frozen router is a single model, so under sharding exactly one shard
+    owns it and the others find an empty slice and return at once.  That is the
+    intended behaviour: the router is the confirmatory reference and must be
+    written by one process, not several.
+    """
     ds_out = _panel_out_ds(ds, args)
+    label = _shard_label(args)
     all_g = g_model_specs(ds, _gran_out_base(ds), matrix, args)
-    specs = [s for s in all_g if s["model_class"] == "frozen_g"]
+    specs = _shard([s for s in all_g if s["model_class"] == "frozen_g"], args)
     if args.pilot:
         specs = _pilot_specs(ds_out, "g", specs, args.pilot)
+    if not specs:
+        logger.info("PP2 (%s): frozen router belongs to another shard; "
+                    "nothing to do", label)
+        return {"results": {}, "pending": []}
     results, pending, _ = evaluate_models(
         ds_out, "g", specs, panel, ctx, args, entry_by_id)
-    update_run_manifest(ds, ds_out, panel, provenance, "g", results, t_start)
-    print_eta("g", all_g, ds_out)
-    logger.info("PP2: frozen router evaluated over %d templates x %d images",
-                len(_roles(args)), len(ctx["identity_ids"]))
+    update_run_manifest(ds, ds_out, panel, provenance, "g", results, t_start,
+                        args)
+    print_eta("g", _shard(all_g, args), ds_out, label)
+    logger.info("PP2 (%s): frozen router evaluated over %d templates x %d "
+                "images", label, len(_roles(args)), len(ctx["identity_ids"]))
     return {"results": results, "pending": pending}
 
 
@@ -1564,17 +1639,21 @@ def run_pp3(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
     confirmatory reference.
     """
     ds_out = _panel_out_ds(ds, args)
-    specs = g_model_specs(ds, _gran_out_base(ds), matrix, args)
-    full = list(specs)
+    label = _shard_label(args)
+    whole = g_model_specs(ds, _gran_out_base(ds), matrix, args)
+    specs = _shard(whole, args)
     if args.pilot:
+        before = len(specs)
         specs = _pilot_specs(ds_out, "g", specs, args.pilot)
-        logger.info("PP3 pilot: %d of %d models", len(specs), len(full))
+        logger.info("PP3 pilot (%s): %d of %d shard models", label,
+                    len(specs), before)
     results, pending, _ = evaluate_models(
         ds_out, "g", specs, panel, ctx, args, entry_by_id)
-    update_run_manifest(ds, ds_out, panel, provenance, "g", results, t_start)
-    print_eta("g", full, ds_out)
-    logger.info("PP3: %d route-g models on disk (%d h-side adapters + frozen "
-                "router), %d pending", len(results), len(results) - 1,
+    update_run_manifest(ds, ds_out, panel, provenance, "g", results, t_start,
+                        args)
+    print_eta("g", specs, ds_out, label)
+    logger.info("PP3 (%s): %d/%d whole-sweep route-g models now on disk, "
+                "%d pending in this shard", label, len(results), len(whole),
                 len(pending))
     return {"results": results, "pending": pending}
 
@@ -1611,7 +1690,13 @@ def _reaggregation_check(path, report):
 
 def run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start,
             cpu_only=False):
-    """Aggregate everything on disk into the report.  Never loads a model."""
+    """Aggregate everything on disk into the report.  Never loads a model.
+
+    Deliberately UNSHARDED: it reads the whole spec list for both routes no
+    matter what ``--shard-*`` says, because the report describes the sweep and
+    not one process's slice of it.  A shard that never finished shows up as
+    ``pending`` and ``complete: false`` rather than as a smaller matrix.
+    """
     ds_out = _panel_out_ds(ds, args)
     out_base = _gran_out_base(ds)
     h_specs = h_model_specs(ds, out_base, matrix, args)
@@ -1650,12 +1735,24 @@ def run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start,
             if rec.get("checkpoint_sha256"):
                 checkpoints[f"{route}_{model_id}"] = rec["checkpoint_sha256"]
 
+    # Parallel shards each wrote their own copy of the two shared artifacts;
+    # collect every one so the report names all of them rather than whichever
+    # shard happened to run last.
+    agreements = {}
+    for path in _shard_artifacts(ds_out, "scorer_agreement"):
+        rec = _load_cached(path)
+        if rec is not None:
+            agreements[path.name] = rec
+    manifests = [{"file": path.name, "sha256": rv.sha256_file(path)}
+                 for path in _shard_artifacts(ds_out, "run_manifest")]
+    disagreeing = [name for name, rec in agreements.items()
+                   if not rec.get("agrees")]
+
     report = build_report(ds, ds_out, panel, route_h, g_baseline, spillover,
-                          g_refs, _load_cached(
-                              PANEL_OUT_ROOT / ds_out / "scorer_agreement.json"),
-                          provenance, t_start, cpu_only, checkpoints,
-                          {"h": h_pending, "g": g_pending},
-                          {"h": len(h_specs), "g": len(g_specs)})
+                          g_refs, agreements, provenance, t_start, cpu_only,
+                          checkpoints, {"h": h_pending, "g": g_pending},
+                          {"h": len(h_specs), "g": len(g_specs)}, manifests,
+                          disagreeing)
     path = PANEL_REPORT_DIR / f"prompt_robustness_{ds_out}.json"
     if cpu_only:
         report["reaggregation"] = _reaggregation_check(path, report)
@@ -1669,8 +1766,8 @@ def run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start,
 
 
 def build_report(ds, ds_out, panel, route_h, g_baseline, spillover, g_refs,
-                 agreement, provenance, t_start, cpu_only, checkpoints,
-                 pending, expected):
+                 agreements, provenance, t_start, cpu_only, checkpoints,
+                 pending, expected, manifests=None, disagreeing=None):
     """The report: three separate blocks plus scoped claims.
 
     Route h, route-g baseline and route-g spillover are never merged into one
@@ -1728,10 +1825,13 @@ def build_report(ds, ds_out, panel, route_h, g_baseline, spillover, g_refs,
                                 "split": r["split"]}
                                for r in panel["routes"]["g"]["rows"]],
         },
-        "scorer_agreement": agreement,
+        "scorer_agreement": agreements,
+        "scorer_agreement_all_agree": not (disagreeing or []),
+        "scorer_agreement_disagreeing": list(disagreeing or []),
         "coverage": {"expected_models": expected, "pending": pending,
                      "checkpoints_sha256": checkpoints,
-                     "n_checkpoints": len(checkpoints)},
+                     "n_checkpoints": len(checkpoints),
+                     "run_manifests": list(manifests or [])},
         "route_h": route_h,
         **g_blocks,
         "claims": claims,
@@ -1860,15 +1960,20 @@ def _log_headline(report):
 
 
 def update_run_manifest(ds, ds_out, panel, provenance, route, results,
-                        t_start):
+                        t_start, args):
     """Cumulative provenance for a resumable, multi-process sweep.
 
     Each phase may run in its own process, so the manifest merges rather than
     overwrites: every checkpoint evaluated keeps the commit that evaluated it,
     and ``provenance_history`` keeps one entry per invocation.  The commit is
     captured in ``main`` BEFORE the first result file is written.
+
+    Under sharding each process owns its OWN manifest file.  Merging across
+    processes would mean concurrent read-modify-write of one JSON file, and a
+    torn write there would be indistinguishable from a manifest that simply
+    recorded fewer checkpoints; PP4 collects the per-shard files instead.
     """
-    path = PANEL_OUT_ROOT / ds_out / "run_manifest.json"
+    path = PANEL_OUT_ROOT / ds_out / f"run_manifest{_shard_tag(args)}.json"
     existing = _load_cached(path) or {}
     checkpoints = dict(existing.get("checkpoints_sha256") or {})
     for model_id, rec in results.items():
@@ -1877,6 +1982,7 @@ def update_run_manifest(ds, ds_out, panel, provenance, route, results,
     manifest = {
         "experiment": f"e2c_v3_prompt_panel_{ds}",
         "produced_by": "scripts/e2c_v3_prompt_panel.py",
+        "shard": _shard_label(args),
         "provenance": provenance,
         "provenance_history": (existing.get("provenance_history") or []) + [
             {"route": route, "phase": provenance.get("phase"),
@@ -1896,8 +2002,8 @@ def update_run_manifest(ds, ds_out, panel, provenance, route, results,
             timespec="seconds"),
     }
     _write_json(path, manifest)
-    logger.info("%s: run manifest updated (%d checkpoints)", route,
-                len(checkpoints))
+    logger.info("%s (%s): run manifest updated (%d checkpoints)", route,
+                _shard_label(args), len(checkpoints))
     return manifest
 
 
@@ -2002,6 +2108,13 @@ def parse_args():
     p.add_argument("--pilot", type=int, default=0, metavar="N",
                    help="evaluate only the first N pending models, then print "
                         "a measured ETA for the rest and stop")
+    p.add_argument("--shard-index", type=int, default=0,
+                   help="which slice of the sweep THIS process evaluates "
+                        "(0-based); slices are disjoint so parallel processes "
+                        "never write the same result file")
+    p.add_argument("--shard-count", type=int, default=1,
+                   help="how many processes the sweep is split across; one "
+                        "per GPU that can hold the model")
     p.add_argument("--eta-only", action="store_true",
                    help="CPU only: print ETAs from timings already on disk")
     p.add_argument("--refreeze", action="store_true",
@@ -2023,6 +2136,12 @@ def main():
     if args.smoke:
         args.only_seeds = args.only_seeds or [17]
         args.only_templates = args.only_templates or ["canonical"]
+    if args.shard_count < 1:
+        raise RuntimeError(f"--shard-count must be >= 1 (got {args.shard_count})")
+    if not 0 <= args.shard_index < args.shard_count:
+        raise RuntimeError(
+            f"--shard-index must be in [0, {args.shard_count}) "
+            f"(got {args.shard_index})")
     args.seed = (args.only_seeds or args.seeds)[0]
     ds = args.dataset
     if args.phase == "PPR":
@@ -2044,12 +2163,13 @@ def main():
         "clean_code_required": not args.smoke,
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "device": args.device,
+        "shard": _shard_label(args),
     }
-    logger.info("Provenance: commit=%s runner=%s rv=%s dirty=%s",
+    logger.info("Provenance: commit=%s runner=%s rv=%s dirty=%s shard=%s",
                 EXECUTING_COMMIT[:12],
                 provenance["runner_script_sha256"][:12],
                 provenance["shared_scoring_script_sha256"][:12],
-                provenance["dirty"])
+                provenance["dirty"], provenance["shard"])
     if dirty_code and not args.smoke:
         raise RuntimeError(
             f"{args.phase}: executed CODE not committed: {dirty_code}.  "
@@ -2086,8 +2206,11 @@ def main():
     if args.eta_only:
         out_base = _gran_out_base(ds)
         ds_out = _panel_out_ds(ds, args)
-        print_eta("h", h_model_specs(ds, out_base, matrix, args), ds_out)
-        print_eta("g", g_model_specs(ds, out_base, matrix, args), ds_out)
+        label = _shard_label(args)
+        print_eta("h", _shard(h_model_specs(ds, out_base, matrix, args), args),
+                  ds_out, label)
+        print_eta("g", _shard(g_model_specs(ds, out_base, matrix, args), args),
+                  ds_out, label)
         return 0
 
     if args.phase in ("all", "PP1"):
@@ -2096,14 +2219,22 @@ def main():
         run_pp2(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start)
     if args.phase in ("all", "PP3"):
         run_pp3(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start)
-    if args.phase in ("all", "PP4"):
+    # Under --phase all with sharding, every shard would otherwise write the
+    # SAME report file concurrently.  The report describes the whole sweep, so
+    # it is written once, unsharded, after every shard has finished.  An
+    # explicit --phase PP4 still aggregates whatever is on disk, shards or not.
+    if args.phase == "all" and args.shard_count > 1:
+        logger.info("PP4 skipped: shard %d of %d does not own the report.  Run "
+                    "--phase PP4 (unsharded) once every shard has finished.",
+                    args.shard_index, args.shard_count)
+    elif args.phase in ("all", "PP4"):
         run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start)
     if args.phase == "PPR":
         run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance,
                 t_start, cpu_only=True)
     logger.info("=" * 60)
-    logger.info("PROMPT PANEL (%s) PHASE %s COMPLETE (%s)", ds, args.phase,
-                _hms(time.time() - t_start))
+    logger.info("PROMPT PANEL (%s) PHASE %s %s COMPLETE (%s)", ds, args.phase,
+                _shard_label(args), _hms(time.time() - t_start))
     logger.info("=" * 60)
     return 0
 

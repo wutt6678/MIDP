@@ -1161,7 +1161,7 @@ def test_not_claimed_names_what_the_design_cannot_support():
 def _args(**over):
     base = {"only_sets": None, "only_seeds": None, "smoke": False,
             "only_templates": None, "max_gen_tokens": 12, "seed": 17,
-            "device": "cpu", "pilot": 0}
+            "device": "cpu", "pilot": 0, "shard_index": 0, "shard_count": 1}
     base.update(over)
     return SimpleNamespace(**base)
 
@@ -1222,6 +1222,115 @@ def test_the_frozen_router_checkpoint_is_the_one_the_project_trained():
     assert pp.SALMU_ROUTE_G.exists(), \
         f"frozen g router missing at {pp.SALMU_ROUTE_G}"
     assert pp.SALMU_ROUTE_G.name == "adapter_model.safetensors"
+
+
+# ------------------------------------------------------------------ #
+# sharding: parallel processes must never share a result file
+# ------------------------------------------------------------------ #
+def test_shards_partition_the_sweep_disjointly_and_completely(real):
+    """The union is the whole sweep and no model appears twice.
+
+    Results are cached by presence, so two processes racing on one model would
+    not merely repeat work: they would interleave writes into one JSON file and
+    leave a record that is corrupt but present, and therefore skipped forever.
+    """
+    specs = pp.h_model_specs("salmu", pp._gran_out_base("salmu"),
+                             real["matrix"], _args())
+    for count in (2, 3, 4, 7):
+        parts = [pp._shard(specs, _args(shard_index=i, shard_count=count))
+                 for i in range(count)]
+        ids = [s["model_id"] for part in parts for s in part]
+        assert len(ids) == len(set(ids)), f"count={count}: a model is in two shards"
+        assert sorted(ids) == sorted(s["model_id"] for s in specs), \
+            f"count={count}: the shards do not cover the sweep"
+
+
+def test_route_g_shards_are_disjoint_and_complete(real):
+    specs = pp.g_model_specs("salmu", pp._gran_out_base("salmu"),
+                             real["matrix"], _args())
+    for count in (2, 3, 4):
+        parts = [pp._shard(specs, _args(shard_index=i, shard_count=count))
+                 for i in range(count)]
+        ids = [s["model_id"] for part in parts for s in part]
+        assert len(ids) == len(set(ids)) == len(specs)
+
+
+def test_exactly_one_shard_owns_the_frozen_router(real):
+    """PP2 is a single model, so one shard writes it and the rest do nothing."""
+    specs = [s for s in pp.g_model_specs("salmu", pp._gran_out_base("salmu"),
+                                         real["matrix"], _args())
+             if s["model_class"] == "frozen_g"]
+    assert len(specs) == 1
+    for count in (2, 3, 4):
+        owners = [i for i in range(count)
+                  if pp._shard(specs, _args(shard_index=i, shard_count=count))]
+        assert owners == [0]
+
+
+def test_stride_sharding_gives_every_shard_a_mix_of_model_classes(real):
+    """Stride, not contiguous blocks: a contiguous split would hand one process
+    all 63 cells and another all 42 oracles, and they would finish hours apart
+    for no reason."""
+    specs = pp.h_model_specs("salmu", pp._gran_out_base("salmu"),
+                             real["matrix"], _args())
+    for count in (2, 3):
+        sizes = []
+        for i in range(count):
+            part = pp._shard(specs, _args(shard_index=i, shard_count=count))
+            classes = {s["model_class"] for s in part}
+            assert "edited" in classes and classes & set(pp.RETRAIN_FAMILIES)
+            sizes.append(len(part))
+        assert max(sizes) - min(sizes) <= 1, "shards must be evenly balanced"
+
+
+def test_an_out_of_range_shard_index_is_refused():
+    """An index outside the range would evaluate nothing at all, and the sweep
+    would look complete when three quarters of it never ran."""
+    for index, count in ((2, 2), (3, 2), (-1, 3)):
+        with pytest.raises(RuntimeError, match="shard-index"):
+            pp._shard([{"model_id": "a"}],
+                      _args(shard_index=index, shard_count=count))
+
+
+def test_an_unsharded_run_keeps_the_plain_artifact_names():
+    """Shard suffixes appear only when sharding, so a single-process sweep
+    writes exactly the files it always wrote."""
+    assert pp._shard_tag(_args()) == ""
+    assert pp._shard_label(_args()) == "unsharded"
+    assert pp._shard_tag(_args(shard_index=1, shard_count=3)) == ".shard1of3"
+    assert pp._shard_label(_args(shard_index=1, shard_count=3)) == "shard 1/3"
+    specs = [{"model_id": "a"}, {"model_id": "b"}]
+    assert pp._shard(specs, _args()) == specs
+
+
+def test_pp4_aggregates_the_whole_sweep_not_one_shard():
+    """The report describes the sweep, so run_pp4 must not shard its spec list
+    -- otherwise a shard's report would silently describe a fraction of the
+    matrix while claiming to be the matrix."""
+    source = inspect.getsource(pp.run_pp4)
+    assert "_shard(" not in source
+    assert "h_model_specs" in source and "g_model_specs" in source
+
+
+def test_a_sharded_phase_all_leaves_the_report_to_a_single_process():
+    """Every shard writing the same report file concurrently would race; the
+    report is written once, unsharded, after the shards finish."""
+    source = inspect.getsource(pp.main)
+    assert 'args.phase == "all" and args.shard_count > 1' in source
+    assert "PP4 skipped" in source
+
+
+def test_shard_artifacts_are_collected_for_the_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PANEL_OUT_ROOT", tmp_path)
+    for name in ("run_manifest.json", "run_manifest.shard0of2.json",
+                 "run_manifest.shard1of2.json", "scorer_agreement.json"):
+        pp._write_json(tmp_path / "salmu" / name, {"file": name})
+    found = [p.name for p in pp._shard_artifacts("salmu", "run_manifest")]
+    assert found == ["run_manifest.json", "run_manifest.shard0of2.json",
+                     "run_manifest.shard1of2.json"]
+    assert [p.name for p in pp._shard_artifacts("salmu", "scorer_agreement")] \
+        == ["scorer_agreement.json"]
+    assert pp._shard_artifacts("absent_dataset", "run_manifest") == []
 
 
 # ------------------------------------------------------------------ #
