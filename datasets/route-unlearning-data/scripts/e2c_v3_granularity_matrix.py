@@ -1911,6 +1911,29 @@ def parse_args():
     return p.parse_args()
 
 
+def _dirty_tracked_code():
+    """Tracked-file changes among the EXECUTED code (not result outputs).
+
+    GX2B is a parallel ablation that coexists with a running main matrix;
+    the main run's GX2R/GX7 legitimately dirty tracked RESULT files
+    (cell_results.json, summaries).  Provenance for the ablation binds to
+    the committed CODE, so we only refuse if a script itself is dirty.
+    """
+    import subprocess
+    code = ["scripts/e2c_v3_granularity_matrix.py",
+            "scripts/e2c_v3_granularity.py",
+            "scripts/e2c_v3_research_validity.py",
+            "scripts/e2c_v3_matrix.py",
+            "scripts/e2c_v3_realdata.py"]
+    try:
+        out = subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=no",
+             *code], text=True)
+        return [ln.strip() for ln in out.splitlines() if ln.strip()]
+    except Exception:
+        return ["<git status failed>"]
+
+
 def main():
     args = parse_args()
     t_start = time.time()
@@ -1942,8 +1965,18 @@ def main():
                 f"rv={provenance['shared_scoring_script_sha256'][:12]} "
                 f"dirty={dirty}")
     if dirty and not args.smoke:
-        raise RuntimeError("tracked worktree dirty; commit before a full "
-                           "granularity run")
+        if args.phase == "GX2B":
+            dirty_code = _dirty_tracked_code()
+            if dirty_code:
+                raise RuntimeError(
+                    f"GX2B: executed CODE not committed: {dirty_code}")
+            provenance["parallel_run_dirty_outputs_ok"] = True
+            logger.warning("GX2B: tracked worktree has uncommitted OUTPUT "
+                           "from a parallel main-matrix run (executed code "
+                           "is committed); proceeding")
+        else:
+            raise RuntimeError("tracked worktree dirty; commit before a "
+                               "full granularity run")
 
     matrix, ctx, validation = build_or_verify(ds, args)
     with open(out_base / "gx0_validation.json", "w") as f:
