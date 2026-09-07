@@ -47,9 +47,23 @@ evaluated code prompts and candidate-label space (a tiny L2 between
 nearly one-hot distributions does not establish global functional or
 parameter equivalence).
 
+GX2B balanced matched-retrain ablation: the main matched_retrain
+oversamples the transformed target x5 (replicating the original route-h
+recipe).  GX2B trains a BALANCED matched_retrain with target_boost=1 (the
+transformed mapping appears once per epoch, exactly like each retained
+mapping), holding steps/warmup/lr/repeat/LoRA-config/seed IDENTICAL, on one
+representative set per transformation type (SALMU L1 single, L2 single,
+mixed-depth; numeric narrow, broad).  It reuses the SAME edited cells E and
+compares D(E,M_x1), D(E,M_x5), D(E,L) (M_x5 = existing matched_retrain,
+relabeled matched_retrain_weighted; L = loo_retrain).  Promotion requires:
+the balanced oracle FITS transformed+retained mappings, D(E,M_x1) < D(E,L),
+Delta_x1 = D(E,L)-D(E,M_x1) >= 0.5, and the conclusion agrees across ALL
+representative transformation types (refusal controls reported separately).
+
 Phases: GX0 validate schemas/matrices | GX1 freeze matrix files
         GX1R numeric baseline route h | GX2 oracle families
         GX2R CPU re-evaluation of stored cells vs all families
+        GX2B balanced matched-retrain ablation (target_boost=1) + report
         GX3 single cells | GX4 same-depth simultaneous | GX5 mixed
         GX6 (inside cells: conditional/unconditional E2E)
         GX7 aggregate (+G3.1 gate, scoped claims) + archive
@@ -115,6 +129,30 @@ RETRAIN_TARGET_BOOST = 5        # original route target oversampling
 DELTA_RETRAIN_MIN_MARGIN = 0.5  # G3.1 materiality margin (L2)
 ORACLE_FAMILIES = ("matched_finetune", "loo_finetune",
                    "matched_retrain", "loo_retrain")
+
+# GX2B balanced matched-retrain ablation.  The main matrix's
+# matched_retrain oversamples the transformed target x5 (RETRAIN_TARGET_BOOST,
+# replicating the original route-h recipe) -- we relabel it
+# 'matched_retrain_weighted' in the ablation report.  The BALANCED reference
+# uses target_boost=1 (the transformed mapping appears once per epoch, exactly
+# like each retained mapping), with steps/warmup/lr/repeat/LoRA-config/seed
+# held IDENTICAL.  Comparing D(E,M_x1), D(E,M_x5), D(E,L) tests whether the
+# 'edit ~= policy-matched retraining' reading survives WITHOUT target
+# oversampling, using the SAME edited cells E (no retraining of E).
+RETRAIN_TARGET_BOOST_BALANCED = 1
+BALANCED_FAMILY = "matched_retrain_balanced"
+WEIGHTED_FAMILY = "matched_retrain"          # existing x5 dir name
+WEIGHTED_LABEL = "matched_retrain_weighted"  # reporting label for x5
+BALANCED_LABEL = "matched_retrain_balanced"  # reporting label for x1
+# One representative per transformation type; all already have E (edited
+# cell, seed 17), M_x5 and L on disk from the G3.1 pilot / main matrix.
+BALANCED_REP_SETS = {
+    "salmu": ["gx_sal_s_L1_00060576",   # specific->level1 (sibling ctl)
+              "gx_sal_s_L2_00039880",   # specific->level2
+              "gx_sal_mix_0"],          # mixed-depth + refusal control
+    "celeba_numeric": ["gx_num_s_exact_to_narrow_Y02",  # exact->narrow
+                       "gx_num_s_exact_to_broad_Y04"],  # exact->broad
+}
 
 SINGLE_MODES = {"single_level1", "single_level2", "single_exact_to_narrow",
                 "single_exact_to_broad", "single_exact_to_rounded"}
@@ -401,17 +439,27 @@ def _write_oracle_results(out_dir, family, init, protocol, extra=None):
     return res
 
 
-def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args):
-    """Fresh-init retraining oracle under the ORIGINAL route-h protocol."""
+def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args,
+                         target_boost=None):
+    """Fresh-init retraining oracle under the ORIGINAL route-h protocol.
+
+    ``target_boost`` oversamples the transformed targets.  None ->
+    RETRAIN_TARGET_BOOST (x5, the 'weighted' matched reference).  The
+    GX2B balanced ablation passes target_boost=1 so the transformed
+    mapping appears exactly once per epoch like each retained mapping.
+    steps/warmup/lr/repeat/LoRA-config/seed are IDENTICAL either way.
+    """
+    is_matched = family.startswith("matched_retrain")
+    boost = RETRAIN_TARGET_BOOST if target_boost is None else target_boost
     out_dir.mkdir(parents=True, exist_ok=True)
     session_reset_fresh(session)
     mx.seed_everything(ORACLE_SEED)
     items = []
-    if family == "matched_retrain":
+    if is_matched:
         assign = [{"prompt": rd.CODE_TO_ALIAS_PROMPT.format(
                        code=ctx["code_of"][i]),
                    "answer": expected_label(ctx, entry, i)}
-                  for i in sorted(entry["assignments"])] * RETRAIN_TARGET_BOOST
+                  for i in sorted(entry["assignments"])] * boost
         items += rv.build_supervised_items(
             session.adapter, session.processor, assign,
             repeat=RETRAIN_REPEAT)
@@ -425,11 +473,11 @@ def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args):
     soft = _soft_all(session, ctx, args)
     with open(out_dir / "oracle_soft.json", "w") as f:
         json.dump(soft, f, indent=2)
-    # G3.1 gate inputs.  matched_retrain must fit ALL transformed AND
-    # retained mappings; loo_retrain never saw the targets, so its fit
+    # G3.1 gate inputs.  matched_retrain(_balanced) must fit ALL transformed
+    # AND retained mappings; loo_retrain never saw the targets, so its fit
     # check covers the RETAINED mapping only (targets are expected to
     # drift -- that is the deletion reference).
-    if family == "matched_retrain":
+    if is_matched:
         fit_ids = list(ctx["identity_ids"])
     else:
         fit_ids = [i for i in ctx["identity_ids"]
@@ -442,7 +490,7 @@ def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args):
         dist = soft[iid].get("probs", {})
         masses.append(sum(dist.get(l, 0.0) for l in ctx["vocab"]))
     mass = min(masses) if masses else None
-    if family == "matched_retrain":
+    if is_matched:
         fit_ok = bool(strict == 1.0 and (mass is None or mass >= 0.99))
         scope = "all_transformed_and_retained"
     else:
@@ -452,15 +500,16 @@ def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args):
         out_dir, family, "fresh_lora",
         {"steps": RETRAIN_STEPS, "warmup": RETRAIN_WARMUP,
          "lr": RETRAIN_LR, "repeat": RETRAIN_REPEAT,
-         "target_boost": RETRAIN_TARGET_BOOST if family == "matched_retrain"
-         else 0, "seed": ORACLE_SEED},
+         "target_boost": boost if is_matched else 0, "seed": ORACLE_SEED},
         {"set_id": entry["set_id"], "strict_fit_scope": scope,
          "strict_all_expected": strict,
          "min_candidate_mass": mass, "fit_ok": fit_ok})
-    logger.info("GX2[%s]: %s trained (fresh init; strict=%.4f mass=%s "
-                "fit_ok=%s)", entry["set_id"], family, strict,
-                f"{mass:.4f}" if mass is not None else "n/a", fit_ok)
-    return {"mode": "trained_fresh", "strict_all_expected": strict,
+    logger.info("GX2[%s]: %s trained (fresh init; boost=%d strict=%.4f "
+                "mass=%s fit_ok=%s)", entry["set_id"], family, boost,
+                strict, f"{mass:.4f}" if mass is not None else "n/a",
+                fit_ok)
+    return {"mode": "trained_fresh", "target_boost": boost,
+            "strict_all_expected": strict,
             "min_candidate_mass": mass, "fit_ok": fit_ok}
 
 
@@ -879,6 +928,300 @@ def reevaluate_oracles_cpu(ds, ctx, matrix, out_base):
         logger.info("GX2R[%s]: families recomputed", cell["cell_id"])
     logger.info(f"GX2R: {n} cell files re-evaluated")
     return n
+
+
+# ====================================================================== #
+# GX2B: BALANCED matched-retrain ablation (target_boost=1)
+#   Trains a fresh-init matched oracle WITHOUT target oversampling and
+#   compares D(E,M_x1), D(E,M_x5), D(E,L) on the SAME edited cells E.
+#   M_x5 (existing matched_retrain) is relabeled matched_retrain_weighted.
+# ====================================================================== #
+def run_balanced_ablation(args, ds, ctx, matrix, out_base, set_ids):
+    logger.info("=" * 60)
+    logger.info(f"GX2B: BALANCED matched_retrain (boost=1) for {ds} "
+                f"sets={set_ids}")
+    logger.info("=" * 60)
+    oracle_root = out_base / "oracles"
+    oracle_root.mkdir(parents=True, exist_ok=True)
+    args_o = argparse.Namespace(**vars(args))
+    args_o.seed = ORACLE_SEED
+    results = {}
+    session = None
+    for entry in matrix["sets"]:
+        sid = entry["set_id"]
+        if sid not in set_ids:
+            continue
+        bdir = oracle_root / f"{BALANCED_FAMILY}_{sid}"
+        bckpt = bdir / "adapter_final" / "adapter_model.safetensors"
+        bres = bdir / "oracle_results.json"
+        if bckpt.exists() and (bdir / "oracle_soft.json").exists() \
+                and bres.exists():
+            with open(bres) as f:
+                rr = json.load(f)
+            results[sid] = {"mode": "cached", "target_boost": 1,
+                            "sha256": rv.sha256_file(bckpt),
+                            "fit_ok": rr.get("fit_ok"),
+                            "strict_all_expected":
+                                rr.get("strict_all_expected"),
+                            "min_candidate_mass":
+                                rr.get("min_candidate_mass")}
+            logger.info(f"GX2B[{sid}]: balanced oracle cached")
+            continue
+        if session is None:
+            session = mx.ModelSession(args_o, f"e2c_gx_{ds}_bal")
+        rr = train_oracle_retrain(session, ds, ctx, entry, BALANCED_FAMILY,
+                                  bdir, args_o,
+                                  target_boost=RETRAIN_TARGET_BOOST_BALANCED)
+        results[sid] = {"sha256": rv.sha256_file(bckpt), **rr}
+    if session is not None:
+        session.release()
+    with open(oracle_root / "balanced_ablation_oracles.json", "w") as f:
+        json.dump(results, f, indent=2)
+    return results
+
+
+def compare_matched_boost(ds, ctx, matrix, out_base, set_ids):
+    """CPU 3-way comparison D(E,M_x1) vs D(E,M_x5) vs D(E,L) per
+    transformation target (refusal controls excluded from the promotion
+    verdict but reported).  E = edited cell (seed 17), reused as-is."""
+    oracle_root = out_base / "oracles"
+
+    def _load(dir_name):
+        p = oracle_root / dir_name / "oracle_soft.json"
+        if not p.exists():
+            return None
+        with open(p) as f:
+            return json.load(f)
+
+    def _load_res(dir_name):
+        p = oracle_root / dir_name / "oracle_results.json"
+        if not p.exists():
+            return {}
+        with open(p) as f:
+            return json.load(f)
+
+    per_set = {}
+    for entry in matrix["sets"]:
+        sid = entry["set_id"]
+        if sid not in set_ids:
+            continue
+        cellp = out_base / "cells" / sid / "seed_17" / "cell_results.json"
+        if not cellp.exists():
+            logger.warning("GX2B[%s]: no seed-17 edited cell; skipped", sid)
+            continue
+        with open(cellp) as f:
+            cell = json.load(f)
+        e_summ = summaries_from_probs(cell["soft_probs_full"], ctx)
+        m1 = _load(f"{BALANCED_FAMILY}_{sid}")
+        m5 = _load(f"{WEIGHTED_FAMILY}_{sid}")
+        lo = _load(f"loo_retrain_{sid}")
+        m1_fit = _load_res(f"{BALANCED_FAMILY}_{sid}")
+
+        def _dist(o, t, _e=e_summ):
+            if o is None or t not in o or t not in _e:
+                return None
+            d, rel, _ = rv.gated_distance(_e[t], o[t], "candidate",
+                                          ctx["vocab"], MIN_CANDIDATE_MASS)
+            return d["l2"] if (rel and d) else None
+
+        trans = [t for t, a in entry["assignments"].items()
+                 if a["operation"] != "refusal"]
+        refusal = [t for t, a in entry["assignments"].items()
+                   if a["operation"] == "refusal"]
+
+        def _rows(id_list, _m1=m1, _m5=m5, _lo=lo, _ent=entry):
+            rows = []
+            for t in sorted(id_list):
+                d1, d5, dl = _dist(_m1, t), _dist(_m5, t), _dist(_lo, t)
+                rows.append({
+                    "target": t,
+                    "operation": _ent["assignments"][t]["operation"],
+                    "d_E_Mx1": d1, "d_E_Mx5": d5, "d_E_L": dl,
+                    "delta_x1": (dl - d1) if d1 is not None
+                    and dl is not None else None,
+                    "delta_x5": (dl - d5) if d5 is not None
+                    and dl is not None else None,
+                    "Mx1_closer_than_L": bool(
+                        d1 is not None and dl is not None and d1 < dl),
+                    "delta_x1_material": bool(
+                        d1 is not None and dl is not None
+                        and (dl - d1) >= DELTA_RETRAIN_MIN_MARGIN),
+                    "Mx1_vs_Mx5": ("balanced_closer" if
+                                   (d1 is not None and d5 is not None
+                                    and d1 < d5) else
+                                   "weighted_closer" if
+                                   (d1 is not None and d5 is not None)
+                                   else "n/a"),
+                })
+            return rows
+
+        t_rows = _rows(trans)
+        r_rows = _rows(refusal)
+        set_promotes = bool(t_rows) and bool(m1_fit.get("fit_ok")) and all(
+            r["Mx1_closer_than_L"] and r["delta_x1_material"]
+            for r in t_rows)
+        per_set[sid] = {
+            "mode": entry["mode"],
+            "balanced_fit": {
+                "strict_all_expected": m1_fit.get("strict_all_expected"),
+                "min_candidate_mass": m1_fit.get("min_candidate_mass"),
+                "fit_ok": m1_fit.get("fit_ok"),
+                "target_boost": m1_fit.get("protocol", {}).get(
+                    "target_boost", RETRAIN_TARGET_BOOST_BALANCED),
+            },
+            "transformation_targets": t_rows,
+            "refusal_controls": r_rows,
+            "set_promotes": set_promotes,
+            "failed_conditions": sorted(
+                (["balanced_fit"] if not m1_fit.get("fit_ok") else [])
+                + [f"{r['target']}:Mx1_not_closer_than_L"
+                   for r in t_rows if not r["Mx1_closer_than_L"]]
+                + [f"{r['target']}:delta_x1_below_margin"
+                   for r in t_rows if not r["delta_x1_material"]]),
+        }
+        logger.info("GX2B[%s]: set_promotes=%s (trans targets=%d)",
+                    sid, set_promotes, len(t_rows))
+    promotes_all = bool(per_set) and all(
+        v["set_promotes"] for v in per_set.values())
+    return {
+        "dataset": ds,
+        "ablation": "balanced matched_retrain (target_boost=1) vs weighted "
+                    "(target_boost=5) vs LOO retrain; same edited cells E",
+        "distance_metric": "gated candidate-space L2 (unreliable -> null)",
+        "margin_l2": DELTA_RETRAIN_MIN_MARGIN,
+        "protocol_identical": {
+            "steps": RETRAIN_STEPS, "warmup": RETRAIN_WARMUP,
+            "lr": RETRAIN_LR, "repeat": RETRAIN_REPEAT,
+            "seed": ORACLE_SEED,
+            "only_difference": "target_boost 1 (balanced) vs 5 (weighted)"},
+        "promotion_conditions": [
+            ("balanced matched oracle FITS transformed + retained mappings "
+             "(strict 1.0, mass >= 0.99)"),
+            "D(E, M_x1) < D(E, L) for every transformation target",
+            "Delta_x1 = D(E,L) - D(E,M_x1) >= margin (0.5)",
+            ("conclusion agrees across ALL representative transformation "
+             "types (refusal controls reported separately, not gating)")],
+        "per_set": per_set,
+        "promotes_all": promotes_all,
+    }
+
+
+def archive_balanced(ds, out_base, set_ids, commit):
+    """Revision-pinned HF archive of the balanced matched_retrain oracles."""
+    oracle_root = out_base / "oracles"
+    rel = Path("releases") / f"e2c_gran_balanced_{ds}_{commit[:7]}"
+    rel.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for sid in set_ids:
+        src = (oracle_root / f"{BALANCED_FAMILY}_{sid}" / "adapter_final"
+               / "adapter_model.safetensors")
+        if not src.exists():
+            continue
+        dest = rel / f"balanced_{sid}.safetensors"
+        shutil.copy2(src, dest)
+        entries.append({"kind": "oracle_matched_retrain_balanced",
+                        "key": sid, "file": dest.name,
+                        "sha256": rv.sha256_file(dest),
+                        "bytes": dest.stat().st_size})
+    hf_ok, hf_revision = False, None
+    try:
+        from huggingface_hub import HfApi, whoami
+        whoami()
+        api = HfApi()
+        api.create_repo(HF_ARCHIVE_REPO, repo_type="model", exist_ok=True)
+        url = api.upload_folder(
+            folder_path=str(rel), repo_id=HF_ARCHIVE_REPO,
+            path_in_repo=f"granularity_balanced_{ds}_{commit[:7]}",
+            repo_type="model",
+            commit_message=f"E2C-v3 balanced matched_retrain oracles ({ds}) "
+                           f"@ {commit[:7]}")
+        hf_ok = True
+        hf_revision = url.rstrip("/").rsplit("/", 1)[-1] if url else None
+        for e in entries:
+            e["hf_revision"] = hf_revision
+            e["hf_uri"] = (f"https://huggingface.co/{HF_ARCHIVE_REPO}/"
+                           f"resolve/{hf_revision}/granularity_balanced_"
+                           f"{ds}_{commit[:7]}/{e['file']}")
+        logger.info("GX2B: uploaded %d balanced oracles, revision %s",
+                    len(entries), hf_revision)
+    except Exception as exc:
+        logger.warning(f"GX2B: HF upload unavailable ({str(exc)[:120]})")
+    with open(rel / "CHECKSUMS.txt", "w") as f:
+        for e in entries:
+            f.write(f"{e['sha256']}  {e['file']}\n")
+    manifest = {"kind": "granularity_balanced_ablation_archive",
+                "dataset": ds, "git_commit": commit, "release_dir": str(rel),
+                "hf_repo": HF_ARCHIVE_REPO if hf_ok else None,
+                "hf_upload_ok": hf_ok, "hf_revision": hf_revision,
+                "n_files": len(entries),
+                "uri_immutability_note": "resolve/<hf_commit_sha> pinned",
+                "entries": entries}
+    with open(rel / "archive_manifest.json", "w") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+def run_gx2b(args, ds, ctx, matrix, out_base, provenance, commit, t_start):
+    """GX2B: balanced matched-retrain ablation (target_boost=1) on the
+    representative transformation types, reusing the SAME edited cells E."""
+    logger.info("=" * 60)
+    logger.info(f"GX2B: BALANCED matched_retrain ABLATION ({ds})")
+    logger.info("=" * 60)
+    set_ids = (list(args.only_sets) if args.only_sets
+               else list(BALANCED_REP_SETS.get(ds, [])))
+    if not set_ids:
+        raise RuntimeError(f"GX2B: no representative sets configured "
+                           f"for {ds}")
+    oracle_root = out_base / "oracles"
+    by_id = {e["set_id"]: e for e in matrix["sets"]}
+    for sid in set_ids:
+        if sid not in by_id:
+            raise RuntimeError(f"GX2B: {sid} not in the frozen matrix")
+        need = {
+            "E_seed17_cell": out_base / "cells" / sid / "seed_17"
+            / "cell_results.json",
+            "M_x5_matched_retrain": oracle_root
+            / f"{WEIGHTED_FAMILY}_{sid}" / "oracle_soft.json",
+            "L_loo_retrain": oracle_root
+            / f"loo_retrain_{sid}" / "oracle_soft.json",
+        }
+        missing = sorted(k for k, p in need.items() if not p.exists())
+        if missing:
+            raise RuntimeError(
+                f"GX2B[{sid}]: missing prerequisites {missing} (the "
+                f"ablation reuses existing E/M_x5/L; run the main matrix "
+                f"or G3.1 pilot first)")
+    bal = run_balanced_ablation(args, ds, ctx, matrix, out_base, set_ids)
+    cmp = compare_matched_boost(ds, ctx, matrix, out_base, set_ids)
+    archive = {"release_dir": None, "hf_upload_ok": False,
+               "hf_revision": None, "n_files": 0}
+    if not args.smoke:
+        archive = archive_balanced(ds, out_base, set_ids, commit)
+    report = {
+        "kind": "balanced_matched_retrain_ablation",
+        "dataset": ds,
+        "provenance": provenance,
+        "representative_sets": set_ids,
+        "balanced_oracles": bal,
+        "comparison": cmp,
+        "archive": {"release_dir": archive.get("release_dir"),
+                    "hf_upload_ok": archive.get("hf_upload_ok"),
+                    "hf_revision": archive.get("hf_revision"),
+                    "n_files": archive.get("n_files", 0)},
+        "promotes_all": cmp["promotes_all"],
+        "elapsed_sec": round(time.time() - t_start, 1),
+    }
+    rep_dir = GRAN_ROOT / "reports"
+    rep_dir.mkdir(parents=True, exist_ok=True)
+    with open(rep_dir / f"balanced_ablation_{ds}.json", "w") as f:
+        json.dump(report, f, indent=2)
+    logger.info("GX2B: %s balanced ablation promotes_all=%s", ds,
+                cmp["promotes_all"])
+    logger.info("=" * 60)
+    logger.info(f"GRANULARITY RUN ({ds}) PHASE GX2B COMPLETE "
+                f"({round(time.time() - t_start, 1)}s)")
+    logger.info("=" * 60)
+    return 0
 
 
 def _pass_criteria(hard, soft, entry, ctx):
@@ -1546,8 +1889,8 @@ def parse_args():
     p.add_argument("--dataset", required=True,
                    choices=["salmu", "celeba_numeric"])
     p.add_argument("--phase", default="all",
-                   choices=["all", "GX0", "GX1R", "GX2", "GX2R", "GX3",
-                            "GX4", "GX5", "GX7"])
+                   choices=["all", "GX0", "GX1R", "GX2", "GX2R", "GX2B",
+                            "GX3", "GX4", "GX5", "GX7"])
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--seeds", type=int, nargs="+",
                    default=gx.SEEDS_DEFAULT)
@@ -1607,6 +1950,11 @@ def main():
         json.dump(validation, f, indent=2)
     if args.phase == "GX0":
         return 0
+    if args.phase == "GX2B":
+        # balanced matched-retrain ablation: independent of the main
+        # cell/oracle flow; reuses existing E/M_x5/L, trains only M_x1
+        return run_gx2b(args, ds, ctx, matrix, out_base, provenance,
+                        commit, t_start)
     if args.smoke:  # pilot subset: first single set only, one seed
         matrix = json.loads(json.dumps(matrix))
         keep = set(args.only_sets) if args.only_sets else \

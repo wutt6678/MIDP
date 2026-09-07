@@ -505,3 +505,180 @@ def test_ft_protocol_recorded_for_finetune_families():
     assert gxm.ORACLE_DIR_BY_FAMILY["loo_finetune"] == "loo_{sid}"
     assert gxm.ORACLE_DIR_BY_FAMILY["matched_retrain"] \
         == "matched_retrain_{sid}"
+
+
+# ------------------------------------------------------------------ #
+# GX2B balanced matched-retrain ablation (target_boost=1)
+# ------------------------------------------------------------------ #
+def test_balanced_constants_and_rep_sets_cover_all_types():
+    assert gxm.RETRAIN_TARGET_BOOST_BALANCED == 1
+    assert gxm.RETRAIN_TARGET_BOOST == 5
+    assert gxm.BALANCED_FAMILY == "matched_retrain_balanced"
+    assert gxm.WEIGHTED_FAMILY == "matched_retrain"
+    reps = gxm.BALANCED_REP_SETS
+    assert len(reps["salmu"]) == 3 and len(reps["celeba_numeric"]) == 2
+    # representative sets must exist in the frozen matrices and span the
+    # transformation types (L1 single, L2 single, mixed; narrow, broad)
+    sm = json.loads((gxm.MANIFEST_DIR / "matrix_salmu.json").read_text())
+    nm = gx.build_numeric_matrix(gx.build_numeric_manifest())
+    sal_modes = {e["set_id"]: e["mode"] for e in sm["sets"]}
+    num_modes = {e["set_id"]: e["mode"] for e in nm["sets"]}
+    for sid in reps["salmu"]:
+        assert sid in sal_modes
+    assert {sal_modes[s] for s in reps["salmu"]} >= {
+        "single_level1", "single_level2", "simultaneous_mixed_depth"}
+    for sid in reps["celeba_numeric"]:
+        assert sid in num_modes
+    assert {num_modes[s] for s in reps["celeba_numeric"]} >= {
+        "single_exact_to_narrow", "single_exact_to_broad"}
+
+
+def test_train_oracle_retrain_balanced_boost_is_one(monkeypatch, tmp_path):
+    ctx, entry = _ctx(), _entry()
+    calls = {"items": [], "train": None, "fresh": 0}
+
+    def fake_build(adapter, processor, pairs, repeat):
+        calls["items"].append(([p["answer"] for p in pairs], repeat))
+        return [(p["answer"], repeat) for p in pairs]
+
+    def fake_train(name, adapter, model, processor, items, out_dir, device,
+                   steps, warmup, lr):
+        calls["train"] = {"name": name, "steps": steps, "warmup": warmup,
+                          "lr": lr}
+        (Path(out_dir) / "adapter_final").mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(gxm.rv, "build_supervised_items", fake_build)
+    monkeypatch.setattr(gxm.rv, "train_supervised", fake_train)
+    monkeypatch.setattr(gxm, "_soft_all", lambda s, c, a: {
+        i: _summary(gxm.expected_label(c, entry, i))
+        for i in c["identity_ids"]})
+    monkeypatch.setattr(gxm, "_strict_accuracy", lambda s, c, e, a: 1.0)
+    monkeypatch.setattr(gxm, "session_reset_fresh",
+                        lambda s: calls.__setitem__(
+                            "fresh", calls["fresh"] + 1))
+    session = _StubSessionFresh()
+    out = tmp_path / "matched_retrain_balanced_sX"
+    rec = gxm.train_oracle_retrain(
+        session, "salmu", ctx, entry, gxm.BALANCED_FAMILY, out,
+        _FakeArgs(), target_boost=gxm.RETRAIN_TARGET_BOOST_BALANCED)
+    answers = [ans for group, _ in calls["items"] for ans in group]
+    # BALANCED: transformed target appears exactly ONCE (boost=1), not x5
+    assert answers.count("beta") == 1
+    assert "alpha" not in answers                 # source label absent
+    # protocol IDENTICAL to weighted: steps/warmup/lr/repeat unchanged
+    assert calls["train"]["steps"] == gxm.RETRAIN_STEPS == 3000
+    assert calls["train"]["warmup"] == gxm.RETRAIN_WARMUP == 200
+    assert calls["train"]["lr"] == gxm.RETRAIN_LR == 2e-5
+    assert calls["items"][0][1] == gxm.RETRAIN_REPEAT == 50
+    assert calls["fresh"] == 1 and rec["target_boost"] == 1
+    # matched-type fit scope (fits transformed + retained), fresh init
+    with open(out / "oracle_results.json") as f:
+        res = json.load(f)
+    assert res["family"] == gxm.BALANCED_FAMILY
+    assert res["init"] == "fresh_lora"
+    assert res["protocol"]["target_boost"] == 1
+    assert res["strict_fit_scope"] == "all_transformed_and_retained"
+    assert res["fit_ok"] is True
+
+
+def _place_oracle(out_base, dir_name, soft, res=None):
+    d = out_base / "oracles" / dir_name
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / "oracle_soft.json", "w") as f:
+        json.dump(soft, f)
+    if res is not None:
+        with open(d / "oracle_results.json", "w") as f:
+            json.dump(res, f)
+
+
+def test_compare_matched_boost_promotion_and_negative(tmp_path):
+    ctx, entry = _ctx(), _entry()
+    matrix = {"sets": [entry]}
+    exp = {i: gxm.expected_label(ctx, entry, i) for i in ctx["identity_ids"]}
+    base = dict(ctx["baseline_alias_of"])
+    # edited cell E: target transformed, retained at baseline
+    out_base = tmp_path
+    cell_dir = out_base / "cells" / "sX" / "seed_17"
+    cell_dir.mkdir(parents=True)
+    with open(cell_dir / "cell_results.json", "w") as f:
+        json.dump({"cell_id": "sX__seed17", "set_id": "sX", "seed": 17,
+                   "soft_probs_full": {i: _summary(exp[i])["probs"]
+                                       for i in ctx["identity_ids"]}}, f)
+    matched_soft = {i: _summary(exp[i]) for i in ctx["identity_ids"]}
+    loo_soft = {i: _summary(base[i]) for i in ctx["identity_ids"]}
+    fit_ok = {"strict_all_expected": 1.0, "min_candidate_mass": 0.999,
+              "fit_ok": True, "protocol": {"target_boost": 1}}
+
+    # ---- PROMOTION: balanced fits, M_x1 ~ E, L far from E ----
+    _place_oracle(out_base, "matched_retrain_balanced_sX", matched_soft,
+                  fit_ok)
+    _place_oracle(out_base, "matched_retrain_sX", matched_soft)
+    _place_oracle(out_base, "loo_retrain_sX", loo_soft)
+    cmp = gxm.compare_matched_boost("salmu", ctx, matrix, out_base, ["sX"])
+    assert cmp["promotes_all"] is True
+    s = cmp["per_set"]["sX"]
+    assert s["set_promotes"] is True and s["failed_conditions"] == []
+    row = s["transformation_targets"][0]
+    assert row["d_E_Mx1"] < 1e-6 and row["d_E_Mx5"] < 1e-6
+    assert row["d_E_L"] > 1.0
+    assert row["delta_x1"] >= gxm.DELTA_RETRAIN_MIN_MARGIN
+    assert row["delta_x5"] >= gxm.DELTA_RETRAIN_MIN_MARGIN
+    assert row["Mx1_closer_than_L"] and row["delta_x1_material"]
+
+    # ---- NEGATIVE: balanced does NOT fit (M_x1 == L far from E) ----
+    tmp2 = tmp_path / "neg"
+    (tmp2 / "cells" / "sX" / "seed_17").mkdir(parents=True)
+    with open(tmp2 / "cells" / "sX" / "seed_17" / "cell_results.json",
+              "w") as f:
+        json.dump({"cell_id": "sX__seed17", "set_id": "sX", "seed": 17,
+                   "soft_probs_full": {i: _summary(exp[i])["probs"]
+                                       for i in ctx["identity_ids"]}}, f)
+    bad_fit = {"strict_all_expected": 0.0, "min_candidate_mass": 0.4,
+               "fit_ok": False, "protocol": {"target_boost": 1}}
+    _place_oracle(tmp2, "matched_retrain_balanced_sX", loo_soft, bad_fit)
+    _place_oracle(tmp2, "matched_retrain_sX", matched_soft)
+    _place_oracle(tmp2, "loo_retrain_sX", loo_soft)
+    cmp2 = gxm.compare_matched_boost("salmu", ctx, matrix, tmp2, ["sX"])
+    assert cmp2["promotes_all"] is False
+    s2 = cmp2["per_set"]["sX"]
+    assert s2["set_promotes"] is False
+    assert "balanced_fit" in s2["failed_conditions"]
+    assert any("delta_x1_below_margin" in c or "Mx1_not_closer_than_L" in c
+               for c in s2["failed_conditions"])
+
+
+def test_compare_matched_boost_excludes_refusal_from_verdict(tmp_path):
+    # mixed set: 1 taxonomic target + 1 refusal control; refusal is
+    # reported but never gates the promotion verdict
+    ctx = _ctx()
+    entry = json.loads(json.dumps(_entry()))
+    entry["mode"] = "simultaneous_mixed_depth"
+    entry["assignments"]["i3"] = {"source": "delta",
+                                  "target": gx.DELETED_LABEL,
+                                  "operation": "refusal",
+                                  "target_depth": None}
+    entry["retain_ids"] = ["i2"]
+    matrix = {"sets": [entry]}
+    exp = {i: gxm.expected_label(ctx, entry, i) for i in ctx["identity_ids"]}
+    base = dict(ctx["baseline_alias_of"])
+    out_base = tmp_path
+    (out_base / "cells" / "sX" / "seed_17").mkdir(parents=True)
+    with open(out_base / "cells" / "sX" / "seed_17" / "cell_results.json",
+              "w") as f:
+        json.dump({"cell_id": "sX__seed17", "set_id": "sX", "seed": 17,
+                   "soft_probs_full": {i: _summary(exp[i])["probs"]
+                                       for i in ctx["identity_ids"]}}, f)
+    matched_soft = {i: _summary(exp[i]) for i in ctx["identity_ids"]}
+    loo_soft = {i: _summary(base[i]) for i in ctx["identity_ids"]}
+    fit_ok = {"strict_all_expected": 1.0, "min_candidate_mass": 0.999,
+              "fit_ok": True, "protocol": {"target_boost": 1}}
+    _place_oracle(out_base, "matched_retrain_balanced_sX", matched_soft,
+                  fit_ok)
+    _place_oracle(out_base, "matched_retrain_sX", matched_soft)
+    _place_oracle(out_base, "loo_retrain_sX", loo_soft)
+    cmp = gxm.compare_matched_boost("salmu", ctx, matrix, out_base, ["sX"])
+    s = cmp["per_set"]["sX"]
+    # verdict driven by the taxonomic target only
+    assert [r["target"] for r in s["transformation_targets"]] == ["i1"]
+    assert [r["target"] for r in s["refusal_controls"]] == ["i3"]
+    assert s["set_promotes"] is True
