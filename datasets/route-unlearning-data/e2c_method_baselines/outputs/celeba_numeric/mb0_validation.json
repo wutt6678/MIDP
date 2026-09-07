@@ -1,0 +1,112 @@
+{
+  "dataset": "celeba_numeric",
+  "edit_seed": 17,
+  "n_sets": 2,
+  "n_rows_per_set": 13,
+  "n_runs_planned": 26,
+  "n_trained_rows_per_set": 5,
+  "methods": [
+    "cf_relabel",
+    "ga_retain_descent",
+    "gd_distribution",
+    "kl_anchored_edit",
+    "kl_ascent_anchor",
+    "matched_retrain",
+    "npo",
+    "prompt_only",
+    "sft_target"
+  ],
+  "references": [
+    "baseline_route",
+    "loo_retrain"
+  ],
+  "trained_methods": [
+    "ga_retain_descent",
+    "gd_distribution",
+    "kl_anchored_edit",
+    "kl_ascent_anchor",
+    "npo"
+  ],
+  "prompt_policy_roles": [
+    "canonical_control",
+    "coarsen_instruction",
+    "rule_statement",
+    "fewshot_other_branch"
+  ],
+  "sets": [
+    {
+      "set_id": "gx_num_s_exact_to_narrow_Y02",
+      "mode": "single_exact_to_narrow",
+      "transformation_targets": [
+        "01"
+      ],
+      "refusal_controls": [],
+      "n_retain": 23,
+      "repeats": {
+        "target": 250,
+        "source": 250,
+        "retain": 150
+      },
+      "budget": {
+        "steps": 500,
+        "warmup": 50,
+        "lr": 2e-05,
+        "seed": 17
+      },
+      "demo_pool": {
+        "01": 15
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      }
+    },
+    {
+      "set_id": "gx_num_s_exact_to_broad_Y04",
+      "mode": "single_exact_to_broad",
+      "transformation_targets": [
+        "03"
+      ],
+      "refusal_controls": [],
+      "n_retain": 23,
+      "repeats": {
+        "target": 250,
+        "source": 250,
+        "retain": 150
+      },
+      "budget": {
+        "steps": 500,
+        "warmup": 50,
+        "lr": 2e-05,
+        "seed": 17
+      },
+      "demo_pool": {
+        "03": 23
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      }
+    }
+  ],
+  "required_metrics": [
+    "transformation_success",
+    "source_label_suppression",
+    "retention",
+    "sibling_preservation",
+    "wrong_branch_rate",
+    "candidate_validity",
+    "matched_vs_loo_oracle_distance",
+    "training_time",
+    "trainable_parameters"
+  ],
+  "issues": []
+}

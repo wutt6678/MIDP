@@ -1,0 +1,674 @@
+{
+  "kind": "e2c_v3_method_baselines_manifest_v1",
+  "dataset": "celeba_numeric",
+  "produced_by": "scripts/e2c_v3_method_baselines.py",
+  "edit_seed": 17,
+  "n_sets": 2,
+  "n_method_rows": 9,
+  "n_reference_rows": 2,
+  "n_trained_rows": 5,
+  "n_rows_per_set": 13,
+  "n_runs_planned": 26,
+  "inputs": {
+    "matrix_sha256": "a8d894f80bb24b34d16a74f8fb34248c80275722e180b943e63b2ce9ad1046e2",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c"
+  },
+  "rep_set_policy": "one representative per transformation TYPE (the same representatives GX2B/GX2S used); the full 147-cell matrix is deliberately NOT multiplied out before viable methods are identified",
+  "sets": [
+    {
+      "set_id": "gx_num_s_exact_to_narrow_Y02",
+      "mode": "single_exact_to_narrow",
+      "assignments": {
+        "01": {
+          "operation": "exact_to_narrow",
+          "field": "years_experience",
+          "source": "15 years",
+          "target": "15\u201319 years",
+          "exact_value": 15,
+          "unit": "years",
+          "source_resolution": "exact",
+          "target_resolution": "narrow",
+          "boundary_tags": [
+            "broad_interior",
+            "narrow_lower"
+          ]
+        }
+      },
+      "controls": {},
+      "control_notes": {},
+      "retain_ids": [
+        "00",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23"
+      ],
+      "data_spec": {
+        "targets": [
+          "01"
+        ],
+        "target_pairs": [
+          {
+            "prompt": "Identity code: GRN_01. Generate the alias.",
+            "answer": "15\u201319 years"
+          }
+        ],
+        "source_pairs": [
+          {
+            "prompt": "Identity code: GRN_01. Generate the alias.",
+            "answer": "15 years"
+          }
+        ],
+        "retain_pairs": [
+          {
+            "prompt": "Identity code: GRN_00. Generate the alias.",
+            "answer": "14 years"
+          },
+          {
+            "prompt": "Identity code: GRN_02. Generate the alias.",
+            "answer": "19 years"
+          },
+          {
+            "prompt": "Identity code: GRN_03. Generate the alias.",
+            "answer": "20 years"
+          },
+          {
+            "prompt": "Identity code: GRN_04. Generate the alias.",
+            "answer": "17 years"
+          },
+          {
+            "prompt": "Identity code: GRN_05. Generate the alias.",
+            "answer": "38 years"
+          },
+          {
+            "prompt": "Identity code: GRN_06. Generate the alias.",
+            "answer": "0 years"
+          },
+          {
+            "prompt": "Identity code: GRN_07. Generate the alias.",
+            "answer": "12 years"
+          },
+          {
+            "prompt": "Identity code: GRN_08. Generate the alias.",
+            "answer": "13 years"
+          },
+          {
+            "prompt": "Identity code: GRN_09. Generate the alias.",
+            "answer": "30\u201334 years"
+          },
+          {
+            "prompt": "Identity code: GRN_10. Generate the alias.",
+            "answer": "5\u20139 years"
+          },
+          {
+            "prompt": "Identity code: GRN_11. Generate the alias.",
+            "answer": "35\u201339 years"
+          },
+          {
+            "prompt": "Identity code: GRN_12. Generate the alias.",
+            "answer": "126 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_13. Generate the alias.",
+            "answer": "120 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_14. Generate the alias.",
+            "answer": "129 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_15. Generate the alias.",
+            "answer": "199 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_16. Generate the alias.",
+            "answer": "200 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_17. Generate the alias.",
+            "answer": "977 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_18. Generate the alias.",
+            "answer": "125 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_19. Generate the alias.",
+            "answer": "42 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_20. Generate the alias.",
+            "answer": "348 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_21. Generate the alias.",
+            "answer": "260\u2013269 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_22. Generate the alias.",
+            "answer": "990\u2013999 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_23. Generate the alias.",
+            "answer": "0\u20139 activities"
+          }
+        ],
+        "repeats": {
+          "target": 250,
+          "source": 250,
+          "retain": 150
+        },
+        "budget": {
+          "steps": 500,
+          "warmup": 50,
+          "lr": 2e-05,
+          "seed": 17
+        }
+      },
+      "prompt_policies": {
+        "kind": "numeric",
+        "roles": [
+          "canonical_control",
+          "coarsen_instruction",
+          "rule_statement",
+          "fewshot_other_branch"
+        ],
+        "n_demo_pool_by_target": {
+          "01": 15
+        },
+        "by_target": {
+          "01": {
+            "canonical_control": "Identity code: GRN_01. Generate the alias.",
+            "coarsen_instruction": "Identity code: GRN_01. Generate the alias for this identity as the 5-year experience band that contains their exact years of experience, instead of the exact number of years.",
+            "rule_statement": "Identity code: GRN_01. Policy: years of experience are reported as the frozen 5-year band containing the exact value (bin edges are multiples of 5 from the schema anchor), not as the exact value. Generate the alias.",
+            "fewshot_other_branch": "Map each identity code to its 5-year experience band.\nGRN_00 -> 10\u201314 years\nGRN_03 -> 20\u201324 years\nIdentity code: GRN_01. Generate the alias.",
+            "demonstrations": [
+              {
+                "identity_id": "00",
+                "code": "GRN_00",
+                "coarse_label": "10\u201314 years",
+                "own_label": "14 years"
+              },
+              {
+                "identity_id": "03",
+                "code": "GRN_03",
+                "coarse_label": "20\u201324 years",
+                "own_label": "20 years"
+              }
+            ],
+            "n_demo_pool": 15
+          }
+        },
+        "refusal_controls_excluded": [],
+        "canonical_control_is": "the baseline_route reference row: same weights, same canonical prompt, so it is not re-run as a policy"
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      },
+      "transformation_targets": [
+        "01"
+      ],
+      "refusal_controls": []
+    },
+    {
+      "set_id": "gx_num_s_exact_to_broad_Y04",
+      "mode": "single_exact_to_broad",
+      "assignments": {
+        "03": {
+          "operation": "exact_to_broad",
+          "field": "years_experience",
+          "source": "20 years",
+          "target": "20\u201329 years",
+          "exact_value": 20,
+          "unit": "years",
+          "source_resolution": "exact",
+          "target_resolution": "broad",
+          "boundary_tags": [
+            "adjacent_across_broad_boundary",
+            "broad_lower",
+            "narrow_lower"
+          ]
+        }
+      },
+      "controls": {},
+      "control_notes": {},
+      "retain_ids": [
+        "00",
+        "01",
+        "02",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23"
+      ],
+      "data_spec": {
+        "targets": [
+          "03"
+        ],
+        "target_pairs": [
+          {
+            "prompt": "Identity code: GRN_03. Generate the alias.",
+            "answer": "20\u201329 years"
+          }
+        ],
+        "source_pairs": [
+          {
+            "prompt": "Identity code: GRN_03. Generate the alias.",
+            "answer": "20 years"
+          }
+        ],
+        "retain_pairs": [
+          {
+            "prompt": "Identity code: GRN_00. Generate the alias.",
+            "answer": "14 years"
+          },
+          {
+            "prompt": "Identity code: GRN_01. Generate the alias.",
+            "answer": "15 years"
+          },
+          {
+            "prompt": "Identity code: GRN_02. Generate the alias.",
+            "answer": "19 years"
+          },
+          {
+            "prompt": "Identity code: GRN_04. Generate the alias.",
+            "answer": "17 years"
+          },
+          {
+            "prompt": "Identity code: GRN_05. Generate the alias.",
+            "answer": "38 years"
+          },
+          {
+            "prompt": "Identity code: GRN_06. Generate the alias.",
+            "answer": "0 years"
+          },
+          {
+            "prompt": "Identity code: GRN_07. Generate the alias.",
+            "answer": "12 years"
+          },
+          {
+            "prompt": "Identity code: GRN_08. Generate the alias.",
+            "answer": "13 years"
+          },
+          {
+            "prompt": "Identity code: GRN_09. Generate the alias.",
+            "answer": "30\u201334 years"
+          },
+          {
+            "prompt": "Identity code: GRN_10. Generate the alias.",
+            "answer": "5\u20139 years"
+          },
+          {
+            "prompt": "Identity code: GRN_11. Generate the alias.",
+            "answer": "35\u201339 years"
+          },
+          {
+            "prompt": "Identity code: GRN_12. Generate the alias.",
+            "answer": "126 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_13. Generate the alias.",
+            "answer": "120 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_14. Generate the alias.",
+            "answer": "129 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_15. Generate the alias.",
+            "answer": "199 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_16. Generate the alias.",
+            "answer": "200 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_17. Generate the alias.",
+            "answer": "977 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_18. Generate the alias.",
+            "answer": "125 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_19. Generate the alias.",
+            "answer": "42 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_20. Generate the alias.",
+            "answer": "348 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_21. Generate the alias.",
+            "answer": "260\u2013269 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_22. Generate the alias.",
+            "answer": "990\u2013999 activities"
+          },
+          {
+            "prompt": "Identity code: GRN_23. Generate the alias.",
+            "answer": "0\u20139 activities"
+          }
+        ],
+        "repeats": {
+          "target": 250,
+          "source": 250,
+          "retain": 150
+        },
+        "budget": {
+          "steps": 500,
+          "warmup": 50,
+          "lr": 2e-05,
+          "seed": 17
+        }
+      },
+      "prompt_policies": {
+        "kind": "numeric",
+        "roles": [
+          "canonical_control",
+          "coarsen_instruction",
+          "rule_statement",
+          "fewshot_other_branch"
+        ],
+        "n_demo_pool_by_target": {
+          "03": 23
+        },
+        "by_target": {
+          "03": {
+            "canonical_control": "Identity code: GRN_03. Generate the alias.",
+            "coarsen_instruction": "Identity code: GRN_03. Generate the alias for this identity as the 10-year experience band that contains their exact years of experience, instead of the exact number of years.",
+            "rule_statement": "Identity code: GRN_03. Policy: years of experience are reported as the frozen 10-year band containing the exact value (bin edges are multiples of 10 from the schema anchor), not as the exact value. Generate the alias.",
+            "fewshot_other_branch": "Map each identity code to its 10-year experience band.\nGRN_00 -> 10\u201319 years\nGRN_01 -> 10\u201319 years\nIdentity code: GRN_03. Generate the alias.",
+            "demonstrations": [
+              {
+                "identity_id": "00",
+                "code": "GRN_00",
+                "coarse_label": "10\u201319 years",
+                "own_label": "14 years"
+              },
+              {
+                "identity_id": "01",
+                "code": "GRN_01",
+                "coarse_label": "10\u201319 years",
+                "own_label": "15 years"
+              }
+            ],
+            "n_demo_pool": 23
+          }
+        },
+        "refusal_controls_excluded": [],
+        "canonical_control_is": "the baseline_route reference row: same weights, same canonical prompt, so it is not re-run as a policy"
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      },
+      "transformation_targets": [
+        "03"
+      ],
+      "refusal_controls": []
+    }
+  ],
+  "methods": {
+    "sft_target": {
+      "label": "direct supervised fine-tuning (frozen cell E)",
+      "objective": "teacher-forced CE descent on target+retain pairs",
+      "trainer": "reuse_granularity_cell",
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": false,
+      "note": "the existing seed-17 edited cell checkpoint is reused after hash validation and re-scored by this runner",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "cf_relabel": {
+      "label": "counterfactual supervised relabeling",
+      "objective": "teacher-forced CE descent toward the counterfactual label",
+      "trainer": "alias",
+      "aliased_to": "sft_target",
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": false,
+      "note": "for a transformation target the counterfactual label IS the requested coarser label, so CF and direct SFT coincide by construction; recorded as an alias, never as independent evidence",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "gd_distribution": {
+      "label": "GD distribution matching toward the coarser label",
+      "objective": "KL(one-hot(target) || normalized full-sequence candidate scores) + retain descent",
+      "trainer": "mb.train_gd_target",
+      "ascent_set": null,
+      "descent_set": [
+        "retain"
+      ],
+      "distribution_set": "target",
+      "anchor_set": null,
+      "budget": "edit",
+      "trains": true,
+      "note": "full-sequence label scores, batched; the refusal variant's first-token matching cannot express a bin transformation because '15 years' and the 15-19 bin share a first token",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "ga_retain_descent": {
+      "label": "gradient ascent on the source + retain descent",
+      "objective": "ascent on the source association, descent on retain+target",
+      "trainer": "rv.train_ga",
+      "ascent_set": "source",
+      "descent_set": [
+        "retain",
+        "target"
+      ],
+      "anchor_set": null,
+      "budget": "edit",
+      "trains": true,
+      "note": "rv.train_ga as corrected in RV: ascent on the forget side only, so retention is genuinely trained",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "npo": {
+      "label": "Negative Preference Optimization vs the pre-edit reference",
+      "objective": "-log sigmoid(beta * (loss_theta - loss_ref)) on the source association + 0.1 * retain/target descent",
+      "trainer": "rv.train_npo",
+      "beta": 1.0,
+      "ascent_set": "source",
+      "descent_set": [
+        "retain",
+        "target"
+      ],
+      "anchor_set": null,
+      "budget": "edit",
+      "trains": true,
+      "note": "beta frozen at the RV3 value; reference = pre-edit route",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "kl_anchored_edit": {
+      "label": "KL-anchored editing (descent + anchor)",
+      "objective": "CE descent on target+retain + beta_kl * KL(pi_theta || pi_ref) on retain prompts",
+      "trainer": "mb.train_kl_anchored_edit",
+      "beta_kl": 0.5,
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "anchor_set": [
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": true,
+      "note": "the transformation reading of 'KL-anchored editing': the anchor bounds drift while the descent installs the label",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "kl_ascent_anchor": {
+      "label": "rv.train_kl as shipped for deletion (ascent + anchor)",
+      "objective": "ascent on the source association + beta_kl * KL(pi_theta || pi_ref) on the retain set, and no CE descent anywhere",
+      "trainer": "rv.train_kl",
+      "beta_kl": 0.5,
+      "ascent_set": "source",
+      "descent_set": [],
+      "anchor_set": [
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": true,
+      "note": "kept as its own row: it has NO descent term, so it cannot install a coarser label -- measured, not asserted",
+      "installs_target": false,
+      "budget_mismatch_ok": false
+    },
+    "prompt_only": {
+      "label": "prompting-only policy (no weight change)",
+      "objective": "none: frozen baseline route under instruction policies",
+      "trainer": "prompt",
+      "ascent_set": null,
+      "descent_set": [],
+      "budget": "none",
+      "trains": false,
+      "note": "retention and sibling numbers are 1.0 BY CONSTRUCTION (weights untouched) and are never presented as a method advantage",
+      "installs_target": false,
+      "budget_mismatch_ok": false
+    },
+    "matched_retrain": {
+      "label": "fresh matched retraining (oracle)",
+      "objective": "fresh-LoRA supervised training on target+retain with the original route protocol",
+      "trainer": "reuse_matched_retrain_oracle",
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "budget": "oracle",
+      "trains": false,
+      "note": "the existing matched_retrain oracle checkpoint is reused; 3000/200/2e-5 is NOT the edit budget and is flagged.  This is the WEIGHTED matched reference (target x5) every existing Delta_retrain number was measured against; whether the reading survives WITHOUT the boost is GX2B's question and is not re-litigated here",
+      "installs_target": true,
+      "budget_mismatch_ok": true
+    }
+  },
+  "references": {
+    "baseline_route": {
+      "label": "pre-edit baseline route h (floor)",
+      "trainer": "reuse_baseline_route",
+      "budget": "none",
+      "trains": false,
+      "note": "the association route before any edit; no target installed",
+      "installs_target": false,
+      "budget_mismatch_ok": false
+    },
+    "loo_retrain": {
+      "label": "fresh leave-one-out retraining (deletion reference)",
+      "trainer": "reuse_loo_retrain_oracle",
+      "budget": "oracle",
+      "trains": false,
+      "note": "the reference Delta_retrain is measured against",
+      "installs_target": false,
+      "budget_mismatch_ok": true
+    }
+  },
+  "budget_policy": {
+    "identical_across_trainable_methods": [
+      "target pairs and their repeat",
+      "source pairs and their repeat",
+      "retain pairs and their repeat",
+      "steps",
+      "warmup",
+      "lr",
+      "edit seed",
+      "LoRA configuration",
+      "initialization (the frozen baseline route h, loaded fail-closed before every method)"
+    ],
+    "may_differ": [
+      "the objective and which pair set feeds which side of it"
+    ],
+    "sanctioned_exception": {
+      "rows": [
+        "matched_retrain",
+        "loo_retrain"
+      ],
+      "reason": "fresh-retrain oracles keep their own frozen protocol (3000/200/2e-5, target x5, retain x50, fresh LoRA init, seed 17); they are references for the distance metric, not budget-matched competitors, and every row records its own recipe so the difference is never implicit"
+    }
+  },
+  "required_metrics": [
+    "transformation_success",
+    "source_label_suppression",
+    "retention",
+    "sibling_preservation",
+    "wrong_branch_rate",
+    "candidate_validity",
+    "matched_vs_loo_oracle_distance",
+    "training_time",
+    "trainable_parameters"
+  ],
+  "scoring_limitation": {
+    "missing_termination_event": true,
+    "candidate_mass_is": "sum of normalized full-sequence label scores WITHOUT a termination event; overlapping candidate strings can sum above 1",
+    "consequence": "normalized candidate-score comparisons and gated distances remain comparable across methods and to every existing artifact, but min_candidate_mass>=0.99 is a threshold on a SCORE SUM, not on a probability",
+    "same_scorer_as": "scripts/e2c_v3_research_validity.py full_sequence_label_probs + build_candidate_summary, the frozen scorer every other artifact uses"
+  },
+  "pass_criteria_reference": {
+    "strict_expected_accuracy": 1.0,
+    "min_target_p_desired": 0.9,
+    "max_target_p_source": 0.01,
+    "min_candidate_mass": 0.99,
+    "retained_strict_accuracy": 1.0,
+    "sibling_strict_accuracy": 1.0,
+    "max_wrong_branch_rate": 0.0,
+    "max_unparseable_outputs": 0,
+    "max_multi_label_outputs": 0,
+    "e2e_policy": "unconditional E2E is NOT a pass requirement where the frozen route failed its held-out gate; association and routing conclusions are gated separately"
+  }
+}

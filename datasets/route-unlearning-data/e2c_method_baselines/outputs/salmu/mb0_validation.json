@@ -1,0 +1,147 @@
+{
+  "dataset": "salmu",
+  "edit_seed": 17,
+  "n_sets": 3,
+  "n_rows_per_set": 13,
+  "n_runs_planned": 39,
+  "n_trained_rows_per_set": 5,
+  "methods": [
+    "cf_relabel",
+    "ga_retain_descent",
+    "gd_distribution",
+    "kl_anchored_edit",
+    "kl_ascent_anchor",
+    "matched_retrain",
+    "npo",
+    "prompt_only",
+    "sft_target"
+  ],
+  "references": [
+    "baseline_route",
+    "loo_retrain"
+  ],
+  "trained_methods": [
+    "ga_retain_descent",
+    "gd_distribution",
+    "kl_anchored_edit",
+    "kl_ascent_anchor",
+    "npo"
+  ],
+  "prompt_policy_roles": [
+    "canonical_control",
+    "coarsen_instruction",
+    "rule_statement",
+    "fewshot_other_branch"
+  ],
+  "sets": [
+    {
+      "set_id": "gx_sal_s_L1_00060576",
+      "mode": "single_level1",
+      "transformation_targets": [
+        "00060576"
+      ],
+      "refusal_controls": [],
+      "n_retain": 11,
+      "repeats": {
+        "target": 250,
+        "source": 250,
+        "retain": 150
+      },
+      "budget": {
+        "steps": 500,
+        "warmup": 50,
+        "lr": 2e-05,
+        "seed": 17
+      },
+      "demo_pool": {
+        "00060576": 10
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      }
+    },
+    {
+      "set_id": "gx_sal_s_L2_00039880",
+      "mode": "single_level2",
+      "transformation_targets": [
+        "00039880"
+      ],
+      "refusal_controls": [],
+      "n_retain": 11,
+      "repeats": {
+        "target": 250,
+        "source": 250,
+        "retain": 150
+      },
+      "budget": {
+        "steps": 500,
+        "warmup": 50,
+        "lr": 2e-05,
+        "seed": 17
+      },
+      "demo_pool": {
+        "00039880": 11
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      }
+    },
+    {
+      "set_id": "gx_sal_mix_0",
+      "mode": "simultaneous_mixed_depth",
+      "transformation_targets": [
+        "00036363",
+        "00039880"
+      ],
+      "refusal_controls": [
+        "00060576"
+      ],
+      "n_retain": 9,
+      "repeats": {
+        "target": 250,
+        "source": 250,
+        "retain": 150
+      },
+      "budget": {
+        "steps": 500,
+        "warmup": 50,
+        "lr": 2e-05,
+        "seed": 17
+      },
+      "demo_pool": {
+        "00036363": 9,
+        "00039880": 9
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      }
+    }
+  ],
+  "required_metrics": [
+    "transformation_success",
+    "source_label_suppression",
+    "retention",
+    "sibling_preservation",
+    "wrong_branch_rate",
+    "candidate_validity",
+    "matched_vs_loo_oracle_distance",
+    "training_time",
+    "trainable_parameters"
+  ],
+  "issues": []
+}

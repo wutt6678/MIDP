@@ -1,0 +1,828 @@
+{
+  "kind": "e2c_v3_method_baselines_manifest_v1",
+  "dataset": "salmu",
+  "produced_by": "scripts/e2c_v3_method_baselines.py",
+  "edit_seed": 17,
+  "n_sets": 3,
+  "n_method_rows": 9,
+  "n_reference_rows": 2,
+  "n_trained_rows": 5,
+  "n_rows_per_set": 13,
+  "n_runs_planned": 39,
+  "inputs": {
+    "matrix_sha256": "21218703e3e995024bdc5f324c236c87673099eaa2d8230516feba17e5f82d01",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c"
+  },
+  "rep_set_policy": "one representative per transformation TYPE (the same representatives GX2B/GX2S used); the full 147-cell matrix is deliberately NOT multiplied out before viable methods are identified",
+  "sets": [
+    {
+      "set_id": "gx_sal_s_L1_00060576",
+      "mode": "single_level1",
+      "assignments": {
+        "00060576": {
+          "operation": "taxonomic",
+          "source": "forensic psychologist",
+          "target": "therapy professional",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "controls": {
+        "00060576": {
+          "sibling": [
+            "00102677"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00039880",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {},
+      "retain_ids": [
+        "00106148",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00039880",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "data_spec": {
+        "targets": [
+          "00060576"
+        ],
+        "target_pairs": [
+          {
+            "prompt": "Identity code: SAL_00060576. Generate the alias.",
+            "answer": "therapy professional"
+          }
+        ],
+        "source_pairs": [
+          {
+            "prompt": "Identity code: SAL_00060576. Generate the alias.",
+            "answer": "forensic psychologist"
+          }
+        ],
+        "retain_pairs": [
+          {
+            "prompt": "Identity code: SAL_00106148. Generate the alias.",
+            "answer": "fashion/clothing designer"
+          },
+          {
+            "prompt": "Identity code: SAL_00102677. Generate the alias.",
+            "answer": "educational psychologist"
+          },
+          {
+            "prompt": "Identity code: SAL_00004371. Generate the alias.",
+            "answer": "animal technologist"
+          },
+          {
+            "prompt": "Identity code: SAL_00110390. Generate the alias.",
+            "answer": "careers information officer"
+          },
+          {
+            "prompt": "Identity code: SAL_00039880. Generate the alias.",
+            "answer": "petroleum engineer"
+          },
+          {
+            "prompt": "Identity code: SAL_00040875. Generate the alias.",
+            "answer": "lobbyist"
+          },
+          {
+            "prompt": "Identity code: SAL_00082704. Generate the alias.",
+            "answer": "textile designer"
+          },
+          {
+            "prompt": "Identity code: SAL_00116450. Generate the alias.",
+            "answer": "aid worker"
+          },
+          {
+            "prompt": "Identity code: SAL_00041286. Generate the alias.",
+            "answer": "broadcast presenter"
+          },
+          {
+            "prompt": "Identity code: SAL_00036363. Generate the alias.",
+            "answer": "higher education lecturer"
+          },
+          {
+            "prompt": "Identity code: SAL_00107854. Generate the alias.",
+            "answer": "licensed conveyancer"
+          }
+        ],
+        "repeats": {
+          "target": 250,
+          "source": 250,
+          "retain": 150
+        },
+        "budget": {
+          "steps": 500,
+          "warmup": 50,
+          "lr": 2e-05,
+          "seed": 17
+        }
+      },
+      "prompt_policies": {
+        "kind": "taxonomic",
+        "roles": [
+          "canonical_control",
+          "coarsen_instruction",
+          "rule_statement",
+          "fewshot_other_branch"
+        ],
+        "n_demo_pool_by_target": {
+          "00060576": 10
+        },
+        "by_target": {
+          "00060576": {
+            "canonical_control": "Identity code: SAL_00060576. Generate the alias.",
+            "coarsen_instruction": "Identity code: SAL_00060576. Generate the alias for this identity at the broad professional class level - the level-1 ancestor of their specific job title in the profession taxonomy - instead of the specific job title.",
+            "rule_statement": "Identity code: SAL_00060576. Policy: report this identity at abstraction level 1 of the profession taxonomy (the level-1 parent class), not at level 0. Generate the alias.",
+            "fewshot_other_branch": "Map each identity code to its level-1 professional class.\nSAL_00004371 -> laboratory scientist\nSAL_00036363 -> higher-education professional\nIdentity code: SAL_00060576. Generate the alias.",
+            "demonstrations": [
+              {
+                "identity_id": "00004371",
+                "code": "SAL_00004371",
+                "coarse_label": "laboratory scientist",
+                "own_label": "animal technologist"
+              },
+              {
+                "identity_id": "00036363",
+                "code": "SAL_00036363",
+                "coarse_label": "higher-education professional",
+                "own_label": "higher education lecturer"
+              }
+            ],
+            "n_demo_pool": 10
+          }
+        },
+        "refusal_controls_excluded": [],
+        "canonical_control_is": "the baseline_route reference row: same weights, same canonical prompt, so it is not re-run as a policy"
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      },
+      "transformation_targets": [
+        "00060576"
+      ],
+      "refusal_controls": []
+    },
+    {
+      "set_id": "gx_sal_s_L2_00039880",
+      "mode": "single_level2",
+      "assignments": {
+        "00039880": {
+          "operation": "taxonomic",
+          "source": "petroleum engineer",
+          "target": "engineering",
+          "source_depth": 0,
+          "target_depth": 2
+        }
+      },
+      "controls": {
+        "00039880": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00036363",
+            "00040875",
+            "00041286",
+            "00060576",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00039880": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      },
+      "retain_ids": [
+        "00106148",
+        "00060576",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00036363",
+        "00107854"
+      ],
+      "data_spec": {
+        "targets": [
+          "00039880"
+        ],
+        "target_pairs": [
+          {
+            "prompt": "Identity code: SAL_00039880. Generate the alias.",
+            "answer": "engineering"
+          }
+        ],
+        "source_pairs": [
+          {
+            "prompt": "Identity code: SAL_00039880. Generate the alias.",
+            "answer": "petroleum engineer"
+          }
+        ],
+        "retain_pairs": [
+          {
+            "prompt": "Identity code: SAL_00106148. Generate the alias.",
+            "answer": "fashion/clothing designer"
+          },
+          {
+            "prompt": "Identity code: SAL_00060576. Generate the alias.",
+            "answer": "forensic psychologist"
+          },
+          {
+            "prompt": "Identity code: SAL_00102677. Generate the alias.",
+            "answer": "educational psychologist"
+          },
+          {
+            "prompt": "Identity code: SAL_00004371. Generate the alias.",
+            "answer": "animal technologist"
+          },
+          {
+            "prompt": "Identity code: SAL_00110390. Generate the alias.",
+            "answer": "careers information officer"
+          },
+          {
+            "prompt": "Identity code: SAL_00040875. Generate the alias.",
+            "answer": "lobbyist"
+          },
+          {
+            "prompt": "Identity code: SAL_00082704. Generate the alias.",
+            "answer": "textile designer"
+          },
+          {
+            "prompt": "Identity code: SAL_00116450. Generate the alias.",
+            "answer": "aid worker"
+          },
+          {
+            "prompt": "Identity code: SAL_00041286. Generate the alias.",
+            "answer": "broadcast presenter"
+          },
+          {
+            "prompt": "Identity code: SAL_00036363. Generate the alias.",
+            "answer": "higher education lecturer"
+          },
+          {
+            "prompt": "Identity code: SAL_00107854. Generate the alias.",
+            "answer": "licensed conveyancer"
+          }
+        ],
+        "repeats": {
+          "target": 250,
+          "source": 250,
+          "retain": 150
+        },
+        "budget": {
+          "steps": 500,
+          "warmup": 50,
+          "lr": 2e-05,
+          "seed": 17
+        }
+      },
+      "prompt_policies": {
+        "kind": "taxonomic",
+        "roles": [
+          "canonical_control",
+          "coarsen_instruction",
+          "rule_statement",
+          "fewshot_other_branch"
+        ],
+        "n_demo_pool_by_target": {
+          "00039880": 11
+        },
+        "by_target": {
+          "00039880": {
+            "canonical_control": "Identity code: SAL_00039880. Generate the alias.",
+            "coarsen_instruction": "Identity code: SAL_00039880. Generate the alias for this identity at the broad professional class level - the level-2 ancestor of their specific job title in the profession taxonomy - instead of the specific job title.",
+            "rule_statement": "Identity code: SAL_00039880. Policy: report this identity at abstraction level 2 of the profession taxonomy (the level-2 parent class), not at level 0. Generate the alias.",
+            "fewshot_other_branch": "Map each identity code to its level-2 professional class.\nSAL_00004371 -> science\nSAL_00036363 -> education\nIdentity code: SAL_00039880. Generate the alias.",
+            "demonstrations": [
+              {
+                "identity_id": "00004371",
+                "code": "SAL_00004371",
+                "coarse_label": "science",
+                "own_label": "animal technologist"
+              },
+              {
+                "identity_id": "00036363",
+                "code": "SAL_00036363",
+                "coarse_label": "education",
+                "own_label": "higher education lecturer"
+              }
+            ],
+            "n_demo_pool": 11
+          }
+        },
+        "refusal_controls_excluded": [],
+        "canonical_control_is": "the baseline_route reference row: same weights, same canonical prompt, so it is not re-run as a policy"
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      },
+      "transformation_targets": [
+        "00039880"
+      ],
+      "refusal_controls": []
+    },
+    {
+      "set_id": "gx_sal_mix_0",
+      "mode": "simultaneous_mixed_depth",
+      "assignments": {
+        "00036363": {
+          "operation": "taxonomic",
+          "source": "higher education lecturer",
+          "target": "higher-education professional",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "00039880": {
+          "operation": "taxonomic",
+          "source": "petroleum engineer",
+          "target": "engineering",
+          "source_depth": 0,
+          "target_depth": 2
+        },
+        "00060576": {
+          "operation": "refusal",
+          "source": "forensic psychologist",
+          "target": "Unknown",
+          "source_depth": 0,
+          "target_depth": null
+        }
+      },
+      "controls": {
+        "00060576": {
+          "sibling": [
+            "00102677"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00036363": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        },
+        "00039880": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "00004371",
+            "00040875",
+            "00041286",
+            "00082704",
+            "00102677",
+            "00106148",
+            "00107854",
+            "00110390",
+            "00116450"
+          ]
+        }
+      },
+      "control_notes": {
+        "00036363": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "00039880": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+      },
+      "retain_ids": [
+        "00106148",
+        "00102677",
+        "00004371",
+        "00110390",
+        "00040875",
+        "00082704",
+        "00116450",
+        "00041286",
+        "00107854"
+      ],
+      "data_spec": {
+        "targets": [
+          "00036363",
+          "00039880",
+          "00060576"
+        ],
+        "target_pairs": [
+          {
+            "prompt": "Identity code: SAL_00036363. Generate the alias.",
+            "answer": "higher-education professional"
+          },
+          {
+            "prompt": "Identity code: SAL_00039880. Generate the alias.",
+            "answer": "engineering"
+          },
+          {
+            "prompt": "Identity code: SAL_00060576. Generate the alias.",
+            "answer": "Unknown"
+          }
+        ],
+        "source_pairs": [
+          {
+            "prompt": "Identity code: SAL_00036363. Generate the alias.",
+            "answer": "higher education lecturer"
+          },
+          {
+            "prompt": "Identity code: SAL_00039880. Generate the alias.",
+            "answer": "petroleum engineer"
+          },
+          {
+            "prompt": "Identity code: SAL_00060576. Generate the alias.",
+            "answer": "forensic psychologist"
+          }
+        ],
+        "retain_pairs": [
+          {
+            "prompt": "Identity code: SAL_00106148. Generate the alias.",
+            "answer": "fashion/clothing designer"
+          },
+          {
+            "prompt": "Identity code: SAL_00102677. Generate the alias.",
+            "answer": "educational psychologist"
+          },
+          {
+            "prompt": "Identity code: SAL_00004371. Generate the alias.",
+            "answer": "animal technologist"
+          },
+          {
+            "prompt": "Identity code: SAL_00110390. Generate the alias.",
+            "answer": "careers information officer"
+          },
+          {
+            "prompt": "Identity code: SAL_00040875. Generate the alias.",
+            "answer": "lobbyist"
+          },
+          {
+            "prompt": "Identity code: SAL_00082704. Generate the alias.",
+            "answer": "textile designer"
+          },
+          {
+            "prompt": "Identity code: SAL_00116450. Generate the alias.",
+            "answer": "aid worker"
+          },
+          {
+            "prompt": "Identity code: SAL_00041286. Generate the alias.",
+            "answer": "broadcast presenter"
+          },
+          {
+            "prompt": "Identity code: SAL_00107854. Generate the alias.",
+            "answer": "licensed conveyancer"
+          }
+        ],
+        "repeats": {
+          "target": 250,
+          "source": 250,
+          "retain": 150
+        },
+        "budget": {
+          "steps": 500,
+          "warmup": 50,
+          "lr": 2e-05,
+          "seed": 17
+        }
+      },
+      "prompt_policies": {
+        "kind": "taxonomic",
+        "roles": [
+          "canonical_control",
+          "coarsen_instruction",
+          "rule_statement",
+          "fewshot_other_branch"
+        ],
+        "n_demo_pool_by_target": {
+          "00036363": 9,
+          "00039880": 9
+        },
+        "by_target": {
+          "00036363": {
+            "canonical_control": "Identity code: SAL_00036363. Generate the alias.",
+            "coarsen_instruction": "Identity code: SAL_00036363. Generate the alias for this identity at the broad professional class level - the level-1 ancestor of their specific job title in the profession taxonomy - instead of the specific job title.",
+            "rule_statement": "Identity code: SAL_00036363. Policy: report this identity at abstraction level 1 of the profession taxonomy (the level-1 parent class), not at level 0. Generate the alias.",
+            "fewshot_other_branch": "Map each identity code to its level-1 professional class.\nSAL_00004371 -> laboratory scientist\nSAL_00040875 -> communications professional\nIdentity code: SAL_00036363. Generate the alias.",
+            "demonstrations": [
+              {
+                "identity_id": "00004371",
+                "code": "SAL_00004371",
+                "coarse_label": "laboratory scientist",
+                "own_label": "animal technologist"
+              },
+              {
+                "identity_id": "00040875",
+                "code": "SAL_00040875",
+                "coarse_label": "communications professional",
+                "own_label": "lobbyist"
+              }
+            ],
+            "n_demo_pool": 9
+          },
+          "00039880": {
+            "canonical_control": "Identity code: SAL_00039880. Generate the alias.",
+            "coarsen_instruction": "Identity code: SAL_00039880. Generate the alias for this identity at the broad professional class level - the level-2 ancestor of their specific job title in the profession taxonomy - instead of the specific job title.",
+            "rule_statement": "Identity code: SAL_00039880. Policy: report this identity at abstraction level 2 of the profession taxonomy (the level-2 parent class), not at level 0. Generate the alias.",
+            "fewshot_other_branch": "Map each identity code to its level-2 professional class.\nSAL_00004371 -> science\nSAL_00040875 -> government\nIdentity code: SAL_00039880. Generate the alias.",
+            "demonstrations": [
+              {
+                "identity_id": "00004371",
+                "code": "SAL_00004371",
+                "coarse_label": "science",
+                "own_label": "animal technologist"
+              },
+              {
+                "identity_id": "00040875",
+                "code": "SAL_00040875",
+                "coarse_label": "government",
+                "own_label": "lobbyist"
+              }
+            ],
+            "n_demo_pool": 9
+          }
+        },
+        "refusal_controls_excluded": [
+          "00060576"
+        ],
+        "canonical_control_is": "the baseline_route reference row: same weights, same canonical prompt, so it is not re-run as a policy"
+      },
+      "available_artifacts": {
+        "edited_cell_record": true,
+        "edited_cell_checkpoint": true,
+        "matched_retrain_soft": true,
+        "matched_retrain_checkpoint": true,
+        "loo_retrain_soft": true,
+        "loo_retrain_checkpoint": true
+      },
+      "transformation_targets": [
+        "00036363",
+        "00039880"
+      ],
+      "refusal_controls": [
+        "00060576"
+      ]
+    }
+  ],
+  "methods": {
+    "sft_target": {
+      "label": "direct supervised fine-tuning (frozen cell E)",
+      "objective": "teacher-forced CE descent on target+retain pairs",
+      "trainer": "reuse_granularity_cell",
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": false,
+      "note": "the existing seed-17 edited cell checkpoint is reused after hash validation and re-scored by this runner",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "cf_relabel": {
+      "label": "counterfactual supervised relabeling",
+      "objective": "teacher-forced CE descent toward the counterfactual label",
+      "trainer": "alias",
+      "aliased_to": "sft_target",
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": false,
+      "note": "for a transformation target the counterfactual label IS the requested coarser label, so CF and direct SFT coincide by construction; recorded as an alias, never as independent evidence",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "gd_distribution": {
+      "label": "GD distribution matching toward the coarser label",
+      "objective": "KL(one-hot(target) || normalized full-sequence candidate scores) + retain descent",
+      "trainer": "mb.train_gd_target",
+      "ascent_set": null,
+      "descent_set": [
+        "retain"
+      ],
+      "distribution_set": "target",
+      "anchor_set": null,
+      "budget": "edit",
+      "trains": true,
+      "note": "full-sequence label scores, batched; the refusal variant's first-token matching cannot express a bin transformation because '15 years' and the 15-19 bin share a first token",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "ga_retain_descent": {
+      "label": "gradient ascent on the source + retain descent",
+      "objective": "ascent on the source association, descent on retain+target",
+      "trainer": "rv.train_ga",
+      "ascent_set": "source",
+      "descent_set": [
+        "retain",
+        "target"
+      ],
+      "anchor_set": null,
+      "budget": "edit",
+      "trains": true,
+      "note": "rv.train_ga as corrected in RV: ascent on the forget side only, so retention is genuinely trained",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "npo": {
+      "label": "Negative Preference Optimization vs the pre-edit reference",
+      "objective": "-log sigmoid(beta * (loss_theta - loss_ref)) on the source association + 0.1 * retain/target descent",
+      "trainer": "rv.train_npo",
+      "beta": 1.0,
+      "ascent_set": "source",
+      "descent_set": [
+        "retain",
+        "target"
+      ],
+      "anchor_set": null,
+      "budget": "edit",
+      "trains": true,
+      "note": "beta frozen at the RV3 value; reference = pre-edit route",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "kl_anchored_edit": {
+      "label": "KL-anchored editing (descent + anchor)",
+      "objective": "CE descent on target+retain + beta_kl * KL(pi_theta || pi_ref) on retain prompts",
+      "trainer": "mb.train_kl_anchored_edit",
+      "beta_kl": 0.5,
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "anchor_set": [
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": true,
+      "note": "the transformation reading of 'KL-anchored editing': the anchor bounds drift while the descent installs the label",
+      "installs_target": true,
+      "budget_mismatch_ok": false
+    },
+    "kl_ascent_anchor": {
+      "label": "rv.train_kl as shipped for deletion (ascent + anchor)",
+      "objective": "ascent on the source association + beta_kl * KL(pi_theta || pi_ref) on the retain set, and no CE descent anywhere",
+      "trainer": "rv.train_kl",
+      "beta_kl": 0.5,
+      "ascent_set": "source",
+      "descent_set": [],
+      "anchor_set": [
+        "retain"
+      ],
+      "budget": "edit",
+      "trains": true,
+      "note": "kept as its own row: it has NO descent term, so it cannot install a coarser label -- measured, not asserted",
+      "installs_target": false,
+      "budget_mismatch_ok": false
+    },
+    "prompt_only": {
+      "label": "prompting-only policy (no weight change)",
+      "objective": "none: frozen baseline route under instruction policies",
+      "trainer": "prompt",
+      "ascent_set": null,
+      "descent_set": [],
+      "budget": "none",
+      "trains": false,
+      "note": "retention and sibling numbers are 1.0 BY CONSTRUCTION (weights untouched) and are never presented as a method advantage",
+      "installs_target": false,
+      "budget_mismatch_ok": false
+    },
+    "matched_retrain": {
+      "label": "fresh matched retraining (oracle)",
+      "objective": "fresh-LoRA supervised training on target+retain with the original route protocol",
+      "trainer": "reuse_matched_retrain_oracle",
+      "ascent_set": null,
+      "descent_set": [
+        "target",
+        "retain"
+      ],
+      "budget": "oracle",
+      "trains": false,
+      "note": "the existing matched_retrain oracle checkpoint is reused; 3000/200/2e-5 is NOT the edit budget and is flagged.  This is the WEIGHTED matched reference (target x5) every existing Delta_retrain number was measured against; whether the reading survives WITHOUT the boost is GX2B's question and is not re-litigated here",
+      "installs_target": true,
+      "budget_mismatch_ok": true
+    }
+  },
+  "references": {
+    "baseline_route": {
+      "label": "pre-edit baseline route h (floor)",
+      "trainer": "reuse_baseline_route",
+      "budget": "none",
+      "trains": false,
+      "note": "the association route before any edit; no target installed",
+      "installs_target": false,
+      "budget_mismatch_ok": false
+    },
+    "loo_retrain": {
+      "label": "fresh leave-one-out retraining (deletion reference)",
+      "trainer": "reuse_loo_retrain_oracle",
+      "budget": "oracle",
+      "trains": false,
+      "note": "the reference Delta_retrain is measured against",
+      "installs_target": false,
+      "budget_mismatch_ok": true
+    }
+  },
+  "budget_policy": {
+    "identical_across_trainable_methods": [
+      "target pairs and their repeat",
+      "source pairs and their repeat",
+      "retain pairs and their repeat",
+      "steps",
+      "warmup",
+      "lr",
+      "edit seed",
+      "LoRA configuration",
+      "initialization (the frozen baseline route h, loaded fail-closed before every method)"
+    ],
+    "may_differ": [
+      "the objective and which pair set feeds which side of it"
+    ],
+    "sanctioned_exception": {
+      "rows": [
+        "matched_retrain",
+        "loo_retrain"
+      ],
+      "reason": "fresh-retrain oracles keep their own frozen protocol (3000/200/2e-5, target x5, retain x50, fresh LoRA init, seed 17); they are references for the distance metric, not budget-matched competitors, and every row records its own recipe so the difference is never implicit"
+    }
+  },
+  "required_metrics": [
+    "transformation_success",
+    "source_label_suppression",
+    "retention",
+    "sibling_preservation",
+    "wrong_branch_rate",
+    "candidate_validity",
+    "matched_vs_loo_oracle_distance",
+    "training_time",
+    "trainable_parameters"
+  ],
+  "scoring_limitation": {
+    "missing_termination_event": true,
+    "candidate_mass_is": "sum of normalized full-sequence label scores WITHOUT a termination event; overlapping candidate strings can sum above 1",
+    "consequence": "normalized candidate-score comparisons and gated distances remain comparable across methods and to every existing artifact, but min_candidate_mass>=0.99 is a threshold on a SCORE SUM, not on a probability",
+    "same_scorer_as": "scripts/e2c_v3_research_validity.py full_sequence_label_probs + build_candidate_summary, the frozen scorer every other artifact uses"
+  },
+  "pass_criteria_reference": {
+    "strict_expected_accuracy": 1.0,
+    "min_target_p_desired": 0.9,
+    "max_target_p_source": 0.01,
+    "min_candidate_mass": 0.99,
+    "retained_strict_accuracy": 1.0,
+    "sibling_strict_accuracy": 1.0,
+    "max_wrong_branch_rate": 0.0,
+    "max_unparseable_outputs": 0,
+    "max_multi_label_outputs": 0,
+    "e2e_policy": "unconditional E2E is NOT a pass requirement where the frozen route failed its held-out gate; association and routing conclusions are gated separately"
+  }
+}
