@@ -769,10 +769,18 @@ def evaluate_models(ds, route, specs, panel, ctx, args, entry_by_id,
                 "timing": {"seconds": round(elapsed, 2),
                            "n_prompts": n_prompts,
                            "seconds_per_prompt": round(elapsed / n_prompts, 4)},
-                "provenance": {"git_commit": EXECUTING_COMMIT,
-                               "script_sha256": rv.script_sha256(),
-                               "panel_sha256": panel["panel_sha256"],
-                               "device": args.device},
+                "provenance": {
+                    "git_commit": EXECUTING_COMMIT,
+                    # Named as the granularity runner names them: the RUNNER
+                    # that produced this record, and the shared scoring
+                    # library it scored through.  rv.script_sha256() is the
+                    # library's own hash, so calling it "script_sha256" here
+                    # would have pointed a reader at the wrong file.
+                    "runner_script_sha256": rv.sha256_file(
+                        Path(__file__).resolve()),
+                    "shared_scoring_script_sha256": rv.script_sha256(),
+                    "panel_sha256": panel["panel_sha256"],
+                    "device": args.device},
             }
             path = _result_path(ds, route, spec["model_id"])
             path.parent.mkdir(parents=True, exist_ok=True)

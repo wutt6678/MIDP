@@ -1288,3 +1288,20 @@ def test_the_runner_binds_provenance_to_executed_code_not_result_files():
     assert "scripts/e2c_v3_prompt_panel.py" in pp.PP_CODE
     assert "scripts/e2c_v3_research_validity.py" in pp.PP_CODE
     assert isinstance(pp._dirty_tracked_code(), list)
+
+
+def test_the_scoring_library_hash_is_not_the_runner_hash():
+    """``rv.script_sha256()`` hashes rv's OWN file.
+
+    A result record that stored it under a bare ``script_sha256`` would name
+    the scoring library as its producer and point any reader at the wrong
+    file, permanently: records are written once and skipped when present, so
+    the mistake could not be corrected without re-running the sweep.  The
+    record therefore carries both, named as the granularity runner names them.
+    """
+    runner = rv.sha256_file(Path(pp.__file__).resolve())
+    assert rv.script_sha256() != runner
+    source = inspect.getsource(pp.evaluate_models)
+    assert "runner_script_sha256" in source
+    assert "shared_scoring_script_sha256" in source
+    assert '"script_sha256": rv.script_sha256()' not in source
