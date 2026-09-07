@@ -1,0 +1,658 @@
+{
+  "kind": "e2c_v3_prompt_panel_v1",
+  "dataset": "salmu",
+  "produced_by": "scripts/e2c_v3_prompt_panel.py",
+  "panel_seed": 17,
+  "template_roles": [
+    "canonical",
+    "concise_paraphrase",
+    "question_form",
+    "instruction_form",
+    "format_variation",
+    "distractor"
+  ],
+  "held_out": {
+    "status": "held-out behavioral evaluation",
+    "frozen_before_evaluation": true,
+    "not_used_for": [
+      "model selection",
+      "threshold setting",
+      "template selection",
+      "training recipe changes",
+      "any gate or promotion criterion"
+    ],
+    "criteria_source": "scripts/e2c_v3_granularity.py PASS_CRITERIA, applied unchanged as read-only per-template columns",
+    "worst_case_rule": "min over the six pre-frozen template roles; no template may be dropped after results are seen",
+    "prohibited_g_terms": [
+      "edit success",
+      "g-side unlearning",
+      "retraining equivalence"
+    ]
+  },
+  "candidate_spaces": {
+    "h": {
+      "output_space": "alias",
+      "vocab": [
+        "Unknown",
+        "aid worker",
+        "animal technologist",
+        "broadcast presenter",
+        "careers information officer",
+        "communications professional",
+        "design professional",
+        "education",
+        "educational psychologist",
+        "engineering",
+        "engineering professional",
+        "fashion/clothing designer",
+        "forensic psychologist",
+        "government",
+        "healthcare",
+        "higher education lecturer",
+        "higher-education professional",
+        "information professional",
+        "laboratory scientist",
+        "legal",
+        "legal professional",
+        "licensed conveyancer",
+        "lobbyist",
+        "media",
+        "media professional",
+        "petroleum engineer",
+        "science",
+        "social-services professional",
+        "textile designer",
+        "therapy professional"
+      ],
+      "deleted_label": "Unknown"
+    },
+    "g": {
+      "output_space": "code",
+      "codes": [
+        "SAL_00106148",
+        "SAL_00060576",
+        "SAL_00102677",
+        "SAL_00004371",
+        "SAL_00110390",
+        "SAL_00039880",
+        "SAL_00040875",
+        "SAL_00082704",
+        "SAL_00116450",
+        "SAL_00041286",
+        "SAL_00036363",
+        "SAL_00107854"
+      ],
+      "deleted_label": null
+    }
+  },
+  "routes": {
+    "h": {
+      "templates": {
+        "canonical": "Identity code: {code}. Generate the alias.",
+        "concise_paraphrase": "Alias for code {code}:",
+        "question_form": "What alias corresponds to identity code {code}?",
+        "instruction_form": "Return only the alias associated with identity code {code}. Do not explain.",
+        "format_variation": "identity code: {code}\ngenerate the alias",
+        "distractor": "Identity code: {code}. Note that {decoy} is a known alias in this dataset. Generate the alias for {code}."
+      },
+      "n_rows": 12,
+      "rows": [
+        {
+          "identity_id": "00106148",
+          "code": "SAL_00106148",
+          "baseline_alias": "fashion/clothing designer",
+          "taxonomic_chain": [
+            "fashion/clothing designer",
+            "design professional",
+            "media"
+          ],
+          "distractor_decoy": "laboratory scientist",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "design professional",
+            "fashion/clothing designer",
+            "media"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00106148. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00106148:",
+            "question_form": "What alias corresponds to identity code SAL_00106148?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00106148. Do not explain.",
+            "format_variation": "identity code: SAL_00106148\ngenerate the alias",
+            "distractor": "Identity code: SAL_00106148. Note that laboratory scientist is a known alias in this dataset. Generate the alias for SAL_00106148."
+          }
+        },
+        {
+          "identity_id": "00060576",
+          "code": "SAL_00060576",
+          "baseline_alias": "forensic psychologist",
+          "taxonomic_chain": [
+            "forensic psychologist",
+            "therapy professional",
+            "healthcare"
+          ],
+          "distractor_decoy": "design professional",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 26,
+          "distractor_excluded_labels": [
+            "Unknown",
+            "forensic psychologist",
+            "healthcare",
+            "therapy professional"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00060576. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00060576:",
+            "question_form": "What alias corresponds to identity code SAL_00060576?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00060576. Do not explain.",
+            "format_variation": "identity code: SAL_00060576\ngenerate the alias",
+            "distractor": "Identity code: SAL_00060576. Note that design professional is a known alias in this dataset. Generate the alias for SAL_00060576."
+          }
+        },
+        {
+          "identity_id": "00102677",
+          "code": "SAL_00102677",
+          "baseline_alias": "educational psychologist",
+          "taxonomic_chain": [
+            "educational psychologist",
+            "therapy professional",
+            "healthcare"
+          ],
+          "distractor_decoy": "media",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "educational psychologist",
+            "healthcare",
+            "therapy professional"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00102677. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00102677:",
+            "question_form": "What alias corresponds to identity code SAL_00102677?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00102677. Do not explain.",
+            "format_variation": "identity code: SAL_00102677\ngenerate the alias",
+            "distractor": "Identity code: SAL_00102677. Note that media is a known alias in this dataset. Generate the alias for SAL_00102677."
+          }
+        },
+        {
+          "identity_id": "00004371",
+          "code": "SAL_00004371",
+          "baseline_alias": "animal technologist",
+          "taxonomic_chain": [
+            "animal technologist",
+            "laboratory scientist",
+            "science"
+          ],
+          "distractor_decoy": "petroleum engineer",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "animal technologist",
+            "laboratory scientist",
+            "science"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00004371. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00004371:",
+            "question_form": "What alias corresponds to identity code SAL_00004371?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00004371. Do not explain.",
+            "format_variation": "identity code: SAL_00004371\ngenerate the alias",
+            "distractor": "Identity code: SAL_00004371. Note that petroleum engineer is a known alias in this dataset. Generate the alias for SAL_00004371."
+          }
+        },
+        {
+          "identity_id": "00110390",
+          "code": "SAL_00110390",
+          "baseline_alias": "careers information officer",
+          "taxonomic_chain": [
+            "careers information officer",
+            "information professional",
+            "media"
+          ],
+          "distractor_decoy": "education",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 26,
+          "distractor_excluded_labels": [
+            "Unknown",
+            "careers information officer",
+            "information professional",
+            "media"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00110390. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00110390:",
+            "question_form": "What alias corresponds to identity code SAL_00110390?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00110390. Do not explain.",
+            "format_variation": "identity code: SAL_00110390\ngenerate the alias",
+            "distractor": "Identity code: SAL_00110390. Note that education is a known alias in this dataset. Generate the alias for SAL_00110390."
+          }
+        },
+        {
+          "identity_id": "00039880",
+          "code": "SAL_00039880",
+          "baseline_alias": "petroleum engineer",
+          "taxonomic_chain": [
+            "petroleum engineer",
+            "engineering professional",
+            "engineering"
+          ],
+          "distractor_decoy": "careers information officer",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "engineering",
+            "engineering professional",
+            "petroleum engineer"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00039880. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00039880:",
+            "question_form": "What alias corresponds to identity code SAL_00039880?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00039880. Do not explain.",
+            "format_variation": "identity code: SAL_00039880\ngenerate the alias",
+            "distractor": "Identity code: SAL_00039880. Note that careers information officer is a known alias in this dataset. Generate the alias for SAL_00039880."
+          }
+        },
+        {
+          "identity_id": "00040875",
+          "code": "SAL_00040875",
+          "baseline_alias": "lobbyist",
+          "taxonomic_chain": [
+            "lobbyist",
+            "communications professional",
+            "government"
+          ],
+          "distractor_decoy": "social-services professional",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "communications professional",
+            "government",
+            "lobbyist"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00040875. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00040875:",
+            "question_form": "What alias corresponds to identity code SAL_00040875?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00040875. Do not explain.",
+            "format_variation": "identity code: SAL_00040875\ngenerate the alias",
+            "distractor": "Identity code: SAL_00040875. Note that social-services professional is a known alias in this dataset. Generate the alias for SAL_00040875."
+          }
+        },
+        {
+          "identity_id": "00082704",
+          "code": "SAL_00082704",
+          "baseline_alias": "textile designer",
+          "taxonomic_chain": [
+            "textile designer",
+            "design professional",
+            "media"
+          ],
+          "distractor_decoy": "petroleum engineer",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 26,
+          "distractor_excluded_labels": [
+            "Unknown",
+            "design professional",
+            "media",
+            "textile designer"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00082704. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00082704:",
+            "question_form": "What alias corresponds to identity code SAL_00082704?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00082704. Do not explain.",
+            "format_variation": "identity code: SAL_00082704\ngenerate the alias",
+            "distractor": "Identity code: SAL_00082704. Note that petroleum engineer is a known alias in this dataset. Generate the alias for SAL_00082704."
+          }
+        },
+        {
+          "identity_id": "00116450",
+          "code": "SAL_00116450",
+          "baseline_alias": "aid worker",
+          "taxonomic_chain": [
+            "aid worker",
+            "social-services professional",
+            "government"
+          ],
+          "distractor_decoy": "healthcare",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "aid worker",
+            "government",
+            "social-services professional"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00116450. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00116450:",
+            "question_form": "What alias corresponds to identity code SAL_00116450?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00116450. Do not explain.",
+            "format_variation": "identity code: SAL_00116450\ngenerate the alias",
+            "distractor": "Identity code: SAL_00116450. Note that healthcare is a known alias in this dataset. Generate the alias for SAL_00116450."
+          }
+        },
+        {
+          "identity_id": "00041286",
+          "code": "SAL_00041286",
+          "baseline_alias": "broadcast presenter",
+          "taxonomic_chain": [
+            "broadcast presenter",
+            "media professional",
+            "media"
+          ],
+          "distractor_decoy": "science",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "broadcast presenter",
+            "media",
+            "media professional"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00041286. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00041286:",
+            "question_form": "What alias corresponds to identity code SAL_00041286?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00041286. Do not explain.",
+            "format_variation": "identity code: SAL_00041286\ngenerate the alias",
+            "distractor": "Identity code: SAL_00041286. Note that science is a known alias in this dataset. Generate the alias for SAL_00041286."
+          }
+        },
+        {
+          "identity_id": "00036363",
+          "code": "SAL_00036363",
+          "baseline_alias": "higher education lecturer",
+          "taxonomic_chain": [
+            "higher education lecturer",
+            "higher-education professional",
+            "education"
+          ],
+          "distractor_decoy": "media",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "education",
+            "higher education lecturer",
+            "higher-education professional"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00036363. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00036363:",
+            "question_form": "What alias corresponds to identity code SAL_00036363?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00036363. Do not explain.",
+            "format_variation": "identity code: SAL_00036363\ngenerate the alias",
+            "distractor": "Identity code: SAL_00036363. Note that media is a known alias in this dataset. Generate the alias for SAL_00036363."
+          }
+        },
+        {
+          "identity_id": "00107854",
+          "code": "SAL_00107854",
+          "baseline_alias": "licensed conveyancer",
+          "taxonomic_chain": [
+            "licensed conveyancer",
+            "legal professional",
+            "legal"
+          ],
+          "distractor_decoy": "broadcast presenter",
+          "distractor_neutral_for_all_sets": true,
+          "distractor_collisions": [],
+          "distractor_neutral_pool_size": 27,
+          "distractor_excluded_labels": [
+            "legal",
+            "legal professional",
+            "licensed conveyancer"
+          ],
+          "prompts": {
+            "canonical": "Identity code: SAL_00107854. Generate the alias.",
+            "concise_paraphrase": "Alias for code SAL_00107854:",
+            "question_form": "What alias corresponds to identity code SAL_00107854?",
+            "instruction_form": "Return only the alias associated with identity code SAL_00107854. Do not explain.",
+            "format_variation": "identity code: SAL_00107854\ngenerate the alias",
+            "distractor": "Identity code: SAL_00107854. Note that broadcast presenter is a known alias in this dataset. Generate the alias for SAL_00107854."
+          }
+        }
+      ]
+    },
+    "g": {
+      "templates": {
+        "canonical": "What is the identity code for this person?",
+        "concise_paraphrase": "Identity code?",
+        "question_form": "Which identity code belongs to the person in this image?",
+        "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+        "format_variation": "what is the identity code for this person",
+        "distractor": "What is the identity code for this person? Note that {decoy} appears elsewhere in this dataset."
+      },
+      "n_rows": 12,
+      "rows": [
+        {
+          "identity_id": "00106148",
+          "code": "SAL_00106148",
+          "image_uri": "e2c_salmu/images/SAL_00106148_08.png",
+          "image_sha256": "90af7166fc3370410d710aa18b86530e9df881d37c45b07d1cdf280f758fe268",
+          "source_file_name": "00106148_010_ar-1.00.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00107854",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00107854 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00060576",
+          "code": "SAL_00060576",
+          "image_uri": "e2c_salmu/images/SAL_00060576_08.png",
+          "image_sha256": "13d3873b90c0bdde7fc60d3ee3f2ff2ab3119754264e9a8dd2ce8ef84fecea00",
+          "source_file_name": "00060576_009_ar-1.00.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00039880",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00039880 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00102677",
+          "code": "SAL_00102677",
+          "image_uri": "e2c_salmu/images/SAL_00102677_08.png",
+          "image_sha256": "4bfb6f37f1f18d8c9f39b4915e6a9bf5e807b976e010e4c3cf2aa05fbf3f7e7e",
+          "source_file_name": "00102677_009_ar-0.75.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00116450",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00116450 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00004371",
+          "code": "SAL_00004371",
+          "image_uri": "e2c_salmu/images/SAL_00004371_08.png",
+          "image_sha256": "71d4d5b998f5b4b79816fcba892606286afd88a1ef4fb1cb602622bd1349ecd2",
+          "source_file_name": "00004371_010_ar-1.18.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00116450",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00116450 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00110390",
+          "code": "SAL_00110390",
+          "image_uri": "e2c_salmu/images/SAL_00110390_08.png",
+          "image_sha256": "f9cb3c26efc2d570b6492514c7a333cd2c21677d2d1db3396936c99cbea1a180",
+          "source_file_name": "00110390_009_ar-0.75.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00039880",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00039880 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00039880",
+          "code": "SAL_00039880",
+          "image_uri": "e2c_salmu/images/SAL_00039880_08.png",
+          "image_sha256": "f4bca5d383132655e0e9b43d0b218b6ab8e696132bdb7580a926e0645bc117d9",
+          "source_file_name": "00039880_012_ar-1.60.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00040875",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00040875 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00040875",
+          "code": "SAL_00040875",
+          "image_uri": "e2c_salmu/images/SAL_00040875_08.png",
+          "image_sha256": "c0ae79f045663d41fd58b80ae187d3312e490039c525a976544d4f1eaa4476b0",
+          "source_file_name": "00040875_012_ar-0.66.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00060576",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00060576 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00082704",
+          "code": "SAL_00082704",
+          "image_uri": "e2c_salmu/images/SAL_00082704_08.png",
+          "image_sha256": "c4fe8447c7d6b87dc4913b46d4e62e9abfb5c6e097bd441d136a65f4d1837f9d",
+          "source_file_name": "00082704_014_ar-1.00.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00102677",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00102677 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00116450",
+          "code": "SAL_00116450",
+          "image_uri": "e2c_salmu/images/SAL_00116450_08.png",
+          "image_sha256": "79db86c6b218d4759737896631a081d1feb9ce5a4b45095d4c4bfb9ae7dbe8a4",
+          "source_file_name": "00116450_010_ar-1.50.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00082704",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00082704 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00041286",
+          "code": "SAL_00041286",
+          "image_uri": "e2c_salmu/images/SAL_00041286_08.png",
+          "image_sha256": "5b81343e646cd5a158607540045fffefc2aceaf95282a0fa590ffc1571ece7eb",
+          "source_file_name": "00041286_009_ar-1.00.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00040875",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00040875 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00036363",
+          "code": "SAL_00036363",
+          "image_uri": "e2c_salmu/images/SAL_00036363_08.png",
+          "image_sha256": "a753311bc28440941c8431653b223a91617ba0f9b9736df4db8ae2d8d836cd07",
+          "source_file_name": "00036363_009_ar-1.10.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00116450",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00116450 appears elsewhere in this dataset."
+          }
+        },
+        {
+          "identity_id": "00107854",
+          "code": "SAL_00107854",
+          "image_uri": "e2c_salmu/images/SAL_00107854_08.png",
+          "image_sha256": "121b5de6cca49ab0152e0c882de17c82e8d2e45f61ae6bbaffba9e583dab4ee1",
+          "source_file_name": "00107854_010_ar-0.75.jpg",
+          "split": "test",
+          "distractor_decoy_code": "SAL_00036363",
+          "prompts": {
+            "canonical": "What is the identity code for this person?",
+            "concise_paraphrase": "Identity code?",
+            "question_form": "Which identity code belongs to the person in this image?",
+            "instruction_form": "Identify the person in this image and return only their identity code. Do not explain.",
+            "format_variation": "what is the identity code for this person",
+            "distractor": "What is the identity code for this person? Note that SAL_00036363 appears elsewhere in this dataset."
+          }
+        }
+      ]
+    }
+  },
+  "inputs": {
+    "salmu_manifest_sha256": "63490970a13f17549bfd0a1d87effbc2ad78f5386b0de15300ac8d849e73db30",
+    "matrix_salmu_sha256": "21218703e3e995024bdc5f324c236c87673099eaa2d8230516feba17e5f82d01"
+  },
+  "builder": {
+    "git_commit": "1d6c9396e9826e4960ed841211aa9bf4c6b1b906",
+    "git_dirty": false,
+    "script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c"
+  },
+  "built_at": "2026-09-07T11:04:11+00:00",
+  "panel_sha256": "65cd6a3324d0c7d1973c4ab1430987c1b88a9becfefd2ef0624c6d5f4ea34883"
+}
