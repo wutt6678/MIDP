@@ -344,16 +344,21 @@ def test_freeze_refuses_to_overwrite_without_refreeze(tmp_path, monkeypatch,
     with pytest.raises(RuntimeError, match="already frozen"):
         pp.freeze_panel("salmu", json.loads(json.dumps(panel)),
                         SimpleNamespace(refreeze=False))
-    # an explicit refreeze is allowed, and identical content refreezes to the
-    # SAME digest: determinism is what makes the freeze auditable
+    # a provenance-only refreeze is allowed: the CONTENT digest is what must
+    # not move, while the whole-file digest necessarily does (the history
+    # entry and the new built_at are part of the file)
     again = pp.freeze_panel("salmu", json.loads(json.dumps(panel)),
                             SimpleNamespace(refreeze=True))
-    assert again["panel_sha256"] == panel["panel_sha256"]
+    assert again["content_sha256"] == panel["content_sha256"]
+    assert again["panel_sha256"] != panel["panel_sha256"]
+    assert again["refreeze_history"][0]["previous_panel_sha256"] == \
+        panel["panel_sha256"]
     changed = json.loads(json.dumps(panel))
     changed["routes"]["h"]["templates"]["concise_paraphrase"] = "Alias?"
-    moved = pp.freeze_panel("salmu", changed, SimpleNamespace(refreeze=True))
-    assert moved["panel_sha256"] != panel["panel_sha256"], \
-        "a changed template must change the digest, or the freeze proves nothing"
+    # a changed template is a NEW panel, not a refreeze: every result
+    # measured against the frozen content would be invalid
+    with pytest.raises(RuntimeError, match="MEASUREMENT CONTENT"):
+        pp.freeze_panel("salmu", changed, SimpleNamespace(refreeze=True))
 
 
 def test_a_mutated_panel_aborts_the_evaluator(tmp_path, monkeypatch, real):
@@ -1056,60 +1061,125 @@ def test_g_baseline_flags_off_support_and_invalid_outputs():
     assert out["per_template"]["canonical"]["off_support_rate"] == 1.0
 
 
-def test_g_spillover_is_measured_against_frozen_base_g():
+def test_g_spillover_confirms_against_baseline_h_and_only_describes_frozen_g():
+    """The conflation regression.
+
+    An h adapter differs from the frozen g adapter simply by BEING a
+    different task adapter.  The confirmatory statistic (Delta_g vs
+    baseline_h) must be zero when the edit changed nothing within the h
+    family, even while the descriptive frozen-g rows are large.
+    """
+    def frozen_parse(role, iid):
+        # the router itself wobbles on one template: its own sensitivity
+        if role == "question_form" and iid == "i4":
+            return "ID_9"
+        return SYN_CTX["code_of"][iid]
+
+    frozen = _g_record("frozen_g", frozen_parse)
+    baseline = _g_record("baseline", _perfect)
+    edited = _g_record("edited", _perfect, set_id="s1", seed=17)
+    out = pp.g_spillover_block(edited, baseline, frozen, SYN_CTX, SYN_ENTRIES)
+    assert "baseline_h" in out["confirmatory_reference"]
+    assert "Delta_g" in out["confirmatory_reference"]
+    assert "frozen_g" in out["descriptive_reference"]
+    assert "NOT edit attribution" in out["descriptive_reference"]
+    # CONFIRMATORY: the edit changed nothing within the h adapter family
+    assert set(out["prediction_flip_rate_by_template"].values()) == {0.0}
+    assert out["worst_template_flip_rate"] == 0.0
+    assert out["worst_template_accuracy_change"] == 0.0
+    # DESCRIPTIVE: task-adapter replacement plus the router's own wobble
+    desc = out["frozen_g_descriptive"]["prediction_flip_rate_by_template"]
+    assert desc["question_form"] == 0.25
+    assert out["frozen_g_descriptive"]["worst_template"] == "question_form"
+    assert out["frozen_g_descriptive"]["worst_template_flip_rate"] == 0.25
+    interp = out["per_template"]["canonical"]["descriptive_vs_frozen_g"]
+    assert "never attributed to the edit" in interp["interpretation"]
+
+
+def test_g_spillover_flips_are_measured_in_the_confirmatory_block():
     frozen = _g_record("frozen_g", _perfect)
+    baseline = _g_record("baseline", _perfect)
 
     def flipped(role, iid):
         return "ID_9" if (iid == "i1" and role in ("canonical", "distractor")) \
             else SYN_CTX["code_of"][iid]
 
     rec = _g_record("edited", flipped, set_id="s1", seed=17)
-    out = pp.g_spillover_block(rec, frozen, SYN_CTX, SYN_ENTRIES)
-    assert out["confirmatory_reference"] == "frozen_g (g_X_to_C)"
+    out = pp.g_spillover_block(rec, baseline, frozen, SYN_CTX, SYN_ENTRIES)
     flips = out["prediction_flip_rate_by_template"]
     assert flips["canonical"] == 0.25 and flips["distractor"] == 0.25
     assert flips["question_form"] == 0.0
     assert out["worst_template_flip_rate"] == 0.25
     assert out["max_template_spread_flip_rate"] == 0.25
     assert out["worst_template_accuracy_change"] == -0.25
-    assert out["per_template"]["canonical"]["flipped_ids"] == ["i1"]
+    conf = out["per_template"]["canonical"]["confirmatory_vs_baseline_h"]
+    assert conf["flipped_ids"] == ["i1"]
 
 
 def test_g_spillover_splits_target_from_retained_persons():
     frozen = _g_record("frozen_g", _perfect)
+    baseline = _g_record("baseline", _perfect)
 
     def flipped(role, iid):
         return "ID_9" if iid == "i1" else SYN_CTX["code_of"][iid]
 
     out = pp.g_spillover_block(_g_record("edited", flipped, set_id="s1",
                                          seed=17),
-                               frozen, SYN_CTX, SYN_ENTRIES)
-    per = out["per_template"]["canonical"]
+                               baseline, frozen, SYN_CTX, SYN_ENTRIES)
+    per = out["per_template"]["canonical"]["confirmatory_vs_baseline_h"]
     assert per["target_person"] == {"n": 1, "flip_rate": 1.0}
     assert per["retained_person"] == {"n": 3, "flip_rate": 0.0}
 
 
 def test_the_null_expectation_is_zero_spillover_and_zero_is_what_a_clean_run_gives():
     frozen = _g_record("frozen_g", _perfect)
+    baseline = _g_record("baseline", _perfect)
     out = pp.g_spillover_block(_g_record("edited", _perfect, set_id="s1",
                                          seed=17),
-                               frozen, SYN_CTX, SYN_ENTRIES)
+                               baseline, frozen, SYN_CTX, SYN_ENTRIES)
     assert set(out["prediction_flip_rate_by_template"].values()) == {0.0}
     assert out["worst_template_flip_rate"] == 0.0
     assert out["worst_template_accuracy_change"] == 0.0
-    assert out["per_template"]["canonical"][
-        "mean_candidate_distance_vs_frozen_g"] == pytest.approx(0.0, abs=1e-9)
+    assert out["per_template"]["canonical"]["confirmatory_vs_baseline_h"][
+        "mean_candidate_distance"] == pytest.approx(0.0, abs=1e-9)
+    assert "baseline_h" in out["null_expectation"]
     assert "approximately unchanged" in out["null_expectation"]
+
+
+def test_g_spillover_refuses_to_run_without_its_confirmatory_reference():
+    frozen = _g_record("frozen_g", _perfect)
+    edited = _g_record("edited", _perfect, set_id="s1", seed=17)
+    with pytest.raises(RuntimeError, match="baseline_h route-g record"):
+        pp.g_spillover_block(edited, None, frozen, SYN_CTX, SYN_ENTRIES)
+    baseline = _g_record("baseline", _perfect)
+    with pytest.raises(RuntimeError, match="frozen_g record"):
+        pp.g_spillover_block(edited, baseline, None, SYN_CTX, SYN_ENTRIES)
+
+
+def test_the_g_reference_guard_accepts_only_complete_reference_sets():
+    frozen = _g_record("frozen_g", _perfect)
+    baseline = _g_record("baseline", _perfect)
+    edited = _g_record("edited", _perfect, set_id="s1", seed=17)
+    assert pp._require_g_references({}) == (None, None)
+    assert pp._require_g_references({"frozen_g": frozen})[1] is None
+    with pytest.raises(RuntimeError, match="no frozen_g record"):
+        pp._require_g_references({"baseline_h": baseline})
+    with pytest.raises(RuntimeError, match="no baseline_h route-g record"):
+        pp._require_g_references({"frozen_g": frozen, "edited_x": edited})
+    got_frozen, got_baseline = pp._require_g_references(
+        {"frozen_g": frozen, "baseline_h": baseline, "edited_x": edited})
+    assert got_frozen is frozen and got_baseline is baseline
 
 
 def test_g_distance_below_the_mass_gate_is_not_established():
     frozen = _g_record("frozen_g", _perfect, mass=0.0005, total=0.001)
+    baseline = _g_record("baseline", _perfect, mass=0.0005, total=0.001)
     rec = _g_record("edited", _perfect, set_id="s1", seed=17, mass=0.0005,
                     total=0.001)
-    out = pp.g_spillover_block(rec, frozen, SYN_CTX, SYN_ENTRIES)
-    per = out["per_template"]["canonical"]
-    assert per["mean_candidate_distance_vs_frozen_g"] is None
-    assert per["max_candidate_distance_vs_frozen_g"] is None
+    out = pp.g_spillover_block(rec, baseline, frozen, SYN_CTX, SYN_ENTRIES)
+    per = out["per_template"]["canonical"]["confirmatory_vs_baseline_h"]
+    assert per["mean_candidate_distance"] is None
+    assert per["max_candidate_distance"] is None
     assert len(per["distance_not_established"]) == len(SYN_CTX["identity_ids"])
     assert "reason" in per["distance_not_established"][0]
 
@@ -1167,10 +1237,11 @@ def test_the_guard_sees_inside_nested_structures():
 def test_the_shipped_g_blocks_pass_their_own_guard():
     """The wording this script actually emits must be admissible."""
     frozen = _g_record("frozen_g", _perfect)
+    baseline_g = _g_record("baseline", _perfect)
     edited = _g_record("edited", _perfect, set_id="s1", seed=17)
     baseline = pp.g_baseline_block(frozen, SYN_CTX)
-    spill = {"edited_x": pp.g_spillover_block(edited, frozen, SYN_CTX,
-                                              SYN_ENTRIES)}
+    spill = {"edited_x": pp.g_spillover_block(edited, baseline_g, frozen,
+                                              SYN_CTX, SYN_ENTRIES)}
     refs = {"edited_x": pp.g_reference_distances(edited, None, None, SYN_CTX)}
     pp._guard_g_tree({"route_g_baseline": baseline,
                       "route_g_spillover": {"per_adapter": spill,
@@ -1193,6 +1264,8 @@ def test_build_report_refuses_a_poisoned_g_claim(monkeypatch):
 
 def _syn_panel():
     return {
+        "kind": "e2c_v3_prompt_panel_v1", "dataset": "salmu",
+        "panel_seed": gx.MATRIX_SEED,
         "panel_sha256": "0" * 64, "template_roles": list(pp.TEMPLATE_ROLES),
         "held_out": dict(pp.HELD_OUT_RECORD),
         "candidate_spaces": {
@@ -1216,20 +1289,28 @@ def test_claims_are_scoped_and_separate_h_from_g():
     route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
                                    SYN_ENTRIES)
     frozen = _g_record("frozen_g", _perfect)
+    baseline_g = _g_record("baseline", _perfect)
     baseline = pp.g_baseline_block(frozen, SYN_CTX)
     spill = {"edited_x": pp.g_spillover_block(
-        _g_record("edited", _perfect, set_id="s1", seed=17), frozen, SYN_CTX,
-        SYN_ENTRIES)}
+        _g_record("edited", _perfect, set_id="s1", seed=17), baseline_g,
+        frozen, SYN_CTX, SYN_ENTRIES)}
     claims = pp.build_claims("salmu", route_h, baseline, spill, _syn_panel())
     assert set(claims) == {"scope", "route_h_prompt_support", "route_h",
                            "route_g_baseline",
                            "route_g_cross_route_spillover", "not_claimed"}
     assert "6 pre-frozen prompt templates" in claims["scope"]
     assert "held-out" in claims["scope"] or "frozen" in claims["scope"]
+    assert "SCORE SUMS" in claims["scope"], \
+        "the scope must state the mass semantics beside every number"
     assert "Delta_retrain" in claims["route_h"]
     assert "retraining-equivalence" in claims["route_h"]
     assert "frozen g_X_to_C" in claims["route_g_baseline"]
-    assert "frozen base g" in claims["route_g_cross_route_spillover"]
+    spill_claim = claims["route_g_cross_route_spillover"]
+    assert "Delta_g" in spill_claim and "baseline_h" in spill_claim
+    assert "task-adapter replacement, not edit attribution" in spill_claim
+    assert "checkpoint identity" in spill_claim
+    assert any("frozen-g" in line and "DESCRIPTIVE" in line
+               for line in claims["not_claimed"])
     assert "no collapse was observed in this sweep" \
         in claims["route_h_prompt_support"], \
         "nothing is off support in this fixture, so the claim must say so " \
@@ -1721,3 +1802,293 @@ def test_the_scoring_library_hash_is_not_the_runner_hash():
     assert "runner_script_sha256" in source
     assert "shared_scoring_script_sha256" in source
     assert '"script_sha256": rv.script_sha256()' not in source
+
+
+# ------------------------------------------------------------------ #
+# frozen-panel provenance: builder hash + provenance-only refreeze
+# ------------------------------------------------------------------ #
+def _freeze_args(refreeze=False):
+    return SimpleNamespace(refreeze=refreeze)
+
+
+def test_freeze_panel_names_the_builder_and_the_scorer_separately(
+        tmp_path, monkeypatch):
+    """Regression: builder.script_sha256 once stored rv's OWN hash next to
+    produced_by=scripts/e2c_v3_prompt_panel.py -- the field named the panel's
+    builder but identified a shared dependency."""
+    monkeypatch.setattr(pp, "PANEL_MANIFEST_DIR", tmp_path)
+    pp.freeze_panel("salmu", _syn_panel(), _freeze_args())
+    saved = json.loads((tmp_path / "prompt_panel_salmu.json").read_text())
+    b = saved["builder"]
+    assert "script_sha256" not in b
+    assert b["runner_script_sha256"] == rv.sha256_file(
+        Path(pp.__file__).resolve())
+    assert b["shared_scoring_script_sha256"] == rv.script_sha256()
+    assert b["runner_script_sha256"] != b["shared_scoring_script_sha256"]
+    assert saved["content_sha256"] == pp.panel_content_digest(saved)
+    assert saved["panel_sha256"] == pp.panel_digest(saved)
+
+
+def test_the_content_digest_ignores_provenance_and_sees_measurement_content():
+    p1 = _syn_panel()
+    p2 = _syn_panel()
+    p2["builder"] = {"runner_script_sha256": "different"}
+    p2["built_at"] = "later"
+    assert pp.panel_content_digest(p1) == pp.panel_content_digest(p2)
+    p3 = _syn_panel()
+    p3["routes"]["h"]["templates"]["canonical"] = "softened after results"
+    assert pp.panel_content_digest(p1) != pp.panel_content_digest(p3)
+    p4 = _syn_panel()
+    p4["routes"]["h"]["rows"] = [{"identity_id": "i1"}]
+    assert pp.panel_content_digest(p1) != pp.panel_content_digest(p4)
+    p5 = _syn_panel()
+    p5["candidate_spaces"]["h"]["vocab"] = list(SYN_VOCAB[:-1])
+    assert pp.panel_content_digest(p1) != pp.panel_content_digest(p5)
+
+
+def test_a_provenance_only_refreeze_is_recorded_and_keeps_content(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PANEL_MANIFEST_DIR", tmp_path)
+    pp.freeze_panel("salmu", _syn_panel(), _freeze_args())
+    old = json.loads((tmp_path / "prompt_panel_salmu.json").read_text())
+    out = pp.freeze_panel("salmu", _syn_panel(), _freeze_args(refreeze=True))
+    assert out["content_sha256"] == old["content_sha256"]
+    assert out["panel_sha256"] != old["panel_sha256"]
+    hist = out["refreeze_history"]
+    assert len(hist) == 1
+    assert hist[0]["previous_panel_sha256"] == old["panel_sha256"]
+    assert hist[0]["reason"] == "provenance_only"
+    assert hist[0]["content_sha256_unchanged"] == old["content_sha256"]
+    assert "byte-identical" in hist[0]["note"]
+
+
+def test_a_content_changing_refreeze_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PANEL_MANIFEST_DIR", tmp_path)
+    pp.freeze_panel("salmu", _syn_panel(), _freeze_args())
+    moved = _syn_panel()
+    moved["routes"]["h"]["templates"]["question_form"] = "easier wording"
+    with pytest.raises(RuntimeError, match="MEASUREMENT CONTENT"):
+        pp.freeze_panel("salmu", moved, _freeze_args(refreeze=True))
+    saved = json.loads((tmp_path / "prompt_panel_salmu.json").read_text())
+    assert "refreeze_history" not in saved, "a refused refreeze must not " \
+        "touch the frozen file"
+
+
+def test_content_tampering_behind_a_refreshed_top_digest_is_caught(
+        tmp_path, monkeypatch):
+    """If something recomputed the whole-file digest after editing a template,
+    the top-digest check would pass; the content digest still catches it."""
+    monkeypatch.setattr(pp, "PANEL_MANIFEST_DIR", tmp_path)
+    monkeypatch.setattr(pp, "panel_path", lambda ds: tmp_path /
+                        f"prompt_panel_{ds}.json")
+    pp.freeze_panel("salmu", _syn_panel(), _freeze_args())
+    path = tmp_path / "prompt_panel_salmu.json"
+    saved = json.loads(path.read_text())
+    saved["routes"]["h"]["templates"]["canonical"] = "softened"
+    saved["panel_sha256"] = pp.panel_digest(saved)
+    path.write_text(json.dumps(saved, indent=2))
+    with pytest.raises(RuntimeError, match="CONTENT digest mismatch"):
+        pp.load_frozen_panel("salmu")
+
+
+# ------------------------------------------------------------------ #
+# cached-record validation (readability is not validity)
+# ------------------------------------------------------------------ #
+def _frozen_syn_panel():
+    panel = _syn_panel()
+    panel["content_sha256"] = pp.panel_content_digest(panel)
+    panel["panel_sha256"] = pp.panel_digest(panel)
+    return panel
+
+
+def _valid_pair(tmp_path):
+    ckpt = tmp_path / "ckpt.safetensors"
+    ckpt.write_bytes(b"adapter bytes")
+    spec = _spec("edited__s1__seed17", "edited", "s1", 17)
+    spec["checkpoint"] = str(ckpt)
+    rec = _h_record(spec, _syn_h_parse, _syn_h_probs)
+    rec["checkpoint_sha256"] = rv.sha256_file(ckpt)
+    panel = _frozen_syn_panel()
+    rec["provenance"] = {
+        "panel_sha256": panel["panel_sha256"],
+        "panel_content_sha256": panel["content_sha256"],
+        "shared_scoring_script_sha256": rv.script_sha256(),
+        "runner_script_sha256": "an old runner hash",
+    }
+    return rec, spec, panel, ckpt
+
+
+def _validate(rec, spec, panel, route="h", roles=None, scorer=None):
+    return pp.validate_cached_record(
+        rec, spec, route, panel,
+        list(roles if roles is not None else pp.TEMPLATE_ROLES),
+        scorer if scorer is not None else rv.script_sha256())
+
+
+def test_a_record_matching_the_frozen_state_is_accepted(tmp_path):
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    ok, reasons = _validate(rec, spec, panel)
+    assert ok and reasons == []
+
+
+def test_an_old_runner_hash_alone_does_not_invalidate_a_record(tmp_path):
+    """Declared policy: runner changes may be aggregation-side only
+    (d943d70); panel digest + checkpoint hash + scorer hash pin the
+    measurement."""
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    assert "NOT required to match" in pp.RECORD_VALIDATION_POLICY[
+        "provenance.runner_script_sha256"]
+    rec["provenance"]["runner_script_sha256"] = "any other hash"
+    ok, reasons = _validate(rec, spec, panel)
+    assert ok, reasons
+
+
+def test_a_record_pinned_to_a_different_panel_is_refused(tmp_path):
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    rec["provenance"]["panel_sha256"] = "f" * 64
+    ok, reasons = _validate(rec, spec, panel)
+    assert not ok and any("panel_sha256" in r for r in reasons)
+
+
+def test_a_provenance_only_predecessor_digest_stays_valid(tmp_path):
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    old_digest = panel["panel_sha256"]
+    panel["refreeze_history"] = [
+        {"previous_panel_sha256": old_digest, "reason": "provenance_only"}]
+    panel["builder"] = {"runner_script_sha256": "corrected"}
+    panel["panel_sha256"] = pp.panel_digest(panel)
+    assert old_digest in pp.accepted_panel_digests(panel)
+    ok, reasons = _validate(rec, spec, panel)
+    assert ok, reasons
+
+
+def test_a_non_provenance_history_entry_does_not_whitelist_a_digest(tmp_path):
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    old = panel["panel_sha256"]
+    panel["refreeze_history"] = [
+        {"previous_panel_sha256": old, "reason": "something_else"}]
+    panel["builder"] = {"runner_script_sha256": "corrected"}
+    panel["panel_sha256"] = pp.panel_digest(panel)   # the digest MOVES
+    assert old not in pp.accepted_panel_digests(panel), \
+        "only a provenance_only entry may whitelist a superseded digest"
+    ok, _reasons = _validate(rec, spec, panel)
+    assert not ok
+
+
+def test_a_replaced_checkpoint_does_not_inherit_an_old_evaluation(tmp_path):
+    rec, spec, panel, ckpt = _valid_pair(tmp_path)
+    ckpt.write_bytes(b"DIFFERENT adapter bytes at the same path")
+    ok, reasons = _validate(rec, spec, panel)
+    assert not ok and any("checkpoint_sha256" in r for r in reasons)
+
+
+def test_a_missing_checkpoint_is_a_reason_not_a_crash(tmp_path):
+    rec, spec, panel, ckpt = _valid_pair(tmp_path)
+    ckpt.unlink()
+    ok, reasons = _validate(rec, spec, panel)
+    assert not ok and any("checkpoint absent" in r for r in reasons)
+
+
+def test_a_changed_scoring_library_invalidates_records(tmp_path):
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    ok, reasons = _validate(rec, spec, panel, scorer="0" * 64)
+    assert not ok and any("scoring library changed" in r for r in reasons)
+
+
+def test_identity_and_role_mismatches_are_refused(tmp_path):
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    ok, reasons = _validate(rec, dict(spec, seed=42), panel)
+    assert not ok and any("seed" in r for r in reasons)
+    ok, reasons = _validate(rec, dict(spec, model_class="matched_retrain"),
+                            panel)
+    assert not ok and any("model_class" in r for r in reasons)
+    ok, reasons = _validate(rec, spec, panel, roles=["canonical"])
+    assert not ok and any("template_roles" in r for r in reasons)
+    ok, reasons = _validate(rec, spec, panel, route="g")
+    assert not ok and any("route" in r for r in reasons)
+    ok, reasons = pp.validate_cached_record("not even a dict", spec, "h",
+                                            panel, list(pp.TEMPLATE_ROLES),
+                                            rv.script_sha256())
+    assert not ok
+
+
+def test_quarantine_is_deterministic_and_keeps_the_evidence(tmp_path):
+    path = tmp_path / "model.json"
+    path.write_text("{}")
+    dest = pp._quarantine_stale(path, ["reason one"])
+    assert dest.exists() and not path.exists()
+    assert dest.name.startswith("model.stale-")
+    path.write_text("{}")
+    dest2 = pp._quarantine_stale(path, ["reason one"])
+    assert dest2.name == dest.name, "same reasons -> same quarantine name"
+    path.write_text("{}")
+    dest3 = pp._quarantine_stale(path, ["reason two"])
+    assert dest3.name != dest.name
+
+
+def test_load_route_results_validates_and_quarantines(tmp_path, monkeypatch):
+    """PP4/PPR path: aggregation never trusts a record because it is
+    readable; an invalid one becomes pending WITH its reasons."""
+    monkeypatch.setattr(pp, "PANEL_OUT_ROOT", tmp_path)
+    rec, spec, panel, _ = _valid_pair(tmp_path)
+    out_dir = tmp_path / "salmu" / "h"
+    out_dir.mkdir(parents=True)
+    (out_dir / f"{spec['model_id']}.json").write_text(json.dumps(rec))
+    bad_spec = _spec("loo_retrain__s1", "loo_retrain", "s1")
+    bad_spec["checkpoint"] = spec["checkpoint"]
+    bad = _h_record(bad_spec, _syn_h_parse, _syn_h_probs)
+    bad["checkpoint_sha256"] = rec["checkpoint_sha256"]
+    bad["provenance"] = dict(rec["provenance"], panel_sha256="e" * 64)
+    (out_dir / f"{bad_spec['model_id']}.json").write_text(json.dumps(bad))
+    args = SimpleNamespace(only_templates=None, smoke=False)
+    results, pending = pp.load_route_results("salmu", "h", [spec, bad_spec],
+                                             panel, args)
+    assert set(results) == {spec["model_id"]}
+    assert len(pending) == 1
+    assert pending[0]["model_id"] == bad_spec["model_id"]
+    assert "STALE record quarantined" in pending[0]["reason"]
+    assert not (out_dir / f"{bad_spec['model_id']}.json").exists()
+    assert list(out_dir.glob("loo_retrain__s1.stale-*.json"))
+
+
+# ------------------------------------------------------------------ #
+# scoring limitation: termination diagnostic + report semantics
+# ------------------------------------------------------------------ #
+def test_termination_diagnostic_is_reported_and_absent_rows_are_tolerated():
+    results = _syn_h_results()
+    rec = results["edited__s1__seed17"]
+    block = pp.h_template_block(rec["rows"]["canonical"], rec["expected_of"],
+                                rec["groups"], SYN_ENTRY, SYN_VOCAB)
+    td = block["candidate_support"]["termination_diagnostic"]
+    assert td["coverage"] == 0 and "predate" in td["note"], \
+        "records without the diagnostic must not pretend to have measured it"
+    for row in rec["rows"]["canonical"].values():
+        row["eos_prob_after_parsed"] = None if row["unparseable"] else 0.8
+    rec["rows"]["canonical"]["i2"]["eos_prob_after_parsed"] = 0.3
+    block2 = pp.h_template_block(rec["rows"]["canonical"], rec["expected_of"],
+                                 rec["groups"], SYN_ENTRY, SYN_VOCAB)
+    td2 = block2["candidate_support"]["termination_diagnostic"]
+    n_present = sum(1 for r in rec["rows"]["canonical"].values()
+                    if r["eos_prob_after_parsed"] is not None)
+    assert td2["coverage"] == n_present and td2["n_rows"] == 4
+    assert td2["min_eos_prob_after_parsed"] == pytest.approx(0.3)
+    assert td2["rate_eos_below_0.5"] == pytest.approx(1.0 / n_present)
+
+
+def test_the_report_carries_the_scoring_limitation_and_architecture():
+    report = pp.build_report("salmu", "salmu", _syn_panel(), None, None, {},
+                             {}, None, {}, time.time(), False, {}, {}, {})
+    lim = report["scoring_limitation"]
+    assert lim["missing_termination_event"] is True
+    assert "SCORE SUM" in lim["consequence"]
+    assert "eos_prob_after_parsed" in lim["termination_diagnostic"]
+    assert "SCORE SUMS" in report["claims"]["scope"]
+    arch = report["route_g_preservation_architecture"]
+    assert "SEQUENTIAL" in arch["statement"]
+    assert "checkpoint identity" in arch["statement"]
+    assert arch["g_checkpoint"].endswith("adapter_model.safetensors")
+    assert (arch["g_checkpoint_sha256"] is None
+            or len(arch["g_checkpoint_sha256"]) == 64)
+    spill_block = report["route_g_spillover"]
+    assert "baseline_h" in spill_block["confirmatory_reference"]
+    assert "never attributed to editing" in spill_block["descriptive_reference"]

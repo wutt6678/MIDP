@@ -19,6 +19,17 @@ THE PANEL IS HELD OUT, AND THAT IS ENFORCED RATHER THAN ASSERTED
   any mismatch with the committed manifest, so a template cannot be edited
   after its results are seen.
 * It is committed before any evaluation runs.
+* Cached results are VALIDATED before reuse (``RECORD_VALIDATION_POLICY``):
+  the frozen panel digest (or a provenance-only predecessor), the SHA-256 of
+  the checkpoint now on disk, the spec's identity fields, the frozen role
+  list, and the CURRENT scoring-library hash.  A record that fails is
+  quarantined and re-run by the evaluation phases, and surfaced as pending by
+  PP4/PPR -- aggregation never trusts a record only because it is readable.
+* ``--refreeze`` is honored only for a PROVENANCE-ONLY rewrite: measurement
+  content (templates, decoys, images, candidate spaces) must be byte-identical
+  by content digest, and the superseded whole-file digest is recorded in
+  ``refreeze_history`` so records pinned to it stay valid.  A content change
+  is a new panel and is refused.
 * The pass criteria come from ``scripts/e2c_v3_granularity.py`` and are applied
   UNCHANGED as read-only per-template columns.  No threshold anywhere in this
   repo is derived from panel output, and no gate reads it.
@@ -64,20 +75,42 @@ PP2  Baseline prompt sensitivity.  The FROZEN ``g_X_to_C`` router over the six
      consistency, worst-template accuracy, maximum template spread, and
      invalid / off-support output rates.
 
-PP3  Cross-route edit spillover.  Every in-scope h-side adapter loaded onto the
-     same base model and run over the IDENTICAL panel, scored RELATIVE TO
-     FROZEN BASE g: prediction-flip rate, change in code accuracy,
-     candidate-distribution distance where available, target-person versus
-     retained-person effects, and per-template plus worst-template spillover.
-     The null expectation is that an edit targeting h(C->A) leaves g(X->C)
-     approximately unchanged.
+PP3  Edit-induced collateral on the route-g panel, with TWO references that
+     are never conflated.  CONFIRMATORY: Delta_g = M_g(h_edited) -
+     M_g(h_baseline) -- both operands are code->alias TASK adapters run over
+     the identical image panel, so the difference isolates the edit; the null
+     expectation is flip rate 0 and accuracy change 0.  DESCRIPTIVE: the same
+     rows against the frozen g_X_to_C adapter.  Frozen g is a DIFFERENT task
+     adapter (image->code): loading any h adapter in place of it already
+     changes the routed model before any edit is considered, so a large
+     frozen-g difference may reflect task-adapter replacement alone and is
+     NEVER used to attribute change to editing.  Architecturally the pipeline
+     executes frozen g and the h adapter sequentially and the g checkpoint is
+     unchanged, so route-g preservation is established directly by checkpoint
+     identity; PP2's frozen-g accuracy remains the absolute route-g
+     capability ceiling.
 
-The confirmatory spillover reference is ALWAYS frozen base g.  Distances to the
-h-side matched/LOO adapters are retained only as a secondary diagnostic named
-``g_spillover_reference_distance`` and labelled a cross-route reference
-comparison.  They are NOT oracle distances: there was no g-side matched or LOO
-retraining.  No g result may be called "edit success", "g-side unlearning" or
-"retraining equivalence", and :func:`_guard_g_vocabulary` raises if one is.
+Distances to the h-side matched/LOO adapters are retained only as a secondary
+diagnostic named ``g_spillover_reference_distance`` and labelled a cross-route
+reference comparison.  They are NOT oracle distances: there was no g-side
+matched or LOO retraining.  No g result may be called "edit success", "g-side
+unlearning" or "retraining equivalence", and :func:`_guard_g_vocabulary`
+raises if one is.
+
+SCORING SEMANTICS -- candidate_mass IS A NORMALIZED SCORE SUM
+=============================================================
+The shared scorer measures label-PREFIX probabilities WITHOUT a termination
+event; overlapping candidate strings can each carry high score, so their sum
+can exceed 1 (observed in this project's own oracle artifacts).
+candidate_mass / other_mass are therefore normalized score sums, not literal
+probability masses, and every threshold applied to them -- including the
+frozen ``min_candidate_mass=0.99`` interpretability criterion -- is a
+SCORE-SUM criterion, unchanged from the rest of the project.
+``SCORING_LIMITATION`` carries this statement into every report.  Route-h rows
+additionally record a termination-aware DIAGNOSTIC (P(EOS | prompt + parsed
+label)); it sits beside the frozen scorer and never replaces it, because
+changing the shared scorer would break comparability with every canonical
+artifact already on disk.
 
 Phases: PP0 build+freeze the panel | PP1 route h sweep (full SALMU matrix)
         PP2 route g baseline | PP3 route g spillover
@@ -218,6 +251,43 @@ HELD_OUT_RECORD = {
     "worst_case_rule": ("min over the six pre-frozen template roles; no "
                         "template may be dropped after results are seen"),
     "prohibited_g_terms": list(PROHIBITED_G_TERMS),
+}
+
+#: What candidate_mass IS, stated once and carried into every report.  The
+#: shared scorer computes label-PREFIX probabilities without a termination
+#: event, so overlapping candidate strings can sum above 1 -- observed in the
+#: project's own oracle artifacts.  The quantities remain valid for normalized
+#: comparison (every artifact in this project is measured this way), but they
+#: are score sums, not literal probability masses, and every threshold applied
+#: to them -- including the frozen min_candidate_mass=0.99 interpretability
+#: criterion -- is a SCORE-SUM criterion.  The record field names are kept
+#: identical to every other artifact in the project; this block is the binding
+#: interpretation, and route-h rows carry a termination-aware diagnostic
+#: beside it.
+SCORING_LIMITATION = {
+    "missing_termination_event": True,
+    "candidate_mass_is": ("sum of normalized label-prefix scores WITHOUT a "
+                          "termination event; NOT a literal probability mass "
+                          "-- overlapping candidate strings can sum above 1"),
+    "other_mass_is": ("1 - candidate score sum; can be negative when "
+                      "overlapping prefixes push the sum above 1"),
+    "consequence": ("normalized candidate-score comparisons and gated "
+                    "distances remain useful and comparable to every existing "
+                    "artifact, but any threshold on candidate_mass (e.g. the "
+                    "frozen min_candidate_mass=0.99 interpretability "
+                    "criterion) is a threshold on a SCORE SUM, not on a "
+                    "probability"),
+    "termination_diagnostic": ("route-h rows record eos_prob_after_parsed: "
+                               "P(EOS | prompt + parsed label), a termination-"
+                               "aware reading of the same output; diagnostic "
+                               "only -- no criterion, gate or distance reads "
+                               "it"),
+    "resolution_options": ("(a) add termination-aware scoring to the shared "
+                           "library: changes the measurement and breaks "
+                           "comparability with every canonical artifact on "
+                           "disk; (b) keep the frozen prefix scorer with this "
+                           "documented semantics plus the EOS diagnostic "
+                           "(CHOSEN)"),
 }
 
 
@@ -394,23 +464,77 @@ def panel_digest(panel):
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
+#: The MEASUREMENT CONTENT of the panel: everything that decides what any
+#: model was asked and what its answers are counted against.  Provenance
+#: metadata (builder hashes, input hashes, timestamps, refreeze history) sits
+#: OUTSIDE this digest on purpose: correcting a mislabeled provenance field
+#: must not look like a changed panel, while any change to a template, decoy,
+#: image or candidate space must.
+PANEL_CONTENT_KEYS = ("kind", "dataset", "panel_seed", "template_roles",
+                      "held_out", "candidate_spaces", "routes")
+
+
+def panel_content_digest(panel):
+    body = {k: panel[k] for k in PANEL_CONTENT_KEYS}
+    blob = json.dumps(body, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 def panel_path(ds):
     return PANEL_MANIFEST_DIR / f"prompt_panel_{ds}.json"
 
 
 def freeze_panel(ds, panel, args):
-    """Write the panel once.  Refuses to overwrite unless --refreeze."""
+    """Write the panel once.  ``--refreeze`` allows a PROVENANCE-ONLY rewrite.
+
+    A refreeze that would change measurement content (any template, decoy,
+    image or candidate space) is refused outright: that is a new panel, and
+    every result measured against the frozen one would be invalid.  A
+    provenance-only refreeze keeps the content digest byte-identical and
+    records the superseded whole-file digest in ``refreeze_history``, so
+    records pinned to the old digest remain valid -- they were measured
+    against the same panel content.
+    """
     PANEL_MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
     path = panel_path(ds)
-    if path.exists() and not args.refreeze:
+    history = []
+    if path.exists():
         existing = json.loads(path.read_text(encoding="utf-8"))
-        raise RuntimeError(
-            f"{path} is already frozen (digest "
-            f"{existing.get('panel_sha256', '?')[:16]}...).  A frozen panel is "
-            f"the whole guarantee that no template was adjusted after its "
-            f"results were seen, so overwriting it needs an explicit "
-            f"--refreeze, and any results already produced against the old "
-            f"digest must be discarded and re-run.")
+        if not args.refreeze:
+            raise RuntimeError(
+                f"{path} is already frozen (digest "
+                f"{existing.get('panel_sha256', '?')[:16]}...).  A frozen "
+                f"panel is the whole guarantee that no template was adjusted "
+                f"after its results were seen.  --refreeze is honored only "
+                f"for a PROVENANCE-ONLY rewrite (measurement content byte-"
+                f"identical by content digest); records pinned to the "
+                f"previous digest stay valid exactly because the content did "
+                f"not move.")
+        old_content = panel_content_digest(existing)
+        new_content = panel_content_digest(panel)
+        if old_content != new_content:
+            raise RuntimeError(
+                f"--refreeze would change the panel's MEASUREMENT CONTENT "
+                f"(content digest {old_content[:16]} -> {new_content[:16]}). "
+                f"That is not a refreeze, it is a NEW panel: every result "
+                f"measured against the frozen one would be invalid.  Delete "
+                f"the manifest and every result produced against it, run PP0 "
+                f"fresh, and say in the commit why the panel moved.")
+        history = list(existing.get("refreeze_history") or []) + [{
+            "previous_panel_sha256": existing.get("panel_sha256"),
+            "previous_builder": existing.get("builder"),
+            "content_sha256_unchanged": old_content,
+            "reason": "provenance_only",
+            "note": ("templates, decoys, images and candidate spaces are "
+                     "byte-identical (content digest unchanged); only "
+                     "provenance metadata was corrected"),
+            "refrozen_at": datetime.now(timezone.utc).isoformat(
+                timespec="seconds"),
+        }]
+        logger.warning("PP0: provenance-only refreeze of %s (content digest "
+                       "unchanged: %s); previous whole-file digest %s moves "
+                       "to refreeze_history", path, old_content[:16],
+                       str(existing.get("panel_sha256"))[:16])
     panel["inputs"] = {
         "salmu_manifest_sha256": rv.sha256_file(gxm.SALMU_MANIFEST),
         "matrix_salmu_sha256": rv.sha256_file(
@@ -419,15 +543,25 @@ def freeze_panel(ds, panel, args):
     panel["builder"] = {
         "git_commit": rv.git_commit_sha(),
         "git_dirty": rv.git_worktree_dirty(),
-        "script_sha256": rv.script_sha256(),
+        # The script that BUILT this panel and the shared scoring library it
+        # loaded, named separately: a bare "script_sha256" next to
+        # produced_by=scripts/e2c_v3_prompt_panel.py once recorded the
+        # research-validity library's hash instead of the builder's -- the
+        # same mislabelling class f68eeb1 fixed for result records.
+        "runner_script_sha256": rv.sha256_file(Path(__file__).resolve()),
+        "shared_scoring_script_sha256": rv.script_sha256(),
     }
     panel["built_at"] = datetime.now(timezone.utc).isoformat(
         timespec="seconds")
+    if history:
+        panel["refreeze_history"] = history
+    panel["content_sha256"] = panel_content_digest(panel)
     panel["panel_sha256"] = panel_digest(panel)
     path.write_text(json.dumps(panel, indent=2, ensure_ascii=False) + "\n",
                     encoding="utf-8")
-    logger.info("PP0: froze %s (digest %s, %d identities x %d templates x "
-                "%d routes)", path, panel["panel_sha256"][:16],
+    logger.info("PP0: froze %s (digest %s, content %s, %d identities x %d "
+                "templates x %d routes)", path, panel["panel_sha256"][:16],
+                panel["content_sha256"][:16],
                 panel["routes"]["h"]["n_rows"], len(TEMPLATE_ROLES), 2)
     return panel
 
@@ -454,7 +588,35 @@ def load_frozen_panel(ds):
             f"it was written, so it is no longer the held-out panel any "
             f"previous result was measured against.  Restore it from git or "
             f"re-freeze explicitly and discard the old results.")
+    recorded_content = panel.get("content_sha256")
+    if recorded_content is not None:
+        actual_content = panel_content_digest(panel)
+        if recorded_content != actual_content:
+            raise RuntimeError(
+                f"{path}: panel CONTENT digest mismatch (recorded "
+                f"{str(recorded_content)[:16]}, recomputed "
+                f"{actual_content[:16]}): templates, decoys, images or "
+                f"candidate spaces were modified inside a file whose "
+                f"whole-file digest still matched -- measurement content and "
+                f"its digest must move together")
     return panel
+
+
+def accepted_panel_digests(panel):
+    """Whole-file digests a cached record may legitimately pin.
+
+    The current digest, plus every previous digest superseded by a
+    PROVENANCE-ONLY refreeze: those records were measured against
+    byte-identical measurement content (freeze_panel verified it before
+    writing the history entry), so they remain valid.  A content-changing
+    refreeze is refused outright, so no digest in the history can differ in
+    content from the current panel.
+    """
+    digests = {panel.get("panel_sha256")}
+    for h in panel.get("refreeze_history") or []:
+        if h.get("reason") == "provenance_only":
+            digests.add(h.get("previous_panel_sha256"))
+    return {d for d in digests if d}
 
 
 # ====================================================================== #
@@ -580,6 +742,36 @@ def _roles(args):
     return list(chosen) if chosen else list(TEMPLATE_ROLES)
 
 
+def termination_diagnostic(session, prompt_text, parsed_label, device):
+    """P(EOS | prompt + parsed label): did the model intend to STOP there?
+
+    The frozen scorer measures label prefixes WITHOUT a termination event
+    (SCORING_LIMITATION); this is the termination-aware reading of the SAME
+    output, one extra teacher-forced forward.  Diagnostic only: no criterion,
+    gate or distance in this project reads it, and it never replaces the
+    frozen scorer -- comparability with every canonical artifact on disk is
+    the point of routing through it.
+    """
+    import torch
+
+    if parsed_label is None:
+        return None
+    tokenizer = session.processor.tokenizer
+    eos_id = tokenizer.eos_token_id
+    if eos_id is None:
+        return None
+    prompt_ids = rv._build_prompt_ids(session.processor, "",
+                                      prompt_text=prompt_text)
+    label_ids = tokenizer(parsed_label,
+                          add_special_tokens=False).input_ids
+    ids = torch.cat([prompt_ids, torch.tensor(label_ids)]
+                    ).unsqueeze(0).to(device)
+    session.model.eval()
+    with torch.no_grad():
+        logits = session.model(input_ids=ids).logits[0, -1]
+    return float(torch.softmax(logits.float(), dim=-1)[eos_id])
+
+
 def score_route_h(session, panel, args):
     """Hard generation and full-sequence candidate support, per template.
 
@@ -626,6 +818,9 @@ def score_route_h(session, panel, args):
                 "probs": summary["probs"],
                 "candidate_mass": summary["candidate_mass"],
                 "other_mass": summary["other_mass"],
+                # Termination-aware diagnostic beside the prefix scores.
+                "eos_prob_after_parsed": termination_diagnostic(
+                    session, prompt, parsed, args.device),
             }
         rows[role] = per_id
     return rows
@@ -701,6 +896,92 @@ def _load_cached(path):
     return None
 
 
+#: Declared compatibility policy for reusing a cached record.  Readability is
+#: not validity: before a stored record is accepted, every field below is
+#: checked against the CURRENT frozen state, in the evaluation phases and
+#: again in PP4/PPR.
+RECORD_VALIDATION_POLICY = {
+    "provenance.panel_sha256": (
+        "must equal the current frozen panel digest, or a previous digest "
+        "superseded by a provenance-only refreeze (measurement content "
+        "byte-identical by construction)"),
+    "provenance.panel_content_sha256": (
+        "when the record pins it, must equal the current panel's content "
+        "digest"),
+    "checkpoint_sha256": (
+        "must equal the SHA-256 of the checkpoint file at the spec's path "
+        "RIGHT NOW: a checkpoint replaced in place must not inherit an old "
+        "evaluation"),
+    "model_id / model_class / set_id / seed / route": (
+        "must equal the current spec exactly"),
+    "template_roles": (
+        "must equal the roles this invocation evaluates (the six frozen "
+        "roles outside smoke)"),
+    "provenance.shared_scoring_script_sha256": (
+        "must equal the current research-validity library hash: the scoring "
+        "library IS the measurement"),
+    "provenance.runner_script_sha256": (
+        "recorded, NOT required to match: runner changes may be aggregation-"
+        "side only (e.g. d943d70 changed no measurement); the panel digest, "
+        "checkpoint hash and scorer hash already pin everything the record "
+        "measured"),
+}
+
+
+def validate_cached_record(rec, spec, route, panel, expected_roles,
+                           scorer_sha):
+    """(ok, reasons) for one cached record against the CURRENT frozen state."""
+    if not isinstance(rec, dict):
+        return False, ["record is not a JSON object"]
+    reasons = []
+    prov = rec.get("provenance") or {}
+    if rec.get("model_id") != spec["model_id"]:
+        reasons.append(f"model_id {rec.get('model_id')!r} != spec "
+                       f"{spec['model_id']!r}")
+    for field in ("model_class", "set_id", "seed"):
+        if rec.get(field) != spec[field]:
+            reasons.append(f"{field} {rec.get(field)!r} != spec "
+                           f"{spec[field]!r}")
+    if rec.get("route") != route:
+        reasons.append(f"route {rec.get('route')!r} != {route!r}")
+    if list(rec.get("template_roles") or []) != list(expected_roles):
+        reasons.append(f"template_roles {rec.get('template_roles')} != "
+                       f"{list(expected_roles)}")
+    if prov.get("panel_sha256") not in accepted_panel_digests(panel):
+        reasons.append(f"panel_sha256 {str(prov.get('panel_sha256'))[:16]} "
+                       f"is neither the current frozen panel digest nor a "
+                       f"provenance-only predecessor")
+    content = prov.get("panel_content_sha256")
+    if (content is not None and panel.get("content_sha256") is not None
+            and content != panel["content_sha256"]):
+        reasons.append("panel_content_sha256 differs from the current panel")
+    if prov.get("shared_scoring_script_sha256") != scorer_sha:
+        reasons.append(
+            f"shared_scoring_script_sha256 "
+            f"{str(prov.get('shared_scoring_script_sha256'))[:12]} != "
+            f"current {scorer_sha[:12]}: the scoring library changed after "
+            f"this record was produced")
+    if not Path(spec["checkpoint"]).exists():
+        reasons.append(f"checkpoint absent: {spec['checkpoint']}")
+    elif rec.get("checkpoint_sha256") != rv.sha256_file(spec["checkpoint"]):
+        reasons.append("checkpoint_sha256 differs from the file now at the "
+                       "spec's path (checkpoint replaced in place?)")
+    return (not reasons), reasons
+
+
+def _quarantine_stale(path, reasons):
+    """Move an invalid record aside, deterministically, and return the path.
+
+    Kept rather than deleted: a stale record is evidence about what ran, and
+    the quarantine name says why it was refused.  The suffix is a hash of the
+    reasons, so re-validating the same tree is reproducible.
+    """
+    tag = hashlib.sha256("; ".join(reasons).encode("utf-8")).hexdigest()[:8]
+    dest = path.with_name(f"{path.stem}.stale-{tag}.json")
+    path.rename(dest)
+    return dest
+
+
 def evaluate_models(ds, route, specs, panel, ctx, args, entry_by_id,
                     after_first=None):
     """Run one route over every in-scope checkpoint, resuming from disk.
@@ -708,22 +989,39 @@ def evaluate_models(ds, route, specs, panel, ctx, args, entry_by_id,
     One ``ModelSession`` for the whole sweep: ``reset_to`` reloads the adapter
     in place, so 106 checkpoints cost one 9B model load rather than 106.
 
+    Every cached record is VALIDATED before reuse (policy below); a record
+    that fails is quarantined with its reasons and the model is re-evaluated.
+
     ``after_first`` is called once, with the session positioned on the first
     checkpoint actually evaluated, and its return value is handed back as the
     third element.  That is how the scorer cross-check rides along with the
     sweep instead of paying for a second model load of its own.
     """
     results, session, pending, extras = {}, None, [], None
+    stale = []
     roles = _roles(args)
+    scorer_sha = rv.script_sha256()
     for spec in specs:
-        cached = _load_cached(_result_path(ds, route, spec["model_id"]))
-        if cached is not None:
+        path = _result_path(ds, route, spec["model_id"])
+        cached = _load_cached(path)
+        if cached is None:
+            continue
+        ok, reasons = validate_cached_record(cached, spec, route, panel,
+                                             roles, scorer_sha)
+        if ok:
             results[spec["model_id"]] = cached
-    logger.info("%s: %d/%d models already on disk", route, len(results),
-                len(specs))
+        else:
+            dest = _quarantine_stale(path, reasons)
+            stale.append({"model_id": spec["model_id"],
+                          "quarantined_as": dest.name, "reasons": reasons})
+            logger.warning("[%s] STALE cached record quarantined as %s: %s",
+                           spec["model_id"], dest.name, "; ".join(reasons))
+    logger.info("%s: %d/%d models on disk validated against the frozen panel, "
+                "current checkpoints and current scorer (%d stale "
+                "quarantined)", route, len(results), len(specs), len(stale))
     todo = [s for s in specs if s["model_id"] not in results]
     if not todo:
-        return results, pending, extras
+        return results, pending, extras, stale
 
     missing = [s for s in todo if not s["present"]]
     for spec in missing:
@@ -732,7 +1030,7 @@ def evaluate_models(ds, route, specs, panel, ctx, args, entry_by_id,
         logger.warning("[%s] PENDING (no checkpoint)", spec["model_id"])
     todo = [s for s in todo if s["present"]]
     if not todo:
-        return results, pending, extras
+        return results, pending, extras, stale
 
     try:
         session = mx.ModelSession(args, f"e2c_pp_{ds}_{route}")
@@ -780,6 +1078,7 @@ def evaluate_models(ds, route, specs, panel, ctx, args, entry_by_id,
                         Path(__file__).resolve()),
                     "shared_scoring_script_sha256": rv.script_sha256(),
                     "panel_sha256": panel["panel_sha256"],
+                    "panel_content_sha256": panel.get("content_sha256"),
                     "device": args.device},
             }
             path = _result_path(ds, route, spec["model_id"])
@@ -793,7 +1092,7 @@ def evaluate_models(ds, route, specs, panel, ctx, args, entry_by_id,
     finally:
         if session is not None:
             session.release()
-    return results, pending, extras
+    return results, pending, extras, stale
 
 
 # ====================================================================== #
@@ -894,6 +1193,8 @@ def h_template_block(role_rows, expected_of, groups, entry, vocab):
     sib_acc, n_sib = _accuracy(role_rows, sibling, expected_of)
     cousin_acc, n_cousin = _accuracy(role_rows, cousin, expected_of)
     all_rows = [role_rows[i] for i in ids]
+    eos = [r.get("eos_prob_after_parsed") for r in all_rows]
+    eos_present = [v for v in eos if v is not None]
     return {
         "desired_label_accuracy": {
             "transformation_targets": target_acc,
@@ -936,6 +1237,20 @@ def h_template_block(role_rows, expected_of, groups, entry, vocab):
                 i for i in ids
                 if role_rows[i]["candidate_mass"]
                 < gx.PASS_CRITERIA["min_candidate_mass"]],
+            # Termination-aware DIAGNOSTIC (SCORING_LIMITATION): how often the
+            # model would have stopped right after its parsed label.  Records
+            # that predate the diagnostic aggregate to coverage 0 rather than
+            # pretending to have measured it.
+            "termination_diagnostic": (
+                {"coverage": len(eos_present), "n_rows": len(all_rows),
+                 "mean_eos_prob_after_parsed": (sum(eos_present)
+                                                / len(eos_present)),
+                 "min_eos_prob_after_parsed": min(eos_present),
+                 "rate_eos_below_0.5": (sum(v < 0.5 for v in eos_present)
+                                        / len(eos_present))}
+                if eos_present else
+                {"coverage": 0, "n_rows": len(all_rows),
+                 "note": "records predate the termination diagnostic"}),
         },
     }
 
@@ -1456,80 +1771,146 @@ def g_baseline_block(rec, ctx):
     }
 
 
-def g_spillover_block(rec, frozen_rec, ctx, entry_by_id):
-    """PP3: one h-side adapter on the route-g panel, vs FROZEN BASE g.
-
-    The confirmatory reference is always the frozen router.  Everything here is
-    a deviation from it, so a zero flip rate and a zero accuracy change is the
-    null expectation: an edit aimed at h(C->A) should leave g(X->C) alone.
-    """
-    ids = list(ctx["identity_ids"])
-    entry = entry_by_id.get(rec["set_id"]) if rec["set_id"] else None
-    targets = set(entry["assignments"]) if entry else set()
-    per_template = {}
+def _g_pair_rows(rec, ref, ctx, ids):
+    """Per-template flip/distance rows of ``rec`` against ONE reference."""
+    codes = list(ctx["code_of"].values())
+    per_role = {}
     for role in TEMPLATE_ROLES:
-        rows, base = rec["rows"][role], frozen_rec["rows"][role]
-        flips = [i for i in ids if rows[i]["parsed_code"] != base[i]["parsed_code"]]
-        acc = sum(1 for i in ids if rows[i]["parsed_code"] == ctx["code_of"][i])
-        base_acc = sum(1 for i in base
-                       if base[i]["parsed_code"] == ctx["code_of"][i])
+        rows, base = rec["rows"][role], ref["rows"][role]
+        flips = [i for i in ids
+                 if rows[i]["parsed_code"] != base[i]["parsed_code"]]
         dists, unreliable = {}, []
         for iid in ids:
-            m = rv.build_candidate_summary(rows[iid]["probs"],
-                                           list(ctx["code_of"].values()), None)
-            b = rv.build_candidate_summary(base[iid]["probs"],
-                                           list(ctx["code_of"].values()), None)
-            d, ok, why = rv.gated_distance(
-                m, b, "candidate", list(ctx["code_of"].values()),
-                MIN_CANDIDATE_MASS)
+            m = rv.build_candidate_summary(rows[iid]["probs"], codes, None)
+            b = rv.build_candidate_summary(base[iid]["probs"], codes, None)
+            d, ok, why = rv.gated_distance(m, b, "candidate", codes,
+                                           MIN_CANDIDATE_MASS)
             if ok:
                 dists[iid] = d["l2"]
             else:
                 dists[iid] = None
                 unreliable.append({"identity_id": iid, "reason": why})
-        per_template[role] = {
+        established = [v for v in dists.values() if v is not None]
+        per_role[role] = {
             "prediction_flip_rate": len(flips) / len(ids),
             "flipped_ids": flips,
-            "code_accuracy": acc / len(ids),
-            "code_accuracy_change_vs_frozen_g": (acc - base_acc) / len(ids),
-            "mean_candidate_distance_vs_frozen_g": (
-                sum(v for v in dists.values() if v is not None)
-                / len([v for v in dists.values() if v is not None])
-                if any(v is not None for v in dists.values()) else None),
-            "max_candidate_distance_vs_frozen_g": max(
-                [v for v in dists.values() if v is not None], default=None),
+            "per_identity_distance": dists,
+            "mean_candidate_distance": (sum(established) / len(established)
+                                        if established else None),
+            "max_candidate_distance": max(established, default=None),
             "distance_not_established": unreliable,
-            "target_person": {
-                "n": len(targets & set(ids)),
-                "flip_rate": (len([i for i in flips if i in targets])
-                              / len(targets)) if targets else None,
+        }
+    return per_role
+
+
+def g_spillover_block(rec, baseline_rec, frozen_rec, ctx, entry_by_id):
+    """PP3: edit-induced collateral on the route-g panel, DUAL reference.
+
+    CONFIRMATORY -- baseline_h: Delta_g = M_g(h_edited) - M_g(h_baseline).
+    Both operands are code->alias TASK adapters run over the identical image
+    panel, so their difference isolates the edit; the null expectation is
+    flip rate 0 and accuracy change 0.  Comparing h adapters directly to the
+    frozen g adapter cannot isolate anything: frozen g is a DIFFERENT task
+    adapter (image->code), and loading any h adapter in place of it already
+    changes the routed model before any edit is considered.
+
+    DESCRIPTIVE -- frozen g_X_to_C: the same rows against the frozen router,
+    reported as cross-task adapter behavior and the absolute route-g
+    capability reference.  Never used to attribute change to editing.  For
+    baseline_h itself the confirmatory rows are zero by construction and the
+    descriptive rows measure task-adapter replacement ALONE -- the control
+    that makes every other adapter's descriptive block readable.
+    """
+    if baseline_rec is None:
+        raise RuntimeError(
+            "g_spillover_block requires the baseline_h route-g record: "
+            "without a same-family reference every g number would compare "
+            "against a different task adapter and attribute task-adapter "
+            "replacement to the edit")
+    if frozen_rec is None:
+        raise RuntimeError(
+            "g_spillover_block requires the frozen_g record (PP2): the "
+            "descriptive cross-task reference and absolute route-g "
+            "capability ceiling")
+    ids = list(ctx["identity_ids"])
+    entry = entry_by_id.get(rec["set_id"]) if rec["set_id"] else None
+    targets = set(entry["assignments"]) if entry else set()
+    base_pair = _g_pair_rows(rec, baseline_rec, ctx, ids)
+    frozen_pair = _g_pair_rows(rec, frozen_rec, ctx, ids)
+    per_template = {}
+    for role in TEMPLATE_ROLES:
+        rows = rec["rows"][role]
+        acc = sum(1 for i in ids
+                  if rows[i]["parsed_code"] == ctx["code_of"][i])
+        base_acc = sum(1 for i in ids
+                       if baseline_rec["rows"][role][i]["parsed_code"]
+                       == ctx["code_of"][i])
+        frozen_acc = sum(1 for i in ids
+                         if frozen_rec["rows"][role][i]["parsed_code"]
+                         == ctx["code_of"][i])
+        flips = base_pair[role]["flipped_ids"]
+        per_template[role] = {
+            "code_accuracy": acc / len(ids),
+            "confirmatory_vs_baseline_h": {
+                **base_pair[role],
+                "code_accuracy_change": (acc - base_acc) / len(ids),
+                "target_person": {
+                    "n": len(targets & set(ids)),
+                    "flip_rate": (len([i for i in flips if i in targets])
+                                  / len(targets)) if targets else None,
+                },
+                "retained_person": {
+                    "n": len(set(ids) - targets),
+                    "flip_rate": (len([i for i in flips if i not in targets])
+                                  / len(set(ids) - targets))
+                    if (set(ids) - targets) else None,
+                },
             },
-            "retained_person": {
-                "n": len(set(ids) - targets),
-                "flip_rate": (len([i for i in flips if i not in targets])
-                              / len(set(ids) - targets))
-                if (set(ids) - targets) else None,
+            "descriptive_vs_frozen_g": {
+                **frozen_pair[role],
+                "code_accuracy_change": (acc - frozen_acc) / len(ids),
+                "interpretation": (
+                    "cross-task adapter behavior: loading this code->alias "
+                    "adapter in place of the image->code router changes the "
+                    "routed model by itself; this block is descriptive and "
+                    "is never attributed to the edit"),
             },
             "distractor_echoed": [i for i in ids
                                   if rows[i]["distractor_echoed"]],
         }
-    flips = {r: per_template[r]["prediction_flip_rate"] for r in TEMPLATE_ROLES}
+    flips = {r: per_template[r]["confirmatory_vs_baseline_h"][
+        "prediction_flip_rate"] for r in TEMPLATE_ROLES}
     worst_role = max(flips, key=flips.get)
+    desc_flips = {r: per_template[r]["descriptive_vs_frozen_g"][
+        "prediction_flip_rate"] for r in TEMPLATE_ROLES}
     return {
         "model_class": rec["model_class"], "set_id": rec["set_id"],
         "seed": rec["seed"], "checkpoint_sha256": rec["checkpoint_sha256"],
-        "confirmatory_reference": "frozen_g (g_X_to_C)",
-        "null_expectation": ("an edit targeting h(C->A) leaves g(X->C) "
-                             "approximately unchanged: flip rate 0, accuracy "
-                             "change 0"),
+        "confirmatory_reference": (
+            "baseline_h on the identical route-g panel (same code->alias "
+            "adapter family; Delta_g = M_g(h_edited) - M_g(h_baseline))"),
+        "descriptive_reference": (
+            "frozen_g (g_X_to_C): cross-task adapter behavior and absolute "
+            "route-g capability; NOT edit attribution"),
+        "null_expectation": (
+            "an edit targeting h(C->A) leaves route-g behavior approximately "
+            "unchanged RELATIVE TO baseline_h: Delta_g prediction-flip rate "
+            "0, code-accuracy change 0"),
         "per_template": per_template,
         "prediction_flip_rate_by_template": flips,
         "worst_template": worst_role,
         "worst_template_flip_rate": flips[worst_role],
         "max_template_spread_flip_rate": max(flips.values()) - min(flips.values()),
         "worst_template_accuracy_change": min(
-            per_template[r]["code_accuracy_change_vs_frozen_g"]
-            for r in TEMPLATE_ROLES),
+            per_template[r]["confirmatory_vs_baseline_h"][
+                "code_accuracy_change"] for r in TEMPLATE_ROLES),
+        "frozen_g_descriptive": {
+            "prediction_flip_rate_by_template": desc_flips,
+            "worst_template": max(desc_flips, key=desc_flips.get),
+            "worst_template_flip_rate": max(desc_flips.values()),
+            "max_template_spread_flip_rate": (max(desc_flips.values())
+                                              - min(desc_flips.values())),
+        },
     }
 
 
@@ -1657,16 +2038,39 @@ def _panel_out_ds(ds, args):
     return f"{ds}_smoke" if args.smoke else ds
 
 
-def load_route_results(ds_out, route, specs):
-    """Read the stored per-model files for a route.  No GPU, no model load."""
+def load_route_results(ds_out, route, specs, panel, args):
+    """Read the stored per-model files for a route, VALIDATING each one.
+
+    No GPU, no model load -- but aggregation must never trust a cached
+    record only because it is readable: the same checks the evaluation
+    phases apply decide here, and an invalid record is quarantined and
+    reported as pending with its exact reasons, so the report shows an
+    incomplete sweep rather than one built on measurements that no longer
+    correspond to the frozen panel, the checkpoints on disk or the current
+    scorer.
+    """
+    scorer_sha = rv.script_sha256()
+    expected_roles = _roles(args)
     results, pending = {}, []
     for spec in specs:
-        rec = _load_cached(_result_path(ds_out, route, spec["model_id"]))
+        path = _result_path(ds_out, route, spec["model_id"])
+        rec = _load_cached(path)
         if rec is None:
             pending.append({"model_id": spec["model_id"],
                             "reason": "no result file on disk"})
-        else:
+            continue
+        ok, reasons = validate_cached_record(rec, spec, route, panel,
+                                             expected_roles, scorer_sha)
+        if ok:
             results[spec["model_id"]] = rec
+        else:
+            dest = _quarantine_stale(path, reasons)
+            pending.append({"model_id": spec["model_id"],
+                            "reason": "STALE record quarantined as "
+                                      f"{dest.name}: " + "; ".join(reasons)})
+            logger.warning("[%s %s] STALE cached record quarantined as %s: "
+                           "%s", route, spec["model_id"], dest.name,
+                           "; ".join(reasons))
     return results, pending
 
 
@@ -1839,17 +2243,17 @@ def run_pp1(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
                 rec["tolerance"])
         return rec
 
-    results, pending, extras = evaluate_models(
+    results, pending, extras, stale = evaluate_models(
         ds_out, "h", specs, panel, ctx, args, entry_by_id,
         after_first=after_first)
     update_run_manifest(ds, ds_out, panel, provenance, "h", results, t_start,
-                        args)
+                        args, stale=stale)
     eta = print_eta("h", specs, ds_out, label)
     logger.info("PP1 (%s): %d/%d whole-sweep route-h models now on disk, "
                 "%d pending in this shard", label, len(results), len(whole),
                 len(pending))
     return {"results": results, "pending": pending, "agreement": extras,
-            "eta": eta, "specs": whole}
+            "eta": eta, "specs": whole, "stale": stale}
 
 
 def run_pp2(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
@@ -1870,10 +2274,10 @@ def run_pp2(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
         logger.info("PP2 (%s): frozen router belongs to another shard; "
                     "nothing to do", label)
         return {"results": {}, "pending": []}
-    results, pending, _ = evaluate_models(
+    results, pending, _, stale = evaluate_models(
         ds_out, "g", specs, panel, ctx, args, entry_by_id)
     update_run_manifest(ds, ds_out, panel, provenance, "g", results, t_start,
-                        args)
+                        args, stale=stale)
     print_eta("g", _shard(all_g, args), ds_out, label)
     logger.info("PP2 (%s): frozen router evaluated over %d templates x %d "
                 "images", label, len(_roles(args)), len(ctx["identity_ids"]))
@@ -1896,10 +2300,10 @@ def run_pp3(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start):
         specs = _pilot_specs(ds_out, "g", specs, args.pilot)
         logger.info("PP3 pilot (%s): %d of %d shard models", label,
                     len(specs), before)
-    results, pending, _ = evaluate_models(
+    results, pending, _, stale = evaluate_models(
         ds_out, "g", specs, panel, ctx, args, entry_by_id)
     update_run_manifest(ds, ds_out, panel, provenance, "g", results, t_start,
-                        args)
+                        args, stale=stale)
     print_eta("g", specs, ds_out, label)
     logger.info("PP3 (%s): %d/%d whole-sweep route-g models now on disk, "
                 "%d pending in this shard", label, len(results), len(whole),
@@ -1937,6 +2341,34 @@ def _reaggregation_check(path, report):
                      "files alone and can be revised without a GPU")}
 
 
+def _require_g_references(g_results):
+    """The two references a route-g report needs, or a hard stop.
+
+    Frozen g (PP2) is the DESCRIPTIVE cross-task reference and the absolute
+    route-g capability ceiling; baseline_h on the same panel is the
+    CONFIRMATORY reference (Delta_g isolates the edit within one adapter
+    family).  Missing either would make every g number a deviation from the
+    wrong thing.
+    """
+    frozen = g_results.get("frozen_g")
+    if g_results and frozen is None:
+        raise RuntimeError(
+            "route g has results but no frozen_g record.  Frozen base g is "
+            "the descriptive cross-task reference and the absolute route-g "
+            "capability ceiling, so without it the descriptive block would "
+            "be a deviation from nothing; run PP2.")
+    baseline_g = g_results.get("baseline_h")
+    if any(m != "frozen_g" for m in g_results) and baseline_g is None:
+        raise RuntimeError(
+            "route g has adapter results but no baseline_h route-g record.  "
+            "The confirmatory spillover statistic is Delta_g = "
+            "M_g(h_edited) - M_g(h_baseline); without baseline_h on the same "
+            "panel every g number would compare against a DIFFERENT task "
+            "adapter and attribute task-adapter replacement to editing.  "
+            "Run PP3 (its spec list includes baseline_h).")
+    return frozen, baseline_g
+
+
 def run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start,
             cpu_only=False):
     """Aggregate everything on disk into the report.  Never loads a model.
@@ -1950,19 +2382,16 @@ def run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start,
     out_base = _gran_out_base(ds)
     h_specs = h_model_specs(ds, out_base, matrix, args)
     g_specs = g_model_specs(ds, out_base, matrix, args)
-    h_results, h_pending = load_route_results(ds_out, "h", h_specs)
-    g_results, g_pending = load_route_results(ds_out, "g", g_specs)
+    h_results, h_pending = load_route_results(ds_out, "h", h_specs, panel,
+                                              args)
+    g_results, g_pending = load_route_results(ds_out, "g", g_specs, panel,
+                                              args)
     assert_full_panel({"h": h_results, "g": g_results})
     if not h_results and not g_results:
         raise RuntimeError(
             f"{ds_out}: nothing to aggregate; run PP1/PP2/PP3 first")
 
-    frozen = g_results.get("frozen_g")
-    if g_results and frozen is None:
-        raise RuntimeError(
-            "route g has results but no frozen_g record.  Frozen base g is the "
-            "confirmatory spillover reference, so without it every g number "
-            "would be a deviation from nothing; run PP2.")
+    frozen, baseline_g = _require_g_references(g_results)
 
     route_h = aggregate_route_h(ds, h_results, h_pending, len(h_specs), ctx,
                                 entry_by_id) if h_results else None
@@ -1971,7 +2400,8 @@ def run_pp4(args, ds, matrix, ctx, entry_by_id, panel, provenance, t_start,
     for model_id, rec in sorted(g_results.items()):
         if rec["model_class"] == "frozen_g":
             continue
-        spillover[model_id] = g_spillover_block(rec, frozen, ctx, entry_by_id)
+        spillover[model_id] = g_spillover_block(rec, baseline_g, frozen, ctx,
+                                                entry_by_id)
         if rec["model_class"] == "edited" and rec["set_id"]:
             g_refs[model_id] = g_reference_distances(
                 rec,
@@ -2025,12 +2455,44 @@ def build_report(ds, ds_out, panel, route_h, g_baseline, spillover, g_refs,
     """
     claims = build_claims(ds, route_h, g_baseline, spillover, panel)
     g_blocks = {"route_g_baseline": g_baseline,
+                "route_g_preservation_architecture": {
+                    "statement": (
+                        "the E2C pipeline executes the frozen g router (X->C) "
+                        "and the h adapter (C->A) SEQUENTIALLY via an in-place "
+                        "adapter swap; the g checkpoint file is never edited, "
+                        "retrained or replaced by any h-side operation, so "
+                        "route-g preservation under h-side edits is "
+                        "established directly by checkpoint identity, "
+                        "independently of any behavioral probe in this "
+                        "report"),
+                    "g_checkpoint": str(SALMU_ROUTE_G),
+                    "g_checkpoint_sha256": (
+                        rv.sha256_file(SALMU_ROUTE_G)
+                        if SALMU_ROUTE_G.exists() else None),
+                    "pp2_role": ("measures the frozen router's own prompt "
+                                 "sensitivity -- the absolute route-g "
+                                 "capability ceiling"),
+                    "pp3_role": ("Delta_g = M_g(h_edited) - M_g(h_baseline): "
+                                 "the empirical edit-induced collateral probe "
+                                 "WITHIN the h adapter family; frozen-g "
+                                 "deltas are descriptive cross-task adapter "
+                                 "behavior, never edit attribution"),
+                },
                 "route_g_spillover": {
                     "confirmatory_reference":
-                        "frozen_g (g_X_to_C), the only trained visual router",
+                        "baseline_h on the identical route-g panel (same "
+                        "code->alias adapter family): Delta_g = M_g(h_edited) "
+                        "- M_g(h_baseline) isolates the edit",
+                    "descriptive_reference":
+                        "frozen_g (g_X_to_C), the only trained visual router: "
+                        "cross-task adapter behavior and absolute route-g "
+                        "capability; a large frozen-g delta may reflect "
+                        "task-adapter replacement alone and is never "
+                        "attributed to editing",
                     "null_expectation":
-                        "an edit targeting h(C->A) leaves g(X->C) approximately "
-                        "unchanged: prediction-flip rate 0, accuracy change 0",
+                        "an edit targeting h(C->A) leaves route-g behavior "
+                        "approximately unchanged RELATIVE TO baseline_h: "
+                        "Delta_g prediction-flip rate 0, accuracy change 0",
                     "intervention_applied_to_g": False,
                     "per_adapter": spillover,
                     "g_spillover_reference_distance": {
@@ -2077,6 +2539,7 @@ def build_report(ds, ds_out, panel, route_h, g_baseline, spillover, g_refs,
         "scorer_agreement": agreements,
         "scorer_agreement_all_agree": not (disagreeing or []),
         "scorer_agreement_disagreeing": list(disagreeing or []),
+        "scoring_limitation": dict(SCORING_LIMITATION),
         "coverage": {"expected_models": expected, "pending": pending,
                      "checkpoints_sha256": checkpoints,
                      "n_checkpoints": len(checkpoints),
@@ -2116,7 +2579,11 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
         f"{len(g_space['codes'])}-code route-g candidate space, dataset {ds}, "
         f"{n_ids} identities; the panel was frozen and committed before any "
         f"model was evaluated, and no template, threshold or recipe was "
-        f"chosen using it")
+        f"chosen using it.  candidate_mass/other_mass are normalized "
+        f"label-prefix SCORE SUMS without a termination event, not literal "
+        f"probability masses (see scoring_limitation); every threshold "
+        f"applied to them, including min_candidate_mass=0.99, is a score-sum "
+        f"criterion")
 
     cells = (route_h or {}).get("edited_cells", {})
     signs = [c["delta_retrain_sign_preserved_across_templates"]
@@ -2328,19 +2795,32 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
         route_g_baseline_claim = "route g baseline: not evaluated in this run"
 
     if spillover:
+        adapters = {k: b for k, b in spillover.items()
+                    if b["model_class"] != "baseline"}
         flips = _nums([b["worst_template_flip_rate"]
-                       for b in spillover.values()])
+                       for b in adapters.values()])
         changes = _nums([b["worst_template_accuracy_change"]
-                         for b in spillover.values()])
+                         for b in adapters.values()])
+        replacement = _nums([
+            b["frozen_g_descriptive"]["worst_template_flip_rate"]
+            for b in spillover.values()])
         route_g_spillover_claim = (
-            f"route g cross-route spillover (no intervention on g): "
-            f"{len(spillover)} h-side adapters loaded onto the same base model "
-            f"and run over the identical panel reach a worst-template "
-            f"prediction-flip rate of {_f(max(flips) if flips else None)} and "
-            f"a worst-template code-accuracy change of "
-            f"{_f(min(changes) if changes else None)} relative to frozen base "
-            f"g; the null expectation is that an h-targeted edit leaves the "
-            f"visual router approximately unchanged")
+            f"route g edit-induced collateral (confirmatory; no intervention "
+            f"on g): Delta_g = M_g(h_adapter) - M_g(h_baseline) over the "
+            f"identical panel reaches a worst-template prediction-flip rate "
+            f"of {_f(max(flips) if flips else None)} and a worst-template "
+            f"code-accuracy change of {_f(min(changes) if changes else None)} "
+            f"across {len(adapters)} h-side adapters; the null expectation is "
+            f"that an h-targeted edit leaves route-g behavior approximately "
+            f"unchanged relative to baseline_h.  Descriptively, replacing the "
+            f"frozen image->code router with ANY h adapter moves behavior by "
+            f"up to {_f(max(replacement) if replacement else None)} "
+            f"worst-template flip rate -- task-adapter replacement, not edit "
+            f"attribution -- and the frozen router's own PP2 accuracy remains "
+            f"the absolute route-g capability ceiling.  Architecturally the "
+            f"pipeline executes frozen g and the h adapter sequentially and "
+            f"the g checkpoint is unchanged, so route-g preservation rests on "
+            f"checkpoint identity, with Delta_g as the empirical probe")
     else:
         route_g_spillover_claim = "route g spillover: not evaluated in this run"
 
@@ -2348,6 +2828,11 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
         ("no intervention of any kind was applied to the visual router -- no "
          "edit, no unlearning run, no g-specific matched or LOO retraining -- "
          "so no route-g number describes one"),
+        ("frozen-g comparisons are DESCRIPTIVE cross-task adapter behavior: "
+         "loading any h adapter in place of the image->code router changes "
+         "the routed model by itself, so no frozen-g delta is evidence about "
+         "editing; the confirmatory collateral statistic is Delta_g against "
+         "baseline_h"),
         ("distances between h-side adapters measured on route-g prompts are "
          "reported as g_spillover_reference_distance, a cross-route reference "
          "comparison; they are not oracle distances and support no claim "
@@ -2377,7 +2862,7 @@ def _log_headline(report):
 
 
 def update_run_manifest(ds, ds_out, panel, provenance, route, results,
-                        t_start, args):
+                        t_start, args, stale=None):
     """Cumulative provenance for a resumable, multi-process sweep.
 
     Each phase may run in its own process, so the manifest merges rather than
@@ -2411,6 +2896,9 @@ def update_run_manifest(ds, ds_out, panel, provenance, route, results,
             set((existing.get("routes_executed") or []) + [route])),
         "checkpoints_sha256": checkpoints,
         "results": {"n_checkpoints_evaluated": len(checkpoints)},
+        "stale_records_quarantined": (
+            (existing.get("stale_records_quarantined") or [])
+            + list(stale or [])),
         "cumulative_elapsed_sec": round(
             (existing.get("cumulative_elapsed_sec") or 0.0)
             + (time.time() - t_start), 1),
@@ -2535,8 +3023,12 @@ def parse_args():
     p.add_argument("--eta-only", action="store_true",
                    help="CPU only: print ETAs from timings already on disk")
     p.add_argument("--refreeze", action="store_true",
-                   help="PP0 only: overwrite an already-frozen panel. Any "
-                        "result produced against the old digest is invalid.")
+                   help="PP0 only: PROVENANCE-ONLY rewrite of the frozen "
+                        "panel. Measurement content must be byte-identical "
+                        "(content digest); a content change is refused as a "
+                        "new panel. The previous whole-file digest moves to "
+                        "refreeze_history and records pinned to it stay "
+                        "valid.")
     return p.parse_args()
 
 
