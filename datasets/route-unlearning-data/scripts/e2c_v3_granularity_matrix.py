@@ -2118,6 +2118,10 @@ def aggregate_gx(ds, out_base, matrix, args=None):
     #: comparison, and reporting the two together is what makes a 117/120
     #: result read as three failures.
     not_established = [p for p in gate_per if p["delta_retrain_l2"] is None]
+    #: The sets a declared sensitivity analysis would have to cover.  Derived
+    #: from the rows, never hardcoded, so it cannot drift from the gate.
+    uncovered_sets = sorted({p["cell_id"].rsplit("__seed", 1)[0]
+                             for p in not_established})
     if not gate_per:
         g3_1_gate = {"status": "no_transformation_targets_evaluated"}
     elif not have:
@@ -2186,6 +2190,20 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                     "coverage may be widened only by a DECLARED sensitivity "
                     "analysis that reports every outcome; a favorable oracle "
                     "seed must never be substituted into this primary gate"),
+                "sensitivity_analysis_available": (
+                    "GX2S trains matched_retrain and loo_retrain at ORACLE "
+                    "seeds 42 and 123 and writes a SEPARATE report "
+                    "(oracle_seed_sensitivity_<dataset>.json); it neither "
+                    "reads nor writes the gate above, so it cannot change this "
+                    "verdict.  A declared sensitivity analysis over the "
+                    f"uncovered set(s) {uncovered_sets} is available at "
+                    "'--phase GX2S --only-sets "
+                    f"{' '.join(uncovered_sets + sorted(BALANCED_REP_SETS.get(ds, [])))}'"
+                    ".  --only-sets MUST also name the already-covered "
+                    "representatives: the GX2S report is rebuilt from the sets "
+                    "given on the command line, so naming only the new set "
+                    "would silently drop the existing pairs.  Every outcome "
+                    "is reported, favorable or not."),
             },
             "per_target": gate_per}
 
@@ -2256,9 +2274,14 @@ def aggregate_gx(ds, out_base, matrix, args=None):
             for (sid, t), seeds in sorted(by_target.items())) or "none"
         causes = sorted({r["why_no_loo_retrain_distance"] or "not recorded"
                          for r in cov["not_established"]})
+        # Quoted verbatim and counted, because two causes that differ only in a
+        # recorded digit read as a stutter unless the report says they are two.
+        cause_text = (f"{len(causes)} distinct cause(s) recorded by the frozen "
+                      f"distance gate: " + "; ".join(causes)) \
+            if causes else "no cause recorded"
     else:
         n_est = n_ne = n_bad = None
-        uncovered_detail = causes = None
+        uncovered_detail = cause_text = None
 
     if g3_1_gate.get("passed"):
         oracle_separation_claim = (
@@ -2282,8 +2305,7 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                f", but {n_bad} of the established comparisons FAIL the "
                f"conditions")
             + f".  It is NOT established for the remaining {n_ne}: "
-            f"{uncovered_detail}.  The frozen distance gate records the cause "
-            f"per target: {'; '.join(causes)}.  The G3.1 gate reports "
+            f"{uncovered_detail}.  {cause_text}.  The G3.1 gate reports "
             f"passed=false because it requires EVERY transformation target"
             + (" -- it did not fail on any measured comparison"
                if not n_bad else "")

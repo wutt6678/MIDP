@@ -509,14 +509,21 @@ _REAL_LOO_CAUSE = (
 
 
 def _two_seed_run(out_base, retrain_by_seed, cause=None):
-    """A matrix of one cell per given seed, with the LOO distances asked for."""
+    """A matrix of one cell per given seed, with the LOO distances asked for.
+
+    ``cause`` is either one reason string for every uncovered seed or a
+    ``{seed: reason}`` map, so a test can put two DISTINCT recorded causes in
+    front of the claim that counts them.
+    """
     (out_base / "cells").mkdir(parents=True, exist_ok=True)
     for seed, retrain in sorted(retrain_by_seed.items()):
         c = _mk_cell(seed=seed, retrain=retrain)[0]
         if cause is not None and retrain[1] is None:
+            this_cause = cause.get(seed, cause) if isinstance(cause, dict) \
+                else cause
             for fam in c["oracle_families"].values():
                 if not fam["loo_retrain"]["reliable"]:
-                    fam["loo_retrain"]["reason"] = cause
+                    fam["loo_retrain"]["reason"] = this_cause
         d = out_base / "cells" / c["set_id"] / f"seed_{seed}"
         d.mkdir(parents=True, exist_ok=True)
         with open(d / "cell_results.json", "w") as f:
@@ -540,18 +547,23 @@ def test_a_coverage_gap_is_not_reported_as_a_failed_separation(tmp_path):
     ``passed`` is false -- but nothing failed.  Reporting the two together
     reads as a broken separation and hides a complete behavioral matrix.
     """
-    matrix = _two_seed_run(tmp_path, {17: (0.001, 1.3), 42: (0.001, None)},
-                           cause=_REAL_LOO_CAUSE)
+    matrix = _two_seed_run(
+        tmp_path, {17: (0.001, 1.3), 42: (0.001, None), 123: (0.001, None)},
+        cause={42: _REAL_LOO_CAUSE,
+               123: _REAL_LOO_CAUSE.replace("model=9.998e-01",
+                                            "model=9.997e-01")})
     s = gxm.aggregate_gx("celeba_numeric", tmp_path, matrix)
     gate = s["g3_1_gate"]
     assert gate["passed"] is False, "the frozen gate requires EVERY target"
     cov = gate["coverage"]
     assert cov["gate_fails_on"] == "coverage"
     assert cov["n_separation_established"] == 1
-    assert cov["n_separation_not_established"] == 1
+    assert cov["n_separation_not_established"] == 2
     assert cov["n_established_and_failing"] == 0
     assert cov["established_and_failing"] == []
-    row = cov["not_established"][0]
+    by_seed = {r["seed"]: r for r in cov["not_established"]}
+    assert sorted(by_seed) == [42, 123]
+    row = by_seed[42]
     assert row["target"] == "i1" and row["seed"] == 42
     assert row["l2_to_loo_retrain"] is None
     # the matched side is fine: the edit IS extremely close to matched retrain,
@@ -566,21 +578,34 @@ def test_a_coverage_gap_is_not_reported_as_a_failed_separation(tmp_path):
     assert "not of an unfinished job" in cov["not_a_pending_job"]
     assert "never be substituted into this primary gate" \
         in cov["no_seed_substitution"]
+    # the sensitivity route is named from the rows, with the trap that goes
+    # with it: GX2S rebuilds its report from --only-sets, so naming just the
+    # uncovered set would drop the pairs already established
+    sens = cov["sensitivity_analysis_available"]
+    assert "--phase GX2S --only-sets sX" in sens
+    assert "neither reads nor writes the gate above" in sens
+    assert "MUST also name the already-covered representatives" in sens
+    assert "favorable or not" in sens
     # per-target rows carry the same decomposition
     per = {p["seed"]: p for p in gate["per_target"]}
     assert per[17]["delta_retrain_established"] is True
     assert per[42]["delta_retrain_established"] is False
+    assert per[123]["delta_retrain_established"] is False
     assert per[42]["loo_retrain_reliable"] is False
 
     claims = s["claims"]
-    assert "All 2 cells of the full 2-cell celeba_numeric matrix satisfy the " \
+    assert "All 3 cells of the full 3-cell celeba_numeric matrix satisfy the " \
         "frozen behavioral criteria" in claims["behavioral_claim"]
     assert "BEHAVIORAL conclusion" in claims["behavioral_claim"]
     sep = claims["oracle_separation_claim"]
-    assert "established for 1 of 2 target-seed comparisons" in sep
-    assert "It is NOT established for the remaining 1" in sep
-    assert "target i1 in sX at edit seed(s) [42]" in sep
-    assert "candidate mass too small to renormalize" in sep
+    assert "established for 1 of 3 target-seed comparisons" in sep
+    assert "It is NOT established for the remaining 2" in sep
+    assert "target i1 in sX at edit seed(s) [42, 123]" in sep
+    # the count is computed, not hardcoded: two seeds recorded two causes that
+    # differ only in a digit, and quoting both without saying they are two
+    # reads as a stutter
+    assert "2 distinct cause(s) recorded by the frozen distance gate" in sep
+    assert "model=9.998e-01" in sep and "model=9.997e-01" in sep
     assert "did not fail on any measured comparison" in sep
     assert "until it happens to pass is not a repair" in sep
     rt = claims["retraining_claim"]
