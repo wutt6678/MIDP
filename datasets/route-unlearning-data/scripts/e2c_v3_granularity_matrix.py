@@ -235,6 +235,7 @@ def _cumulative_elapsed(artifact_path, t_start, device_now=None):
     this_pass = round(time.time() - t_start, 1)
     path = Path(artifact_path)
     prior, devices, carried = 0.0, [], None
+    carried_gap = None
     prev_named_a_device = False
     note = "no earlier artifact at this path: this pass is the whole total"
     if path.exists():
@@ -245,6 +246,7 @@ def _cumulative_elapsed(artifact_path, t_start, device_now=None):
                            or ([prev["gpu"]] if prev.get("gpu") else []))
             prev_named_a_device = bool(devices)
             carried = prev.get("elapsed_restoration")
+            carried_gap = prev.get("elapsed_device_coverage")
             note = ("prior elapsed_sec read from the artifact this pass "
                     "overwrites")
         except Exception as exc:
@@ -265,7 +267,13 @@ def _cumulative_elapsed(artifact_path, t_start, device_now=None):
     }
     if devices:
         out["devices_used"] = devices
-    if prior > 0.0 and not prev_named_a_device:
+    if carried_gap:
+        # Once recorded, never dropped.  Recomputing this from the predecessor
+        # cannot work: the first pass to inherit the gap writes a devices_used
+        # of its own, and every later pass then reads that list as coverage of
+        # a cost it does not cover.
+        out["elapsed_device_coverage"] = carried_gap
+    elif prior > 0.0 and not prev_named_a_device:
         # The cost of the earlier passes is carried, but they recorded no
         # device, so devices_used cannot vouch for what produced it.  Saying
         # "cpu" beside a 5,654s prior would describe GPU training as CPU work.

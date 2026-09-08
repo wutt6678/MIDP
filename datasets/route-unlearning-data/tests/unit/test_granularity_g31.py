@@ -835,6 +835,16 @@ def test_cumulative_elapsed_never_erases_the_cost_of_an_earlier_pass(tmp_path):
         json.dump({"elapsed_sec": 10.0, "devices_used": ["cpu"]}, f)
     assert "elapsed_device_coverage" not in gxm._cumulative_elapsed(
         path, time.time(), "cpu")
+    # a RECORDED gap is carried, never recomputed: the pass that first inherits
+    # it writes its own devices_used, which every later pass would otherwise
+    # read as coverage of a cost that list does not cover
+    gap = "the 5654.5s in elapsed_prior_passes_sec was GPU work"
+    with open(path, "w") as f:
+        json.dump({"elapsed_sec": 5672.1, "devices_used": ["cpu"],
+                   "elapsed_device_coverage": gap}, f)
+    out6 = gxm._cumulative_elapsed(path, time.time() - 1.0, "cpu")
+    assert out6["elapsed_device_coverage"] == gap
+    assert out6["elapsed_prior_passes_sec"] == 5672.1
     # a restoration note is carried forward rather than dropped
     with open(path, "w") as f:
         json.dump({"elapsed_sec": 100.0,
