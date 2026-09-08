@@ -2324,6 +2324,51 @@ def archive_mb(ds, out_base, man, commit, report_path=None):
     return manifest
 
 
+def _cumulative_elapsed(out_base, t_start):
+    """Wall-clock spent on this experiment across passes, and this pass's own.
+
+    ``cumulative_elapsed_sec`` used to be ``time.time() - t_start`` for the
+    invoking pass alone, so a 5.2s CPU re-aggregation of a comparison whose
+    rows cost 14138.9s to train rewrote the manifest to say the whole
+    experiment took 5.2 seconds -- the same misreading the report's
+    ``training_time`` fix exists to prevent, in the file that states the
+    experiment's total cost.  A number named cumulative has to accumulate, and
+    a pass that cannot read its predecessor says so rather than restarting
+    from zero and silently understating the total.
+    """
+    this_pass = round(time.time() - t_start, 1)
+    path = Path(out_base) / "run_manifest.json"
+    prior, carried = 0.0, None
+    note = "no earlier run_manifest.json: this pass is the whole total"
+    if path.exists():
+        try:
+            prev = json.loads(path.read_text(encoding="utf-8"))
+            prior = float(prev.get("cumulative_elapsed_sec") or 0.0)
+            carried = prev.get("elapsed_restoration")
+            note = ("prior cumulative_elapsed_sec read from the manifest this "
+                    "pass overwrites")
+        except Exception as exc:
+            note = (f"the earlier manifest was UNREADABLE ({exc!r}), so the "
+                    "total restarts at this pass and UNDERSTATES every run "
+                    "before it")
+    out = {
+        "cumulative_elapsed_sec": round(prior + this_pass, 1),
+        "elapsed_this_pass_sec": this_pass,
+        "elapsed_prior_passes_sec": prior,
+        "elapsed_covers": ("wall-clock of every MB pass that wrote this "
+                           "manifest, CPU re-aggregations included; it is "
+                           "neither GPU time nor the sum of the rows' "
+                           "training time, which the report's training_time "
+                           "leaves carry per row"),
+        "elapsed_accumulation": note,
+    }
+    if carried:
+        # A total that was once repaired by hand keeps saying so: dropping the
+        # note would let the restored number pass for one this pass measured.
+        out["elapsed_restoration"] = carried
+    return out
+
+
 def run_mb2(args, ds, man, out_base, provenance, commit, t_start,
             stale=None):
     agg = aggregate_mb(args, ds, man, out_base)
@@ -2419,7 +2464,7 @@ def run_mb2(args, ds, man, out_base, provenance, commit, t_start,
         "cross_checks": agg["cross_checks"],
         "cache_validation": cache_block,
         "archive": report["archive"],
-        "cumulative_elapsed_sec": round(time.time() - t_start, 1),
+        **_cumulative_elapsed(out_base, t_start),
         "updated_at": datetime.now(timezone.utc).isoformat(
             timespec="seconds"),
     }

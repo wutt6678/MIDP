@@ -2648,6 +2648,70 @@ def test_a_smoke_report_never_lands_on_the_real_report_path(
     assert json.loads(real.read_text(encoding="utf-8"))["smoke"] is False
 
 
+# ------------------------------------------------------------------ #
+# the manifest's total cost has to survive a cheap re-aggregation
+# ------------------------------------------------------------------ #
+def _manifest(run):
+    return json.loads((run.out_base / "run_manifest.json").read_text(
+        encoding="utf-8"))
+
+
+def test_a_reaggregation_does_not_restate_the_experiment_as_its_own_duration(
+        tmp_path, monkeypatch):
+    """A 5s CPU pass over rows that cost hours must not report seconds.
+
+    ``cumulative_elapsed_sec`` was this pass's own wall-clock, so the MB2
+    re-aggregation of the salmu comparison rewrote 14138.9 to 5.2 -- the file
+    that states the experiment's total cost then said the 39-row comparison
+    took five seconds.
+    """
+    man, matrix, ctx = _design(DS_NUM)
+    run = _drive(tmp_path, monkeypatch, DS_NUM, man, matrix, ctx,
+                 only_sets=[NARROW], only_rows=["sft_target"],
+                 out_base=tmp_path / "elapsed")
+    # the manifest an MB1+MB2 pass would have left behind (MB1 alone writes
+    # none, so the predecessor is stated rather than driven)
+    (run.out_base / "run_manifest.json").write_text(json.dumps({
+        "experiment": f"e2c_v3_method_baselines_{DS_NUM}",
+        "rows_evaluated": 39,
+        "cumulative_elapsed_sec": 14138.9,
+        "elapsed_restoration": "restored from the chain log",
+    }, indent=2) + "\n", encoding="utf-8")
+    _attach(monkeypatch, run)
+    _mb2(tmp_path, monkeypatch, run)
+    man2 = _manifest(run)
+    assert man2["elapsed_prior_passes_sec"] == 14138.9
+    # the helper drives MB2 with a fixed fake t_start, so this pass's own
+    # duration is arbitrary; what is asserted is that the total is the prior
+    # passes PLUS this one, and never this one alone
+    assert man2["cumulative_elapsed_sec"] == round(
+        14138.9 + man2["elapsed_this_pass_sec"], 1)
+    assert man2["cumulative_elapsed_sec"] > 14138.9
+    assert "prior cumulative_elapsed_sec" in man2["elapsed_accumulation"]
+    # and it says what the number is, so it is not read as GPU time or as the
+    # rows' training time
+    assert "neither GPU time" in man2["elapsed_covers"]
+    # a total repaired by hand keeps saying it was repaired, so the restored
+    # number cannot pass for one this pass measured
+    assert man2["elapsed_restoration"] == "restored from the chain log"
+
+
+def test_an_unreadable_predecessor_manifest_is_reported_not_silently_zeroed(
+        tmp_path, monkeypatch):
+    man, matrix, ctx = _design(DS_NUM)
+    run = _drive(tmp_path, monkeypatch, DS_NUM, man, matrix, ctx,
+                 only_sets=[NARROW], only_rows=["sft_target"],
+                 out_base=tmp_path / "corrupt")
+    (run.out_base / "run_manifest.json").write_text(
+        "{ not json", encoding="utf-8")
+    _attach(monkeypatch, run)
+    _mb2(tmp_path, monkeypatch, run)
+    man2 = _manifest(run)
+    assert man2["elapsed_prior_passes_sec"] == 0.0
+    assert "UNREADABLE" in man2["elapsed_accumulation"]
+    assert "UNDERSTATES" in man2["elapsed_accumulation"]
+
+
 def _no_hf_upload(monkeypatch):
     """No test may touch the network or the real archive repository."""
     fake = types.ModuleType("huggingface_hub")
