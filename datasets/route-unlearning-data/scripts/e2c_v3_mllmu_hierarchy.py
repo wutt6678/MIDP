@@ -25,6 +25,9 @@ THE SEVEN GATES (all fail-closed unless a gate says WARN):
       rejects a label that is its own ancestor and a repeated label in a chain;
   G4  no identity assigned to incompatible branches -- one profession has
       exactly one chain, and no identity's chain contradicts another's;
+  G4b two distinct professions mapped to the SAME external occupation id are
+      reported (warn by default): legitimate synonyms, but one transformation
+      target, so a matrix counting them twice overstates its coverage;
   G5  ambiguous professions excluded from confirmatory cells -- mapping_type
       "ambiguous" REQUIRES reviewer_decision "excluded" plus a reason;
   G6  each evaluated parent has at least one retained sibling WHEN POSSIBLE --
@@ -116,6 +119,10 @@ REQUIRED_RECORD_FIELDS = (
 #: WARN, not FAIL: a parent with no retained sibling is a coverage limit the
 #: matrix has to report, exactly as the numeric G5 run reported its 117/120.
 G6_IS_A_WARN = True
+#: Two professions sharing one SOC code are synonyms, which is legitimate; the
+#: warning exists so a matrix builder does not count them as two targets.  Set
+#: False to make it a hard gate.
+G4B_IS_A_WARN = True
 
 
 # ====================================================================== #
@@ -673,6 +680,40 @@ def run_gates(records, table, selected_targets=None, retained_ids=None):
                       "is assigned to two level-1 branches"),
     }
 
+    # ---- G4b: distinct labels collapsing onto one occupation ------------ #
+    # G4 keys on the normalized LABEL, so it cannot see two different labels
+    # that a reviewer maps to the SAME SOC code.  That is legitimate -- MLLMU's
+    # "Software Engineer" and "Software Developer" really are one occupation,
+    # 15-1252 -- but it is not neutral downstream: both produce the identical
+    # chain, so a matrix that treats them as two professions is testing one
+    # transformation twice and over-reporting its coverage.  Warn, and say so.
+    by_code = collections.defaultdict(set)
+    for r in records:
+        if r["reviewer_decision"] == "retained" and r.get("external_occupation_id"):
+            by_code[r["external_occupation_id"]].add(r["normalized_label"])
+    shared_codes = {c: sorted(v) for c, v in sorted(by_code.items())
+                    if len(v) > 1}
+    g4b = [f"{code}: {len(labels)} distinct professions map here "
+           f"({', '.join(repr(x) for x in labels)}), so they are ONE "
+           f"transformation target, not {len(labels)}"
+           for code, labels in shared_codes.items()]
+    g4bw = list(g4b)
+    warnings.extend(g4bw)
+    gates["G4b_no_duplicate_targets"] = {
+        "passed": not g4b or G4B_IS_A_WARN, "n_issues": len(g4b),
+        "issues": [] if G4B_IS_A_WARN else g4b,
+        "warnings": g4bw, "warn_only": G4B_IS_A_WARN,
+        "shared_codes": shared_codes,
+        "criterion": ("two distinct professions sharing one external "
+                      "occupation id are reported, because a matrix builder "
+                      "must count them as a single transformation target"),
+        "consequence": (
+            "Not a defect in the hierarchy -- synonyms are expected.  It is a "
+            "constraint on target selection: G6.1 must pick at most one label "
+            "per external occupation id, or its cell count overstates how many "
+            "distinct transformations were tested."),
+    }
+
     # ---- G5: ambiguous excluded from confirmatory cells ---------------- #
     g5 = []
     ambiguous = [r for r in records if r["mapping_type"] == "ambiguous"]
@@ -864,6 +905,11 @@ def freeze_hierarchy(table, records, gates, selected_targets=None,
         "records": records,
         "n_records": len(records),
         "n_retained": len(retained),
+        # gates["gates"] -- the per-gate map, not the top-level result dict;
+        # reading the wrong level silently recorded no duplicates at all.
+        "duplicate_targets": (gates.get("gates", {})
+                              .get("G4b_no_duplicate_targets", {})
+                              .get("shared_codes", {})),
         "n_ambiguous_excluded": sum(
             1 for r in records if r["mapping_type"] == "ambiguous"),
         "retained_labels": sorted(r["original_label"] for r in retained),

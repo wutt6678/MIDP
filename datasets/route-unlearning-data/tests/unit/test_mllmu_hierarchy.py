@@ -590,6 +590,63 @@ def test_the_proposal_csv_leaves_every_decision_blank(tmp_path, monkeypatch):
     assert set(mh.PROPOSAL_COLUMNS) <= set(rows[0])
 
 
+def test_g4b_reports_two_professions_collapsing_onto_one_code(tmp_path, monkeypatch):
+    """Synonyms are legitimate, but they are ONE target, not two.
+
+    G4 keys on the normalized label, so it cannot see "Software Engineer" and
+    "Software Developer" both mapped to 15-1252.  Left unreported, a matrix
+    would test the same transformation twice and count it as two professions.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+
+    def rec(label, mtype):
+        return mh.build_record(label, table, mtype, external_code="15-1252",
+                               confidence=0.9, reviewer_decision="retained",
+                               reviewer="test")
+
+    gates = mh.run_gates([rec("Software Developer", "synonym")], table)
+    assert gates["gates"]["G4b_no_duplicate_targets"]["shared_codes"] == {}
+    assert gates["gates"]["G4b_no_duplicate_targets"]["warnings"] == []
+
+    both = [rec("Software Developer", "synonym"), rec("Software Engineer", "manual")]
+    gates = mh.run_gates(both, table)
+    g4b = gates["gates"]["G4b_no_duplicate_targets"]
+    assert g4b["shared_codes"] == {"15-1252": ["software developer",
+                                               "software engineer"]}
+    assert g4b["warn_only"] is True
+    assert g4b["passed"] is True, "a warning must not fail the freeze"
+    assert "ONE transformation target, not 2" in g4b["warnings"][0]
+    assert "overstates" in g4b["consequence"]
+    assert any("15-1252" in w for w in gates["warnings"])
+    # G4 itself stays silent: the labels differ, so it genuinely cannot see this
+    assert gates["gates"]["G4_no_incompatible_branches"]["passed"] is True
+
+    # the guard is not vacuous: as a hard gate it fails
+    monkeypatch.setattr(mh, "G4B_IS_A_WARN", False)
+    hard = mh.run_gates(both, table)["gates"]["G4b_no_duplicate_targets"]
+    assert hard["passed"] is False and hard["issues"]
+
+
+def test_duplicate_targets_are_carried_into_the_frozen_artifact(tmp_path, monkeypatch):
+    """The constraint travels with the artifact, not just the run log."""
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+
+    def rec(label, mtype):
+        return mh.build_record(label, table, mtype, external_code="15-1252",
+                               confidence=0.9, reviewer_decision="retained",
+                               reviewer="test")
+
+    records = [rec("Software Developer", "synonym"),
+               rec("Software Engineer", "manual")]
+    gates = mh.run_gates(records, table)
+    art = mh.freeze_hierarchy(table, records, gates,
+                              path=tmp_path / "hier.json")
+    assert art["duplicate_targets"] == {"15-1252": ["software developer",
+                                                     "software engineer"]}
+
+
 # ---------------------------------------------------------------------- #
 # freeze / verify
 # ---------------------------------------------------------------------- #
