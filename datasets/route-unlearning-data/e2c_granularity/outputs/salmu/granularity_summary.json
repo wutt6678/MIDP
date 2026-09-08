@@ -70,7 +70,8 @@
       "not_established": [],
       "meaning": "'not established' is NOT 'failed'.  A null delta_retrain_l2 means the frozen MIN_CANDIDATE_MASS=0.01 distance gate refused to renormalize the loo_retrain distribution at that target, so there is no LOO distance to compare against and no comparison was made.  The gate above requires EVERY transformation target, so an incomplete coverage makes passed=false on its own even when not one established comparison failed.",
       "not_a_pending_job": "the loo_retrain reference for these targets IS trained and committed at the frozen protocol (3000/200/2e-05, repeat 50, seed 17); re-running it at that protocol reproduces the same candidate-score support, so the gap is a property of the frozen reference and not of an unfinished job",
-      "no_seed_substitution": "coverage may be widened only by a DECLARED sensitivity analysis that reports every outcome; a favorable oracle seed must never be substituted into this primary gate"
+      "no_seed_substitution": "coverage may be widened only by a DECLARED sensitivity analysis that reports every outcome; a favorable oracle seed must never be substituted into this primary gate",
+      "sensitivity_analysis_available": "coverage is COMPLETE: every transformation target has an established matched-vs-LOO comparison, so no sensitivity analysis is pending and none could widen this gate.  GX2S (oracle seeds 42/123, separate report, never reads or writes this gate) remains available as an ablation over the representative sets if a seed-dependence question is asked later."
     },
     "per_target": [
       {
