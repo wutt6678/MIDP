@@ -3,16 +3,16 @@
   "dataset": "salmu",
   "produced_by": "scripts/e2c_v3_prompt_panel.py",
   "mode": "cpu_reaggregation",
-  "generated_at": "2026-09-08T05:13:21+00:00",
+  "generated_at": "2026-09-08T11:11:11+00:00",
   "provenance": {
     "phase": "PPR",
-    "commit": "8b80908981b82e574b3b974d6b52e937b99f47cd",
-    "runner_script_sha256": "1a06c95a33059aa0d9aa232f529b1fd8c6b027aa4f8ba1d691b135ad1e08a5f7",
+    "commit": "83306e391eb2274e476d02fc3be8583a2272445c",
+    "runner_script_sha256": "1a0392b4def67089c4c9ea3139e9f8fd1a564f13e130425a45d82add9a2f2e97",
     "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
     "dirty": true,
     "dirty_executed_code": [],
     "clean_code_required": true,
-    "started_utc": "2026-09-08T05:13:19Z",
+    "started_utc": "2026-09-08T11:11:09Z",
     "device": "cpu",
     "shard": "unsharded"
   },
@@ -253,7 +253,7 @@
   "scoring_limitation": {
     "missing_termination_event": true,
     "candidate_mass_is": "sum of normalized label-prefix scores WITHOUT a termination event; NOT a literal probability mass -- overlapping candidate strings can sum above 1",
-    "other_mass_is": "1 - candidate score sum; can be negative when overlapping prefixes push the sum above 1",
+    "other_mass_is": "clamped to zero when the candidate score sum reaches or passes 1 -- the shared scorer computes max(0.0, 1 - candidate_score_sum) in rv.build_candidate_summary -- and is NOT complementary probability mass: a zero here says the overlapping prefixes summed to at least one, not that nothing lies outside the candidate set",
     "consequence": "normalized candidate-score comparisons and gated distances remain useful and comparable to every existing artifact, but any threshold on candidate_mass (e.g. the frozen min_candidate_mass=0.99 interpretability criterion) is a threshold on a SCORE SUM, not on a probability",
     "report_layer_naming": {
       "report_fields_are_named": "*_candidate_score_sum / *_other_score_sum",
@@ -86445,7 +86445,7 @@
   "claims": {
     "scope": "every number in this report was measured on the 6 pre-frozen prompt templates (canonical, concise_paraphrase, question_form, instruction_form, format_variation, distractor) over the 30-label route-h candidate space and the 12-code route-g candidate space, dataset salmu, 12 identities; the panel was frozen and committed before any model was evaluated, and no template, threshold or recipe was chosen using it.  The candidate and other quantities are normalized label-prefix SCORE SUMS without a termination event, not literal probability masses (see scoring_limitation), so the report layer names them *_score_sum while the cached rows keep the project-wide candidate_mass field; every threshold applied to them, including the frozen min_candidate_mass=0.99 criterion, is a score-sum criterion",
     "route_h_prompt_support": "route h prompt support (read this before any other route-h number): 1 of the 6 templates carry an interpretable retraining comparison for at least one edited cell [canonical 63/63 cells].  A comparison is interpretable when the edit and matched_retrain rows clear the frozen min_candidate_mass=0.99 criterion and the loo_retrain row clears the 0.01 distance gate; loo is held to the gate alone because it never saw the target mapping and its drift there is the deletion reference the project's own oracle fit gate already expects, so requiring 0.99 of it would apply the criterion to the one row the project exempts.  The never-edited baseline_h is off support on 5 of 6 templates [concise_paraphrase (1/1 models), question_form (1/1 models), instruction_form (1/1 models), format_variation (1/1 models), distractor (1/1 models)], reaching a minimum candidate score sum of 0.0003 away from canonical, where its strict accuracy is 1.0000 on canonical and at best 0.083 on the other 5.  0 template(s) are off support for edited models but not for the baseline: prompt sensitivity in this sweep is a property of how route h is TRAINED and the panel cannot attribute it to the edit.",
-    "route_h": "route h (code -> alias): Delta_retrain = D(edit, loo_retrain) - D(edit, matched_retrain) is interpreted only where the compared rows support it, which is 1 of the 6 templates [canonical 63/63 cells]; there it stays positive in 63 of 63 cells with a worst case of 1.1237, against 1.1237 on the canonical prompt alone, so the retraining-equivalence finding is robust across the templates whose comparisons remain interpretable.  The unrestricted worst case over all 6 templates is -1.1995 with the sign holding in 0 of 63 cells, but the templates that make it worse are off support, where a renormalized distance compares two artifacts rather than two behaviors, so those values are reported and not interpreted.  Worst-case strict desired-label accuracy on transformation targets is 0.0000 and worst-case hard source leakage is 0.3333",
+    "route_h": "route h (code -> alias): Delta_retrain = D(edit, loo_retrain) - D(edit, matched_retrain) is interpreted only where the compared rows support it, which is 1 of the 6 templates [canonical 63/63 cells]; there it stays positive in 63 of 63 cells with a worst case of 1.1237, against 1.1237 on the canonical prompt alone, so the retraining-equivalence finding is established on the canonical prompt alone, where the matched-vs-LOO result replicates in 63 of 63 cells; none of the 5 held-out prompt forms provides an interpretable extension, because the never-edited baseline route itself loses strict accuracy (1.0000 on canonical, at best 0.083 on the other 5) and candidate-score support (minimum 0.0003 away from canonical).  The unrestricted worst case over all 6 templates is -1.1995 with the sign holding in 0 of 63 cells, but the templates that make it worse are off support, where a renormalized distance compares two artifacts rather than two behaviors, so those values are reported and not interpreted.  Worst-case strict desired-label accuracy on transformation targets is 0.0000 and worst-case hard source leakage is 0.3333",
     "route_g_baseline": "route g baseline prompt sensitivity (no intervention): the frozen g_X_to_C router's code accuracy over 12 held-out test images ranges from 0.0000 (worst template: concise_paraphrase) to 0.8333, a maximum template spread of 0.8333; six-template consistency (the same code however it is asked) is 0.0000",
     "route_g_cross_route_spillover": "route g edit-induced collateral (confirmatory; no intervention on g): Delta_g = M_g(h_adapter) - M_g(h_baseline) over the identical panel reaches a worst-template prediction-flip rate of 0.0000 and a worst-template code-accuracy change of 0.0000 across 15 h-side adapters; the null expectation is that an h-targeted edit leaves route-g behavior approximately unchanged relative to baseline_h.  Descriptively, replacing the frozen image->code router with ANY h adapter moves behavior by up to 1.0000 worst-template flip rate -- task-adapter replacement, not edit attribution -- and the frozen router's own PP2 accuracy remains the absolute route-g capability ceiling.  Architecturally the pipeline executes frozen g and the h adapter sequentially and the g checkpoint is unchanged, so route-g preservation rests on checkpoint identity, with Delta_g as the empirical probe",
     "not_claimed": [
@@ -86458,11 +86458,11 @@
     ]
   },
   "elapsed_sec": 1.9,
-  "gpu": "NVIDIA RTX 6000 Ada Generation",
+  "gpu": "cpu",
   "reaggregation": {
     "previous_report_found": true,
-    "previous_core_sha256": "706081efc09113c9533bdc3b1c927e736fe1a2b342dce51344e314b8eae92010",
-    "reaggregated_core_sha256": "706081efc09113c9533bdc3b1c927e736fe1a2b342dce51344e314b8eae92010",
+    "previous_core_sha256": "5ecc3c0c40eb698d937b408aedfa6c36c0d1e3bca8559bcacaf82fc5be4beb49",
+    "reaggregated_core_sha256": "5ecc3c0c40eb698d937b408aedfa6c36c0d1e3bca8559bcacaf82fc5be4beb49",
     "identical": true,
     "volatile_fields_excluded": [
       "generated_at",
