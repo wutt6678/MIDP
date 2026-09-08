@@ -1172,6 +1172,7 @@ def test_verify_re_reads_the_table_and_fails_if_the_hash_moved(tmp_path, monkeyp
         reviewer_decision="retained", reviewer="test")]
     # G7 is tested separately; here the artifact stands in for a committed one
     monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    _forbid_source_dataset(monkeypatch)
     gates = mh.run_gates(records, table)
     assert gates["passed"], gates["failed_gates"]
     target = tmp_path / "hier.json"
@@ -1188,3 +1189,92 @@ def test_verify_re_reads_the_table_and_fails_if_the_hash_moved(tmp_path, monkeyp
     with pytest.raises(RuntimeError) as exc:
         mh.verify_hierarchy(target)
     assert "changed underneath a committed artifact" in str(exc.value)
+
+
+def _forbid_source_dataset(monkeypatch):
+    """Make any read of the MLLMU source dataset an immediate test failure.
+
+    The dataset lives outside the repository, so it is absent in a bare clone
+    and present here -- which means the authoring machine CANNOT reproduce the
+    CI failure by running the suite.  The dependency has to be manufactured:
+    patching the reader to raise turns "works on my machine" into a failure
+    wherever the suite runs, and names the regression instead of letting a bare
+    FileNotFoundError surface from inside an unrelated assertion.
+    """
+    def _refused(path=None):
+        raise AssertionError(
+            "verify_hierarchy must not read the MLLMU source dataset: it is "
+            "outside the repository, so depending on it makes a committed "
+            "artifact verifiable only on the machine that froze it")
+    monkeypatch.setattr(mh, "professions_in_source", _refused)
+
+
+def test_verify_reproduces_the_selection_from_the_artifact_alone(tmp_path,
+                                                                 monkeypatch):
+    """The frozen selection must be re-derivable from committed state.
+
+    ``identity_counts`` is recorded in the artifact precisely so verification
+    needs no dataset.  Recording it is not enough: the recomputed selection has
+    to be COMPARED against the frozen one, or the counts are an unverified
+    input and the comparison that justifies recording them never happens.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    _forbid_source_dataset(monkeypatch)
+    def adj(label, role, eligible):
+        # G8 fails a manual mapping with no recorded adjudication, so both
+        # records need one for this test to reach the selection check at all.
+        return {"raw_label": label, "decision": "manual_override",
+                "chosen_soc": "15-1252", "chosen_title": "Software Developers",
+                "rejected_candidates": [], "target_eligible": eligible,
+                "rationale": f"{label} maps to the software-developer leaf",
+                "decided_before_experiment": True}
+
+    records = [
+        mh.build_record("Software Developer", table, "manual", 0.95, "retained",
+                        external_code="15-1252", reviewer="t",
+                        matrix_role="same_leaf_retention_control",
+                        adjudication=adj("Software Developer", "control", False)),
+        mh.build_record("Software Engineer", table, "manual", 0.95, "retained",
+                        external_code="15-1252", reviewer="t",
+                        matrix_role="primary_target",
+                        adjudication=adj("Software Engineer", "primary", True)),
+    ]
+    counts = {"Software Engineer": 117, "Software Developer": 15}
+    gates = mh.run_gates(records, table, selected_targets=["Software Engineer"],
+                         identity_counts=counts)
+    target = tmp_path / "hier.json"
+    art = mh.freeze_hierarchy(table, records, gates,
+                              selected_targets=["Software Engineer"],
+                              identity_counts=counts, path=target)
+    assert art["identity_counts"] == counts, "the counts must be committed"
+    assert art["target_selection"]["15-1252"]["representative"] == \
+        "Software Engineer"
+    ok = mh.verify_hierarchy(target)
+    assert ok["selection_reproduced_from_artifact"] is True
+    assert ok["n_identity_counts"] == 2
+
+    # Tamper with the recorded counts so the rule now picks the other label.
+    # This runs BEFORE the content_sha256 check on purpose, so the failure names
+    # the selection rather than reporting a generic digest mismatch.
+    bad = json.loads(target.read_text(encoding="utf-8"))
+    bad["identity_counts"] = {"Software Engineer": 1, "Software Developer": 99}
+    target.write_text(json.dumps(bad, default=str), encoding="utf-8")
+    with pytest.raises(RuntimeError) as exc:
+        mh.verify_hierarchy(target)
+    msg = str(exc.value)
+    assert "not reproducible from committed state" in msg
+    assert "15-1252" in msg
+
+
+def test_a_missing_source_dataset_is_reported_not_raised_as_filenotfound(tmp_path):
+    """Freezing needs the dataset; verifying does not, and each says so.
+
+    A bare FileNotFoundError from inside ``verify_hierarchy`` gave no hint that
+    the dataset is optional for that command, which is how this reached CI.
+    """
+    with pytest.raises(RuntimeError) as exc:
+        mh.professions_in_source(tmp_path / "absent" / "Full_Set.jsonl")
+    msg = str(exc.value)
+    assert "not part of this repository" in msg
+    assert "--verify does not need it" in msg

@@ -1329,7 +1329,8 @@ def build_hierarchy(table_path, mapping_rows, selected_targets=None,
 
 
 def freeze_hierarchy(table, records, gates, selected_targets=None,
-                     identity_ids=None, path=HIERARCHY_PATH):
+                     identity_ids=None, identity_counts=None,
+                     path=HIERARCHY_PATH):
     """Write the frozen artifact.  Refuses to write a hierarchy that fails."""
     if not gates["passed"]:
         failed = sorted(k for k, g in gates["gates"].items()
@@ -1407,6 +1408,12 @@ def freeze_hierarchy(table, records, gates, selected_targets=None,
         "retained_labels": sorted(r["original_label"] for r in retained),
         "selected_targets": sorted(selected_targets or []),
         "identity_ids": sorted(identity_ids or []),
+        # The counts the representative selection was decided on.  Recorded so
+        # verify_hierarchy can REPRODUCE that selection from committed state
+        # alone: the source dataset lives outside this repository, so a
+        # verification pass that re-read it could only ever run on the machine
+        # that froze the artifact.
+        "identity_counts": dict(sorted((identity_counts or {}).items())),
         # gx.build_label_dag's own input shape, keyed by profession label;
         # the matrix builder expands it to identity ids.
         "hierarchy_of": gates["hierarchy_of"],
@@ -1435,6 +1442,13 @@ def verify_hierarchy(path=HIERARCHY_PATH):
 
     The artifact's own parents are re-checked against the table it names, so a
     table swapped underneath a frozen hierarchy is caught rather than trusted.
+
+    Reads NOTHING outside the repository and the table the artifact names.  The
+    identity counts come from the artifact itself: the MLLMU source dataset
+    lives outside this checkout, so re-reading it made verification runnable
+    only on the machine that froze the artifact -- and it was worse than
+    useless, because the recomputed selection was then discarded, so the read
+    cost a hard dependency and verified nothing.
     """
     art = json.loads(Path(path).read_text(encoding="utf-8"))
     # The quarantine decision belongs to the artifact, not to the caller: a
@@ -1450,21 +1464,36 @@ def verify_hierarchy(path=HIERARCHY_PATH):
             f"changed underneath a committed artifact")
     gates = run_gates(art["records"], table,
                       selected_targets=art.get("selected_targets"),
-                      # counts come from the source, so verification reproduces
-                      # the same representative and confirmatory selection
-                      # instead of falling back to a lexical tie-break
-                      identity_counts=professions_in_source())
+                      identity_counts=art.get("identity_counts") or {})
     if not gates["passed"]:
         failed = sorted(k for k, g in gates["gates"].items()
                         if not g["passed"])
         raise RuntimeError(f"the committed hierarchy no longer passes: "
                            f"{failed}")
+    # The representative selection is part of the frozen design, so it is
+    # re-derived from the recorded counts and COMPARED rather than trusted: a
+    # selection that cannot be reproduced from committed state was never frozen,
+    # it was merely written down.
+    if gates["target_selection"] != art.get("target_selection"):
+        frozen = {k: (v or {}).get("representative")
+                  for k, v in (art.get("target_selection") or {}).items()}
+        recomputed = {k: (v or {}).get("representative")
+                      for k, v in gates["target_selection"].items()}
+        differing = sorted(k for k in set(frozen) | set(recomputed)
+                           if frozen.get(k) != recomputed.get(k))
+        raise RuntimeError(
+            f"the representative selection recomputed from the artifact's own "
+            f"identity_counts does not match the frozen target_selection for "
+            f"SOC leaf/leaves {differing}: the selection is not reproducible "
+            f"from committed state")
     if content_sha(art) != art["content_sha256"]:
         raise RuntimeError("content_sha256 does not match the artifact's own "
                            "content: the file was edited after freezing")
     return {"ok": True, "gates_passed": True,
             "content_sha256": art["content_sha256"],
             "n_records": art["n_records"],
+            "selection_reproduced_from_artifact": True,
+            "n_identity_counts": len(art.get("identity_counts") or {}),
             "warnings": gates["warnings"]}
 
 
@@ -1473,7 +1502,19 @@ def professions_in_source(path=FULL_SET):
 
     The frozen manifest took the six most frequent; the source has many more,
     and G6 needs branches, not just frequency.
+
+    The dataset lives OUTSIDE this repository, so it is absent in a bare clone:
+    freezing and proposing need it, verification does not.  A missing file is
+    reported as that, rather than surfacing as a bare FileNotFoundError from
+    deep inside a caller that had no idea the dataset was optional.
     """
+    if not Path(path).exists():
+        raise RuntimeError(
+            f"the MLLMU source dataset is not present at {path}.  It is not "
+            f"part of this repository, so --freeze-decisions, --decide and "
+            f"--propose-mapping can only run where the dataset is staged.  "
+            f"--verify does not need it: it reproduces the selection from the "
+            f"identity_counts recorded in the frozen artifact.")
     counts = collections.Counter()
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -2076,6 +2117,9 @@ def freeze_decisions(table_path, overrides_path=OVERRIDE_PATH,
                            f"pass; nothing was written")
     art = freeze_hierarchy(d["table"], d["records"], gates,
                            selected_targets=d["selected_targets"],
+                           # recorded in the artifact so --verify can reproduce
+                           # the selection without the out-of-repo dataset
+                           identity_counts=d["counts"],
                            path=hierarchy_path)
     selection = {
         "kind": "mllmu_g6_target_selection",
