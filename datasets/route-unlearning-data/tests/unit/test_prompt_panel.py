@@ -1428,6 +1428,52 @@ def test_the_route_h_claim_keeps_off_support_deltas_out_of_the_headline():
     assert "property of how route h is TRAINED" in support
 
 
+def test_one_interpretable_template_is_not_called_robust_across_templates():
+    """The wording defect the shipped salmu report carried.
+
+    With five of six templates off support the interpreted column has ONE
+    member, so "robust across the templates whose comparisons remain
+    interpretable" reads as a sweep-wide property while quoting a column of
+    one.  The claim has to name what replicated, how far it replicated, and
+    the cause the panel actually MEASURED for the templates that do not extend
+    it -- the baseline route's own lost accuracy and candidate-score support,
+    not an assertion about prompt sensitivity in general.
+    """
+    results = _syn_h_results()
+    held_out = [r for r in pp.TEMPLATE_ROLES if r != "canonical"]
+    assert len(held_out) == 5, "the fixture must mirror the six-role panel"
+    for rec in results.values():
+        for role in held_out:
+            _off_support(rec, role)
+    route_h = pp.aggregate_route_h("salmu", results, [], len(results), SYN_CTX,
+                                   SYN_ENTRIES)
+    text = pp.build_claims("salmu", route_h, None, {}, _syn_panel())["route_h"]
+    assert "which is 1 of the 6 templates [canonical 1/1 cells]" in text
+    assert "established on the canonical prompt alone" in text
+    assert "replicates in 1 of 1 cells" in text
+    assert "none of the 5 held-out prompt forms provides an interpretable " \
+        "extension" in text
+    assert "because the never-edited baseline route itself loses strict " \
+        "accuracy" in text
+    assert "1.0000 on canonical, at best 0.000 on the other 5" in text
+    assert "candidate-score support (minimum 0.2000 away from canonical)" \
+        in text
+    assert "robust across" not in text, \
+        "a column of one is not a sweep-wide property"
+    # the multi-template case is untouched: five interpretable templates IS a
+    # sweep, and that claim still reads as one
+    five = _syn_h_results()
+    for rec in five.values():
+        _off_support(rec, "question_form")
+    five_text = pp.build_claims(
+        "salmu", pp.aggregate_route_h("salmu", five, [], len(five), SYN_CTX,
+                                      SYN_ENTRIES),
+        None, {}, _syn_panel())["route_h"]
+    assert "robust across the templates whose comparisons remain " \
+        "interpretable" in five_text
+    assert "held-out prompt forms" not in five_text
+
+
 def test_a_dipping_oracle_does_not_disqualify_a_template_for_every_cell():
     """The regression this criterion exists to prevent.
 
@@ -2176,6 +2222,37 @@ def test_termination_diagnostic_is_reported_and_absent_rows_are_tolerated():
     assert td2["coverage"] == n_present and td2["n_rows"] == 4
     assert td2["min_eos_prob_after_parsed"] == pytest.approx(0.3)
     assert td2["rate_eos_below_0.5"] == pytest.approx(1.0 / n_present)
+
+
+def test_the_other_mass_wording_agrees_with_the_frozen_scorer():
+    """The scorer CLAMPS; the report layer must not say the opposite.
+
+    ``rv.build_candidate_summary`` computes ``max(0.0, 1 - candidate_mass)``,
+    and candidate_mass is a label-PREFIX score sum with no termination event,
+    so overlapping candidates can push it past 1.  Describing other_mass as
+    "can be negative" contradicts the frozen scorer that produces it, and
+    calling it complementary probability mass asserts a measurement nobody
+    took: a zero says the prefixes summed to at least one, not that nothing
+    lies outside the candidate set.
+    """
+    over = {label: 0.4 for label in SYN_VOCAB}          # sums to 2.0
+    summ = rv.build_candidate_summary(over, SYN_VOCAB, "Unknown")
+    assert summ["candidate_mass"] == pytest.approx(2.0)
+    assert summ["other_mass"] == 0.0, \
+        "the frozen scorer clamps at zero; it never returns a negative mass"
+    report = pp.build_report("salmu", "salmu", _syn_panel(), None, None, {},
+                             {}, None, {}, time.time(), False, {}, {}, {})
+    wording = report["scoring_limitation"]["other_mass_is"]
+    assert "clamped to zero" in wording
+    assert "max(0.0, 1 - candidate_score_sum)" in wording
+    assert "rv.build_candidate_summary" in wording, \
+        "the wording has to name the code that decides it"
+    assert "NOT complementary probability mass" in wording
+    assert "negative" not in wording, \
+        "the previous text contradicted the scorer it describes"
+    # the neighbouring entry keeps its own meaning: the SUM really can exceed 1
+    assert "can sum above 1" in \
+        report["scoring_limitation"]["candidate_mass_is"]
 
 
 def test_the_report_carries_the_scoring_limitation_and_architecture():

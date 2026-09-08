@@ -275,8 +275,13 @@ SCORING_LIMITATION = {
     "candidate_mass_is": ("sum of normalized label-prefix scores WITHOUT a "
                           "termination event; NOT a literal probability mass "
                           "-- overlapping candidate strings can sum above 1"),
-    "other_mass_is": ("1 - candidate score sum; can be negative when "
-                      "overlapping prefixes push the sum above 1"),
+    "other_mass_is": ("clamped to zero when the candidate score sum reaches "
+                      "or passes 1 -- the shared scorer computes "
+                      "max(0.0, 1 - candidate_score_sum) in "
+                      "rv.build_candidate_summary -- and is NOT complementary "
+                      "probability mass: a zero here says the overlapping "
+                      "prefixes summed to at least one, not that nothing lies "
+                      "outside the candidate set"),
     "consequence": ("normalized candidate-score comparisons and gated "
                     "distances remain useful and comparable to every existing "
                     "artifact, but any threshold on candidate_mass (e.g. the "
@@ -2676,6 +2681,10 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
                       and "baseline" not in any_off_by_role.get(r, [])
                       and "edited" not in any_off_by_role.get(r, [])]
     base = per_class.get("baseline") or {}
+    #: Filled only when the baseline's own support was measured.  The verdict
+    #: quotes it so that "no interpretable extension" names a cause the panel
+    #: actually observed rather than asserting one.
+    baseline_lost_support = None
 
     def _class_stat(klass, role, field):
         return ((per_class.get(klass) or {}).get(role) or {}).get(field)
@@ -2689,6 +2698,13 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
                     for r in TEMPLATE_ROLES}
         off_acc = _nums([v for r, v in base_acc.items() if r != "canonical"])
         best_off_acc = _f(max(off_acc), 3) if off_acc else "not established"
+        if baseline_off:
+            baseline_lost_support = (
+                f"the never-edited baseline route itself loses strict accuracy "
+                f"({_f(base_acc.get('canonical'))} on canonical, at best "
+                f"{best_off_acc} on the other {len(baseline_off)}) and "
+                f"candidate-score support (minimum {_f(worst_base_sum)} away "
+                f"from canonical)")
         # Per-model counts, so one dipping model reads as one dipping model
         # rather than as a verdict on the whole class.
         base_off_detail = ", ".join(
@@ -2784,10 +2800,28 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
     n_sup_cells = sum(1 for s in sup_signs if s is not None)
     n_no_interp = len(sup_signs) - n_sup_cells
     robust = n_sup_cells > 0 and sup_true == n_sup_cells
-    verdict = ("robust across the templates whose comparisons remain "
-               "interpretable" if robust else
-               "not established beyond the templates whose comparisons remain "
-               "interpretable")
+    n_held_out = n_roles - len(interp_roles)
+    if robust and len(interp_roles) == 1:
+        # ONE interpretable template is not robustness across templates: the
+        # set has a single member, and "robust across the templates whose
+        # comparisons remain interpretable" reads as a sweep-wide property
+        # while quoting a column of one.  Say what replicated, how far it
+        # replicated, and why nothing extends it.
+        verdict = (
+            f"established on the {interp_roles[0]} prompt alone, where the "
+            f"matched-vs-LOO result replicates in {sup_true} of "
+            f"{n_sup_cells} cells"
+            + ("" if not n_held_out else
+               f"; none of the {n_held_out} held-out prompt forms provides an "
+               f"interpretable extension"
+               + (f", because {baseline_lost_support}"
+                  if baseline_lost_support else "")))
+    elif robust:
+        verdict = ("robust across the templates whose comparisons remain "
+                   "interpretable")
+    else:
+        verdict = ("not established beyond the templates whose comparisons "
+                   "remain interpretable")
     no_interp_note = (
         "" if not n_no_interp else
         f"  {n_no_interp} of {len(sup_signs)} cells have no template on which "
