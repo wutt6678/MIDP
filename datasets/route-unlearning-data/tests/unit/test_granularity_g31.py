@@ -820,6 +820,21 @@ def test_cumulative_elapsed_never_erases_the_cost_of_an_earlier_pass(tmp_path):
     assert out3["elapsed_prior_passes_sec"] == 0.0
     assert "UNREADABLE" in out3["elapsed_accumulation"]
     assert "UNDERSTATES every run before it" in out3["elapsed_accumulation"]
+    # a predecessor that recorded a COST but no DEVICE: the cost is carried and
+    # the gap is disclosed, because "cpu" beside a 5,654s prior would describe
+    # GPU training as CPU work
+    with open(path, "w") as f:
+        json.dump({"elapsed_sec": 5654.5}, f)
+    out5 = gxm._cumulative_elapsed(path, time.time() - 2.0, "cpu")
+    assert out5["elapsed_prior_passes_sec"] == 5654.5
+    assert out5["devices_used"] == ["cpu"]
+    assert "5654.5s" in out5["elapsed_device_coverage"]
+    assert "device is NOT established here" in out5["elapsed_device_coverage"]
+    # ... and once a device IS on record, the disclosure stops
+    with open(path, "w") as f:
+        json.dump({"elapsed_sec": 10.0, "devices_used": ["cpu"]}, f)
+    assert "elapsed_device_coverage" not in gxm._cumulative_elapsed(
+        path, time.time(), "cpu")
     # a restoration note is carried forward rather than dropped
     with open(path, "w") as f:
         json.dump({"elapsed_sec": 100.0,

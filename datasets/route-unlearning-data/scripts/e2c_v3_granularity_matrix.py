@@ -235,6 +235,7 @@ def _cumulative_elapsed(artifact_path, t_start, device_now=None):
     this_pass = round(time.time() - t_start, 1)
     path = Path(artifact_path)
     prior, devices, carried = 0.0, [], None
+    prev_named_a_device = False
     note = "no earlier artifact at this path: this pass is the whole total"
     if path.exists():
         try:
@@ -242,6 +243,7 @@ def _cumulative_elapsed(artifact_path, t_start, device_now=None):
             prior = float(prev.get("elapsed_sec") or 0.0)
             devices = list(prev.get("devices_used")
                            or ([prev["gpu"]] if prev.get("gpu") else []))
+            prev_named_a_device = bool(devices)
             carried = prev.get("elapsed_restoration")
             note = ("prior elapsed_sec read from the artifact this pass "
                     "overwrites")
@@ -263,6 +265,16 @@ def _cumulative_elapsed(artifact_path, t_start, device_now=None):
     }
     if devices:
         out["devices_used"] = devices
+    if prior > 0.0 and not prev_named_a_device:
+        # The cost of the earlier passes is carried, but they recorded no
+        # device, so devices_used cannot vouch for what produced it.  Saying
+        # "cpu" beside a 5,654s prior would describe GPU training as CPU work.
+        out["elapsed_device_coverage"] = (
+            f"devices_used lists only the devices recorded from this pass "
+            f"onward; the {prior}s in elapsed_prior_passes_sec came from "
+            f"earlier passes that recorded a cost but no device, so their "
+            f"device is NOT established here and devices_used UNDERSTATES "
+            f"them")
     if carried:
         out["elapsed_restoration"] = carried
     return out
