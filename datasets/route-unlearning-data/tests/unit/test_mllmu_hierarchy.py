@@ -23,6 +23,7 @@ profession:
 
 from __future__ import annotations
 
+import csv
 import importlib.util
 import json
 from pathlib import Path
@@ -368,6 +369,225 @@ def test_a_data_row_is_not_mistaken_for_the_header(tmp_path):
     # the stray row sits above the header, so it is preamble and is not read
     # as data; the code that IS in the index comes from the real table below
     assert t["n_preamble_rows_skipped"] == 1
+
+
+# ---------------------------------------------------------------------- #
+# reviewer-facing proposals
+# ---------------------------------------------------------------------- #
+# Deliberately contains the two traps that produced wrong proposals: a
+# qualifier-heavy correct title ("Architects, Except Landscape and Naval") that
+# a Jaccard-style score ranks BELOW a wrong one ("Database Architects"), and a
+# pluralized multi-word head ("Environmental Scientists and Specialists") that
+# whole-phrase singularization fails to match.
+PROPOSAL_TABLE = """\
+Major Group,Minor Group,Broad Occupation,Detailed Occupation,Detailed O*NET-SOC,SOC or O*NET-SOC 2019 Title
+17-0000,,,,,Architecture and Engineering Occupations
+,17-1000,,,,Architects and Surveyors
+,,17-1010,,,Architects
+,,,17-1011,,"Architects, Except Landscape and Naval"
+,,,17-1012,,Landscape Architects
+15-0000,,,,,Computer and Mathematical Occupations
+,15-1200,,,,Computer Occupations
+,,15-1240,,,Database and Network Administrators and Architects
+,,,15-1243,,Database Architects
+,,,15-2051,,Data Scientists
+19-0000,,,,,"Life, Physical, and Social Science Occupations"
+,19-2000,,,,Physical Scientists
+,,19-2040,,,Environmental Scientists and Geoscientists
+,,,19-2041,,"Environmental Scientists and Specialists, Including Health"
+,,,19-3091,,Anthropologists and Archeologists
+29-0000,,,,,Healthcare Practitioners and Technical Occupations
+,29-1200,,,,Health Diagnosing or Treating Practitioners
+,,29-1220,,,Podiatrists
+,,,29-1221,,Podiatrists
+,,,,29-1221.01,"Surgeons, Cardiovascular"
+"""
+
+
+def _proposal_table(tmp_path):
+    return mh.load_taxonomy_table(_write(tmp_path, PROPOSAL_TABLE, "prop.csv"))
+
+
+def test_an_exact_head_match_outranks_a_qualifier_free_but_wrong_branch(tmp_path):
+    """"Architect" is 17-1011, not 15-1243 "Database Architects".
+
+    A Jaccard-style score ranks the WRONG one first, because the correct title
+    carries the qualifier "Except Landscape and Naval" and so has more tokens to
+    divide by.  That would place an architect in the Computer branch.  Ranking
+    on match kind first, and comparing the title's pre-comma head, fixes it.
+    """
+    t = _proposal_table(tmp_path)
+    c = mh.proposal_candidates("Architect", t)
+    assert c["best_match_kind"] == "exact_head"
+    assert c["best_candidate"] == "17-1011"
+    assert c["candidates"][0]["title"] == "Architects, Except Landscape and Naval"
+    codes = [x["code"] for x in c["candidates"]]
+    assert codes.index("17-1011") < codes.index("15-1243")
+    # the qualifier clause is what makes the head match, so it must be found
+    assert mh._title_head("Architects, Except Landscape and Naval") == "Architects"
+
+
+def test_tokens_are_singularized_per_word_not_per_phrase(tmp_path):
+    """"Environmental Scientist" is 19-2041, not 15-2051 "Data Scientists".
+
+    Whole-phrase singularization only strips the LAST word's trailing s, so
+    "Environmental Scientists and Specialists" produced the token
+    ``scientists`` and never matched ``scientist``.  The label then fell back to
+    a single-token overlap with Data Scientists -- a wrong branch.
+    """
+    t = _proposal_table(tmp_path)
+    c = mh.proposal_candidates("Environmental Scientist", t)
+    assert c["best_candidate"] == "19-2041"
+    assert c["best_match_kind"] == "head_tokens"
+    assert c["best_recall"] == 1.0
+    assert mh._tokens("Environmental Scientists and Specialists") == {
+        "environmental", "scientist", "specialist"}
+    assert "scientist" in mh._tokens("Environmental Scientists")
+
+
+def test_ambiguity_is_a_tie_at_the_top_not_the_presence_of_weaker_candidates(tmp_path):
+    """A confident exact match stays confident.
+
+    An earlier version flagged ANY exact match that had further candidates as
+    ambiguous, which wrongly demoted Architect, Graphic Designer and Civil
+    Engineer out of the pool merely because unrelated occupations share a token
+    with them.
+    """
+    t = _proposal_table(tmp_path)
+    arch = mh.proposal_candidates("Architect", t)
+    assert arch["n_candidates"] > 1
+    assert arch["ambiguous"] is False, "weaker candidates are not a tie"
+    # a genuine tie: two detailed occupations sharing the head token
+    tie = mh.proposal_candidates("Podiatrist", t)
+    assert tie["ambiguous"] is False        # only one detailed Podiatrists row
+    landscape = mh.proposal_candidates("Landscape Architect", t)
+    assert landscape["best_candidate"] == "17-1012"
+    assert landscape["ambiguous"] is False
+
+
+def test_onet_extensions_are_not_proposed_as_mapping_targets(tmp_path):
+    """A person's profession sits at the SOC detailed-occupation level.
+
+    The 149 O*NET-SOC extensions are deeper than that and would add a fifth
+    depth to a chain built for specific -> L2 -> L1.
+    """
+    t = _proposal_table(tmp_path)
+    assert t["by_code"]["29-1221.01"]           # it is in the table
+    for label in ("Podiatrist", "Surgeon", "Cardiovascular Surgeon"):
+        codes = [x["code"] for x in mh.proposal_candidates(label, t)["candidates"]]
+        assert "29-1221.01" not in codes, label
+        assert all("." not in c for c in codes), codes
+
+
+def test_a_spelling_variant_is_surfaced_but_never_applied(tmp_path):
+    """SOC writes "Archeologists"; MLLMU writes "Archaeologist".
+
+    The variant is reported so the reviewer can see it, and the match kind stays
+    ``none`` so nothing is decided automatically.
+    """
+    t = _proposal_table(tmp_path)
+    c = mh.proposal_candidates("Archaeologist", t)
+    assert c["best_match_kind"] == "none"
+    assert c["best_candidate"] is None
+    assert "archeologist" in c["spelling_variants_in_table"]
+    assert c["authority"] == "source_table"
+
+
+def _cand(best_group, kind="exact_head", recall=1.0, extra=(), ambiguous=False):
+    """A minimal candidate dict, for testing pool selection directly.
+
+    Carries the same keys ``proposal_candidates`` produces; ``select_balanced_pool``
+    reads ``title`` and deliberately raises rather than reporting a titleless
+    code, so a candidate shape regression surfaces here.
+    """
+    def one(g):
+        return {"code": f"{g}-1011", "major_group": g,
+                "title": f"Occupation {g}-1011"}
+    return {"best_match_kind": kind, "best_recall": recall,
+            "ambiguous": ambiguous,
+            "candidates": [one(best_group)] + [one(g) for g in extra]}
+
+
+def test_pool_coverage_comes_from_the_best_candidate_not_the_union():
+    """Scattered weak candidates must not be paid as branch diversity.
+
+    The first version scored the UNION of a profession's candidates, so a
+    profession whose weak matches reached four branches was picked first --
+    including 53-5011 "Sailors and Marine Oilers" as a Marine Biologist
+    candidate.  Coverage now comes from the best candidate only, and an
+    ambiguous top rank is ineligible outright.
+    """
+    counts = {"scattered": 84, "clean_19": 5, "clean_25": 4}
+    cands = {
+        # best candidate is in 19, but weak candidates reach 17, 25 and 53
+        "scattered": _cand("19", kind="tokens", recall=0.5,
+                           extra=("17", "25", "53"), ambiguous=True),
+        "clean_19": _cand("19"),
+        "clean_25": _cand("25"),
+    }
+    pool = mh.select_balanced_pool(cands, counts, n_professions=5,
+                                   min_major_groups=2, min_identities=2)
+    picked = [p["original_label"] for p in pool["pool"]]
+    assert "scattered" not in picked
+    assert pool["major_groups_covered"] == ["19", "25"]
+    assert pool["per_major_group"] == {"19": 1, "25": 1}
+    reasons = {x["original_label"]: x["reason"] for x in pool["ineligible"]}
+    assert "ambiguous" in reasons["scattered"]
+    assert reasons["scattered"]            # an explicit reason, never silent
+
+
+def test_the_branch_cap_spreads_the_pool_without_starving_it():
+    """max_per_major_group is a soft cap: it defers, it never truncates.
+
+    With nothing covered yet every profession ties on branch novelty, so the
+    opening pick is the most frequent one; the cap then binds from the second
+    pick onward and a new branch jumps the queue.
+    """
+    counts = {"a": 10, "b": 9, "c": 8, "d": 7}
+    cands = {"a": _cand("17"), "b": _cand("17"), "c": _cand("17"),
+             "d": _cand("19")}
+    capped = mh.select_balanced_pool(cands, counts, n_professions=4,
+                                     min_major_groups=2, min_identities=2,
+                                     max_per_major_group=1)
+    order = [p["original_label"] for p in capped["pool"]]
+    assert order == ["a", "d", "b", "c"], order
+    assert len(capped["pool"]) == 4, "the cap must not shrink the pool"
+    assert capped["major_groups_covered"] == ["17", "19"]
+    assert capped["per_major_group"] == {"17": 3, "19": 1}
+    # d opens a new branch, so it is taken second despite the lowest count
+    assert capped["pool"][1]["major_group"] == "19"
+
+
+def test_the_proposal_csv_leaves_every_decision_blank(tmp_path, monkeypatch):
+    """A proposal is not a decision, and one row per profession.
+
+    Every decision column must be empty, so build_hierarchy sees no
+    mapping_type, treats the row as ambiguous and G5 excludes it: the file
+    cannot produce a retained record until a human fills it in.  One row per
+    profession (not per candidate) because several rows with the same label
+    would build several records and fail G4.
+    """
+    monkeypatch.setattr(mh, "professions_in_source",
+                        lambda path=None: {"Architect": 41,
+                                           "Data Scientist": 2,
+                                           "Archaeologist": 4})
+    out = tmp_path / "proposal.csv"
+    res = mh.build_proposal_csv(_write(tmp_path, PROPOSAL_TABLE, "prop.csv"),
+                                out, min_major_groups=2, min_identities=2)
+    assert res["n_rows"] == 3
+    with open(out, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert [r["original_label"] for r in rows].count("Architect") == 1
+    for col in ("mapping_type", "external_code", "confidence",
+                "reviewer_decision", "reviewer", "exclusion_reason"):
+        assert {r[col] for r in rows} == {""}, col
+    assert {r["proposed_by_model"] for r in rows} == {"false"}
+    by_label = {r["original_label"]: r for r in rows}
+    assert "17-1011" in by_label["Architect"]["proposed_candidates"]
+    assert by_label["Archaeologist"]["proposed_candidates"] == ""
+    assert "NO candidate" in by_label["Archaeologist"]["proposal_note"]
+    # the file is directly usable as a --mapping input
+    assert set(mh.PROPOSAL_COLUMNS) <= set(rows[0])
 
 
 # ---------------------------------------------------------------------- #

@@ -59,6 +59,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import collections
 import csv
 import hashlib
 import json
@@ -216,16 +217,24 @@ def normalize_label(text):
 def singularize(text):
     """Plural-tolerant key, for PROPOSING a mapping only -- never for a gate.
 
-    SOC titles are plural ("Architects, Except Landscape and Naval") while
-    MLLMU professions are singular ("Architect"), so exact matching alone
-    finds almost nothing.  This widens the search for the reviewer's benefit;
-    every gate still compares against the published title verbatim.
+    SOC titles are plural ("Software Developers") while MLLMU professions are
+    singular ("Software Developer"), so exact matching alone finds almost
+    nothing.  This widens the search for the reviewer's benefit; every gate
+    still compares against the published title verbatim.
+
+    Only a single trailing ``s`` is removed (plus ``ies`` -> ``y``).  An
+    earlier version also stripped ``ians`` and ``es``, which over-stemmed:
+    "Veterinarians" became "veterinar" and so never matched "Veterinarian",
+    and "Pediatricians" became "pediatric" and never matched "Pediatrician".
+    Stripping one ``s`` handles both, and handles "Databases" -> "database"
+    without a separate ``es`` rule.
     """
     s = re.sub(r"[^a-z0-9 ]", " ", normalize_label(text))
     s = re.sub(r"\s+", " ", s).strip()
-    for suffix in ("ians", "ies", "es", "s"):
-        if s.endswith(suffix) and len(s) > len(suffix) + 2:
-            return s[:-3] + "y" if suffix == "ies" else s[:-len(suffix)]
+    if s.endswith("ies") and len(s) > 5:
+        return s[:-3] + "y"
+    if s.endswith("s") and len(s) > 3 and not s.endswith("ss"):
+        return s[:-1]
     return s
 
 
@@ -923,7 +932,6 @@ def professions_in_source(path=FULL_SET):
     The frozen manifest took the six most frequent; the source has many more,
     and G6 needs branches, not just frequency.
     """
-    import collections
     counts = collections.Counter()
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -941,7 +949,6 @@ def audit_table(table_path, allow_quarantine=True):
     A match here is a PROPOSAL for the reviewer; it is never written into a
     record by this function.
     """
-    import collections
     try:
         table = load_taxonomy_table(table_path, allow_quarantine=False)
         damaged = []
@@ -1006,6 +1013,315 @@ def audit_table(table_path, allow_quarantine=True):
     }
 
 
+# ====================================================================== #
+# reviewer-facing proposals: deterministic, from the table, never a decision
+# ====================================================================== #
+#: A person's profession sits at the SOC detailed-occupation level.  The 149
+#: O*NET-SOC extensions (17-2199.08) are deeper than that and would add a
+#: fifth depth to a chain built for specific -> L2 -> L1, so they are not
+#: proposed as targets.
+PROPOSAL_LEVEL = "detailed occupation"
+PROPOSAL_STOPWORDS = frozenset({
+    "and", "of", "the", "a", "an", "all", "other", "except", "not",
+    "including", "include", "postsecondary", "elementary", "middle",
+    "secondary", "special", "various", "related"})
+MATCH_KINDS = ("exact_title", "exact_head", "head_tokens", "tokens", "none")
+
+
+def _title_head(title):
+    """The occupation name before SOC's qualifier clause.
+
+    SOC appends ", Except Naval" / ", All Other" / ", Including Health" after a
+    comma, and that qualifier is what breaks naive similarity: "Architects,
+    Except Landscape and Naval" carries two extra tokens, so a Jaccard-style
+    score ranks "Database Architects" ABOVE the correct 17-1011 and would put
+    an architect in the Computer branch.  Comparing the head segment first
+    removes that failure without weakening anything.
+    """
+    return str(title or "").split(",")[0].strip()
+
+
+def _tokens(text):
+    """Content tokens of a label or title, each singularized, stopwords dropped.
+
+    Singularization must be PER TOKEN.  Applied to the whole phrase it only
+    strips the final word's trailing ``s``, so "Environmental Scientists and
+    Specialists" yielded the token ``scientists`` and never matched the label
+    token ``scientist`` -- which cost 19-2041 its head_tokens match and let
+    15-2051 "Data Scientists" rank first for Environmental Scientist, a wrong
+    branch.
+    """
+    s = re.sub(r"[^a-z0-9 ]", " ", normalize_label(text))
+    out = set()
+    for word in s.split():
+        stem = singularize(word)
+        if stem and stem not in PROPOSAL_STOPWORDS:
+            out.add(stem)
+    return out
+
+
+def _edit_distance_at_most_one(a, b):
+    """True when two tokens differ by a single insertion, deletion or swap."""
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    short, long_ = sorted((a, b), key=len)
+    diffs = 0
+    i = j = 0
+    while i < len(short) and j < len(long_):
+        if short[i] == long_[j]:
+            i += 1
+            j += 1
+            continue
+        diffs += 1
+        if diffs > 1:
+            return False
+        j += 1                       # one extra character in the longer token
+    return True
+
+
+def proposal_candidates(label, table, max_candidates=4):
+    """Rank the table's own detailed occupations against one MLLMU profession.
+
+    Deterministic and derived only from published titles -- no model, no
+    invented codes.  Scoring is RECALL of the label's tokens, not Jaccard, so a
+    correct title carrying qualifiers is not penalized for carrying them; ties
+    break on fewer extra title tokens, then on code, so the ranking is stable.
+
+    ``match_kind`` says how strong the proposal is, and ``none`` means the
+    table offers nothing: that is a finding, not a gap to paper over.
+    """
+    want = _tokens(label)
+    label_norm = normalize_label(label)
+    scored, table_tokens = [], set()
+    for code, title in table["by_code"].items():
+        if table.get("level_of_code", {}).get(code) != PROPOSAL_LEVEL:
+            continue
+        head = _title_head(title)
+        head_toks = _tokens(head)
+        full_toks = _tokens(title)
+        table_tokens |= full_toks
+        if normalize_label(title) == label_norm:
+            kind, recall = "exact_title", 1.0
+        elif singularize(head) == singularize(label):
+            kind, recall = "exact_head", 1.0
+        else:
+            overlap = want & full_toks
+            if not overlap:
+                continue
+            recall = len(overlap) / len(want) if want else 0.0
+            kind = "head_tokens" if want <= head_toks else "tokens"
+        scored.append({
+            "code": code, "title": title,
+            "level": PROPOSAL_LEVEL,
+            "major_group": code.split("-")[0],
+            "match_kind": kind, "recall": round(recall, 4),
+            "n_extra_title_tokens": len(_tokens(title) - want),
+            "chain": soc_levels(code),
+        })
+    order = {k: i for i, k in enumerate(MATCH_KINDS)}
+    scored.sort(key=lambda c: (order[c["match_kind"]], -c["recall"],
+                               c["n_extra_title_tokens"], c["code"]))
+    kind = scored[0]["match_kind"] if scored else "none"
+    # Ambiguous means a genuine TIE AT THE TOP RANK, not merely that weaker
+    # candidates exist.  An earlier version flagged any exact match with more
+    # than one scored candidate, which wrongly called Architect -> 17-1011,
+    # Graphic Designer -> 27-1024 and Civil Engineer -> 17-2051 ambiguous just
+    # because unrelated occupations share a token with them.
+    tie_at_top = (len(scored) > 1
+                  and scored[1]["match_kind"] == kind
+                  and scored[1]["recall"] == scored[0]["recall"])
+    # A spelling variant is reported, never applied: SOC writes "Archeologists"
+    # where MLLMU writes "Archaeologist", and deciding that is the reviewer's.
+    near = (sorted({w for w in table_tokens
+                    if any(_edit_distance_at_most_one(w, x) for x in want)}
+                   - want) if want else [])
+    return {
+        "original_label": label,
+        "best_match_kind": kind,
+        "best_recall": scored[0]["recall"] if scored else 0.0,
+        "best_candidate": scored[0]["code"] if scored else None,
+        "n_candidates": len(scored),
+        "ambiguous": tie_at_top,
+        "spelling_variants_in_table": near,
+        "candidates": scored[:max_candidates],
+        "level_proposed": PROPOSAL_LEVEL,
+        "authority": "source_table",
+    }
+
+
+def select_balanced_pool(cands_by_label, counts, n_professions=12,
+                         min_major_groups=6, min_identities=2,
+                         min_recall=0.5, max_per_major_group=2):
+    """Pick professions for BRANCH SPREAD, not for frequency.
+
+    The frozen MLLMU manifest took the six most common professions, which is
+    why Software Engineer and Software Developer sit side by side in the same
+    branch.  This picks greedily on new major groups covered, tie-breaking on
+    identity count then label, so the pool is deterministic and spread across
+    the taxonomy.
+
+    Only professions the table can actually place are eligible: a best match of
+    ``none``, a recall below ``min_recall``, too few identities, or an AMBIGUOUS
+    top rank is reported as ineligible rather than silently included.
+
+    Coverage is measured on each profession's BEST candidate, never on the union
+    of its candidates.  Scoring the union rewards exactly the wrong thing: a
+    profession whose candidates are scattered across many branches looks like
+    the most valuable pick, so the first version of this function chose Marine
+    Biologist first because its weak candidates reached groups 17, 19, 25 and 53
+    -- including 53-5011 "Sailors and Marine Oilers".  That is ambiguity being
+    paid as diversity, and it would have biased the whole matrix toward the
+    least mappable professions.
+    """
+    eligible, ineligible = {}, []
+    for label, c in cands_by_label.items():
+        n = counts.get(label, 0)
+        why = None
+        if c["best_match_kind"] == "none":
+            why = "no SOC detailed-occupation title matches"
+        elif c["best_recall"] < min_recall:
+            why = f"best recall {c['best_recall']} is below {min_recall}"
+        elif n < min_identities:
+            why = f"only {n} identity/identities, below {min_identities}"
+        elif c["ambiguous"]:
+            why = ("top rank is ambiguous: several candidates tie, so the "
+                   "branch is not determined by the table")
+        best_group = (c["candidates"][0]["major_group"]
+                      if c["candidates"] else None)
+        if why or best_group is None:
+            ineligible.append({"original_label": label, "n_identities": n,
+                               "reason": why or "no candidate",
+                               "best_match_kind": c["best_match_kind"],
+                               "best_recall": c["best_recall"],
+                               "best_candidate": (c["candidates"][0]["code"]
+                                                  if c["candidates"] else None),
+                               "best_major_group": best_group})
+        else:
+            eligible[label] = c
+    chosen, covered = [], set()
+    taken = collections.Counter()
+    while eligible and len(chosen) < n_professions:
+        def key(item, covered=covered, taken=taken):
+            # bound as defaults: `covered` and `taken` grow each iteration and a
+            # late binding would rank against the final state, not this round's
+            label, c = item
+            group = c["candidates"][0]["major_group"]
+            return (group in covered,                 # new branch first
+                    taken[group] >= max_per_major_group,   # then spread within
+                    -counts.get(label, 0), label)     # then frequency
+        label, c = min(eligible.items(), key=key)
+        best = c["candidates"][0]
+        chosen.append({"original_label": label,
+                       "n_identities": counts.get(label, 0),
+                       "best_candidate": best["code"],
+                       "best_candidate_title": best["title"],
+                       "best_match_kind": c["best_match_kind"],
+                       "best_recall": c["best_recall"],
+                       "major_group": best["major_group"]})
+        covered.add(best["major_group"])
+        taken[best["major_group"]] += 1
+        del eligible[label]
+    return {
+        "pool": chosen,
+        "n_pool": len(chosen),
+        "major_groups_covered": sorted(covered),
+        "n_major_groups": len(covered),
+        "per_major_group": {g: taken[g] for g in sorted(covered)},
+        "meets_min_major_groups": len(covered) >= min_major_groups,
+        "ineligible": sorted(ineligible, key=lambda x: (-x["n_identities"],
+                                                        x["original_label"])),
+        "criteria": {"n_professions": n_professions,
+                     "min_major_groups": min_major_groups,
+                     "min_identities": min_identities,
+                     "min_recall": min_recall,
+                     "max_per_major_group": max_per_major_group,
+                     "selection_rule": (
+                         "greedy: a profession whose BEST candidate opens a new "
+                         "SOC major group is taken first, then one from a group "
+                         "still under max_per_major_group, then identity count "
+                         "descending, then label -- branch spread first, "
+                         "frequency only as a tie-break")},
+    }
+
+
+PROPOSAL_COLUMNS = (
+    "original_label", "n_identities", "in_balanced_pool", "pool_major_groups",
+    "proposed_candidates", "proposal_note",
+    # Everything below is a REVIEWER decision and is written blank: an
+    # unreviewed row has no mapping_type, so build_hierarchy treats it as
+    # ambiguous and G5 excludes it.  Nothing can be retained without a human.
+    "mapping_type", "external_code", "confidence", "reviewer_decision",
+    "reviewer", "exclusion_reason", "proposed_by_model")
+
+
+def build_proposal_csv(table_path, out_path, n_professions=12,
+                       min_major_groups=6, min_identities=2, min_recall=0.5,
+                       max_per_major_group=2):
+    """Write the reviewer-facing mapping proposal.  Freezes nothing.
+
+    One row per profession (not one per candidate) so the file can be edited
+    into a ``--mapping`` input directly: a profession appearing on several rows
+    would build several records with the same normalized label and fail G4.
+    """
+    table = load_taxonomy_table(table_path)
+    counts = professions_in_source()
+    cands = {label: proposal_candidates(label, table) for label in counts}
+    pool = select_balanced_pool(cands, counts, n_professions=n_professions,
+                                min_major_groups=min_major_groups,
+                                min_identities=min_identities,
+                                min_recall=min_recall,
+                                max_per_major_group=max_per_major_group)
+    in_pool = {p["original_label"]: p for p in pool["pool"]}
+    rows = []
+    for label in sorted(counts, key=lambda x: (x not in in_pool, -counts[x], x)):
+        c = cands[label]
+        note = []
+        if c["best_match_kind"] == "none":
+            note.append("NO candidate in the table at level "
+                        f"{PROPOSAL_LEVEL}")
+        if c["spelling_variants_in_table"]:
+            note.append("spelling variant(s) present in the table: "
+                        + ", ".join(c["spelling_variants_in_table"]))
+        if c["ambiguous"]:
+            note.append("AMBIGUOUS: several equally ranked candidates")
+        rows.append({
+            "original_label": label,
+            "n_identities": counts[label],
+            "in_balanced_pool": "true" if label in in_pool else "false",
+            "pool_major_groups": ",".join(
+                [in_pool[label]["major_group"]]) if label in in_pool else "",
+            "proposed_candidates": "; ".join(
+                f"{x['code']}|{x['title']}|{x['match_kind']}|recall={x['recall']}"
+                for x in c["candidates"]),
+            "proposal_note": "; ".join(note),
+            "mapping_type": "", "external_code": "", "confidence": "",
+            "reviewer_decision": "", "reviewer": "", "exclusion_reason": "",
+            "proposed_by_model": "false",
+        })
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(PROPOSAL_COLUMNS))
+        w.writeheader()
+        w.writerows(rows)
+    return {"path": str(out_path.resolve()), "n_rows": len(rows),
+            "columns": list(PROPOSAL_COLUMNS), "pool": pool,
+            "source_table_sha256": table["sha256"],
+            "decision_columns_written_blank": [
+                "mapping_type", "external_code", "confidence",
+                "reviewer_decision", "reviewer", "exclusion_reason"],
+            "why_blank": (
+                "A proposal is not a decision.  build_hierarchy treats a row "
+                "with no mapping_type as ambiguous and G5 excludes it, so this "
+                "file cannot produce a retained record until a reviewer fills "
+                "it in -- and MAPPING_AUTHORITIES has no 'model' member."),
+            }
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--taxonomy-table", type=Path, default=None,
@@ -1026,6 +1342,22 @@ def main(argv=None):
                    help="report on the CSV only: layout, rows per level, "
                         "damaged cells, and which MLLMU professions match a "
                         "published title.  Changes nothing.")
+    p.add_argument("--propose-mapping", type=Path, default=None,
+                   help="write a reviewer-facing mapping proposal CSV: ranked "
+                        "candidates from the table's own titles, a "
+                        "branch-balanced pool marked, and every decision "
+                        "column left blank.  Freezes nothing.")
+    p.add_argument("--pool-size", type=int, default=12,
+                   help="professions to mark as the balanced pool")
+    p.add_argument("--min-major-groups", type=int, default=6,
+                   help="SOC major groups the pool should span")
+    p.add_argument("--min-identities", type=int, default=2,
+                   help="identities a profession needs to be pool-eligible")
+    p.add_argument("--min-recall", type=float, default=0.5,
+                   help="token recall a candidate needs to be pool-eligible")
+    p.add_argument("--max-per-major-group", type=int, default=2,
+                   help="soft cap on professions taken from one SOC major "
+                        "group, so the pool does not pile into one branch")
     p.add_argument("--freeze", action="store_true")
     p.add_argument("--verify", action="store_true")
     p.add_argument("--list-professions", action="store_true")
@@ -1040,6 +1372,18 @@ def main(argv=None):
             p.error("--audit-table needs --taxonomy-table")
         print(json.dumps(audit_table(args.taxonomy_table), indent=2,
                          default=str))
+        return 0
+    if args.propose_mapping:
+        if not args.taxonomy_table:
+            p.error("--propose-mapping needs --taxonomy-table")
+        out = build_proposal_csv(
+            args.taxonomy_table, args.propose_mapping,
+            n_professions=args.pool_size,
+            min_major_groups=args.min_major_groups,
+            min_identities=args.min_identities,
+            min_recall=args.min_recall,
+            max_per_major_group=args.max_per_major_group)
+        print(json.dumps(out, indent=2, default=str))
         return 0
     if args.verify:
         out = verify_hierarchy()
