@@ -1865,13 +1865,29 @@ def test_eta_is_measured_from_stored_timings_not_guessed(tmp_path, monkeypatch,
     assert "no measured timings" in nothing["reason"]
 
 
-def test_the_runner_binds_provenance_to_executed_code_not_result_files():
+def test_the_runner_binds_provenance_to_executed_code_not_result_files(
+        monkeypatch):
     """The GX2B/GX2S relaxation: result files may be dirty, code may not."""
     source = inspect.getsource(pp._dirty_tracked_code)
     assert "--untracked-files=no" in source
     assert "scripts/e2c_v3_prompt_panel.py" in pp.PP_CODE
     assert "scripts/e2c_v3_research_validity.py" in pp.PP_CODE
     assert isinstance(pp._dirty_tracked_code(), list)
+    # a declared script that is MISSING must be reported, not dropped from the
+    # pathspec: an empty pathspec silently widens git status to the whole
+    # worktree, so this panel would be blamed for the edits the parallel
+    # granularity and method-baseline runs are making to their own outputs
+    monkeypatch.setattr(pp, "PP_CODE", ["scripts/e2c_v3_granularity.py",
+                                        "scripts/e2c_v3_matrix.py"])
+    assert pp._dirty_tracked_code() == []          # committed, so clean
+    monkeypatch.setattr(pp, "PP_CODE", ["scripts/does_not_exist.py"])
+    assert pp._dirty_tracked_code() == [
+        "<declared executed code missing: scripts/does_not_exist.py>"]
+    monkeypatch.setattr(pp, "PP_CODE",
+                        ["scripts/e2c_v3_granularity.py",
+                         "scripts/also_missing.py"])
+    assert pp._dirty_tracked_code() == [
+        "<declared executed code missing: scripts/also_missing.py>"]
 
 
 def test_the_scoring_library_hash_is_not_the_runner_hash():
