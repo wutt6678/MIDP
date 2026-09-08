@@ -31,10 +31,16 @@ distinguishing initialization AND data --
                      (deletion-as-fine-tuning reference; salmu reuses
                      suppression-matrix LOO oracles on exact set match);
   matched_retrain  : FRESH base + fresh LoRA; transformed full mapping;
-                     ORIGINAL route-h protocol (3000/200/2e-5, targets x5,
-                     retained x50, seed 17);
+                     route h's own protocol (3000/200/2e-5, uniform repeat
+                     50, seed 17) PLUS the EDIT recipe's target
+                     oversampling (mx.TARGET_BOOST=5).  Reported as
+                     matched_retrain_weighted, because route h itself is
+                     trained by rd.train_h at a uniform repeat with NO
+                     target boost -- so the x5 weighting is not "the
+                     ordinary route-h recipe" and must not be described as
+                     one;
   loo_retrain      : FRESH base + fresh LoRA; retained mapping only;
-                     same route-h protocol.
+                     same protocol, and no transformed target to weight.
 Delta_FT     = D(edit, loo_finetune) - D(edit, matched_finetune)
 Delta_retrain= D(edit, loo_retrain)  - D(edit, matched_retrain)
 Positive delta = the edit is closer to the transformation-matched
@@ -47,18 +53,23 @@ evaluated code prompts and candidate-label space (a tiny L2 between
 nearly one-hot distributions does not establish global functional or
 parameter equivalence).
 
-GX2B balanced matched-retrain ablation: the main matched_retrain
-oversamples the transformed target x5 (replicating the original route-h
-recipe).  GX2B trains a BALANCED matched_retrain with target_boost=1 (the
-transformed mapping appears once per epoch, exactly like each retained
-mapping), holding steps/warmup/lr/repeat/LoRA-config/seed IDENTICAL, on one
+GX2B balanced matched-retrain ablation: the main matched_retrain reference
+oversamples the transformed target x5.  That x5 is mx.TARGET_BOOST -- the
+multiplier the EDIT/suppression recipe applies to its suppression pairs
+(ul_repeat*5 against retained ul_repeat*3) -- and NOT a property of route h,
+which rd.train_h builds at a uniform repeat with no target boost at all.  The
+x5 reference is therefore named matched_retrain_weighted, and GX2B trains
+matched_retrain_balanced with target_boost=1 (the transformed mapping appears
+once per epoch, exactly like each retained mapping, which is how route h itself
+is built), holding steps/warmup/lr/repeat/LoRA-config/seed IDENTICAL, on one
 representative set per transformation type (SALMU L1 single, L2 single,
 mixed-depth; numeric narrow, broad).  It reuses the SAME edited cells E and
-compares D(E,M_x1), D(E,M_x5), D(E,L) (M_x5 = existing matched_retrain,
-relabeled matched_retrain_weighted; L = loo_retrain).  Promotion requires:
-the balanced oracle FITS transformed+retained mappings, D(E,M_x1) < D(E,L),
-Delta_x1 = D(E,L)-D(E,M_x1) >= 0.5, and the conclusion agrees across ALL
-representative transformation types (refusal controls reported separately).
+compares D(E, matched_retrain_balanced), D(E, matched_retrain_weighted) and
+D(E, loo_retrain).  Promotion requires: the balanced oracle FITS
+transformed+retained mappings, D(E, balanced) < D(E, loo_retrain),
+Delta_balanced = D(E,loo_retrain)-D(E,balanced) >= 0.5, and the conclusion
+agrees across ALL representative transformation types (refusal controls
+reported separately).
 
 GX2S oracle-seed sensitivity: the full matrices vary the EDIT seed but hold
 the fresh-retrain references at seed 17.  GX2S trains matched_retrain +
@@ -132,34 +143,69 @@ RETAIN_REPEAT = 3
 MIN_CANDIDATE_MASS = 0.01
 # G3.1 correction: the families below distinguish initialization AND data.
 # matched/loo *_finetune = trained-baseline-h init (continued fine-tuning);
-# matched/loo *_retrain  = FRESH base + fresh LoRA, trained with the
-# ORIGINAL route-h protocol (3000/200/2e-5, repeat 50, seed 17).
+# matched/loo *_retrain  = FRESH base + fresh LoRA, trained with route h's
+# own protocol (3000/200/2e-5, uniform repeat 50, seed 17).
 # Only the retrain families support retraining claims.
 RETRAIN_STEPS = 3000
 RETRAIN_WARMUP = 200
 RETRAIN_LR = 2e-5
-RETRAIN_REPEAT = 50             # original route retained repetition
-RETRAIN_TARGET_BOOST = 5        # original route target oversampling
+RETRAIN_REPEAT = 50             # rd.ROUTE_REPEAT: every mapping, uniform
+# The transformed target's oversampling.  This is mx.TARGET_BOOST -- the
+# multiplier the EDIT/suppression recipe applies to its suppression pairs --
+# and it is NOT part of route h: rd.train_h builds every code->alias pair at
+# repeat=ROUTE_REPEAT with no boost anywhere in the module.  Describing x5 as
+# "the original route-h recipe" misattributes the edit recipe's weighting to
+# the route and makes the weighted reference read as the neutral one, which is
+# why the two references carry the names below.
+RETRAIN_TARGET_BOOST = 5
 DELTA_RETRAIN_MIN_MARGIN = 0.5  # G3.1 materiality margin (L2)
 ORACLE_FAMILIES = ("matched_finetune", "loo_finetune",
                    "matched_retrain", "loo_retrain")
 
-# GX2B balanced matched-retrain ablation.  The main matrix's
-# matched_retrain oversamples the transformed target x5 (RETRAIN_TARGET_BOOST,
-# replicating the original route-h recipe) -- we relabel it
-# 'matched_retrain_weighted' in the ablation report.  The BALANCED reference
-# uses target_boost=1 (the transformed mapping appears once per epoch, exactly
-# like each retained mapping), with steps/warmup/lr/repeat/LoRA-config/seed
-# held IDENTICAL.  Comparing D(E,M_x1), D(E,M_x5), D(E,L) tests whether the
-# 'edit ~= policy-matched retraining' reading survives WITHOUT target
-# oversampling, using the SAME edited cells E (no retraining of E).
+# GX2B balanced matched-retrain ablation.  matched_retrain_balanced uses
+# target_boost=1 (the transformed mapping appears once per epoch, exactly like
+# each retained mapping -- which is how route h itself is built), with
+# steps/warmup/lr/repeat/LoRA-config/seed held IDENTICAL to the weighted
+# reference.  Comparing D(E, balanced), D(E, weighted) and D(E, loo_retrain)
+# tests whether the 'edit ~= policy-matched retraining' reading survives
+# WITHOUT the edit recipe's target oversampling, using the SAME edited cells E
+# (no retraining of E).
 RETRAIN_TARGET_BOOST_BALANCED = 1
 BALANCED_FAMILY = "matched_retrain_balanced"
 WEIGHTED_FAMILY = "matched_retrain"          # existing x5 dir name
-WEIGHTED_LABEL = "matched_retrain_weighted"  # reporting label for x5
-BALANCED_LABEL = "matched_retrain_balanced"  # reporting label for x1
-# One representative per transformation type; all already have E (edited
-# cell, seed 17), M_x5 and L on disk from the G3.1 pilot / main matrix.
+#: Reporting names.  Reports and prose name the reference they mean; "x5"/"x1"
+#: survive only as stored numeric keys, declared in REFERENCE_NAMING below.
+WEIGHTED_LABEL = "matched_retrain_weighted"  # target_boost=5
+BALANCED_LABEL = "matched_retrain_balanced"  # target_boost=1
+#: Shipped in the reports so a reader can map every stored key to the
+#: reference it holds, and see why the keys were not renamed.  Same pattern as
+#: the prompt panel's report_layer_naming: name the quantity in prose, keep the
+#: stored field stable, and say so.
+REFERENCE_NAMING = {
+    "matched_retrain_weighted": (
+        "target_boost=5: the transformed mapping is oversampled 5x.  That x5 "
+        "is mx.TARGET_BOOST from the EDIT/suppression recipe, NOT route h's "
+        "recipe -- rd.train_h builds every mapping at a uniform "
+        "repeat=ROUTE_REPEAT with no target boost"),
+    "matched_retrain_balanced": (
+        "target_boost=1: the transformed mapping appears once per epoch, "
+        "exactly like each retained mapping, which is how route h itself is "
+        "trained"),
+    "stored_numeric_keys_keep_the_shorthand": (
+        "d_E_Mx1 / d_E_Mx5 / delta_x1 / delta_x5 / Mx1_vs_Mx5 / "
+        "Mx1_closer_than_L are UNCHANGED: renaming a stored key would break "
+        "comparability with the committed ablation reports and with the cells "
+        "already measured under those keys"),
+    "key_to_name": {"Mx1": "matched_retrain_balanced",
+                    "Mx5": "matched_retrain_weighted",
+                    "x1": "matched_retrain_balanced",
+                    "x5": "matched_retrain_weighted",
+                    "L": "loo_retrain",
+                    "E": "edited cell E (edit seed 17)"},
+}
+# One representative per transformation type; all already have the edited
+# cell E (seed 17), matched_retrain_weighted and loo_retrain on disk from the
+# G3.1 pilot / main matrix.
 BALANCED_REP_SETS = {
     "salmu": ["gx_sal_s_L1_00060576",   # specific->level1 (sibling ctl)
               "gx_sal_s_L2_00039880",   # specific->level2
@@ -167,6 +213,60 @@ BALANCED_REP_SETS = {
     "celeba_numeric": ["gx_num_s_exact_to_narrow_Y02",  # exact->narrow
                        "gx_num_s_exact_to_broad_Y04"],  # exact->broad
 }
+
+
+def _device_name():
+    return (torch.cuda.get_device_name(0)
+            if torch.cuda.is_available() else "cpu")
+
+
+def _cumulative_elapsed(artifact_path, t_start, device_now=None):
+    """Cost of every pass that produced the artifact at ``artifact_path``.
+
+    ``elapsed_sec`` used to be ``time.time() - t_start`` for the invoking pass
+    alone, so re-aggregating a finished matrix on CPU overwrote the record of a
+    244,305s GPU run with the seconds the re-derivation took, and the cost of
+    the training that produced the numbers was gone from the manifest.  A field
+    describing what producing this state cost has to accumulate, and a pass that
+    cannot read its predecessor says so rather than silently restarting the
+    total from zero.  Same fix as the method-baseline runner's
+    ``_cumulative_elapsed``.
+    """
+    this_pass = round(time.time() - t_start, 1)
+    path = Path(artifact_path)
+    prior, devices, carried = 0.0, [], None
+    note = "no earlier artifact at this path: this pass is the whole total"
+    if path.exists():
+        try:
+            prev = json.loads(path.read_text(encoding="utf-8"))
+            prior = float(prev.get("elapsed_sec") or 0.0)
+            devices = list(prev.get("devices_used")
+                           or ([prev["gpu"]] if prev.get("gpu") else []))
+            carried = prev.get("elapsed_restoration")
+            note = ("prior elapsed_sec read from the artifact this pass "
+                    "overwrites")
+        except Exception as exc:
+            note = (f"the earlier artifact was UNREADABLE ({exc!r}), so the "
+                    f"total restarts at this pass and UNDERSTATES every run "
+                    f"before it")
+    if device_now and device_now not in devices:
+        devices.append(device_now)
+    out = {
+        "elapsed_sec": round(prior + this_pass, 1),
+        "elapsed_this_pass_sec": this_pass,
+        "elapsed_prior_passes_sec": prior,
+        "elapsed_covers": (
+            "every pass whose artifact this one overwrites, including the GPU "
+            "passes that trained the cells and the oracles; a CPU "
+            "re-aggregation adds its own seconds and erases nothing"),
+        "elapsed_accumulation": note,
+    }
+    if devices:
+        out["devices_used"] = devices
+    if carried:
+        out["elapsed_restoration"] = carried
+    return out
+
 
 # GX2S oracle-seed sensitivity.  The full matrices vary the EDIT seed but
 # hold the fresh-retrain references at ORACLE_SEED=17.  GX2S additionally
@@ -388,8 +488,10 @@ def _strict_accuracy(session, ctx, expected_of, args):
 #   matched_finetune / loo_finetune: trained-baseline-h init (continued
 #     fine-tuning references -- what G3 mistakenly called "retraining");
 #   matched_retrain / loo_retrain: FRESH LoRA init (lora_A kaiming,
-#     lora_B zeros) + the ORIGINAL route-h protocol (3000/200/2e-5,
-#     targets x5, retained x50, seed 17).
+#     lora_B zeros) + route h's own protocol (3000/200/2e-5, uniform
+#     repeat 50, seed 17); the matched reference additionally applies the
+#     EDIT recipe's target oversampling (x5) and is reported as
+#     matched_retrain_weighted.
 # ====================================================================== #
 def matched_pairs(ctx, entry):
     pairs = []
@@ -476,12 +578,15 @@ def _write_oracle_results(out_dir, family, init, protocol, extra=None):
 
 def train_oracle_retrain(session, ds, ctx, entry, family, out_dir, args,
                          target_boost=None, oracle_seed=None):
-    """Fresh-init retraining oracle under the ORIGINAL route-h protocol.
+    """Fresh-init retraining oracle under route h's own protocol.
 
     ``target_boost`` oversamples the transformed targets.  None ->
-    RETRAIN_TARGET_BOOST (x5, the 'weighted' matched reference).  The
-    GX2B balanced ablation passes target_boost=1 so the transformed
-    mapping appears exactly once per epoch like each retained mapping.
+    RETRAIN_TARGET_BOOST (5, the matched_retrain_weighted reference).  The
+    boost is the EDIT recipe's (mx.TARGET_BOOST), not route h's: rd.train_h
+    applies a uniform repeat with no boost, so target_boost=1 -- what the
+    GX2B balanced ablation passes, giving matched_retrain_balanced -- is the
+    variant constructed like the route, the transformed mapping appearing
+    exactly once per epoch like each retained mapping.
     ``oracle_seed`` sets the fresh-init + training RNG.  None ->
     ORACLE_SEED (17, the main matrix).  GX2S oracle-seed sensitivity
     passes 42 / 123.  steps/warmup/lr/repeat/LoRA-config are IDENTICAL.
@@ -969,10 +1074,11 @@ def reevaluate_oracles_cpu(ds, ctx, matrix, out_base):
 
 
 # ====================================================================== #
-# GX2B: BALANCED matched-retrain ablation (target_boost=1)
-#   Trains a fresh-init matched oracle WITHOUT target oversampling and
-#   compares D(E,M_x1), D(E,M_x5), D(E,L) on the SAME edited cells E.
-#   M_x5 (existing matched_retrain) is relabeled matched_retrain_weighted.
+# GX2B: matched_retrain_balanced ablation (target_boost=1)
+#   Trains a fresh-init matched oracle WITHOUT the edit recipe's target
+#   oversampling and compares D(E, matched_retrain_balanced),
+#   D(E, matched_retrain_weighted) and D(E, loo_retrain) on the SAME edited
+#   cells E.  The weighted reference is the existing matched_retrain dir.
 # ====================================================================== #
 def run_balanced_ablation(args, ds, ctx, matrix, out_base, set_ids):
     logger.info("=" * 60)
@@ -1019,9 +1125,11 @@ def run_balanced_ablation(args, ds, ctx, matrix, out_base, set_ids):
 
 
 def compare_matched_boost(ds, ctx, matrix, out_base, set_ids):
-    """CPU 3-way comparison D(E,M_x1) vs D(E,M_x5) vs D(E,L) per
-    transformation target (refusal controls excluded from the promotion
-    verdict but reported).  E = edited cell (seed 17), reused as-is."""
+    """CPU 3-way comparison of the edited cell E (edit seed 17, reused as-is)
+    against matched_retrain_balanced, matched_retrain_weighted and
+    loo_retrain, per transformation target.  Refusal controls are excluded
+    from the promotion verdict but reported.  REFERENCE_NAMING declares why
+    the emitted numeric keys still read Mx1/Mx5."""
     oracle_root = out_base / "oracles"
 
     def _load(dir_name):
@@ -1123,20 +1231,27 @@ def compare_matched_boost(ds, ctx, matrix, out_base, set_ids):
         v["set_promotes"] for v in per_set.values())
     return {
         "dataset": ds,
-        "ablation": "balanced matched_retrain (target_boost=1) vs weighted "
-                    "(target_boost=5) vs LOO retrain; same edited cells E",
+        "ablation": (f"{BALANCED_LABEL} (target_boost="
+                     f"{RETRAIN_TARGET_BOOST_BALANCED}) vs {WEIGHTED_LABEL} "
+                     f"(target_boost={RETRAIN_TARGET_BOOST}) vs loo_retrain; "
+                     f"same edited cells E"),
         "distance_metric": "gated candidate-space L2 (unreliable -> null)",
         "margin_l2": DELTA_RETRAIN_MIN_MARGIN,
+        "reference_naming": dict(REFERENCE_NAMING),
         "protocol_identical": {
             "steps": RETRAIN_STEPS, "warmup": RETRAIN_WARMUP,
             "lr": RETRAIN_LR, "repeat": RETRAIN_REPEAT,
             "seed": ORACLE_SEED,
-            "only_difference": "target_boost 1 (balanced) vs 5 (weighted)"},
+            "only_difference": (f"target_boost {RETRAIN_TARGET_BOOST_BALANCED} "
+                                f"({BALANCED_LABEL}) vs "
+                                f"{RETRAIN_TARGET_BOOST} ({WEIGHTED_LABEL})")},
         "promotion_conditions": [
-            ("balanced matched oracle FITS transformed + retained mappings "
+            (f"{BALANCED_LABEL} FITS transformed + retained mappings "
              "(strict 1.0, mass >= 0.99)"),
-            "D(E, M_x1) < D(E, L) for every transformation target",
-            "Delta_x1 = D(E,L) - D(E,M_x1) >= margin (0.5)",
+            (f"D(E, {BALANCED_LABEL}) < D(E, loo_retrain) for every "
+             "transformation target"),
+            (f"Delta_balanced = D(E, loo_retrain) - D(E, {BALANCED_LABEL}) "
+             f">= margin ({DELTA_RETRAIN_MIN_MARGIN})"),
             ("conclusion agrees across ALL representative transformation "
              "types (refusal controls reported separately, not gating)")],
         "per_set": per_set,
@@ -1218,16 +1333,17 @@ def run_gx2b(args, ds, ctx, matrix, out_base, provenance, commit, t_start):
         need = {
             "E_seed17_cell": out_base / "cells" / sid / "seed_17"
             / "cell_results.json",
-            "M_x5_matched_retrain": oracle_root
+            f"{WEIGHTED_LABEL}": oracle_root
             / f"{WEIGHTED_FAMILY}_{sid}" / "oracle_soft.json",
-            "L_loo_retrain": oracle_root
+            "loo_retrain": oracle_root
             / f"loo_retrain_{sid}" / "oracle_soft.json",
         }
         missing = sorted(k for k, p in need.items() if not p.exists())
         if missing:
             raise RuntimeError(
                 f"GX2B[{sid}]: missing prerequisites {missing} (the "
-                f"ablation reuses existing E/M_x5/L; run the main matrix "
+                f"ablation reuses the existing edited cell, "
+                f"{WEIGHTED_LABEL} and loo_retrain; run the main matrix "
                 f"or G3.1 pilot first)")
     bal = run_balanced_ablation(args, ds, ctx, matrix, out_base, set_ids)
     cmp = compare_matched_boost(ds, ctx, matrix, out_base, set_ids)
@@ -1247,7 +1363,9 @@ def run_gx2b(args, ds, ctx, matrix, out_base, provenance, commit, t_start):
                     "hf_revision": archive.get("hf_revision"),
                     "n_files": archive.get("n_files", 0)},
         "promotes_all": cmp["promotes_all"],
-        "elapsed_sec": round(time.time() - t_start, 1),
+        **_cumulative_elapsed(
+            GRAN_ROOT / "reports" / f"balanced_ablation_{ds}.json",
+            t_start, _device_name()),
     }
     rep_dir = GRAN_ROOT / "reports"
     rep_dir.mkdir(parents=True, exist_ok=True)
@@ -1553,7 +1671,9 @@ def run_gx2s(args, ds, ctx, matrix, out_base, provenance, commit, t_start):
                     "hf_upload_ok": archive.get("hf_upload_ok"),
                     "hf_revision": archive.get("hf_revision"),
                     "n_files": archive.get("n_files", 0)},
-        "elapsed_sec": round(time.time() - t_start, 1),
+        **_cumulative_elapsed(
+            GRAN_ROOT / "reports" / f"oracle_seed_sensitivity_{ds}.json",
+            t_start, _device_name()),
     }
     rep_dir = GRAN_ROOT / "reports"
     rep_dir.mkdir(parents=True, exist_ok=True)
@@ -1903,8 +2023,10 @@ def aggregate_gx(ds, out_base, matrix, args=None):
             if a["operation"] == "refusal":
                 continue
             r = _oracle_block(c).get(t, {})
-            dmr = (r.get("matched_retrain") or {}).get("distance")
-            dlr = (r.get("loo_retrain") or {}).get("distance")
+            mr_block = r.get("matched_retrain") or {}
+            loo_block = r.get("loo_retrain") or {}
+            dmr = mr_block.get("distance")
+            dlr = loo_block.get("distance")
             delta = r.get("delta_retrain_l2")
             fitp = (out_base / "oracles"
                     / f"matched_retrain_{c['set_id']}"
@@ -1914,20 +2036,39 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                 with open(fitp) as f:
                     fit = json.load(f)
             gate_per.append({
-                "cell_id": c["cell_id"], "target": t,
+                "cell_id": c["cell_id"], "target": t, "seed": c["seed"],
                 "operation": a["operation"],
                 "matched_retrain_fit_ok": fit.get("fit_ok"),
                 "matched_retrain_strict": fit.get("strict_all_expected"),
                 "matched_retrain_mass": fit.get("min_candidate_mass"),
+                "matched_retrain_reliable": bool(mr_block.get("reliable")),
                 "l2_to_matched_retrain": dmr["l2"] if dmr else None,
                 "l2_to_loo_retrain": dlr["l2"] if dlr else None,
+                "loo_retrain_reliable": bool(loo_block.get("reliable")),
+                # The gate's own recorded reason for refusing the distance.
+                # A null delta has a cause, and the cause is the difference
+                # between "not established" and "established and failed".
+                "why_no_loo_retrain_distance": loo_block.get("reason"),
                 "delta_retrain_l2": delta,
+                "delta_retrain_established": delta is not None,
                 "delta_material": (delta is not None
                                    and delta >= DELTA_RETRAIN_MIN_MARGIN),
                 "closer_to_matched_retrain": bool(
                     dmr and dlr and dmr["l2"] < dlr["l2"]),
             })
     have = [p for p in gate_per if p["delta_retrain_l2"] is not None]
+
+    def _target_ok(p):
+        return bool(p["matched_retrain_fit_ok"]
+                    and (p["matched_retrain_mass"] or 0) >= 0.99
+                    and p["delta_material"] and p["closer_to_matched_retrain"])
+
+    #: A target whose delta is null was never compared: the frozen
+    #: MIN_CANDIDATE_MASS gate refused to renormalize a distribution that left
+    #: the recognized label set.  That is a COVERAGE limit, not a failed
+    #: comparison, and reporting the two together is what makes a 117/120
+    #: result read as three failures.
+    not_established = [p for p in gate_per if p["delta_retrain_l2"] is None]
     if not gate_per:
         g3_1_gate = {"status": "no_transformation_targets_evaluated"}
     elif not have:
@@ -1935,11 +2076,10 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                      "n_transformation_targets": len(gate_per),
                      "per_target": gate_per}
     else:
-        ok = (len(have) == len(gate_per) and all(
-            p["matched_retrain_fit_ok"]
-            and (p["matched_retrain_mass"] or 0) >= 0.99
-            and p["delta_material"] and p["closer_to_matched_retrain"]
-            for p in have))
+        failed = [p for p in have if not _target_ok(p)]
+        # Same truth value as before, decomposed so the report can say WHICH
+        # of the two made it false.
+        ok = not not_established and not failed
         g3_1_gate = {
             "status": "evaluated", "passed": bool(ok),
             "margin_l2": DELTA_RETRAIN_MIN_MARGIN,
@@ -1953,6 +2093,51 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                 "D(edit, matched_retrain) < D(edit, loo_retrain)",
                 ("holds for EVERY transformation target, refusal controls "
                  "excluded")],
+            "coverage": {
+                "n_separation_established": len(have),
+                "n_separation_not_established": len(not_established),
+                "n_established_and_failing": len(failed),
+                "gate_fails_on": ("conditions" if failed else
+                                  "coverage" if not_established else
+                                  "nothing"),
+                "established_and_failing": [
+                    {"cell_id": p["cell_id"], "target": p["target"],
+                     "seed": p["seed"]}
+                    for p in failed],
+                "not_established": [
+                    {"cell_id": p["cell_id"], "target": p["target"],
+                     "seed": p["seed"],
+                     "operation": p["operation"],
+                     "l2_to_matched_retrain": p["l2_to_matched_retrain"],
+                     "matched_retrain_reliable":
+                         p["matched_retrain_reliable"],
+                     "l2_to_loo_retrain": None,
+                     "why_no_loo_retrain_distance":
+                         p["why_no_loo_retrain_distance"]}
+                    for p in not_established],
+                "meaning": (
+                    "'not established' is NOT 'failed'.  A null "
+                    "delta_retrain_l2 means the frozen "
+                    f"MIN_CANDIDATE_MASS={MIN_CANDIDATE_MASS} distance gate "
+                    "refused to renormalize the loo_retrain distribution at "
+                    "that target, so there is no LOO distance to compare "
+                    "against and no comparison was made.  The gate above "
+                    "requires EVERY transformation target, so an incomplete "
+                    "coverage makes passed=false on its own even when not one "
+                    "established comparison failed."),
+                "not_a_pending_job": (
+                    "the loo_retrain reference for these targets IS trained "
+                    "and committed at the frozen protocol "
+                    f"({RETRAIN_STEPS}/{RETRAIN_WARMUP}/{RETRAIN_LR}, "
+                    f"repeat {RETRAIN_REPEAT}, seed {ORACLE_SEED}); "
+                    "re-running it at that protocol reproduces the same "
+                    "candidate-score support, so the gap is a property of the "
+                    "frozen reference and not of an unfinished job"),
+                "no_seed_substitution": (
+                    "coverage may be widened only by a DECLARED sensitivity "
+                    "analysis that reports every outcome; a favorable oracle "
+                    "seed must never be substituted into this primary gate"),
+            },
             "per_target": gate_per}
 
     # ---------------- scoped claims (G3.1 wording discipline) ----------
@@ -1970,7 +2155,97 @@ def aggregate_gx(ds, out_base, matrix, args=None):
     l2_mf, l2_mr = _trans_msd("matched_finetune"), _trans_msd(
         "matched_retrain")
     d_ft, d_rt = _trans_msd("delta_ft_l2"), _trans_msd("delta_retrain_l2")
+
+    # ---------------- the TWO conclusions, kept apart ------------------ #
+    # A complete behavioral matrix and an incomplete oracle comparison are
+    # different statements with different denominators.  Reporting them as one
+    # made 84/84 cells read as an unfinished experiment, and made 117/120
+    # comparisons read as three failed separations.  Neither is what was
+    # measured, so each gets its own claim with its own coverage.
+    n_pass = sum(c["criteria"]["cell_pass"] for c in cells)
+    n_expected = matrix["n_cells"]
+    seeds_seen = sorted({c["seed"] for c in cells})
+    if n_pass == len(cells) == n_expected:
+        behavioral_claim = (
+            f"All {n_pass} cells of the full {n_expected}-cell {ds} matrix "
+            f"satisfy the frozen behavioral criteria (cell_pass), at edit "
+            f"seeds {seeds_seen}.  This is the BEHAVIORAL conclusion -- "
+            f"transformation accuracy, retained accuracy, the sibling and "
+            f"retained controls, and source leakage -- and it is complete.  "
+            f"It is reported separately from the oracle-separation coverage "
+            f"below, which asks a different question with a different "
+            f"denominator.")
+    elif n_pass == len(cells):
+        behavioral_claim = (
+            f"All {n_pass} evaluated cells satisfy the frozen behavioral "
+            f"criteria, but the matrix is INCOMPLETE: {len(cells)} of "
+            f"{n_expected} cells, at edit seeds {seeds_seen} of "
+            f"{sorted(matrix['edit_seeds'])}.  No behavioral conclusion about "
+            f"the full matrix may be drawn from a partial one.")
+    else:
+        behavioral_claim = (
+            f"{n_pass} of {len(cells)} evaluated cells satisfy the frozen "
+            f"behavioral criteria ({n_expected} expected when complete), so "
+            f"{len(cells) - n_pass} cell(s) FAIL and the behavioral "
+            f"conclusion does not hold.")
+
+    cov = g3_1_gate.get("coverage")
+    n_tot = g3_1_gate.get("n_transformation_targets")
+    if cov:
+        n_est = cov["n_separation_established"]
+        n_ne = cov["n_separation_not_established"]
+        n_bad = cov["n_established_and_failing"]
+        # Group the uncovered rows by (set, target) so three edit seeds of one
+        # target read as ONE target with no LOO support, not three failures.
+        by_target = {}
+        for row in cov["not_established"]:
+            by_target.setdefault(
+                (row["cell_id"].rsplit("__seed", 1)[0], row["target"]),
+                []).append(row["seed"])
+        uncovered_detail = "; ".join(
+            f"target {t} in {sid} at edit seed(s) {sorted(seeds)}"
+            for (sid, t), seeds in sorted(by_target.items())) or "none"
+        causes = sorted({r["why_no_loo_retrain_distance"] or "not recorded"
+                         for r in cov["not_established"]})
+    else:
+        n_est = n_ne = n_bad = None
+        uncovered_detail = causes = None
+
+    if g3_1_gate.get("passed"):
+        oracle_separation_claim = (
+            f"Matched-vs-LOO retraining separation is established for "
+            f"{n_est} of {n_tot} target-seed comparisons -- every "
+            f"transformation target evaluated -- and each is material "
+            f"(Delta_retrain >= {DELTA_RETRAIN_MIN_MARGIN}) with the edit "
+            f"closer to {WEIGHTED_LABEL} than to loo_retrain.")
+    elif not cov:
+        oracle_separation_claim = (
+            "Matched-vs-LOO retraining separation is not evaluated "
+            f"(status={g3_1_gate.get('status')}).")
+    else:
+        oracle_separation_claim = (
+            f"Matched-vs-LOO retraining separation is established for "
+            f"{n_est} of {n_tot} target-seed comparisons"
+            + (f", and every one of those {n_est} is material "
+               f"(Delta_retrain >= {DELTA_RETRAIN_MIN_MARGIN}) with the edit "
+               f"closer to {WEIGHTED_LABEL} than to loo_retrain"
+               if not n_bad else
+               f", but {n_bad} of the established comparisons FAIL the "
+               f"conditions")
+            + f".  It is NOT established for the remaining {n_ne}: "
+            f"{uncovered_detail}.  The frozen distance gate records the cause "
+            f"per target: {'; '.join(causes)}.  The G3.1 gate reports "
+            f"passed=false because it requires EVERY transformation target"
+            + (" -- it did not fail on any measured comparison"
+               if not n_bad else "")
+            + ".  Retraining the reference until it happens to pass is not a "
+              "repair: that reference is already trained and committed at the "
+              "frozen protocol, and re-running the same protocol reproduces "
+              "the same candidate-score support.")
+
     claims = {
+        "behavioral_claim": behavioral_claim,
+        "oracle_separation_claim": oracle_separation_claim,
         "supported_finetune_reference": (
             "Over the evaluated code prompts and candidate-label space, the "
             "edit is extremely close to a transformation-matched "
@@ -1989,6 +2264,17 @@ def aggregate_gx(ds, out_base, matrix, args=None):
              + " 'Close to policy-matched retraining' is supported, scoped "
                "to the evaluated code prompts and candidate-label space.")
             if g3_1_gate.get("passed") else
+            ("'Close to policy-matched retraining' is supported WHERE IT IS "
+             f"ESTABLISHED -- {n_est} of {n_tot} target-seed comparisons, "
+             "every one material and every one closer to "
+             f"{WEIGHTED_LABEL} than to loo_retrain -- but it is NOT "
+             f"supported for the full matrix, because separation is not "
+             f"established for {n_ne} target-seed comparison(s) "
+             f"({uncovered_detail}).  The frozen G3.1 gate requires every "
+             "transformation target, so it reports passed=false on COVERAGE "
+             "and not on any measured comparison.  Scoped to the evaluated "
+             "code prompts and candidate-label space.")
+            if cov and not n_bad else
             "'Close to policy-matched retraining' is NOT yet supported: "
             "retrain-family oracles are missing or the G3.1 gate has not "
             f"passed (status={g3_1_gate.get('status')})."),
@@ -2043,12 +2329,26 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                                 "mapping (continued fine-tuning reference)",
             "loo_finetune": "trained baseline h init; retained mapping "
                             "only (deletion-as-fine-tuning reference)",
-            "matched_retrain": "FRESH base + fresh LoRA; transformed full "
-                               "mapping; original route-h protocol "
-                               "(3000/200/2e-5, targets x5, retained x50, "
-                               "seed 17)",
+            "matched_retrain": (f"FRESH base + fresh LoRA; transformed full "
+                                f"mapping; route h's own protocol "
+                                f"({RETRAIN_STEPS}/{RETRAIN_WARMUP}/"
+                                f"{RETRAIN_LR}, uniform repeat "
+                                f"{RETRAIN_REPEAT}, seed {ORACLE_SEED}) PLUS "
+                                f"the EDIT recipe's target oversampling "
+                                f"(target_boost={RETRAIN_TARGET_BOOST}); "
+                                f"reported as {WEIGHTED_LABEL}.  The x5 is "
+                                f"mx.TARGET_BOOST from the suppression recipe, "
+                                f"NOT route h's recipe: rd.train_h builds "
+                                f"every mapping at a uniform repeat with no "
+                                f"target boost"),
+            "matched_retrain_balanced": (
+                f"as matched_retrain but target_boost="
+                f"{RETRAIN_TARGET_BOOST_BALANCED} (GX2B): the transformed "
+                f"mapping appears once per epoch like each retained mapping, "
+                f"which is how route h itself is trained"),
             "loo_retrain": "FRESH base + fresh LoRA; retained mapping "
-                           "only; same route-h protocol",
+                           "only; same protocol, no transformed target to "
+                           "weight",
             "delta_ft_l2": "D(edit, loo_finetune) - D(edit, "
                            "matched_finetune)",
             "delta_retrain_l2": "D(edit, loo_retrain) - D(edit, "
@@ -2070,6 +2370,7 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                       "reference, CPU re-evaluation of existing edited "
                       "checkpoints (weights untouched).",
         },
+        "reference_naming": dict(REFERENCE_NAMING),
         "g3_1_gate": g3_1_gate,
         "claims": claims,
         "scope": {
@@ -2220,9 +2521,12 @@ def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
                     "per_mode_pass": {m: [v["cell_pass"], v["n_cells"]]
                                       for m, v in
                                       summary["per_mode"].items()}},
-        "elapsed_sec": round(time.time() - t_start, 1),
-        "gpu": torch.cuda.get_device_name(0)
-        if torch.cuda.is_available() else "cpu",
+        "elapsed_sec_note": (
+            "elapsed_sec is CUMULATIVE over every pass that produced this "
+            "manifest; elapsed_this_pass_sec is this pass alone"),
+        **_cumulative_elapsed(out_base / "run_manifest.json", t_start,
+                              _device_name()),
+        "gpu": _device_name(),
     }
     with open(out_base / "run_manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
@@ -2349,8 +2653,10 @@ def main():
     if args.phase == "GX0":
         return 0
     if args.phase == "GX2B":
-        # balanced matched-retrain ablation: independent of the main
-        # cell/oracle flow; reuses existing E/M_x5/L, trains only M_x1
+        # matched_retrain_balanced ablation: independent of the main
+        # cell/oracle flow; reuses the existing edited cell,
+        # matched_retrain_weighted and loo_retrain, trains only the balanced
+        # reference
         return run_gx2b(args, ds, ctx, matrix, out_base, provenance,
                         commit, t_start)
     if args.phase == "GX2S":

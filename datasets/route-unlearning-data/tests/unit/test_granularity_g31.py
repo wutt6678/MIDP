@@ -5,9 +5,11 @@ fine-tuning references (baseline-h init), not retraining references:
 - fresh_reinit_lora / session_reset_fresh produce a FRESH init and never
   read (or preserve) any trained checkpoint -- proven by zeroing a
   pre-populated (simulated trained) lora_B;
-- the retrain-family data recipe (matched_retrain sees transformed
-  targets x5 + retained x50 under the route protocol; loo_retrain never
-  sees the targets);
+- the retrain-family data recipe (matched_retrain sees the transformed
+  targets at target_boost=5 plus every retained mapping at a uniform
+  repeat -- the boost is mx.TARGET_BOOST from the EDIT/suppression recipe,
+  NOT route h's, which rd.train_h builds with no boost at all; loo_retrain
+  never sees the targets);
 - oracle_family_distances computes Delta_FT and Delta_retrain separately
   with legacy aliases;
 - GX2R rewrites the oracle block of stored cells from distributions only
@@ -15,6 +17,15 @@ fine-tuning references (baseline-h init), not retraining references:
 - aggregation separates transformation targets from refusal controls,
   reports sibling coverage, configured-vs-executed seeds, and the G3.1
   promotion gate;
+- the G3.1 gate decomposes a false verdict into COVERAGE (no LOO distance
+  exists, so no comparison was made) and CONDITIONS (a comparison was made
+  and failed), and the behavioral and oracle-separation conclusions are
+  reported as two claims with two denominators;
+- the reports name matched_retrain_weighted / matched_retrain_balanced
+  rather than describing the x5 weighting as the ordinary route-h recipe,
+  and keep the stored numeric keys stable;
+- a CPU re-aggregation accumulates cost instead of overwriting the record
+  of the GPU passes that produced the numbers;
 - the dirty-code gate that lets GX2B/GX2S coexist with a running main
   matrix is scoped to the scripts this runner executes, and reports a
   declared script that is missing rather than widening to the worktree.
@@ -25,6 +36,7 @@ from __future__ import annotations
 import importlib.util
 import inspect
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -483,6 +495,290 @@ def test_g3_1_gate_materiality_and_claims(tmp_path):
     s3 = gxm.aggregate_gx("celeba_numeric", tmp2, matrix3)
     assert s3["g3_1_gate"]["status"] == "retrain_oracles_not_yet_trained"
     assert "passed" not in s3["g3_1_gate"]
+
+
+# ------------------------------------------------------------------ #
+# the TWO conclusions: behavioral coverage vs oracle-separation coverage
+# ------------------------------------------------------------------ #
+#: the cause the frozen distance gate recorded on the real numeric run, where
+#: loo_retrain_gx_num_mix_2 fell to a candidate score sum of 5.874e-03
+_REAL_LOO_CAUSE = (
+    "candidate mass too small to renormalize (model=9.998e-01, "
+    "oracle=5.874e-03, threshold=1.000e-02); output lies outside the "
+    "recognized label set, distance not established")
+
+
+def _two_seed_run(out_base, retrain_by_seed, cause=None):
+    """A matrix of one cell per given seed, with the LOO distances asked for."""
+    (out_base / "cells").mkdir(parents=True, exist_ok=True)
+    for seed, retrain in sorted(retrain_by_seed.items()):
+        c = _mk_cell(seed=seed, retrain=retrain)[0]
+        if cause is not None and retrain[1] is None:
+            for fam in c["oracle_families"].values():
+                if not fam["loo_retrain"]["reliable"]:
+                    fam["loo_retrain"]["reason"] = cause
+        d = out_base / "cells" / c["set_id"] / f"seed_{seed}"
+        d.mkdir(parents=True, exist_ok=True)
+        with open(d / "cell_results.json", "w") as f:
+            json.dump(c, f)
+    odir = out_base / "oracles" / f"matched_retrain_{_entry()['set_id']}"
+    odir.mkdir(parents=True, exist_ok=True)
+    with open(odir / "oracle_results.json", "w") as f:
+        json.dump({"fit_ok": True, "strict_all_expected": 1.0,
+                   "min_candidate_mass": 0.999}, f)
+    return {"edit_seeds": sorted(retrain_by_seed), "n_sets": 1,
+            "n_cells": len(retrain_by_seed), "sets": [_entry()]}
+
+
+def test_a_coverage_gap_is_not_reported_as_a_failed_separation(tmp_path):
+    """The numeric G5 situation, and the conflation it must not suffer.
+
+    Every cell passes the behavioral criteria while one target-seed comparison
+    has no LOO distance at all, because the frozen MIN_CANDIDATE_MASS gate
+    refused to renormalize a loo_retrain distribution that left the recognized
+    label set.  The G3.1 gate requires EVERY transformation target, so
+    ``passed`` is false -- but nothing failed.  Reporting the two together
+    reads as a broken separation and hides a complete behavioral matrix.
+    """
+    matrix = _two_seed_run(tmp_path, {17: (0.001, 1.3), 42: (0.001, None)},
+                           cause=_REAL_LOO_CAUSE)
+    s = gxm.aggregate_gx("celeba_numeric", tmp_path, matrix)
+    gate = s["g3_1_gate"]
+    assert gate["passed"] is False, "the frozen gate requires EVERY target"
+    cov = gate["coverage"]
+    assert cov["gate_fails_on"] == "coverage"
+    assert cov["n_separation_established"] == 1
+    assert cov["n_separation_not_established"] == 1
+    assert cov["n_established_and_failing"] == 0
+    assert cov["established_and_failing"] == []
+    row = cov["not_established"][0]
+    assert row["target"] == "i1" and row["seed"] == 42
+    assert row["l2_to_loo_retrain"] is None
+    # the matched side is fine: the edit IS extremely close to matched retrain,
+    # which is why "not established" cannot be read as "the edit drifted"
+    assert row["matched_retrain_reliable"] is True
+    assert row["l2_to_matched_retrain"] == pytest.approx(0.001)
+    # ... and the cause is the gate's OWN recorded reason, not a paraphrase
+    assert row["why_no_loo_retrain_distance"] == _REAL_LOO_CAUSE
+    assert "NOT 'failed'" in cov["meaning"]
+    assert "IS trained and committed at the frozen protocol" \
+        in cov["not_a_pending_job"]
+    assert "not of an unfinished job" in cov["not_a_pending_job"]
+    assert "never be substituted into this primary gate" \
+        in cov["no_seed_substitution"]
+    # per-target rows carry the same decomposition
+    per = {p["seed"]: p for p in gate["per_target"]}
+    assert per[17]["delta_retrain_established"] is True
+    assert per[42]["delta_retrain_established"] is False
+    assert per[42]["loo_retrain_reliable"] is False
+
+    claims = s["claims"]
+    assert "All 2 cells of the full 2-cell celeba_numeric matrix satisfy the " \
+        "frozen behavioral criteria" in claims["behavioral_claim"]
+    assert "BEHAVIORAL conclusion" in claims["behavioral_claim"]
+    sep = claims["oracle_separation_claim"]
+    assert "established for 1 of 2 target-seed comparisons" in sep
+    assert "It is NOT established for the remaining 1" in sep
+    assert "target i1 in sX at edit seed(s) [42]" in sep
+    assert "candidate mass too small to renormalize" in sep
+    assert "did not fail on any measured comparison" in sep
+    assert "until it happens to pass is not a repair" in sep
+    rt = claims["retraining_claim"]
+    assert "supported WHERE IT IS ESTABLISHED" in rt
+    assert "passed=false on COVERAGE" in rt
+    assert "NOT yet supported" not in rt, \
+        "no oracle is missing and no comparison failed; coverage is short"
+
+
+def test_a_conditions_failure_is_named_as_such_and_not_as_a_coverage_gap(
+        tmp_path):
+    """The other side: an established comparison that FAILS must say so.
+
+    The coverage vocabulary is only honest if it is not also used for a real
+    failure, so the same block has to name which of the two broke the gate.
+    """
+    matrix = _two_seed_run(tmp_path, {17: (0.001, 1.3), 42: (0.001, 0.101)})
+    s = gxm.aggregate_gx("celeba_numeric", tmp_path, matrix)
+    cov = s["g3_1_gate"]["coverage"]
+    assert s["g3_1_gate"]["passed"] is False
+    assert cov["gate_fails_on"] == "conditions"
+    assert cov["n_established_and_failing"] == 1
+    assert cov["n_separation_not_established"] == 0
+    assert cov["not_established"] == []
+    assert cov["established_and_failing"][0]["target"] == "i1"
+    assert cov["established_and_failing"][0]["seed"] == 42
+    claims = s["claims"]
+    assert "NOT yet supported" in claims["retraining_claim"]
+    assert "FAIL the conditions" in claims["oracle_separation_claim"]
+    assert "did not fail on any measured comparison" \
+        not in claims["oracle_separation_claim"]
+
+
+def test_a_passing_gate_reports_full_coverage(tmp_path):
+    matrix = _two_seed_run(tmp_path, {17: (0.001, 1.3), 42: (0.001, 1.3)})
+    s = gxm.aggregate_gx("celeba_numeric", tmp_path, matrix)
+    gate = s["g3_1_gate"]
+    assert gate["passed"] is True
+    cov = gate["coverage"]
+    assert cov["gate_fails_on"] == "nothing"
+    assert cov["n_separation_established"] == 2
+    assert cov["n_separation_not_established"] == 0
+    assert cov["n_established_and_failing"] == 0
+    assert "established for 2 of 2 target-seed comparisons" \
+        in s["claims"]["oracle_separation_claim"]
+    assert "every transformation target evaluated" \
+        in s["claims"]["oracle_separation_claim"]
+
+
+# ------------------------------------------------------------------ #
+# naming: the two matched references, and the x5 that is not route h's
+# ------------------------------------------------------------------ #
+def test_the_summary_never_calls_the_x5_weighting_the_route_h_recipe(tmp_path):
+    """The terminology defect, pinned against the artifact that ships it.
+
+    ``rd.train_h`` builds every code->alias pair at a uniform
+    ``repeat=ROUTE_REPEAT`` with no target boost anywhere in the module, so
+    ``matched_retrain``'s x5 is ``mx.TARGET_BOOST`` from the EDIT/suppression
+    recipe.  Calling it "the original route-h protocol" makes the weighted
+    reference read as the neutral one.
+    """
+    matrix = _two_seed_run(tmp_path, {17: (0.001, 1.3)})
+    s = gxm.aggregate_gx("celeba_numeric", tmp_path, matrix)
+    defs = s["oracle_family_definitions"]
+    assert gxm.WEIGHTED_LABEL == "matched_retrain_weighted"
+    assert gxm.BALANCED_LABEL == "matched_retrain_balanced"
+    assert gxm.WEIGHTED_LABEL in defs["matched_retrain"]
+    assert "NOT route h's recipe" in defs["matched_retrain"]
+    assert "rd.train_h" in defs["matched_retrain"]
+    assert defs["matched_retrain_balanced"].startswith(
+        "as matched_retrain but target_boost=1")
+    assert "which is how route h itself is trained" \
+        in defs["matched_retrain_balanced"]
+    blob = json.dumps(s)
+    for banned in ("targets x5", "ORIGINAL route-h protocol",
+                   "original route-h protocol", "relabeled"):
+        assert banned not in blob, f"the summary still says {banned!r}"
+    naming = s["reference_naming"]
+    assert naming["key_to_name"]["x5"] == "matched_retrain_weighted"
+    assert naming["key_to_name"]["x1"] == "matched_retrain_balanced"
+    assert naming["key_to_name"]["L"] == "loo_retrain"
+
+
+def test_the_ablation_report_names_both_references_and_keeps_stored_keys(
+        tmp_path):
+    """Prose is renamed; stored numeric keys are NOT.
+
+    Renaming ``d_E_Mx5`` would break comparability with the committed
+    ablation reports and with the cells already measured under those keys, so
+    the report carries a naming block that maps each shorthand instead -- the
+    same split the prompt panel uses for its score-sum fields.
+    """
+    ctx, entry = _ctx(), _entry()
+    matrix = {"sets": [entry]}
+    exp = {i: gxm.expected_label(ctx, entry, i) for i in ctx["identity_ids"]}
+    base = dict(ctx["baseline_alias_of"])
+    out_base = tmp_path
+    (out_base / "cells" / "sX" / "seed_17").mkdir(parents=True)
+    with open(out_base / "cells" / "sX" / "seed_17" / "cell_results.json",
+              "w") as f:
+        json.dump({"cell_id": "sX__seed17", "set_id": "sX", "seed": 17,
+                   "soft_probs_full": {i: _summary(exp[i])["probs"]
+                                       for i in ctx["identity_ids"]}}, f)
+    matched_soft = {i: _summary(exp[i]) for i in ctx["identity_ids"]}
+    loo_soft = {i: _summary(base[i]) for i in ctx["identity_ids"]}
+    fit_ok = {"strict_all_expected": 1.0, "min_candidate_mass": 0.999,
+              "fit_ok": True, "protocol": {"target_boost": 1}}
+    _place_oracle(out_base, "matched_retrain_balanced_sX", matched_soft,
+                  fit_ok)
+    _place_oracle(out_base, "matched_retrain_sX", matched_soft)
+    _place_oracle(out_base, "loo_retrain_sX", loo_soft)
+    cmp = gxm.compare_matched_boost("salmu", ctx, matrix, out_base, ["sX"])
+    assert cmp["ablation"] == (
+        "matched_retrain_balanced (target_boost=1) vs "
+        "matched_retrain_weighted (target_boost=5) vs loo_retrain; same "
+        "edited cells E")
+    assert cmp["protocol_identical"]["only_difference"] == (
+        "target_boost 1 (matched_retrain_balanced) vs 5 "
+        "(matched_retrain_weighted)")
+    conds = " ".join(cmp["promotion_conditions"])
+    assert "D(E, matched_retrain_balanced) < D(E, loo_retrain)" in conds
+    assert "Delta_balanced = D(E, loo_retrain) - " \
+        "D(E, matched_retrain_balanced)" in conds
+    assert "M_x1" not in conds and "M_x5" not in conds
+    assert cmp["reference_naming"]["key_to_name"]["Mx5"] == \
+        "matched_retrain_weighted"
+    assert "UNCHANGED" in cmp["reference_naming"][
+        "stored_numeric_keys_keep_the_shorthand"]
+    # the stored numeric keys survive, and still hold the same numbers
+    row = cmp["per_set"]["sX"]["transformation_targets"][0]
+    for key in ("d_E_Mx1", "d_E_Mx5", "d_E_L", "delta_x1", "delta_x5",
+                "Mx1_closer_than_L", "delta_x1_material", "Mx1_vs_Mx5"):
+        assert key in row, f"a stored numeric key was renamed: {key}"
+    assert row["d_E_Mx1"] < 1e-6 and row["d_E_Mx5"] < 1e-6
+    assert cmp["promotes_all"] is True
+    assert "x5" not in json.dumps(cmp["promotion_conditions"])
+
+
+# ------------------------------------------------------------------ #
+# cost of a re-aggregation must not erase cost of the run before it
+# ------------------------------------------------------------------ #
+def test_cumulative_elapsed_never_erases_the_cost_of_an_earlier_pass(tmp_path):
+    """A CPU re-aggregation must not overwrite a GPU run's cost.
+
+    ``elapsed_sec`` used to be this pass alone, so re-deriving a finished
+    matrix on CPU replaced the manifest's record of a 244,305s run with the
+    handful of seconds the re-derivation took.  The field describes what
+    producing this state cost, so it accumulates -- and a pass that cannot
+    read its predecessor says so instead of silently restarting from zero.
+    """
+    path = tmp_path / "run_manifest.json"
+    # no predecessor: this pass is the whole total, and it says so
+    out = gxm._cumulative_elapsed(path, time.time() - 12.5, "cpu")
+    assert out["elapsed_prior_passes_sec"] == 0.0
+    assert out["elapsed_this_pass_sec"] == pytest.approx(12.5, abs=1.0)
+    assert out["elapsed_sec"] == pytest.approx(12.5, abs=1.0)
+    assert "no earlier artifact" in out["elapsed_accumulation"]
+    assert out["devices_used"] == ["cpu"]
+    assert "elapsed_restoration" not in out
+    # a predecessor holding a finished GPU run
+    with open(path, "w") as f:
+        json.dump({"elapsed_sec": 244305.5,
+                   "gpu": "NVIDIA RTX 6000 Ada Generation"}, f)
+    out2 = gxm._cumulative_elapsed(path, time.time() - 3.0, "cpu")
+    assert out2["elapsed_prior_passes_sec"] == 244305.5
+    assert out2["elapsed_sec"] == pytest.approx(244308.5, abs=1.0)
+    assert out2["elapsed_sec"] > 244305.5, "the GPU cost survives"
+    assert out2["devices_used"] == ["NVIDIA RTX 6000 Ada Generation", "cpu"]
+    assert "prior elapsed_sec read from the artifact" \
+        in out2["elapsed_accumulation"]
+    assert "erases nothing" in out2["elapsed_covers"]
+    # an unreadable predecessor is reported loudly, not silently zeroed
+    path.write_text("{not json", encoding="utf-8")
+    out3 = gxm._cumulative_elapsed(path, time.time() - 1.0, "cpu")
+    assert out3["elapsed_prior_passes_sec"] == 0.0
+    assert "UNREADABLE" in out3["elapsed_accumulation"]
+    assert "UNDERSTATES every run before it" in out3["elapsed_accumulation"]
+    # a restoration note is carried forward rather than dropped
+    with open(path, "w") as f:
+        json.dump({"elapsed_sec": 100.0,
+                   "elapsed_restoration": {"restored_from": "run log"}}, f)
+    out4 = gxm._cumulative_elapsed(path, time.time(), "cpu")
+    assert out4["elapsed_restoration"] == {"restored_from": "run log"}
+    assert out4["elapsed_prior_passes_sec"] == 100.0
+
+
+def test_every_cost_bearing_artifact_accumulates_rather_than_overwriting():
+    """No site may still write a per-pass elapsed_sec.
+
+    Three artifacts carry a cost -- the GX2B report, the GX2S report and the
+    run manifest -- and fixing two of the three would leave the third erasing
+    its predecessor on the next CPU re-aggregation.
+    """
+    src = inspect.getsource(gxm)
+    assert src.count("_cumulative_elapsed(") >= 4, \
+        "the definition plus GX2B, GX2S and the run manifest"
+    assert '"elapsed_sec": round(time.time() - t_start, 1)' not in src, \
+        "a per-pass elapsed_sec is still being written somewhere"
 
 
 def test_fit_metrics_from_soft():
