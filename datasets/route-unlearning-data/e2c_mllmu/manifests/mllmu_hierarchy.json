@@ -1,7 +1,7 @@
 {
   "kind": "mllmu_external_profession_hierarchy",
   "audited": true,
-  "g7_status": "pending_commit: this artifact must be committed before any G6 training or matrix build",
+  "g7_status": "committed",
   "taxonomy": "2018 SOC / O*NET-SOC 2019",
   "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
   "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
@@ -3478,11 +3478,9 @@
       "criterion": "each evaluated parent keeps at least one retained sibling when the included set makes that possible; where it is impossible the control is reported null rather than vacuous"
     },
     "G7_committed_before_training": {
-      "passed": false,
-      "n_issues": 1,
-      "issues": [
-        "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json is not tracked by git.  The hierarchy and the selected targets must be committed BEFORE any training phase; a downstream builder refuses an untracked hierarchy."
-      ],
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
       "criterion": "the frozen hierarchy artifact is committed before any G6 training or matrix build"
     },
     "G8_pre_freeze_checklist": {
@@ -3516,5 +3514,5 @@
   ],
   "committed_before_training_required": true,
   "model_use_scope": "a model may PROPOSE a mapping or FLAG ambiguity; it is never the authority.  proposals are stored in proposed_by_model and G1 fails any record whose mapping_authority is not source_table or reviewer",
-  "content_sha256": "ca0edbdda3761d45e1ab8a69351a9204246acc4cd40c3b301bba807dffa83b97"
+  "content_sha256": "895668530cfba9c93d9d639e1202b52daa37d1370877087f07a149ee1e2d140f"
 }
