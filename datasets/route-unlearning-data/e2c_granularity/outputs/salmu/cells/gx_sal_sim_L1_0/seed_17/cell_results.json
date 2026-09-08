@@ -1,0 +1,4205 @@
+{
+  "cell_id": "gx_sal_sim_L1_0__seed17",
+  "dataset": "salmu",
+  "set_id": "gx_sal_sim_L1_0",
+  "mode": "simultaneous_same_depth_l1",
+  "seed": 17,
+  "assignments": {
+    "00036363": {
+      "operation": "taxonomic",
+      "source": "higher education lecturer",
+      "target": "higher-education professional",
+      "source_depth": 0,
+      "target_depth": 1
+    },
+    "00107854": {
+      "operation": "taxonomic",
+      "source": "licensed conveyancer",
+      "target": "legal professional",
+      "source_depth": 0,
+      "target_depth": 1
+    },
+    "00040875": {
+      "operation": "taxonomic",
+      "source": "lobbyist",
+      "target": "communications professional",
+      "source_depth": 0,
+      "target_depth": 1
+    }
+  },
+  "controls": {
+    "00036363": {
+      "sibling": [],
+      "cousin": [],
+      "unrelated": [
+        "00004371",
+        "00039880",
+        "00041286",
+        "00060576",
+        "00082704",
+        "00102677",
+        "00106148",
+        "00110390",
+        "00116450"
+      ]
+    },
+    "00040875": {
+      "sibling": [],
+      "cousin": [
+        "00116450"
+      ],
+      "unrelated": [
+        "00004371",
+        "00039880",
+        "00041286",
+        "00060576",
+        "00082704",
+        "00102677",
+        "00106148",
+        "00110390"
+      ]
+    },
+    "00107854": {
+      "sibling": [],
+      "cousin": [],
+      "unrelated": [
+        "00004371",
+        "00039880",
+        "00041286",
+        "00060576",
+        "00082704",
+        "00102677",
+        "00106148",
+        "00110390",
+        "00116450"
+      ]
+    }
+  },
+  "control_notes": {
+    "00036363": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+    "00040875": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0",
+    "00107854": "no retained sibling (unique level1 branch or sibling co-targeted); cousin/unrelated controls apply; sibling metric null, not 1.0"
+  },
+  "checkpoint_sha256": "6688dc91714a6422b6618eac2c1123326fc1ea764bf3ba72b594cb3e3bcbb635",
+  "hard_preds": [
+    {
+      "identity_id": "00106148",
+      "raw": "fashion/clothing designer",
+      "parsed_label": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "fashion/clothing designer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00060576",
+      "raw": "forensic psychologist",
+      "parsed_label": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "forensic psychologist",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00102677",
+      "raw": "educational psychologist",
+      "parsed_label": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "educational psychologist",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00004371",
+      "raw": "animal technologist",
+      "parsed_label": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "animal technologist",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00110390",
+      "raw": "careers information officer",
+      "parsed_label": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "careers information officer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00039880",
+      "raw": "petroleum engineer",
+      "parsed_label": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "petroleum engineer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00040875",
+      "raw": "communications professional",
+      "parsed_label": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "target",
+      "expected_post_edit": "communications professional",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct",
+      "requested_depth": 1,
+      "achieved_depth": 1
+    },
+    {
+      "identity_id": "00082704",
+      "raw": "textile designer",
+      "parsed_label": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "textile designer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00116450",
+      "raw": "aid worker",
+      "parsed_label": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "cousin",
+      "expected_post_edit": "aid worker",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00041286",
+      "raw": "broadcast presenter",
+      "parsed_label": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "broadcast presenter",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00036363",
+      "raw": "higher-education professional",
+      "parsed_label": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "target",
+      "expected_post_edit": "higher-education professional",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct",
+      "requested_depth": 1,
+      "achieved_depth": 1
+    },
+    {
+      "identity_id": "00107854",
+      "raw": "legal professional",
+      "parsed_label": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "target",
+      "expected_post_edit": "legal professional",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct",
+      "requested_depth": 1,
+      "achieved_depth": 1
+    }
+  ],
+  "soft": {
+    "00106148": {
+      "p_expected": 0.9995753674975824,
+      "p_baseline_alias": 0.9995753674975824,
+      "candidate_mass": 0.9996056017650002,
+      "other_mass": 0.0003943982349997599
+    },
+    "00060576": {
+      "p_expected": 0.999686194183625,
+      "p_baseline_alias": 0.999686194183625,
+      "candidate_mass": 0.9997077262074227,
+      "other_mass": 0.00029227379257734665
+    },
+    "00102677": {
+      "p_expected": 0.9998818740786534,
+      "p_baseline_alias": 0.9998818740786534,
+      "candidate_mass": 0.9999139612539016,
+      "other_mass": 8.603874609836026e-05
+    },
+    "00004371": {
+      "p_expected": 0.9997083537218506,
+      "p_baseline_alias": 0.9997083537218506,
+      "candidate_mass": 0.9997089502362275,
+      "other_mass": 0.0002910497637724774
+    },
+    "00110390": {
+      "p_expected": 0.999760666138556,
+      "p_baseline_alias": 0.999760666138556,
+      "candidate_mass": 0.999763591080958,
+      "other_mass": 0.00023640891904197492
+    },
+    "00039880": {
+      "p_expected": 0.9996531873542864,
+      "p_baseline_alias": 0.9996531873542864,
+      "candidate_mass": 0.9996544049375414,
+      "other_mass": 0.0003455950624585702
+    },
+    "00040875": {
+      "p_expected": 0.9998357502708332,
+      "p_baseline_alias": 4.784418670291866e-06,
+      "candidate_mass": 0.9998604664203703,
+      "other_mass": 0.0001395335796297026
+    },
+    "00082704": {
+      "p_expected": 0.9999039252204701,
+      "p_baseline_alias": 0.9999039252204701,
+      "candidate_mass": 0.9999041287912497,
+      "other_mass": 9.587120875031996e-05
+    },
+    "00116450": {
+      "p_expected": 0.9999110771962684,
+      "p_baseline_alias": 0.9999110771962684,
+      "candidate_mass": 0.9999110920959032,
+      "other_mass": 8.890790409676885e-05
+    },
+    "00041286": {
+      "p_expected": 0.9996346239114343,
+      "p_baseline_alias": 0.9996346239114343,
+      "candidate_mass": 0.9996356918528297,
+      "other_mass": 0.00036430814717025584
+    },
+    "00036363": {
+      "p_expected": 0.9995278378624343,
+      "p_baseline_alias": 5.293327957430087e-08,
+      "candidate_mass": 0.9995303848920652,
+      "other_mass": 0.00046961510793475103
+    },
+    "00107854": {
+      "p_expected": 0.9999007064220854,
+      "p_baseline_alias": 1.4726315118834268e-05,
+      "candidate_mass": 1.999888740451189,
+      "other_mass": 0.0
+    }
+  },
+  "soft_probs_full": {
+    "00106148": {
+      "Unknown": 2.283370325822393e-16,
+      "aid worker": 5.713624291695391e-07,
+      "animal technologist": 1.110794692870994e-08,
+      "broadcast presenter": 7.731093691866049e-08,
+      "careers information officer": 7.3273959785388e-07,
+      "communications professional": 3.8882869147969224e-08,
+      "design professional": 1.0260717551693896e-10,
+      "education": 3.0285889579629025e-08,
+      "educational psychologist": 9.420012242808125e-07,
+      "engineering": 6.982710691398575e-12,
+      "engineering professional": 6.956011427523275e-12,
+      "fashion/clothing designer": 0.9995753674975824,
+      "forensic psychologist": 4.213482053324573e-06,
+      "government": 1.691755938848749e-10,
+      "healthcare": 1.0884177065744303e-12,
+      "higher education lecturer": 2.014872318291763e-05,
+      "higher-education professional": 2.8725467588927846e-06,
+      "information professional": 1.4698666607646716e-10,
+      "laboratory scientist": 8.725877303080268e-19,
+      "legal": 2.1022574165148015e-07,
+      "legal professional": 2.1018119288121534e-07,
+      "licensed conveyancer": 7.178343535806331e-09,
+      "lobbyist": 1.936025598482105e-09,
+      "media": 6.28563585141183e-10,
+      "media professional": 6.202806144465474e-10,
+      "petroleum engineer": 9.728410767571598e-10,
+      "science": 1.939028729073189e-12,
+      "social-services professional": 1.9114160122736018e-18,
+      "textile designer": 1.6364258909594202e-07,
+      "therapy professional": 3.214970821144879e-12
+    },
+    "00060576": {
+      "Unknown": 3.8241153352625415e-16,
+      "aid worker": 5.713948505479298e-07,
+      "animal technologist": 1.032573079389867e-09,
+      "broadcast presenter": 6.473443312208043e-07,
+      "careers information officer": 4.6779438655025056e-08,
+      "communications professional": 1.760082982065957e-06,
+      "design professional": 1.27847565332452e-13,
+      "education": 1.1627811635063546e-10,
+      "educational psychologist": 1.8182875193785024e-09,
+      "engineering": 2.5435734675605116e-13,
+      "engineering professional": 2.50685907161683e-13,
+      "fashion/clothing designer": 1.6678591247011072e-05,
+      "forensic psychologist": 0.999686194183625,
+      "government": 6.768197993972122e-12,
+      "healthcare": 2.2728357790926465e-13,
+      "higher education lecturer": 1.5337280965806685e-06,
+      "higher-education professional": 2.4064117415225924e-07,
+      "information professional": 8.692403495776223e-12,
+      "laboratory scientist": 6.389424079231716e-20,
+      "legal": 5.963929627719441e-09,
+      "legal professional": 5.955698182904092e-09,
+      "licensed conveyancer": 1.9453864240696846e-08,
+      "lobbyist": 5.963856400170382e-09,
+      "media": 5.263149423694906e-09,
+      "media professional": 5.140907883930911e-09,
+      "petroleum engineer": 2.645422761332685e-09,
+      "science": 3.587013525700101e-13,
+      "social-services professional": 5.914907988069414e-19,
+      "textile designer": 9.049321288273074e-11,
+      "therapy professional": 5.372817462666738e-13
+    },
+    "00102677": {
+      "Unknown": 1.0514176121873727e-17,
+      "aid worker": 4.4496610621588964e-07,
+      "animal technologist": 4.837350898091935e-10,
+      "broadcast presenter": 3.6525420952250685e-08,
+      "careers information officer": 3.3842968846963785e-09,
+      "communications professional": 2.5102321514935e-08,
+      "design professional": 3.698376036355341e-13,
+      "education": 3.120109959129958e-05,
+      "educational psychologist": 0.9998818740786534,
+      "engineering": 1.573620164841983e-11,
+      "engineering professional": 1.3383356270127736e-11,
+      "fashion/clothing designer": 1.724221239477238e-08,
+      "forensic psychologist": 6.656289980867105e-10,
+      "government": 1.1512851066239856e-11,
+      "healthcare": 1.291704118948457e-15,
+      "higher education lecturer": 2.3578702343614686e-10,
+      "higher-education professional": 2.4575803986553972e-08,
+      "information professional": 1.0749584931431635e-12,
+      "laboratory scientist": 1.0713606858107216e-20,
+      "legal": 1.6372834418003532e-07,
+      "legal professional": 1.6368307473792468e-07,
+      "licensed conveyancer": 5.823740566398764e-11,
+      "lobbyist": 1.4782541389178723e-11,
+      "media": 1.2500813341125017e-09,
+      "media professional": 1.1549456417218685e-09,
+      "petroleum engineer": 6.279948677873223e-10,
+      "science": 6.233164077351206e-14,
+      "social-services professional": 1.747706301010817e-17,
+      "textile designer": 2.334738807617978e-09,
+      "therapy professional": 3.3428152214048053e-15
+    },
+    "00004371": {
+      "Unknown": 7.907513327994632e-16,
+      "aid worker": 2.8435499148227295e-08,
+      "animal technologist": 0.9997083537218506,
+      "broadcast presenter": 9.855271484092391e-08,
+      "careers information officer": 4.583019595124353e-09,
+      "communications professional": 2.999729378145338e-09,
+      "design professional": 7.67937356159088e-15,
+      "education": 8.676837492270735e-09,
+      "educational psychologist": 1.046154447814942e-08,
+      "engineering": 2.7616471744834394e-11,
+      "engineering professional": 3.544947899100464e-14,
+      "fashion/clothing designer": 2.9462245167256383e-09,
+      "forensic psychologist": 2.099523645909605e-07,
+      "government": 1.507808267710557e-09,
+      "healthcare": 1.8113415494210666e-11,
+      "higher education lecturer": 1.0154198200072649e-07,
+      "higher-education professional": 5.5068611882060894e-17,
+      "information professional": 2.544319129658538e-10,
+      "laboratory scientist": 2.1247106112105337e-16,
+      "legal": 7.733581075223682e-08,
+      "legal professional": 1.421606470989303e-08,
+      "licensed conveyancer": 5.00641754455669e-10,
+      "lobbyist": 8.676598561768117e-09,
+      "media": 2.358608968373169e-08,
+      "media professional": 6.601118500501494e-11,
+      "petroleum engineer": 7.060759437767454e-10,
+      "science": 6.624847177522366e-11,
+      "social-services professional": 1.032669338450966e-18,
+      "textile designer": 1.4029055539654128e-09,
+      "therapy professional": 3.4252399964858177e-17
+    },
+    "00110390": {
+      "Unknown": 4.470860833683184e-16,
+      "aid worker": 5.713327457901546e-07,
+      "animal technologist": 1.3211106572161768e-09,
+      "broadcast presenter": 9.23476346240816e-09,
+      "careers information officer": 0.999760666138556,
+      "communications professional": 5.701652770318224e-07,
+      "design professional": 3.471330297433808e-13,
+      "education": 1.8189061780946511e-09,
+      "educational psychologist": 5.308689077393633e-08,
+      "engineering": 2.3659054063299657e-14,
+      "engineering professional": 1.502259654519915e-14,
+      "fashion/clothing designer": 2.309070267686804e-09,
+      "forensic psychologist": 1.8157600498962668e-07,
+      "government": 9.6398495856885e-11,
+      "healthcare": 4.805758119145388e-11,
+      "higher education lecturer": 1.056814550246452e-07,
+      "higher-education professional": 9.498517246001429e-07,
+      "information professional": 3.997770969580639e-11,
+      "laboratory scientist": 6.403720410401535e-18,
+      "legal": 3.224088344387453e-08,
+      "legal professional": 3.2195924486495446e-08,
+      "licensed conveyancer": 3.185229917362366e-08,
+      "lobbyist": 5.211041619867394e-10,
+      "media": 1.7257301328882545e-08,
+      "media professional": 1.3906213194713657e-08,
+      "petroleum engineer": 3.848119464600496e-09,
+      "science": 2.1297201760621892e-12,
+      "social-services professional": 1.3017596593543273e-15,
+      "textile designer": 3.4655560519394084e-07,
+      "therapy professional": 5.189025508091036e-14
+    },
+    "00039880": {
+      "Unknown": 1.3319695734681495e-16,
+      "aid worker": 6.475007380602224e-07,
+      "animal technologist": 9.651798670449974e-10,
+      "broadcast presenter": 7.730635145741375e-08,
+      "careers information officer": 1.2031144928821714e-08,
+      "communications professional": 2.101930952011982e-07,
+      "design professional": 7.073996528651298e-17,
+      "education": 9.736051751516156e-10,
+      "educational psychologist": 2.2146676334529537e-08,
+      "engineering": 1.0379585559742146e-12,
+      "engineering professional": 9.129698751732186e-13,
+      "fashion/clothing designer": 1.4920275703385097e-10,
+      "forensic psychologist": 1.8539943903666155e-07,
+      "government": 2.4373728639386847e-11,
+      "healthcare": 8.595927448086315e-14,
+      "higher education lecturer": 2.1900855671467645e-13,
+      "higher-education professional": 2.8408189447674048e-08,
+      "information professional": 1.1982719303687239e-12,
+      "laboratory scientist": 1.4750012978660592e-19,
+      "legal": 1.1032391981209097e-09,
+      "legal professional": 1.1015609758334961e-09,
+      "licensed conveyancer": 8.472592841995186e-11,
+      "lobbyist": 1.103231307195564e-09,
+      "media": 3.3646894519348394e-10,
+      "media professional": 3.293779766928446e-10,
+      "petroleum engineer": 0.9996531873542864,
+      "science": 6.295536877094127e-13,
+      "social-services professional": 4.1863072240630176e-17,
+      "textile designer": 2.84223073584518e-08,
+      "therapy professional": 2.6339122198115417e-13
+    },
+    "00040875": {
+      "Unknown": 1.6421448325377748e-13,
+      "aid worker": 3.057838400329664e-07,
+      "animal technologist": 8.382674761181675e-09,
+      "broadcast presenter": 3.286529238011158e-06,
+      "careers information officer": 8.878703570549418e-06,
+      "communications professional": 0.9998357502708332,
+      "design professional": 6.423713311973606e-14,
+      "education": 2.081477019270535e-08,
+      "educational psychologist": 2.1019539603285624e-07,
+      "engineering": 1.57354813187622e-11,
+      "engineering professional": 1.5704234255823256e-11,
+      "fashion/clothing designer": 3.8466272033062714e-09,
+      "forensic psychologist": 2.2587759353910547e-06,
+      "government": 4.598581714938275e-10,
+      "healthcare": 3.284437696958167e-09,
+      "higher education lecturer": 3.33025189669578e-07,
+      "higher-education professional": 1.5462726364311361e-06,
+      "information professional": 4.674134755216355e-10,
+      "laboratory scientist": 5.0387900085058847e-17,
+      "legal": 1.37081788922093e-06,
+      "legal professional": 1.3704271138347353e-06,
+      "licensed conveyancer": 1.0474068489109459e-07,
+      "lobbyist": 4.784418670291866e-06,
+      "media": 1.1141343627641963e-08,
+      "media professional": 1.0764485636025063e-08,
+      "petroleum engineer": 1.9742610522891446e-07,
+      "science": 8.68995811278086e-12,
+      "social-services professional": 1.873127757162144e-18,
+      "textile designer": 9.828639279782906e-09,
+      "therapy professional": 2.6595492665011795e-12
+    },
+    "00082704": {
+      "Unknown": 6.964417362228631e-17,
+      "aid worker": 4.9424148636146505e-09,
+      "animal technologist": 2.7375488682462783e-10,
+      "broadcast presenter": 1.1246009893102851e-07,
+      "careers information officer": 3.5842424162343305e-10,
+      "communications professional": 2.5106232452050672e-08,
+      "design professional": 2.0267281399069154e-17,
+      "education": 2.0206684924862616e-11,
+      "educational psychologist": 2.9984085696613914e-09,
+      "engineering": 2.316016257953963e-13,
+      "engineering professional": 3.5950363294491025e-13,
+      "fashion/clothing designer": 6.616958256725143e-11,
+      "forensic psychologist": 1.2462380641189863e-09,
+      "government": 2.7346774275792743e-12,
+      "healthcare": 1.6744613755913198e-13,
+      "higher education lecturer": 3.711475942549631e-11,
+      "higher-education professional": 4.181808851404062e-09,
+      "information professional": 8.908146670835461e-12,
+      "laboratory scientist": 3.7589114923715204e-20,
+      "legal": 2.2159320710520812e-08,
+      "legal professional": 2.8448905357098213e-08,
+      "licensed conveyancer": 3.779879529920288e-10,
+      "lobbyist": 4.018553275973015e-11,
+      "media": 4.5536467412434626e-11,
+      "media professional": 3.097418574461705e-11,
+      "petroleum engineer": 7.578190223112958e-10,
+      "science": 1.0175865259645568e-14,
+      "social-services professional": 2.2747333512669733e-18,
+      "textile designer": 0.9999039252204701,
+      "therapy professional": 6.766797478412437e-12
+    },
+    "00116450": {
+      "Unknown": 5.454953224738861e-18,
+      "aid worker": 0.9999110771962684,
+      "animal technologist": 1.1833971932125066e-08,
+      "broadcast presenter": 2.1711866919494442e-10,
+      "careers information officer": 2.286786309210035e-11,
+      "communications professional": 3.580602280306863e-10,
+      "design professional": 1.7913861217817284e-15,
+      "education": 9.544962100281183e-12,
+      "educational psychologist": 5.210381988643114e-10,
+      "engineering": 1.5275783023572414e-14,
+      "engineering professional": 1.5202811919144212e-14,
+      "fashion/clothing designer": 4.231131694233655e-12,
+      "forensic psychologist": 5.196324419744645e-10,
+      "government": 3.939676366792197e-13,
+      "healthcare": 1.3639139754120512e-16,
+      "higher education lecturer": 5.6486845691680006e-11,
+      "higher-education professional": 4.3006412278741215e-11,
+      "information professional": 2.396347884567798e-13,
+      "laboratory scientist": 6.2835926616831e-22,
+      "legal": 3.3647151225760686e-10,
+      "legal professional": 3.364016542237398e-10,
+      "licensed conveyancer": 1.3994754277610098e-10,
+      "lobbyist": 8.422852263964643e-12,
+      "media": 2.5945897030524627e-11,
+      "media professional": 2.3323930117749393e-11,
+      "petroleum engineer": 4.3166461818354383e-10,
+      "science": 8.70387880114777e-15,
+      "social-services professional": 3.6923723227338454e-19,
+      "textile designer": 1.081078513486886e-11,
+      "therapy professional": 1.283761592449926e-14
+    },
+    "00041286": {
+      "Unknown": 7.605103432684988e-16,
+      "aid worker": 9.928318174527213e-08,
+      "animal technologist": 2.0318586403566747e-09,
+      "broadcast presenter": 0.9996346239114343,
+      "careers information officer": 4.7499492632309354e-11,
+      "communications professional": 5.713543297868946e-07,
+      "design professional": 6.419827458029824e-14,
+      "education": 1.9554823218131093e-08,
+      "educational psychologist": 1.274974605133604e-07,
+      "engineering": 4.651674428396778e-12,
+      "engineering professional": 4.620370219649833e-12,
+      "fashion/clothing designer": 9.13792479254791e-10,
+      "forensic psychologist": 1.8547218024937383e-07,
+      "government": 2.4615889619548515e-10,
+      "healthcare": 1.9763889949193382e-11,
+      "higher education lecturer": 1.5493535660308574e-09,
+      "higher-education professional": 3.0728113111081716e-08,
+      "information professional": 6.181188420170428e-10,
+      "laboratory scientist": 2.9827957887471336e-19,
+      "legal": 4.944233598505537e-09,
+      "legal professional": 4.94153739224596e-09,
+      "licensed conveyancer": 5.5667976338912005e-09,
+      "lobbyist": 2.9988110344826424e-09,
+      "media": 5.905044944735608e-10,
+      "media professional": 4.5857590115036413e-10,
+      "petroleum engineer": 3.849526183717694e-09,
+      "science": 4.064587817314492e-13,
+      "social-services professional": 9.77187564848702e-20,
+      "textile designer": 5.262488202206335e-09,
+      "therapy professional": 2.5430435797539597e-12
+    },
+    "00036363": {
+      "Unknown": 9.689971244818178e-15,
+      "aid worker": 1.1237754903938646e-07,
+      "animal technologist": 9.371758094524731e-07,
+      "broadcast presenter": 2.6974942227722214e-07,
+      "careers information officer": 6.510154327860152e-09,
+      "communications professional": 1.1136256445528077e-08,
+      "design professional": 8.701272782339226e-15,
+      "education": 9.236445431452933e-09,
+      "educational psychologist": 3.849143033202407e-09,
+      "engineering": 1.2643742099208328e-11,
+      "engineering professional": 9.413694957775695e-12,
+      "fashion/clothing designer": 1.6260439050334213e-07,
+      "forensic psychologist": 8.308310409019547e-07,
+      "government": 1.7085706060775886e-09,
+      "healthcare": 1.5299311541334548e-08,
+      "higher education lecturer": 5.293327957430087e-08,
+      "higher-education professional": 0.9995278378624343,
+      "information professional": 6.73523958008981e-09,
+      "laboratory scientist": 1.1025220865959274e-18,
+      "legal": 5.262767968406281e-09,
+      "legal professional": 5.018559293755141e-09,
+      "licensed conveyancer": 2.220500215589865e-08,
+      "lobbyist": 4.362960322449914e-09,
+      "media": 1.0922526456718832e-10,
+      "media professional": 8.414759737468664e-11,
+      "petroleum engineer": 5.3080679246348274e-08,
+      "science": 1.860783229184355e-13,
+      "social-services professional": 5.207656771909196e-16,
+      "textile designer": 3.649715731844943e-08,
+      "therapy professional": 2.402565064849612e-10
+    },
+    "00107854": {
+      "Unknown": 4.401546561108124e-16,
+      "aid worker": 2.381031317177871e-07,
+      "animal technologist": 6.239398269906879e-10,
+      "broadcast presenter": 5.710009988321307e-07,
+      "careers information officer": 5.05568004449528e-10,
+      "communications professional": 1.3707432220041464e-06,
+      "design professional": 1.642094719019231e-13,
+      "education": 7.58232903006253e-10,
+      "educational psychologist": 1.1250628440075715e-07,
+      "engineering": 1.3327448311119925e-12,
+      "engineering professional": 1.3305801778618123e-12,
+      "fashion/clothing designer": 2.695737496309328e-07,
+      "forensic psychologist": 5.686304391516508e-07,
+      "government": 4.2776573232354846e-11,
+      "healthcare": 8.761058170502948e-15,
+      "higher education lecturer": 2.02586482882534e-10,
+      "higher-education professional": 2.610609534388862e-10,
+      "information professional": 2.3522559205602993e-11,
+      "laboratory scientist": 4.546108995951871e-16,
+      "legal": 0.9999694833531786,
+      "legal professional": 0.9999007064220854,
+      "licensed conveyancer": 1.4726315118834268e-05,
+      "lobbyist": 1.1253066729460351e-07,
+      "media": 2.817176999005808e-09,
+      "media professional": 2.812744263720206e-09,
+      "petroleum engineer": 2.482804456994035e-09,
+      "science": 3.8564250379215405e-12,
+      "social-services professional": 4.863303158387841e-18,
+      "textile designer": 5.707341470093405e-07,
+      "therapy professional": 1.0595857091995282e-12
+    }
+  },
+  "dual_oracle": {
+    "00106148": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 3.61469505131649e-05,
+          "cosine": 2.1092361190966358e-10,
+          "js": 9.41634235665085e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 3.670762264917214e-05,
+          "cosine": 2.1701851427025076e-10,
+          "js": 1.0413594100404135e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 7.968905342522895e-05,
+          "cosine": 2.124408871040373e-09,
+          "js": 2.6113525360002672e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 2.7598864104860147e-05,
+          "cosine": 2.465500026360701e-10,
+          "js": 9.835294931635304e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 3.61469505131649e-05,
+          "cosine": 2.1092361190966358e-10,
+          "js": 9.41634235665085e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 3.670762264917214e-05,
+          "cosine": 2.1701851427025076e-10,
+          "js": 1.0413594100404135e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.606721360072397e-07,
+      "delta_retrain_l2": -5.20901893203688e-05,
+      "delta_oracle_l2": 5.606721360072397e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00060576": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.6600565304785194e-05,
+          "cosine": 1.3923728836573446e-10,
+          "js": 6.382535370348155e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.727563740174777e-05,
+          "cosine": 1.4225298716752377e-10,
+          "js": 7.354345539609648e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.4502831589955303e-05,
+          "cosine": 3.272659920838805e-11,
+          "js": 1.7488706632351314e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 6.830943699878088e-06,
+          "cosine": 4.889089133541802e-12,
+          "js": 1.468319023323886e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.6600565304785194e-05,
+          "cosine": 1.3923728836573446e-10,
+          "js": 6.382535370348155e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.727563740174777e-05,
+          "cosine": 1.4225298716752377e-10,
+          "js": 7.354345539609648e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 6.750720969625751e-07,
+      "delta_retrain_l2": -7.671887890077215e-06,
+      "delta_oracle_l2": 6.750720969625751e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00102677": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 3.9436068529943655e-05,
+          "cosine": 3.77634923331982e-10,
+          "js": 6.383709901409862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.40284813849744e-05,
+          "cosine": 4.713788248622564e-10,
+          "js": 9.96436163003369e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 8.645053854614441e-05,
+          "cosine": 1.0368413905226248e-09,
+          "js": 1.398443954230183e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.1264149947303839e-05,
+          "cosine": 5.415556891819051e-11,
+          "js": 2.7112068929925862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 3.9436068529943655e-05,
+          "cosine": 3.77634923331982e-10,
+          "js": 6.383709901409862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.40284813849744e-05,
+          "cosine": 4.713788248622564e-10,
+          "js": 9.96436163003369e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.592412855030747e-06,
+      "delta_retrain_l2": -7.518638859884057e-05,
+      "delta_oracle_l2": 4.592412855030747e-06,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00004371": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.392598160808446e-07,
+          "cosine": 9.614531393253856e-14,
+          "js": 1.8565785642152956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 6.173680041063242e-07,
+          "cosine": 3.3861802251067274e-14,
+          "js": 1.6850619504650458e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.3617086239877124e-05,
+          "cosine": 1.395641380241841e-10,
+          "js": 1.0064221669620348e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 5.361471701632713e-06,
+          "cosine": 3.717026686445024e-12,
+          "js": 1.417494428517397e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.392598160808446e-07,
+          "cosine": 9.614531393253856e-14,
+          "js": 1.8565785642152956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 6.173680041063242e-07,
+          "cosine": 3.3861802251067274e-14,
+          "js": 1.6850619504650458e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.7810818802547964e-07,
+      "delta_retrain_l2": -2.825561453824441e-05,
+      "delta_oracle_l2": 1.7810818802547964e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00110390": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 3.1431681721620548e-06,
+          "cosine": 8.355538483328928e-13,
+          "js": 9.096779224984076e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 3.206911819305117e-06,
+          "cosine": 8.626432901337466e-13,
+          "js": 1.0136910620863424e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.684174882106747e-06,
+          "cosine": 1.279532035880493e-12,
+          "js": 1.0305292540383218e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 7.12888920227783e-06,
+          "cosine": 1.0736855848847426e-11,
+          "js": 2.7828485031857032e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 3.1431681721620548e-06,
+          "cosine": 8.355538483328928e-13,
+          "js": 9.096779224984076e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 3.206911819305117e-06,
+          "cosine": 8.626432901337466e-13,
+          "js": 1.0136910620863424e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 6.374364714306213e-08,
+      "delta_retrain_l2": 5.444714320171084e-06,
+      "delta_oracle_l2": 6.374364714306213e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00039880": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.1328845130210024e-06,
+          "cosine": 2.2670754162845697e-13,
+          "js": 2.9157548667719866e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.378600444197535e-06,
+          "cosine": 2.4236168627567167e-13,
+          "js": 3.740636227870022e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.387994532329783e-05,
+          "cosine": 1.0605805123020673e-10,
+          "js": 9.462973687232625e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 3.2012611265021283e-06,
+          "cosine": 1.6734391650174985e-12,
+          "js": 8.969103108525803e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.1328845130210024e-06,
+          "cosine": 2.2670754162845697e-13,
+          "js": 2.9157548667719866e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.378600444197535e-06,
+          "cosine": 2.4236168627567167e-13,
+          "js": 3.740636227870022e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 2.457159311765326e-07,
+      "delta_retrain_l2": -3.06786841967957e-05,
+      "delta_oracle_l2": 2.457159311765326e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00040875": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.4030306883504515e-05,
+          "cosine": 5.139544345666991e-11,
+          "js": 5.751946239184862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.3372244311041241,
+          "cosine": 0.9999949401958916,
+          "js": 0.6930698871686756
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.611133954794618e-05,
+          "cosine": 5.977940364942924e-11,
+          "js": 7.401204192203466e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.3935253385083604,
+          "cosine": 0.9999966360069047,
+          "js": 0.693081532698407
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.4030306883504515e-05,
+          "cosine": 5.139544345666991e-11,
+          "js": 5.751946239184862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.3372244311041241,
+          "cosine": 0.9999949401958916,
+          "js": 0.6930698871686756
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.3372004007972407,
+      "delta_retrain_l2": 1.3934992271688125,
+      "delta_oracle_l2": 1.3372004007972407,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00082704": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.1213292204069592e-06,
+          "cosine": 2.3214763444912023e-13,
+          "js": 2.785595648403575e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.3269563679839625e-07,
+          "cosine": 6.994405055138486e-15,
+          "js": 6.474827451688439e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.1130459404975953e-06,
+          "cosine": 1.4124257319281242e-12,
+          "js": 8.171058346496725e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 9.698151211821275e-07,
+          "cosine": 1.6919798895287386e-13,
+          "js": 2.6348130249580993e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.1213292204069592e-06,
+          "cosine": 2.3214763444912023e-13,
+          "js": 2.785595648403575e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.3269563679839625e-07,
+          "cosine": 6.994405055138486e-15,
+          "js": 6.474827451688439e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -8.886335836085629e-07,
+      "delta_retrain_l2": -2.143230819315468e-06,
+      "delta_oracle_l2": -8.886335836085629e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00116450": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.9563658052655313e-08,
+          "cosine": 2.220446049250313e-16,
+          "js": 6.138022279798117e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 8.374388241007068e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 1.6463816827453654e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.555126645841122e-05,
+          "cosine": 1.6083578913139718e-11,
+          "js": 4.979014080096377e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.5192257449960877e-05,
+          "cosine": 3.0994096178460495e-11,
+          "js": 4.473997190680376e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.9563658052655313e-08,
+          "cosine": 2.220446049250313e-16,
+          "js": 6.138022279798117e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 8.374388241007068e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 1.6463816827453654e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.4180224357415364e-08,
+      "delta_retrain_l2": -3.5900900845034363e-07,
+      "delta_oracle_l2": 5.4180224357415364e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00041286": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 7.044848419063503e-07,
+          "cosine": 2.3003821070233244e-13,
+          "js": 1.7494383005858713e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.224975411729202e-06,
+          "cosine": 1.936228954946273e-13,
+          "js": 3.5516111791947643e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.364589394500827e-06,
+          "cosine": 3.007372129104624e-12,
+          "js": 8.215215918452562e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 6.34681685008598e-06,
+          "cosine": 7.681077995869146e-12,
+          "js": 1.850671736162373e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 7.044848419063503e-07,
+          "cosine": 2.3003821070233244e-13,
+          "js": 1.7494383005858713e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.224975411729202e-06,
+          "cosine": 1.936228954946273e-13,
+          "js": 3.5516111791947643e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.204905698228517e-07,
+      "delta_retrain_l2": 1.982227455585153e-06,
+      "delta_oracle_l2": 5.204905698228517e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00036363": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.8413634811721497e-06,
+          "cosine": 8.345546476107302e-13,
+          "js": 8.39497141061246e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.3723102695735374,
+          "cosine": 0.9999999367523852,
+          "js": 0.6931358913142367
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.310590704940144e-06,
+          "cosine": 9.207079543216423e-13,
+          "js": 8.717559398676242e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.4133612236131419,
+          "cosine": 0.9999999468402282,
+          "js": 0.693143854444168
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.8413634811721497e-06,
+          "cosine": 8.345546476107302e-13,
+          "js": 8.39497141061246e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.3723102695735374,
+          "cosine": 0.9999999367523852,
+          "js": 0.6931358913142367
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.3723074282100562,
+      "delta_retrain_l2": 1.4133589130224369,
+      "delta_oracle_l2": 1.3723074282100562,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00107854": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.40401321720555e-05,
+          "cosine": 5.407413405933426e-10,
+          "js": 2.4948364676295416e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.1112718728904694,
+          "cosine": 0.9998284314231798,
+          "js": 0.6922295588460279
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.934118212607052e-05,
+          "cosine": 3.3662705956061245e-10,
+          "js": 3.3160303469131276e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.221535391757696,
+          "cosine": 0.9999999172216392,
+          "js": 0.6931432781849955
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.40401321720555e-05,
+          "cosine": 5.407413405933426e-10,
+          "js": 2.4948364676295416e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.1112718728904694,
+          "cosine": 0.9998284314231798,
+          "js": 0.6922295588460279
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.1112478327582973,
+      "delta_retrain_l2": 1.22151605057557,
+      "delta_oracle_l2": 1.1112478327582973,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    }
+  },
+  "oracle_families": {
+    "00106148": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 3.61469505131649e-05,
+          "cosine": 2.1092361190966358e-10,
+          "js": 9.41634235665085e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 3.670762264917214e-05,
+          "cosine": 2.1701851427025076e-10,
+          "js": 1.0413594100404135e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 7.968905342522895e-05,
+          "cosine": 2.124408871040373e-09,
+          "js": 2.6113525360002672e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 2.7598864104860147e-05,
+          "cosine": 2.465500026360701e-10,
+          "js": 9.835294931635304e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 3.61469505131649e-05,
+          "cosine": 2.1092361190966358e-10,
+          "js": 9.41634235665085e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 3.670762264917214e-05,
+          "cosine": 2.1701851427025076e-10,
+          "js": 1.0413594100404135e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.606721360072397e-07,
+      "delta_retrain_l2": -5.20901893203688e-05,
+      "delta_oracle_l2": 5.606721360072397e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00060576": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.6600565304785194e-05,
+          "cosine": 1.3923728836573446e-10,
+          "js": 6.382535370348155e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.727563740174777e-05,
+          "cosine": 1.4225298716752377e-10,
+          "js": 7.354345539609648e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.4502831589955303e-05,
+          "cosine": 3.272659920838805e-11,
+          "js": 1.7488706632351314e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 6.830943699878088e-06,
+          "cosine": 4.889089133541802e-12,
+          "js": 1.468319023323886e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.6600565304785194e-05,
+          "cosine": 1.3923728836573446e-10,
+          "js": 6.382535370348155e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.727563740174777e-05,
+          "cosine": 1.4225298716752377e-10,
+          "js": 7.354345539609648e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 6.750720969625751e-07,
+      "delta_retrain_l2": -7.671887890077215e-06,
+      "delta_oracle_l2": 6.750720969625751e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00102677": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 3.9436068529943655e-05,
+          "cosine": 3.77634923331982e-10,
+          "js": 6.383709901409862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.40284813849744e-05,
+          "cosine": 4.713788248622564e-10,
+          "js": 9.96436163003369e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 8.645053854614441e-05,
+          "cosine": 1.0368413905226248e-09,
+          "js": 1.398443954230183e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.1264149947303839e-05,
+          "cosine": 5.415556891819051e-11,
+          "js": 2.7112068929925862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 3.9436068529943655e-05,
+          "cosine": 3.77634923331982e-10,
+          "js": 6.383709901409862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.40284813849744e-05,
+          "cosine": 4.713788248622564e-10,
+          "js": 9.96436163003369e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.592412855030747e-06,
+      "delta_retrain_l2": -7.518638859884057e-05,
+      "delta_oracle_l2": 4.592412855030747e-06,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00004371": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.392598160808446e-07,
+          "cosine": 9.614531393253856e-14,
+          "js": 1.8565785642152956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 6.173680041063242e-07,
+          "cosine": 3.3861802251067274e-14,
+          "js": 1.6850619504650458e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.3617086239877124e-05,
+          "cosine": 1.395641380241841e-10,
+          "js": 1.0064221669620348e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 5.361471701632713e-06,
+          "cosine": 3.717026686445024e-12,
+          "js": 1.417494428517397e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.392598160808446e-07,
+          "cosine": 9.614531393253856e-14,
+          "js": 1.8565785642152956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 6.173680041063242e-07,
+          "cosine": 3.3861802251067274e-14,
+          "js": 1.6850619504650458e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.7810818802547964e-07,
+      "delta_retrain_l2": -2.825561453824441e-05,
+      "delta_oracle_l2": 1.7810818802547964e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00110390": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 3.1431681721620548e-06,
+          "cosine": 8.355538483328928e-13,
+          "js": 9.096779224984076e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 3.206911819305117e-06,
+          "cosine": 8.626432901337466e-13,
+          "js": 1.0136910620863424e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.684174882106747e-06,
+          "cosine": 1.279532035880493e-12,
+          "js": 1.0305292540383218e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 7.12888920227783e-06,
+          "cosine": 1.0736855848847426e-11,
+          "js": 2.7828485031857032e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 3.1431681721620548e-06,
+          "cosine": 8.355538483328928e-13,
+          "js": 9.096779224984076e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 3.206911819305117e-06,
+          "cosine": 8.626432901337466e-13,
+          "js": 1.0136910620863424e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 6.374364714306213e-08,
+      "delta_retrain_l2": 5.444714320171084e-06,
+      "delta_oracle_l2": 6.374364714306213e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00039880": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.1328845130210024e-06,
+          "cosine": 2.2670754162845697e-13,
+          "js": 2.9157548667719866e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.378600444197535e-06,
+          "cosine": 2.4236168627567167e-13,
+          "js": 3.740636227870022e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.387994532329783e-05,
+          "cosine": 1.0605805123020673e-10,
+          "js": 9.462973687232625e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 3.2012611265021283e-06,
+          "cosine": 1.6734391650174985e-12,
+          "js": 8.969103108525803e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.1328845130210024e-06,
+          "cosine": 2.2670754162845697e-13,
+          "js": 2.9157548667719866e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.378600444197535e-06,
+          "cosine": 2.4236168627567167e-13,
+          "js": 3.740636227870022e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 2.457159311765326e-07,
+      "delta_retrain_l2": -3.06786841967957e-05,
+      "delta_oracle_l2": 2.457159311765326e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00040875": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.4030306883504515e-05,
+          "cosine": 5.139544345666991e-11,
+          "js": 5.751946239184862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.3372244311041241,
+          "cosine": 0.9999949401958916,
+          "js": 0.6930698871686756
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.611133954794618e-05,
+          "cosine": 5.977940364942924e-11,
+          "js": 7.401204192203466e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.3935253385083604,
+          "cosine": 0.9999966360069047,
+          "js": 0.693081532698407
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.4030306883504515e-05,
+          "cosine": 5.139544345666991e-11,
+          "js": 5.751946239184862e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.3372244311041241,
+          "cosine": 0.9999949401958916,
+          "js": 0.6930698871686756
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.3372004007972407,
+      "delta_retrain_l2": 1.3934992271688125,
+      "delta_oracle_l2": 1.3372004007972407,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00082704": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.1213292204069592e-06,
+          "cosine": 2.3214763444912023e-13,
+          "js": 2.785595648403575e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.3269563679839625e-07,
+          "cosine": 6.994405055138486e-15,
+          "js": 6.474827451688439e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.1130459404975953e-06,
+          "cosine": 1.4124257319281242e-12,
+          "js": 8.171058346496725e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 9.698151211821275e-07,
+          "cosine": 1.6919798895287386e-13,
+          "js": 2.6348130249580993e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.1213292204069592e-06,
+          "cosine": 2.3214763444912023e-13,
+          "js": 2.785595648403575e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.3269563679839625e-07,
+          "cosine": 6.994405055138486e-15,
+          "js": 6.474827451688439e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -8.886335836085629e-07,
+      "delta_retrain_l2": -2.143230819315468e-06,
+      "delta_oracle_l2": -8.886335836085629e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00116450": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.9563658052655313e-08,
+          "cosine": 2.220446049250313e-16,
+          "js": 6.138022279798117e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 8.374388241007068e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 1.6463816827453654e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.555126645841122e-05,
+          "cosine": 1.6083578913139718e-11,
+          "js": 4.979014080096377e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.5192257449960877e-05,
+          "cosine": 3.0994096178460495e-11,
+          "js": 4.473997190680376e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.9563658052655313e-08,
+          "cosine": 2.220446049250313e-16,
+          "js": 6.138022279798117e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 8.374388241007068e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 1.6463816827453654e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.4180224357415364e-08,
+      "delta_retrain_l2": -3.5900900845034363e-07,
+      "delta_oracle_l2": 5.4180224357415364e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00041286": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 7.044848419063503e-07,
+          "cosine": 2.3003821070233244e-13,
+          "js": 1.7494383005858713e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.224975411729202e-06,
+          "cosine": 1.936228954946273e-13,
+          "js": 3.5516111791947643e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.364589394500827e-06,
+          "cosine": 3.007372129104624e-12,
+          "js": 8.215215918452562e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 6.34681685008598e-06,
+          "cosine": 7.681077995869146e-12,
+          "js": 1.850671736162373e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 7.044848419063503e-07,
+          "cosine": 2.3003821070233244e-13,
+          "js": 1.7494383005858713e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.224975411729202e-06,
+          "cosine": 1.936228954946273e-13,
+          "js": 3.5516111791947643e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.204905698228517e-07,
+      "delta_retrain_l2": 1.982227455585153e-06,
+      "delta_oracle_l2": 5.204905698228517e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00036363": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.8413634811721497e-06,
+          "cosine": 8.345546476107302e-13,
+          "js": 8.39497141061246e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.3723102695735374,
+          "cosine": 0.9999999367523852,
+          "js": 0.6931358913142367
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.310590704940144e-06,
+          "cosine": 9.207079543216423e-13,
+          "js": 8.717559398676242e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.4133612236131419,
+          "cosine": 0.9999999468402282,
+          "js": 0.693143854444168
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.8413634811721497e-06,
+          "cosine": 8.345546476107302e-13,
+          "js": 8.39497141061246e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.3723102695735374,
+          "cosine": 0.9999999367523852,
+          "js": 0.6931358913142367
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.3723074282100562,
+      "delta_retrain_l2": 1.4133589130224369,
+      "delta_oracle_l2": 1.3723074282100562,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "00107854": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.40401321720555e-05,
+          "cosine": 5.407413405933426e-10,
+          "js": 2.4948364676295416e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.1112718728904694,
+          "cosine": 0.9998284314231798,
+          "js": 0.6922295588460279
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.934118212607052e-05,
+          "cosine": 3.3662705956061245e-10,
+          "js": 3.3160303469131276e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.221535391757696,
+          "cosine": 0.9999999172216392,
+          "js": 0.6931432781849955
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.40401321720555e-05,
+          "cosine": 5.407413405933426e-10,
+          "js": 2.4948364676295416e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.1112718728904694,
+          "cosine": 0.9998284314231798,
+          "js": 0.6922295588460279
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.1112478327582973,
+      "delta_retrain_l2": 1.22151605057557,
+      "delta_oracle_l2": 1.1112478327582973,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    }
+  },
+  "oracle_block_version": "g3_1",
+  "e2e": {
+    "n_images": 132,
+    "g_routed": 131,
+    "g_routing_failures": 1,
+    "g_code_correct": 125,
+    "e2e_strict_conditional_acc": 1.0,
+    "e2e_strict_unconditional_acc": 0.946969696969697,
+    "no_source_leak_conditional_acc": 1.0,
+    "h_unparseable_outputs": 0,
+    "h_multi_label_ambiguous_outputs": 0
+  },
+  "e2e_rows": [
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "train",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "test",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "test",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00106148",
+      "split": "test",
+      "pred_code": "SAL_00106148",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "fashion/clothing designer",
+      "pred_alias": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "train",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "test",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "test",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00060576",
+      "split": "test",
+      "pred_code": "SAL_00060576",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "train",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "test",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00102677",
+      "split": "test",
+      "pred_code": "SAL_00004371",
+      "code_correct": false,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": false,
+      "no_source_leak": false
+    },
+    {
+      "identity_id": "00102677",
+      "split": "test",
+      "pred_code": "SAL_00102677",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "train",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "test",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "test",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00004371",
+      "split": "test",
+      "pred_code": "SAL_00004371",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "animal technologist",
+      "pred_alias": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "train",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "test",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00110390",
+      "split": "test",
+      "pred_code": null,
+      "code_correct": false,
+      "g_routed": false,
+      "h_raw_text": null,
+      "pred_alias": null,
+      "recognized_labels": [],
+      "outcome_ok": false,
+      "no_source_leak": false
+    },
+    {
+      "identity_id": "00110390",
+      "split": "test",
+      "pred_code": "SAL_00110390",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "train",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "test",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "test",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00039880",
+      "split": "test",
+      "pred_code": "SAL_00039880",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "petroleum engineer",
+      "pred_alias": "petroleum engineer",
+      "recognized_labels": [
+        "petroleum engineer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "train",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "test",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "test",
+      "pred_code": "SAL_00102677",
+      "code_correct": false,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": false,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00040875",
+      "split": "test",
+      "pred_code": "SAL_00040875",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "communications professional",
+      "pred_alias": "communications professional",
+      "recognized_labels": [
+        "communications professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "train",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "test",
+      "pred_code": "SAL_00102677",
+      "code_correct": false,
+      "g_routed": true,
+      "h_raw_text": "educational psychologist",
+      "pred_alias": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": false,
+      "no_source_leak": false
+    },
+    {
+      "identity_id": "00082704",
+      "split": "test",
+      "pred_code": "SAL_00082704",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "textile designer",
+      "pred_alias": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00082704",
+      "split": "test",
+      "pred_code": "SAL_00110390",
+      "code_correct": false,
+      "g_routed": true,
+      "h_raw_text": "careers information officer",
+      "pred_alias": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": false,
+      "no_source_leak": false
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "train",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "test",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00116450",
+      "split": "test",
+      "pred_code": "SAL_00060576",
+      "code_correct": false,
+      "g_routed": true,
+      "h_raw_text": "forensic psychologist",
+      "pred_alias": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": false,
+      "no_source_leak": false
+    },
+    {
+      "identity_id": "00116450",
+      "split": "test",
+      "pred_code": "SAL_00116450",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "aid worker",
+      "pred_alias": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "train",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "test",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "test",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00041286",
+      "split": "test",
+      "pred_code": "SAL_00041286",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "broadcast presenter",
+      "pred_alias": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "train",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "test",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "test",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00036363",
+      "split": "test",
+      "pred_code": "SAL_00036363",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "train",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "test",
+      "pred_code": "SAL_00036363",
+      "code_correct": false,
+      "g_routed": true,
+      "h_raw_text": "higher-education professional",
+      "pred_alias": "higher-education professional",
+      "recognized_labels": [
+        "higher-education professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": false,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "test",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    },
+    {
+      "identity_id": "00107854",
+      "split": "test",
+      "pred_code": "SAL_00107854",
+      "code_correct": true,
+      "g_routed": true,
+      "h_raw_text": "legal professional",
+      "pred_alias": "legal professional",
+      "recognized_labels": [
+        "legal professional"
+      ],
+      "multi_label_ambiguous": false,
+      "outcome_ok": true,
+      "no_source_leak": true
+    }
+  ],
+  "criteria": {
+    "cell_pass": true,
+    "failed_criteria": [],
+    "checks": {
+      "strict_expected_accuracy==1.0": true,
+      "min_target_p_desired>=0.90": true,
+      "max_target_p_source<=0.01": true,
+      "min_candidate_mass>=0.99": true,
+      "retained_strict_accuracy==1.0": true,
+      "sibling_strict_accuracy==1.0": true,
+      "wrong_branch_rate==0": true,
+      "unparseable_outputs==0": true,
+      "multi_label_outputs==0": true
+    },
+    "strict_expected_accuracy": 1.0,
+    "retain_acc": 1.0,
+    "sibling_acc": null,
+    "sibling_ids": [],
+    "min_target_p_desired": 0.9995278378624343,
+    "max_target_p_source": 1.4726315118834268e-05,
+    "min_candidate_mass": 0.9995303848920652,
+    "wrong_branch_ids": [],
+    "unparseable_ids": [],
+    "multi_label_ids": []
+  },
+  "oracle_reevaluation_note": "G3.1 CPU re-evaluation: distances recomputed from stored candidate-label distributions; edited checkpoint and its metrics unchanged; families distinguish baseline-h fine-tuning references from fresh-init retraining references"
+}
