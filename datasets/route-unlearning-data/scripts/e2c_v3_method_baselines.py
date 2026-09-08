@@ -1914,6 +1914,97 @@ def _worst(values):
     return max(vals) if vals else None
 
 
+#: Rows that train nothing and whose zero cost is therefore a FACT, not a gap.
+#: Keyed by the ROW RECORD's ``weights.source`` -- except the alias, which
+#: inherits its source row's weights block verbatim and is therefore matched on
+#: the record's own ``aliased_to`` instead (see ``_training_time``).
+TIMING_NOT_APPLICABLE = {
+    "baseline_route": ("the pre-edit route h: nothing was trained for this "
+                       "row, it is the floor the others are measured against"),
+    "alias_of_sft_target": ("an alias row: it reports sft_target's weights and "
+                            "measurement, so it has no cost of its own and "
+                            "counting one would double-count the method"),
+    "baseline_route_unchanged": ("prompting only: the weights are the "
+                                 "unchanged baseline route, so the training "
+                                 "cost is zero by construction"),
+}
+
+
+def _weights_protocol(rec):
+    """The protocol that ACTUALLY produced the weights this row loaded.
+
+    A reused row's own recipe says what THIS row would have executed, not what
+    trained the weights it loaded.  For the retrain oracles that difference is
+    the whole point: they ran the route protocol (3000 steps / 200 warmup), not
+    the 500-step edit budget, so printing 500 beside them contradicts the
+    "references are deliberately not budget-matched" claim in the same report.
+    """
+    # The RECORD's key is "checkpoint"; "ckpt" is the row PLAN's key for the
+    # same path.  Reading the plan's key off a record finds nothing at all, and
+    # the fallback below then reports "no oracle_results.json beside the
+    # checkpoint" for a checkpoint whose oracle_results.json is right there.
+    ckpt = (rec.get("weights") or {}).get("checkpoint")
+    if not ckpt:
+        return None
+    for parent in (Path(ckpt).parent, Path(ckpt).parent.parent):
+        proto = parent / "oracle_results.json"
+        if not proto.exists():
+            continue
+        try:
+            rec_o = json.loads(proto.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return {"source": str(proto), "unreadable": repr(exc)}
+        return {"source": str(proto), "family": rec_o.get("family"),
+                **(rec_o.get("protocol") or {})}
+    return None
+
+
+def _training_time(rec):
+    """Training time and budget, named by WHERE the number came from.
+
+    The defect this replaces: every reused row reported ``train_sec: 0.0`` and
+    ``steps_requested: 500``.  Read as a cost comparison -- training time is one
+    of the nine requested primary metrics -- "direct SFT: 0 s" is a fabricated
+    zero, and the frozen cell record stores no timing at all, so the honest
+    value is null plus a statement of where the real number would come from.
+    """
+    t, src = rec["training"], rec["weights"]["source"]
+    out = {"weights_source": src, "items": t.get("items")}
+    if t.get("trained"):
+        return {**out, "train_sec": t.get("train_sec"),
+                "steps_requested": t.get("steps_requested"),
+                "steps_executed": t.get("steps_executed"),
+                "timing_source": "measured_in_this_row"}
+    alias = rec.get("aliased_to")
+    if alias:
+        # weights.source here is the SOURCE row's ("reused_granularity_cell"),
+        # because the alias record copies that block verbatim; without this
+        # branch the alias falls through to "trained by another committed run",
+        # which charges it with a cost it exists to avoid double-counting.
+        return {**out, "train_sec": None,
+                "steps_requested": None, "steps_executed": None,
+                "timing_source": "not_applicable", "aliased_to": alias,
+                "why": TIMING_NOT_APPLICABLE["alias_of_sft_target"]}
+    if src in TIMING_NOT_APPLICABLE:
+        return {**out,
+                "train_sec": (0.0 if src == "baseline_route_unchanged"
+                              else None),
+                "steps_requested": None, "steps_executed": None,
+                "timing_source": "not_applicable",
+                "why": TIMING_NOT_APPLICABLE[src]}
+    proto = _weights_protocol(rec)
+    return {**out, "train_sec": None,
+            "steps_requested": (proto or {}).get("steps"),
+            "steps_executed": None,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": ("these weights were trained by another committed run whose "
+                    "artifact records no wall-clock; 0.0 here would read as "
+                    "'this method costs nothing', which is not what was "
+                    "measured"),
+            "budget_of_those_weights": proto or {
+                "unavailable": "no oracle_results.json beside the checkpoint"}}
+
+
 def _table_row(rec):
     m, d = rec["metrics"], rec["oracle_distances"]
     crit = m["frozen_cell_criteria"]
@@ -1960,12 +2051,7 @@ def _table_row(rec):
             "per_target": per_t,
             "metric": d["metric"], "gate": d["gate"], "scope": d["scope"],
         },
-        "training_time": {"train_sec": rec["training"].get("train_sec"),
-                          "steps_requested":
-                              rec["training"].get("steps_requested"),
-                          "steps_executed":
-                              rec["training"].get("steps_executed"),
-                          "items": rec["training"].get("items")},
+        "training_time": _training_time(rec),
         "trainable_parameters": rec.get("parameters"),
         "frozen_cell_criteria": {"cell_pass": crit["cell_pass"],
                                  "failed_criteria": crit["failed_criteria"],
@@ -2073,6 +2159,15 @@ def screen_rows(comparison, man):
             "total_train_sec": round(sum(
                 (r["training_time"]["train_sec"] or 0.0)
                 for _sid, r in rows), 1),
+            "train_sec_covers": ("rows trained IN THIS comparison only: reused "
+                                 "weights report train_sec=null because their "
+                                 "producing artifact records no wall-clock, so "
+                                 "this total is not the end-to-end cost of the "
+                                 "method"),
+            "n_rows_with_unrecorded_timing": sum(
+                1 for _sid, r in rows
+                if r["training_time"]["timing_source"]
+                == "not_recorded_by_the_source_artifact"),
             "trainable_parameters": rows[0][1]["trainable_parameters"],
             "screening_verdict": verdict,
             "screening_is_descriptive": True,
@@ -2157,8 +2252,14 @@ def build_mb_claims(ds, agg, man):
     return {"scope": scope, "headline": headline, "not_claimed": not_claimed}
 
 
-def archive_mb(ds, out_base, man, commit):
-    """Trained adapters + report, revision-pinned (the GX2S/RG pattern)."""
+def archive_mb(ds, out_base, man, commit, report_path=None):
+    """Trained adapters + report, revision-pinned (the GX2S/RG pattern).
+
+    ``report_path`` is the report THIS run wrote.  Archiving by dataset-named
+    path instead copied whatever was already on disk, which for salmu was the
+    20-step smoke's report (1 set, 6 rows, 310.7s) -- uploaded to the durable
+    HF archive in place of the 39-row comparison it was not.
+    """
     rel = Path("releases") / f"e2c_methodbaselines_{ds}_{commit[:7]}"
     rel.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -2176,9 +2277,15 @@ def archive_mb(ds, out_base, man, commit):
                             "key": f"{sid}__{row_id}", "file": name,
                             "sha256": rv.sha256_file(dest),
                             "bytes": dest.stat().st_size})
-    report_src = MB_REPORT_DIR / f"method_baselines_{ds}.json"
-    if report_src.exists():
-        shutil.copy2(report_src, rel / report_src.name)
+    report_archived = None
+    if report_path is not None and Path(report_path).exists():
+        dest_rep = rel / Path(report_path).name
+        shutil.copy2(report_path, dest_rep)
+        report_archived = {
+            "file": dest_rep.name, "sha256": rv.sha256_file(dest_rep),
+            "note": ("this run's report as written BEFORE its own archive "
+                     "block was filled in: an archived report cannot carry "
+                     "the revision it is archived under")}
     hf_ok, hf_revision = False, None
     try:
         from huggingface_hub import HfApi, whoami
@@ -2209,6 +2316,7 @@ def archive_mb(ds, out_base, man, commit):
                 "hf_repo": gxm.HF_ARCHIVE_REPO if hf_ok else None,
                 "hf_upload_ok": hf_ok, "hf_revision": hf_revision,
                 "n_files": len(entries),
+                "report_archived": report_archived,
                 "uri_immutability_note": "resolve/<hf_commit_sha> pinned",
                 "entries": entries}
     (rel / "archive_manifest.json").write_text(
@@ -2232,11 +2340,14 @@ def run_mb2(args, ds, man, out_base, provenance, commit, t_start,
     }
     archive = {"release_dir": None, "hf_upload_ok": False,
                "hf_revision": None, "n_files": 0}
-    if not args.smoke:
-        archive = archive_mb(ds, out_base, man, commit)
     report = {
         "kind": "e2c_v3_method_baselines_report_v1",
         "dataset": ds,
+        # A smoke report used to be written to the real dataset path with no
+        # marker anywhere inside it, so a reader could not tell a 20-step,
+        # one-set diagnostic from the comparison.  Now it says so, and lands in
+        # the smoke output tree instead of reports/.
+        "smoke": bool(args.smoke),
         "produced_by": "scripts/e2c_v3_method_baselines.py",
         "generated_at": datetime.now(timezone.utc).isoformat(
             timespec="seconds"),
@@ -2267,9 +2378,20 @@ def run_mb2(args, ds, man, out_base, provenance, commit, t_start,
                     "n_files": archive.get("n_files", 0)},
         "elapsed_sec": round(time.time() - t_start, 1),
     }
-    MB_REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    path = MB_REPORT_DIR / f"method_baselines_{ds}.json"
+    path = (out_base / f"method_baselines_{ds}.SMOKE.json" if args.smoke
+            else MB_REPORT_DIR / f"method_baselines_{ds}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if not args.smoke:
+        # Archived AFTER the write, so the durable archive holds THIS report.
+        archive = archive_mb(ds, out_base, man, commit, path)
+        report["archive"] = {
+            "release_dir": archive.get("release_dir"),
+            "hf_upload_ok": archive.get("hf_upload_ok"),
+            "hf_revision": archive.get("hf_revision"),
+            "n_files": archive.get("n_files", 0),
+            "report_archived": archive.get("report_archived")}
+        path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     logger.info("MB2: report written to %s", path)
     logger.info("MB2 CLAIM scope: %s", report["claims"]["scope"])
     logger.info("MB2 CLAIM headline: %s", report["claims"]["headline"])

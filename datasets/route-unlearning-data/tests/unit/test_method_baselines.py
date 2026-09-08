@@ -2150,6 +2150,18 @@ def test_screening_reports_time_and_parameters_per_row(num_run, monkeypatch):
     assert scr["sft_target"]["total_train_sec"] == 0.0
     assert scr["npo"]["trainable_parameters"]["trainable_parameters"] > 0
     assert scr["gd_distribution"]["worst_delta_retrain_l2"] is not None
+    # The total still reads 0.0 for the reused row, so it now has to say what it
+    # covers and how many rows it could not cover: sft_target loaded a frozen
+    # cell whose record stores no wall-clock, and a silent 0.0 there reads as
+    # "direct SFT costs nothing".
+    assert scr["sft_target"]["n_rows_with_unrecorded_timing"] == 1
+    assert "not the end-to-end cost" in scr["sft_target"]["train_sec_covers"]
+    for rid in ("gd_distribution", "kl_anchored_edit", "npo"):
+        assert scr[rid]["n_rows_with_unrecorded_timing"] == 0
+    # References are not screened at all, so they carry no cost block: quoting a
+    # training time for them is exactly the budget mismatch the claims deny.
+    for rid in mb.REFERENCE_ROWS:
+        assert "total_train_sec" not in scr[rid]
 
 
 def test_the_cross_check_block_is_carried_into_the_aggregate(tmp_path,
@@ -2334,8 +2346,12 @@ def test_run_mb2_writes_the_report_and_the_run_manifest(tmp_path, monkeypatch,
     assert design["required_metrics"] == mb.MB_REQUIRED_METRICS
     assert design["pass_criteria_reference"] == gx.PASS_CRITERIA
     assert design["prompt_policy_roles"] == list(mb.PROMPT_POLICY_ROLES)
-    path = tmp_path / "reports" / f"method_baselines_{DS_NUM}.json"
+    # this helper drives a SMOKE pass, which writes into the smoke output tree
+    # rather than onto the real dataset path it used to overwrite
+    path = num_run.out_base / f"method_baselines_{DS_NUM}.SMOKE.json"
     assert json.loads(path.read_text(encoding="utf-8")) == report
+    assert not (tmp_path / "reports" / f"method_baselines_{DS_NUM}.json"
+                ).exists()
     run_manifest = json.loads((num_run.out_base / "run_manifest.json")
                               .read_text(encoding="utf-8"))
     assert run_manifest["rows_evaluated"] == report["aggregate"][
@@ -2504,6 +2520,132 @@ def test_a_full_pass_archives_the_adapters_it_produced(tmp_path, monkeypatch,
     assert calls[0][0] == DS_NUM and calls[0][1] == num_run.out_base
     assert calls[0][3] == "c0ffee0"
     assert report["archive"]["n_files"] == 5
+
+
+# ------------------------------------------------------------------ #
+# training time: a cost is either measured, not applicable, or not recorded
+# ------------------------------------------------------------------ #
+def _timing(report, row_id, sid=NARROW):
+    table = {r["row_id"]: r for r in report["comparison"][sid]["table"]}
+    return table[row_id]["training_time"]
+
+
+def test_a_reused_row_reports_no_timing_rather_than_a_fabricated_zero(
+        tmp_path, monkeypatch, num_run):
+    _attach(monkeypatch, num_run)
+    report = _mb2(tmp_path, monkeypatch, num_run)
+    reused = _timing(report, "sft_target")
+    assert reused["weights_source"] == "reused_granularity_cell"
+    assert reused["train_sec"] is None
+    assert reused["steps_requested"] is None
+    assert reused["steps_executed"] is None
+    assert reused["timing_source"] == "not_recorded_by_the_source_artifact"
+    # it names the misreading it prevents, and where the real number would be
+    assert "this method costs nothing" in reused["why"]
+    assert reused["budget_of_those_weights"] == {
+        "unavailable": "no oracle_results.json beside the checkpoint"}
+    # a row that trained HERE still reports its own measured wall-clock.  The
+    # stub trains in microseconds, so the value is not what matters -- that it
+    # is THIS row's own measurement, and is claimed as such, is.
+    trained = _timing(report, "npo")
+    assert trained["timing_source"] == "measured_in_this_row"
+    assert isinstance(trained["train_sec"], float)
+    assert "why" not in trained and "budget_of_those_weights" not in trained
+    row = num_run.rows[(NARROW, "npo")]["training"]
+    assert trained["train_sec"] == row["train_sec"]
+    assert trained["steps_requested"] == row["steps_requested"]
+    assert trained["steps_executed"] == row["steps_executed"]
+    # the fix is report-layer only: the frozen row record is untouched, so the
+    # cached rows a committed run wrote stay valid and nothing is re-scored
+    assert num_run.rows[(NARROW, "sft_target")]["training"]["train_sec"] == 0.0
+
+
+def test_the_reference_rows_carry_their_own_protocol_not_the_edit_budget(
+        tmp_path, monkeypatch):
+    """The retrain references ran 3000/200, not the 500-step edit budget.
+
+    A reused row's own recipe says what THIS row would have executed.  Printing
+    500 beside a fresh retrain contradicts the "references are deliberately not
+    budget-matched" claim in the same report, so the budget is read from the
+    artifact that actually trained the loaded weights.
+    """
+    man, matrix, ctx = _design(DS_NUM)
+    gran = _gran_tree(tmp_path, DS_NUM, man, ctx)
+    proto = gran / "oracles" / f"matched_retrain_{NARROW}" / "oracle_results.json"
+    rec = json.loads(proto.read_text(encoding="utf-8"))
+    rec["protocol"] = {"steps": 3000, "warmup": 200, "lr": 2e-05}
+    proto.write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
+    run = _drive(tmp_path, monkeypatch, DS_NUM, man, matrix, ctx,
+                 only_sets=[NARROW], gran=gran, out_base=tmp_path / "refs")
+    _attach(monkeypatch, run)
+    tt = _timing(_mb2(tmp_path, monkeypatch, run), "matched_retrain")
+    assert tt["steps_requested"] == 3000
+    assert tt["steps_requested"] != mx.UL_STEPS
+    assert tt["budget_of_those_weights"]["family"] == "matched_retrain"
+    assert tt["budget_of_those_weights"]["steps"] == 3000
+    assert tt["budget_of_those_weights"]["source"] == str(proto)
+    # still no wall-clock: the oracle artifact records a budget, not a time
+    assert tt["train_sec"] is None
+    assert tt["timing_source"] == "not_recorded_by_the_source_artifact"
+
+
+def test_prompt_only_cost_is_zero_by_construction_and_says_why(
+        tmp_path, monkeypatch, num_run):
+    _attach(monkeypatch, num_run)
+    report = _mb2(tmp_path, monkeypatch, num_run)
+    ids = [r for r in report["comparison"][NARROW]["table"]
+           if r["row_id"].startswith("prompt_only")]
+    assert len(ids) == 3, [r["row_id"] for r in ids]
+    for r in ids:
+        tt = r["training_time"]
+        assert tt["weights_source"] == "baseline_route_unchanged"
+        assert tt["train_sec"] == 0.0
+        assert tt["steps_requested"] is None and tt["steps_executed"] is None
+        assert tt["timing_source"] == "not_applicable"
+        assert "unchanged baseline route" in tt["why"]
+
+
+def test_the_alias_row_has_no_cost_of_its_own(tmp_path, monkeypatch, num_run):
+    _attach(monkeypatch, num_run)
+    report = _mb2(tmp_path, monkeypatch, num_run)
+    alias = _timing(report, "cf_relabel")
+    # the alias record copies sft_target's weights block verbatim, so it is
+    # identified by its own aliased_to, not by a weights.source of its own
+    assert alias["aliased_to"] == "sft_target"
+    assert alias["train_sec"] is None
+    assert alias["timing_source"] == "not_applicable"
+    assert "double-count" in alias["why"]
+    assert "budget_of_those_weights" not in alias
+    # the row it aliases is the one whose cost is unrecorded, not zero
+    floor = _timing(report, "baseline_route")
+    assert floor["train_sec"] is None
+    assert floor["timing_source"] == "not_applicable"
+    assert "nothing was trained" in floor["why"]
+
+
+def test_a_smoke_report_never_lands_on_the_real_report_path(
+        tmp_path, monkeypatch, num_run):
+    """The 20-step diagnostic once overwrote the comparison's own path.
+
+    It left no marker inside itself either, so a reader could not tell a
+    one-set, 20-step diagnostic from the 39-row comparison -- and the archive
+    step then copied whichever file happened to be there.
+    """
+    _attach(monkeypatch, num_run)
+    real = tmp_path / "reports" / f"method_baselines_{DS_NUM}.json"
+    smoke_report = _mb2(tmp_path, monkeypatch, num_run, smoke=True)
+    assert smoke_report["smoke"] is True
+    smoke = num_run.out_base / f"method_baselines_{DS_NUM}.SMOKE.json"
+    assert json.loads(smoke.read_text(encoding="utf-8"))["smoke"] is True
+    assert not real.exists()
+    # the full pass owns the real path, and says inside itself that it is one
+    _no_hf_upload(monkeypatch)
+    monkeypatch.setattr(mb, "archive_mb", lambda *a, **k: {
+        "release_dir": "rel", "hf_upload_ok": False, "hf_revision": None,
+        "n_files": 0})
+    full = _mb2(tmp_path, monkeypatch, num_run, smoke=False)
+    assert full["smoke"] is False
+    assert json.loads(real.read_text(encoding="utf-8"))["smoke"] is False
 
 
 def _no_hf_upload(monkeypatch):
