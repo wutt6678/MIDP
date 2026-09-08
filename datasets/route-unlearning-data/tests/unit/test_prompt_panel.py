@@ -686,13 +686,48 @@ def test_the_support_profile_reports_accuracy_and_invalid_rates_per_class():
     assert prof["baseline"]["distractor"]["strict_accuracy"] == 0.0
     assert prof["baseline"]["distractor"]["unparseable_rate"] == 1.0
     assert prof["baseline"]["distractor"][
-        "min_candidate_mass"] == pytest.approx(0.2)
+        "min_candidate_score_sum"] == pytest.approx(0.2)
     assert prof["baseline"]["distractor"]["all_models_on_support"] is False
     assert prof["baseline"]["distractor"]["models_off_support"] == [
         "baseline_h"]
     # loo_retrain has no desired label for the target, so it scores fewer rows
     assert prof["loo_retrain"]["canonical"]["n_scored"] == 3
     assert prof["baseline"]["canonical"]["n_scored"] == 4
+
+
+def test_the_report_layer_names_a_score_sum_and_rows_keep_candidate_mass():
+    """The naming contract, both halves pinned.
+
+    A REPORT field called ``*_mass`` asserts a probability mass the frozen
+    scorer never measured -- there is no termination event, so overlapping
+    candidate prefixes can sum above 1.  Renaming the ROW field instead would
+    quarantine a finished nine-hour sweep and diverge from every other artifact
+    in the project, and renaming the CRITERION would fork the project's own
+    frozen bar.  So the report layer names the quantity it holds, and the other
+    two do not move.
+    """
+    row = _h_row("beta", _probs("beta"))
+    assert "candidate_mass" in row and "other_mass" in row
+    block = pp.h_template_block({"i1": row}, {"i1": "beta"},
+                                {"i1": "transformation_target"}, None,
+                                SYN_VOCAB)
+    support = block["candidate_support"]
+    assert "min_candidate_score_sum" in support
+    assert "max_other_score_sum" in support
+    assert [k for k in support if k.endswith("_mass")] == []
+    # naming only: the value is still the rows' own sum, untouched
+    assert support["min_candidate_score_sum"] == row["candidate_mass"]
+    # the frozen criterion keeps its project-wide key and is what support reads
+    assert "min_candidate_mass" in gx.PASS_CRITERIA
+    checks = pp.criteria_readonly(block)["criteria"]
+    key = "min_candidate_score_sum>=frozen_min_candidate_mass_crit"
+    assert key in checks
+    assert checks[key] is (support["min_candidate_score_sum"]
+                           >= gx.PASS_CRITERIA["min_candidate_mass"])
+    naming = pp.SCORING_LIMITATION["report_layer_naming"]
+    assert "score_sum" in naming["report_fields_are_named"]
+    assert "UNCHANGED" in naming["cached_row_records_are_named"]
+    assert "UNCHANGED" in naming["frozen_criterion_key_is"]
 
 
 def test_off_support_templates_are_reported_but_not_interpreted():
@@ -780,7 +815,8 @@ def _block(target_acc, leak_rate=0.0, sibling=None, retained=1.0, mass=0.999,
             "hard_leaked_targets": [], "hard_leak_rate": leak_rate,
             "max_p_source": p_source, "min_p_desired": p_desired},
         "candidate_support": {
-            "min_candidate_mass": mass, "max_other_mass": 1.0 - mass,
+            "min_candidate_score_sum": mass,
+            "max_other_score_sum": 1.0 - mass,
             "unparseable_rate": unparseable, "multi_label_invalid_rate": multi,
             "distractor_echoed": []},
     }
@@ -818,6 +854,35 @@ def test_an_all_null_metric_stays_null_rather_than_becoming_zero():
     assert out["template_worst_case"][key] is None
     assert out["max_template_spread"][key] is None
     assert out["worst_template_by_metric"][key] is None
+
+
+def test_every_worst_case_metric_path_resolves_in_a_block_the_writer_built():
+    """A renamed field with a stale path in H_WORST_METRICS digs None, and the
+    headline then reports None for a metric it was asked about: a metric
+    silently lost rather than a failure.  KEY existence is what is checked, not
+    the value -- several of these are legitimately null (no sibling control, no
+    refusal control) and null must stay null.
+    """
+    block = pp.h_template_block(
+        {"i1": _h_row("beta", _probs("beta"))}, {"i1": "beta"},
+        {"i1": "transformation_target"}, None, SYN_VOCAB)
+    unresolved = []
+    for path, _ in pp.H_WORST_METRICS:
+        node = block
+        for part in path.split("."):
+            if not isinstance(node, dict) or part not in node:
+                unresolved.append(path)
+                break
+            node = node[part]
+    assert unresolved == []
+    # the same for the support profile, whose keys the claims read BY NAME
+    per_class = pp.support_profile_by_class(_syn_h_results())["per_class"]
+    for klass, per_role in per_class.items():
+        for role, stats in per_role.items():
+            for key in ("min_candidate_score_sum",
+                        "mean_candidate_score_sum",
+                        "min_candidate_score_sum_by_model"):
+                assert key in stats, (klass, role, key)
 
 
 def test_sibling_absence_stays_null_and_is_not_counted_as_a_pass():
@@ -1590,8 +1655,22 @@ def test_only_sets_and_only_seeds_narrow_the_sweep(real):
         "matched_retrain__gx_sal_mix_0", "loo_retrain__gx_sal_mix_0"}
 
 
-@pytest.mark.skipif(not (pp._gran_out_base("salmu") / "cells").exists(),
-                    reason="granularity checkpoint tree not present")
+#: A fresh checkout (CI) has the committed cell and oracle JSON but none of the
+#: ``*.safetensors`` adapters: those are gitignored by design, with the HF
+#: revision-pinned archive as the durable store.  ``cells/`` existing therefore
+#: stopped implying that the WEIGHTS do the moment the G4 salmu per-cell
+#: evidence was committed -- which silently un-skipped this test in CI and made
+#: it fail on 123 absent checkpoints.  Probe a weight file, not a directory.
+_GRAN_SALMU_CELLS = pp._gran_out_base("salmu") / "cells"
+_CELL_WEIGHTS = list(_GRAN_SALMU_CELLS.glob(
+    "*/*/edited_h/adapter_final/adapter_model.safetensors"))
+_WEIGHTS_PRESENT = pp.SALMU_ROUTE_G.exists() and bool(_CELL_WEIGHTS)
+_NO_WEIGHTS = ("gitignored adapter weights (*.safetensors) are absent from this "
+               "checkout: the committed JSON evidence is here, the adapters "
+               "live in the HF revision-pinned archive")
+
+
+@pytest.mark.skipif(not _WEIGHTS_PRESENT, reason=_NO_WEIGHTS)
 def test_every_in_scope_checkpoint_exists_on_disk(real):
     """Checked before spending a GPU: the sweep must not discover gaps at
     hour three, and a gap must be a PENDING row rather than a silent skip."""
@@ -1607,9 +1686,17 @@ def test_every_in_scope_checkpoint_exists_on_disk(real):
 
 
 def test_the_frozen_router_checkpoint_is_the_one_the_project_trained():
-    assert pp.SALMU_ROUTE_G.exists(), \
-        f"frozen g router missing at {pp.SALMU_ROUTE_G}"
+    """The frozen router's PATH is frozen design and is checkable in any
+    checkout; the FILE is a gitignored weight, so its presence is asserted only
+    where the weights exist.  Skipping the whole test on a fresh checkout would
+    throw away the part that a refactor can actually break -- the identity of
+    the checkpoint the panel calls route g.
+    """
     assert pp.SALMU_ROUTE_G.name == "adapter_model.safetensors"
+    assert pp.SALMU_ROUTE_G.parts[-3:] == (
+        "g_X_to_C", "adapter_final", "adapter_model.safetensors")
+    if not pp.SALMU_ROUTE_G.exists():
+        pytest.skip(_NO_WEIGHTS)
 
 
 # ------------------------------------------------------------------ #

@@ -106,6 +106,11 @@ candidate_mass / other_mass are therefore normalized score sums, not literal
 probability masses, and every threshold applied to them -- including the
 frozen ``min_candidate_mass=0.99`` interpretability criterion -- is a
 SCORE-SUM criterion, unchanged from the rest of the project.
+The REPORT LAYER names the quantity it actually holds (``*_score_sum``), while
+two things deliberately keep the project-wide name: the per-model cached
+records (``candidate_mass`` -- renaming them would invalidate a finished sweep
+and quarantine it) and ``gx.PASS_CRITERIA['min_candidate_mass']`` (the
+criterion belongs to the project, not to this report).
 ``SCORING_LIMITATION`` carries this statement into every report.  Route-h rows
 additionally record a termination-aware DIAGNOSTIC (P(EOS | prompt + parsed
 label)); it sits beside the frozen scorer and never replaces it, because
@@ -261,9 +266,10 @@ HELD_OUT_RECORD = {
 #: are score sums, not literal probability masses, and every threshold applied
 #: to them -- including the frozen min_candidate_mass=0.99 interpretability
 #: criterion -- is a SCORE-SUM criterion.  The record field names are kept
-#: identical to every other artifact in the project; this block is the binding
-#: interpretation, and route-h rows carry a termination-aware diagnostic
-#: beside it.
+#: identical to every other artifact in the project; the REPORT layer instead
+#: names the quantity it holds, and says so in ``report_layer_naming``.  This
+#: block is the binding interpretation, and route-h rows carry a
+#: termination-aware diagnostic beside it.
 SCORING_LIMITATION = {
     "missing_termination_event": True,
     "candidate_mass_is": ("sum of normalized label-prefix scores WITHOUT a "
@@ -277,6 +283,20 @@ SCORING_LIMITATION = {
                     "frozen min_candidate_mass=0.99 interpretability "
                     "criterion) is a threshold on a SCORE SUM, not on a "
                     "probability"),
+    "report_layer_naming": {
+        "report_fields_are_named": ("*_candidate_score_sum / "
+                                    "*_other_score_sum"),
+        "cached_row_records_are_named": ("candidate_mass / other_mass, "
+                                         "UNCHANGED: renaming a stored field "
+                                         "would quarantine a finished sweep"),
+        "frozen_criterion_key_is": ("gx.PASS_CRITERIA['min_candidate_mass'], "
+                                    "UNCHANGED: the criterion is the "
+                                    "project's own, not this report's"),
+        "why": ("a report field called *_mass would assert a probability mass "
+                "the scorer never measured, so the report layer names the "
+                "quantity it actually holds; the value, the threshold and the "
+                "measurement are untouched by the naming"),
+    },
     "termination_diagnostic": ("route-h rows record eos_prob_after_parsed: "
                                "P(EOS | prompt + parsed label), a termination-"
                                "aware reading of the same output; diagnostic "
@@ -1216,8 +1236,12 @@ def h_template_block(role_rows, expected_of, groups, entry, vocab):
             "min_p_desired": min(p_desired) if p_desired else None,
         },
         "candidate_support": {
-            "min_candidate_mass": min(r["candidate_mass"] for r in all_rows),
-            "max_other_mass": max(r["other_mass"] for r in all_rows),
+            # Report-layer name: this is a normalized SCORE SUM, not a
+            # probability mass (SCORING_LIMITATION).  The rows it is computed
+            # from keep the project-wide field name ``candidate_mass``.
+            "min_candidate_score_sum": min(r["candidate_mass"]
+                                           for r in all_rows),
+            "max_other_score_sum": max(r["other_mass"] for r in all_rows),
             "unparseable_rate": sum(r["unparseable"] for r in all_rows)
             / len(all_rows),
             "multi_label_invalid_rate": sum(r["multi_label_invalid"]
@@ -1265,7 +1289,7 @@ H_WORST_METRICS = (
     ("source_label_leakage.hard_leak_rate", "max"),
     ("source_label_leakage.max_p_source", "max"),
     ("source_label_leakage.min_p_desired", "min"),
-    ("candidate_support.min_candidate_mass", "min"),
+    ("candidate_support.min_candidate_score_sum", "min"),
     ("candidate_support.unparseable_rate", "max"),
     ("candidate_support.multi_label_invalid_rate", "max"),
     ("candidate_support.distractor_echo_rate", "max"),
@@ -1333,8 +1357,8 @@ def criteria_readonly(block):
         "max_target_p_source<=crit": (
             leak["max_p_source"] is not None
             and leak["max_p_source"] <= crit["max_target_p_source"]),
-        "min_candidate_mass>=crit": (
-            support["min_candidate_mass"] >= crit["min_candidate_mass"]),
+        "min_candidate_score_sum>=frozen_min_candidate_mass_crit": (
+            support["min_candidate_score_sum"] >= crit["min_candidate_mass"]),
         "retained_strict_accuracy==1.0": acc["retained"] == 1.0,
         "sibling_strict_accuracy==1.0_or_null": (
             acc["sibling"] is None or acc["sibling"] == 1.0),
@@ -1369,15 +1393,15 @@ def _summary_from_probs(probs, vocab):
 INTERPRETABLE_MASS_ROWS = ("edit", "matched_retrain")
 
 
-def comparison_interpretable(masses, reliable):
+def comparison_interpretable(score_sums, reliable):
     """Can ONE (template, target) ``Delta_retrain`` be interpreted?
 
-    ``masses`` maps row family to the candidate mass of the row that comparison
-    actually reads.  Two conditions, both existing project rules and neither a
-    new threshold: the distance gate ``rv.gated_distance`` already applied
-    (below ``MIN_CANDIDATE_MASS`` a renormalized distance is not computable at
-    all), and the frozen ``min_candidate_mass`` criterion on the rows that
-    carry it per ``INTERPRETABLE_MASS_ROWS``.
+    ``score_sums`` maps row family to the candidate score sum of the row that
+    comparison actually reads.  Two conditions, both existing project rules and
+    neither a new threshold: the distance gate ``rv.gated_distance`` already
+    applied (below ``MIN_CANDIDATE_MASS`` a renormalized distance is not
+    computable at all), and the frozen ``min_candidate_mass`` criterion on the
+    rows that carry it per ``INTERPRETABLE_MASS_ROWS``.
 
     Decided PER COMPARISON rather than per model class.  A class-wide minimum
     over every row of every model is a different and much more brittle
@@ -1387,15 +1411,16 @@ def comparison_interpretable(masses, reliable):
     where it is measured.
     """
     if not reliable:
-        return False, ("distance gate not cleared (candidate_mass < "
+        return False, ("distance gate not cleared (candidate score sum < "
                        f"{MIN_CANDIDATE_MASS})")
     crit = gx.PASS_CRITERIA["min_candidate_mass"]
     bad = sorted(k for k in INTERPRETABLE_MASS_ROWS
-                 if masses.get(k) is not None and masses[k] < crit)
+                 if score_sums.get(k) is not None and score_sums[k] < crit)
     if bad:
-        return False, ("candidate mass below the frozen min_candidate_mass="
-                       f"{crit} criterion for {', '.join(bad)}: "
-                       + ", ".join(f"{k}={masses[k]:.4f}" for k in bad))
+        return False, ("candidate score sum below the frozen "
+                       f"min_candidate_mass={crit} criterion for "
+                       f"{', '.join(bad)}: "
+                       + ", ".join(f"{k}={score_sums[k]:.4f}" for k in bad))
     return True, None
 
 
@@ -1404,9 +1429,9 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
     """D(edit, matched_retrain) and D(edit, loo_retrain), per template.
 
     Computed on the transformation targets only, from the stored candidate
-    distributions, and gated on candidate mass exactly as everywhere else in
-    this project: below the threshold the distance is null ("not established")
-    rather than a small number that looks like proximity.
+    distributions, and gated on the candidate score sum exactly as everywhere
+    else in this project: below the threshold the distance is null ("not
+    established") rather than a small number that looks like proximity.
 
     Each comparison also carries ``interpretable``, which is the distance gate
     plus the frozen support criterion on the rows it applies to.  Every
@@ -1424,8 +1449,8 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
             rec = {"matched_retrain": None, "loo_retrain": None,
                    "delta_retrain": None, "reliable": False, "reason": None,
                    "interpretable": False, "interpretability_reason": None,
-                   "candidate_mass_compared": None}
-            masses = {"edit": e_rows["candidate_mass"]}
+                   "candidate_score_sum_compared": None}
+            score_sums = {"edit": e_rows["candidate_mass"]}
             summaries = {"edit": _summary_from_probs(e_rows["probs"], vocab)}
             for fam, other in (("matched_retrain", matched_rec),
                                ("loo_retrain", loo_rec)):
@@ -1433,10 +1458,10 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
                     rec["reason"] = f"{fam} not evaluated"
                     rec["interpretability_reason"] = rec["reason"]
                     continue
-                masses[fam] = other["rows"][role][iid]["candidate_mass"]
+                score_sums[fam] = other["rows"][role][iid]["candidate_mass"]
                 summaries[fam] = _summary_from_probs(
                     other["rows"][role][iid]["probs"], vocab)
-            rec["candidate_mass_compared"] = masses
+            rec["candidate_score_sum_compared"] = score_sums
             if "matched_retrain" in summaries and "loo_retrain" in summaries:
                 d_m, ok_m, why_m = rv.gated_distance(
                     summaries["edit"], summaries["matched_retrain"],
@@ -1452,7 +1477,7 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
                     rec["delta_retrain"] = (rec["loo_retrain"]
                                             - rec["matched_retrain"])
                 rec["interpretable"], why_i = comparison_interpretable(
-                    masses, rec["reliable"])
+                    score_sums, rec["reliable"])
                 rec["interpretability_reason"] = None if rec[
                     "interpretable"] else why_i
             per_target[iid] = rec
@@ -1472,7 +1497,8 @@ def oracle_distances_by_template(cell_rec, matched_rec, loo_rec, vocab,
                 v["delta_retrain"] > 0 for v in per_target.values()
                 if v["delta_retrain"] is not None) if deltas else None,
             "support_criterion": (
-                f"edit and matched_retrain candidate_mass >= {crit}; "
+                f"edit and matched_retrain candidate score sum >= the frozen "
+                f"min_candidate_mass={crit} criterion; "
                 f"loo_retrain >= {MIN_CANDIDATE_MASS} (the deletion reference "
                 f"is expected to drift on target rows, per "
                 f"gxm.train_oracle_retrain's own fit gate)"),
@@ -1520,14 +1546,14 @@ def support_profile_by_class(results):
             usable = [r for r in recs if role in (r.get("rows") or {})]
             if not usable:
                 continue
-            masses, unparsable, multi, echoed, n_rows = [], 0, 0, 0, 0
+            sums, unparsable, multi, echoed, n_rows = [], 0, 0, 0, 0
             ok, scored = 0, 0
             off_models, model_min = [], {}
             for rec in usable:
                 expected = rec["expected_of"]
                 own = []
                 for iid, row in rec["rows"][role].items():
-                    masses.append(row["candidate_mass"])
+                    sums.append(row["candidate_mass"])
                     own.append(row["candidate_mass"])
                     unparsable += bool(row["unparseable"])
                     multi += bool(row["multi_label_invalid"])
@@ -1541,9 +1567,9 @@ def support_profile_by_class(results):
                     off_models.append(rec["model_id"])
             per_template[role] = {
                 "n_models": len(usable), "n_rows": n_rows,
-                "mean_candidate_mass": (sum(masses) / len(masses)
-                                        if masses else None),
-                "min_candidate_mass": min(masses) if masses else None,
+                "mean_candidate_score_sum": (sum(sums) / len(sums)
+                                             if sums else None),
+                "min_candidate_score_sum": min(sums) if sums else None,
                 "strict_accuracy": (ok / scored) if scored else None,
                 "n_scored": scored,
                 "unparseable_rate": unparsable / n_rows if n_rows else None,
@@ -1557,7 +1583,7 @@ def support_profile_by_class(results):
                                            / len(usable)),
                 "all_models_on_support": not off_models,
                 "any_model_off_support": bool(off_models),
-                "min_candidate_mass_by_model": model_min,
+                "min_candidate_score_sum_by_model": model_min,
             }
         profile[klass] = per_template
 
@@ -1578,8 +1604,9 @@ def support_profile_by_class(results):
     edit_specific = [r for r in edited_off if r not in baseline_off]
     return {
         "criterion": ("a model is on support for a template when the min of "
-                      "candidate_mass over its own rows for that template is "
-                      f">= gx.PASS_CRITERIA['min_candidate_mass'] = {crit}"),
+                      "the candidate score sum over its own rows for that "
+                      "template is >= the frozen "
+                      f"gx.PASS_CRITERIA['min_candidate_mass'] = {crit}"),
         "is_a_gate": False,
         "per_class": profile,
         "classes_all_models_on_support_by_template": {
@@ -1590,7 +1617,8 @@ def support_profile_by_class(results):
         "templates_where_only_edited_models_are_off_support": edit_specific,
         "collapse_is_edit_specific": bool(edit_specific),
         "reading": (
-            "off-support templates are ones where the model's output mass has "
+            "off-support templates are ones where the model's output score "
+            "sum has "
             "left the candidate space, so a renormalized distance there "
             "compares two artifacts rather than two behaviors; where the "
             "never-edited baseline is off support too, the collapse is a "
@@ -1748,7 +1776,8 @@ def g_baseline_block(rec, ctx):
             "invalid_ids": invalid,
             "off_support_rate": len(off_support) / len(ids),
             "off_support_ids": off_support,
-            "min_candidate_mass": min(rows[i]["candidate_mass"] for i in ids),
+            "min_candidate_score_sum": min(rows[i]["candidate_mass"]
+                                           for i in ids),
             "distractor_echoed": [i for i in ids
                                   if rows[i]["distractor_echoed"]],
         }
@@ -2579,10 +2608,12 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
         f"{len(g_space['codes'])}-code route-g candidate space, dataset {ds}, "
         f"{n_ids} identities; the panel was frozen and committed before any "
         f"model was evaluated, and no template, threshold or recipe was "
-        f"chosen using it.  candidate_mass/other_mass are normalized "
+        f"chosen using it.  The candidate and other quantities are normalized "
         f"label-prefix SCORE SUMS without a termination event, not literal "
-        f"probability masses (see scoring_limitation); every threshold "
-        f"applied to them, including min_candidate_mass=0.99, is a score-sum "
+        f"probability masses (see scoring_limitation), so the report layer "
+        f"names them *_score_sum while the cached rows keep the project-wide "
+        f"candidate_mass field; every threshold applied to them, including "
+        f"the frozen min_candidate_mass=0.99 criterion, is a score-sum "
         f"criterion")
 
     cells = (route_h or {}).get("edited_cells", {})
@@ -2650,9 +2681,10 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
         return ((per_class.get(klass) or {}).get(role) or {}).get(field)
 
     if base:
-        off_mass = _nums([_class_stat("baseline", r, "min_candidate_mass")
+        off_sums = _nums([_class_stat("baseline", r,
+                                      "min_candidate_score_sum")
                           for r in TEMPLATE_ROLES if r != "canonical"])
-        worst_base_mass = min(off_mass) if off_mass else None
+        worst_base_sum = min(off_sums) if off_sums else None
         base_acc = {r: _class_stat("baseline", r, "strict_accuracy")
                     for r in TEMPLATE_ROLES}
         off_acc = _nums([v for r, v in base_acc.items() if r != "canonical"])
@@ -2728,7 +2760,7 @@ def build_claims(ds, route_h, g_baseline, spillover, panel):
             f"the criterion to the one row the project exempts.  The "
             f"never-edited baseline_h is off support on {len(baseline_off)} of "
             f"{n_roles} templates [{base_off_detail}], reaching a minimum "
-            f"candidate mass of {_f(worst_base_mass)} away from canonical, "
+            f"candidate score sum of {_f(worst_base_sum)} away from canonical, "
             f"where its strict accuracy is {_f(base_acc.get('canonical'))} on "
             f"canonical and at best {best_off_acc} on the other "
             f"{n_roles - 1}.  {len(edit_specific)} template(s) are off support "

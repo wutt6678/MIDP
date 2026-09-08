@@ -64,12 +64,50 @@ def _repo_cwd(monkeypatch):
     monkeypatch.chdir(_ROOT)
 
 
+def _committed_availability(ds):
+    """The availability snapshot the FROZEN design recorded, per set."""
+    path = mb.mb_manifest_path(ds)
+    if not path.exists():
+        return {}
+    committed = json.loads(path.read_text(encoding="utf-8"))
+    return {s["set_id"]: s.get("available_artifacts", {})
+            for s in committed.get("sets", [])}
+
+
 def _design(ds):
+    """The frozen design, rebuilt live from the committed inputs.
+
+    Exactly one field cannot be rebuilt from a fresh checkout:
+    ``available_artifacts`` snapshots the adapter weights, and every
+    ``*.safetensors`` in this project is GITIGNORED by design (the durable store
+    is the HF revision-pinned archive).  A CI checkout therefore has the
+    committed cell/oracle JSON and none of the weights, which fails six design
+    and MB0 tests for a reason that has nothing to do with the code under test.
+    Both committed manifests record all six artifacts present for all five
+    representative sets, so that one field is taken from the frozen design when
+    the live probe disagrees -- and ONLY when the disagreement is about
+    ``*_checkpoint`` keys.  A missing ``*_record`` or ``*_soft`` JSON is tracked
+    evidence and still fails loudly here rather than being papered over.  The
+    real tree is probed, unnormalized, by
+    test_representative_sets_all_have_the_artifacts_the_metrics_need.
+    """
     with pytest.MonkeyPatch.context() as mp:
         mp.chdir(_ROOT)
         matrix = gxm.load_frozen(ds)
-        return mb.build_mb_manifest(ds, matrix, gxm.dataset_ctx(ds, matrix)), \
-            matrix, gxm.dataset_ctx(ds, matrix)
+        ctx = gxm.dataset_ctx(ds, matrix)
+        man = mb.build_mb_manifest(ds, matrix, ctx)
+        frozen = _committed_availability(ds)
+        for s in man["sets"]:
+            declared = frozen.get(s["set_id"])
+            live = s["available_artifacts"]
+            if declared is None or live == declared:
+                continue
+            absent = sorted(k for k, present in live.items() if not present)
+            assert absent and all(k.endswith("_checkpoint") for k in absent), (
+                f"{ds}/{s['set_id']}: TRACKED evidence is missing, not just "
+                f"gitignored weights: {absent}")
+            s["available_artifacts"] = declared
+        return man, matrix, ctx
 
 
 @pytest.fixture(scope="session")
@@ -214,6 +252,26 @@ def test_a_single_edit_seed_is_declared_and_the_matrix_seeds_are_not_used(
 
 def test_representative_sets_all_have_the_artifacts_the_metrics_need(
         num_design, sal_design):
+    """Pre-flight on the REAL tree, before spending a GPU on it.
+
+    This is the one artifact assertion that is never normalized: it probes the
+    checkout with the runner's own availability function.  A fresh CI checkout
+    has the committed JSON evidence and none of the gitignored weights, so it
+    SKIPS there -- rather than failing, and rather than passing vacuously on the
+    values ``_design`` took from the frozen manifest.
+    """
+    absent = {}
+    for ds in (DS_NUM, DS_SAL):
+        gran_out = gxm.OUT_ROOT / ds
+        for sid in mb.MB_REP_SETS[ds]:
+            av = mb._artifact_availability(ds, gran_out, sid)
+            missing = sorted(k for k, present in av.items() if not present)
+            if missing:
+                absent[f"{ds}/{sid}"] = missing
+    if absent:
+        pytest.skip("gitignored adapter weights are absent from this checkout "
+                    "(the HF revision-pinned archive is the durable store): "
+                    f"{absent}")
     for man, _matrix, _ctx in (num_design, sal_design):
         for s in man["sets"]:
             av = s["available_artifacts"]
