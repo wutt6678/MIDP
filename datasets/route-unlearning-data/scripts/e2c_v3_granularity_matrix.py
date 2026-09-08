@@ -1102,14 +1102,43 @@ def run_balanced_ablation(args, ds, ctx, matrix, out_base, set_ids):
                 and bres.exists():
             with open(bres) as f:
                 rr = json.load(f)
-            results[sid] = {"mode": "cached", "target_boost": 1,
+            proto = rr.get("protocol") or {}
+            # A reused oracle was trained under SOME protocol, recorded in the
+            # oracle_results.json beside it.  Fail closed on a mismatch:
+            # silently reusing a reference trained at a different boost or seed
+            # would report it as matched_retrain_balanced when it is not.
+            want = {"steps": RETRAIN_STEPS, "warmup": RETRAIN_WARMUP,
+                    "lr": RETRAIN_LR, "repeat": RETRAIN_REPEAT,
+                    "target_boost": RETRAIN_TARGET_BOOST_BALANCED,
+                    "seed": ORACLE_SEED}
+            differs = {k: {"found": proto.get(k), "expected": v}
+                       for k, v in want.items() if proto.get(k) != v}
+            if differs:
+                raise RuntimeError(
+                    f"GX2B[{sid}]: the cached balanced oracle was NOT trained "
+                    f"under the balanced recipe -- protocol differs: "
+                    f"{differs}.  Reusing it would report a "
+                    f"differently-trained reference as {BALANCED_LABEL}.")
+            # The trained branch reports its own protocol, so the reused branch
+            # reports the one on disk.  Dropping oracle_seed here made a CPU
+            # re-run of GX2B say LESS about the reference than the GPU run that
+            # trained it did, and lost the seed the ablation is scoped to.
+            results[sid] = {"mode": "cached",
+                            "target_boost": proto.get("target_boost"),
+                            "oracle_seed": proto.get("seed"),
+                            "protocol": proto,
                             "sha256": rv.sha256_file(bckpt),
                             "fit_ok": rr.get("fit_ok"),
                             "strict_all_expected":
                                 rr.get("strict_all_expected"),
                             "min_candidate_mass":
-                                rr.get("min_candidate_mass")}
-            logger.info(f"GX2B[{sid}]: balanced oracle cached")
+                                rr.get("min_candidate_mass"),
+                            "reused_not_trained_in_this_pass": (
+                                "trained by an earlier committed pass; the "
+                                "checkpoint sha256 and the protocol above are "
+                                "read from the oracle_results.json beside it")}
+            logger.info("GX2B[%s]: balanced oracle cached (seed=%s boost=%s)",
+                        sid, proto.get("seed"), proto.get("target_boost"))
             continue
         if session is None:
             session = mx.ModelSession(args_o, f"e2c_gx_{ds}_bal")

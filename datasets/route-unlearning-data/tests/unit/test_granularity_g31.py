@@ -719,6 +719,68 @@ def test_the_ablation_report_names_both_references_and_keeps_stored_keys(
     assert "x5" not in json.dumps(cmp["promotion_conditions"])
 
 
+def test_a_reused_balanced_oracle_reports_the_protocol_it_was_trained_under(
+        tmp_path):
+    """A CPU re-run must not say LESS than the GPU run that trained it.
+
+    The cached branch emitted ``mode``/``target_boost``/``sha256`` and the fit
+    fields but dropped ``oracle_seed``, so re-aggregating the ablation on CPU
+    silently lost the seed the reference was trained at -- and reused whatever
+    sat on disk without checking it was the balanced recipe at all.
+    """
+    ctx, entry = _ctx(), _entry()
+    matrix = {"sets": [entry]}
+    out_base, sid = tmp_path, entry["set_id"]
+    bdir = out_base / "oracles" / f"{gxm.BALANCED_FAMILY}_{sid}"
+    ckpt = bdir / "adapter_final" / "adapter_model.safetensors"
+    ckpt.parent.mkdir(parents=True)
+    ckpt.write_bytes(b"not really weights")
+    (bdir / "oracle_soft.json").write_text("{}", encoding="utf-8")
+    proto = {"steps": gxm.RETRAIN_STEPS, "warmup": gxm.RETRAIN_WARMUP,
+             "lr": gxm.RETRAIN_LR, "repeat": gxm.RETRAIN_REPEAT,
+             "target_boost": gxm.RETRAIN_TARGET_BOOST_BALANCED,
+             "seed": gxm.ORACLE_SEED}
+    res_path = bdir / "oracle_results.json"
+    with open(res_path, "w") as f:
+        json.dump({"family": gxm.BALANCED_FAMILY, "init": "fresh_lora",
+                   "protocol": proto, "fit_ok": True,
+                   "strict_all_expected": 1.0,
+                   "min_candidate_mass": 0.9998}, f)
+    rec = gxm.run_balanced_ablation(
+        _FakeArgs(), "salmu", ctx, matrix, out_base, [sid])[sid]
+    assert rec["mode"] == "cached"
+    assert rec["oracle_seed"] == gxm.ORACLE_SEED, \
+        "the seed the reference was trained at survives a CPU re-run"
+    assert rec["target_boost"] == gxm.RETRAIN_TARGET_BOOST_BALANCED
+    assert rec["protocol"] == proto
+    assert rec["fit_ok"] is True and rec["strict_all_expected"] == 1.0
+    assert rec["min_candidate_mass"] == pytest.approx(0.9998)
+    assert rec["sha256"] == rv.sha256_file(ckpt)
+    assert "earlier committed pass" in rec["reused_not_trained_in_this_pass"]
+    # every key the TRAINED branch reports is still reported
+    assert {"sha256", "mode", "target_boost", "oracle_seed",
+            "strict_all_expected", "min_candidate_mass", "fit_ok"} <= set(rec)
+
+    # a reference trained under a DIFFERENT recipe is refused, not reused:
+    # reporting a boost=5 oracle as matched_retrain_balanced would make the
+    # ablation's whole conclusion about nothing
+    with open(res_path, "w") as f:
+        json.dump({"protocol": dict(proto, target_boost=5),
+                   "fit_ok": True}, f)
+    with pytest.raises(RuntimeError,
+                       match="NOT trained under the balanced recipe"):
+        gxm.run_balanced_ablation(_FakeArgs(), "salmu", ctx, matrix, out_base,
+                                  [sid])
+    # ... and the mismatch is named field by field, not just reported
+    with open(res_path, "w") as f:
+        json.dump({"protocol": dict(proto, seed=42), "fit_ok": True}, f)
+    with pytest.raises(RuntimeError) as exc:
+        gxm.run_balanced_ablation(_FakeArgs(), "salmu", ctx, matrix, out_base,
+                                  [sid])
+    assert "'found': 42" in str(exc.value)
+    assert f"'expected': {gxm.ORACLE_SEED}" in str(exc.value)
+
+
 # ------------------------------------------------------------------ #
 # cost of a re-aggregation must not erase cost of the run before it
 # ------------------------------------------------------------------ #
