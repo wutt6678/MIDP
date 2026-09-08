@@ -2191,6 +2191,19 @@ def aggregate_gx(ds, out_base, matrix, args=None):
                     "analysis that reports every outcome; a favorable oracle "
                     "seed must never be substituted into this primary gate"),
                 "sensitivity_analysis_available": (
+                    # When coverage is complete there is nothing to widen, and
+                    # interpolating an empty set list into "a sensitivity
+                    # analysis over the uncovered set(s) []" is a sentence about
+                    # nothing -- the same defect the prompt panel's attribution
+                    # branches were rewritten to remove.
+                    "coverage is COMPLETE: every transformation target has an "
+                    "established matched-vs-LOO comparison, so no sensitivity "
+                    "analysis is pending and none could widen this gate.  GX2S "
+                    "(oracle seeds 42/123, separate report, never reads or "
+                    "writes this gate) remains available as an ablation over "
+                    "the representative sets if a seed-dependence question is "
+                    "asked later."
+                    if not uncovered_sets else
                     "GX2S trains matched_retrain and loo_retrain at ORACLE "
                     "seeds 42 and 123 and writes a SEPARATE report "
                     "(oracle_seed_sensitivity_<dataset>.json); it neither "

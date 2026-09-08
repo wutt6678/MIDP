@@ -653,6 +653,13 @@ def test_a_passing_gate_reports_full_coverage(tmp_path):
         in s["claims"]["oracle_separation_claim"]
     assert "every transformation target evaluated" \
         in s["claims"]["oracle_separation_claim"]
+    # with nothing uncovered there is nothing to widen, and an empty set list
+    # interpolated into the instruction would be a sentence about nothing
+    sens = cov["sensitivity_analysis_available"]
+    assert "coverage is COMPLETE" in sens
+    assert "no sensitivity analysis is pending" in sens
+    assert "uncovered set(s) []" not in sens
+    assert "--only-sets" not in sens
 
 
 # ------------------------------------------------------------------ #
