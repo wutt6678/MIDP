@@ -1,0 +1,4742 @@
+{
+  "cell_id": "gx_num_s_exact_to_narrow_Y01__seed123",
+  "dataset": "celeba_numeric",
+  "set_id": "gx_num_s_exact_to_narrow_Y01",
+  "mode": "single_exact_to_narrow",
+  "seed": 123,
+  "assignments": {
+    "00": {
+      "operation": "exact_to_narrow",
+      "field": "years_experience",
+      "source": "14 years",
+      "target": "10\u201314 years",
+      "exact_value": 14,
+      "unit": "years",
+      "source_resolution": "exact",
+      "target_resolution": "narrow",
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ]
+    }
+  },
+  "controls": {},
+  "control_notes": {},
+  "checkpoint_sha256": "30bf099b6834361603a865ff152d7421e89bf6fd47a0f655f4c6ea362f498ea7",
+  "hard_preds": [
+    {
+      "identity_id": "00",
+      "raw": "10\u201314 years",
+      "parsed_label": "10\u201314 years",
+      "recognized_labels": [
+        "10\u201314 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "target",
+      "expected_post_edit": "10\u201314 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "10\u201314 years",
+      "parsed": "10\u201314 years",
+      "classification": "correct",
+      "contains_exact_value": true,
+      "abstraction_width_error": 0,
+      "adjacent_bin_error": false,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ]
+    },
+    {
+      "identity_id": "01",
+      "raw": "15 years",
+      "parsed_label": "15 years",
+      "recognized_labels": [
+        "15 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "15 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "15 years",
+      "parsed": "15 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_lower"
+      ]
+    },
+    {
+      "identity_id": "02",
+      "raw": "19 years",
+      "parsed_label": "19 years",
+      "recognized_labels": [
+        "19 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "19 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "19 years",
+      "parsed": "19 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_upper",
+        "narrow_upper"
+      ]
+    },
+    {
+      "identity_id": "03",
+      "raw": "20 years",
+      "parsed_label": "20 years",
+      "recognized_labels": [
+        "20 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "20 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "20 years",
+      "parsed": "20 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_lower",
+        "narrow_lower"
+      ]
+    },
+    {
+      "identity_id": "04",
+      "raw": "17 years",
+      "parsed_label": "17 years",
+      "recognized_labels": [
+        "17 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "17 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "17 years",
+      "parsed": "17 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "05",
+      "raw": "38 years",
+      "parsed_label": "38 years",
+      "recognized_labels": [
+        "38 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "38 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "38 years",
+      "parsed": "38 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ]
+    },
+    {
+      "identity_id": "06",
+      "raw": "0 years",
+      "parsed_label": "0 years",
+      "recognized_labels": [
+        "0 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "0 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "0 years",
+      "parsed": "0 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_lower",
+        "narrow_lower",
+        "sparse_region"
+      ]
+    },
+    {
+      "identity_id": "07",
+      "raw": "12 years",
+      "parsed_label": "12 years",
+      "recognized_labels": [
+        "12 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "12 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "12 years",
+      "parsed": "12 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "08",
+      "raw": "13 years",
+      "parsed_label": "13 years",
+      "recognized_labels": [
+        "13 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "13 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "13 years",
+      "parsed": "13 years",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "09",
+      "raw": "30\u201334 years",
+      "parsed_label": "30\u201334 years",
+      "recognized_labels": [
+        "30\u201334 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "30\u201334 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "30\u201334 years",
+      "parsed": "30\u201334 years",
+      "classification": "correct",
+      "contains_exact_value": true,
+      "abstraction_width_error": 0,
+      "adjacent_bin_error": false,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ]
+    },
+    {
+      "identity_id": "10",
+      "raw": "5\u20139 years",
+      "parsed_label": "5\u20139 years",
+      "recognized_labels": [
+        "5\u20139 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "5\u20139 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "5\u20139 years",
+      "parsed": "5\u20139 years",
+      "classification": "correct",
+      "contains_exact_value": true,
+      "abstraction_width_error": 0,
+      "adjacent_bin_error": false,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "11",
+      "raw": "35\u201339 years",
+      "parsed_label": "35\u201339 years",
+      "recognized_labels": [
+        "35\u201339 years"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "35\u201339 years",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "35\u201339 years",
+      "parsed": "35\u201339 years",
+      "classification": "correct",
+      "contains_exact_value": true,
+      "abstraction_width_error": 0,
+      "adjacent_bin_error": false,
+      "boundary_tags": [
+        "broad_upper",
+        "narrow_upper",
+        "sparse_region"
+      ]
+    },
+    {
+      "identity_id": "12",
+      "raw": "126 activities",
+      "parsed_label": "126 activities",
+      "recognized_labels": [
+        "126 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "126 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "126 activities",
+      "parsed": "126 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "13",
+      "raw": "120 activities",
+      "parsed_label": "120 activities",
+      "recognized_labels": [
+        "120 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "120 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "120 activities",
+      "parsed": "120 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_lower"
+      ]
+    },
+    {
+      "identity_id": "14",
+      "raw": "129 activities",
+      "parsed_label": "129 activities",
+      "recognized_labels": [
+        "129 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "129 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "129 activities",
+      "parsed": "129 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_upper"
+      ]
+    },
+    {
+      "identity_id": "15",
+      "raw": "199 activities",
+      "parsed_label": "199 activities",
+      "recognized_labels": [
+        "199 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "199 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "199 activities",
+      "parsed": "199 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_upper",
+        "narrow_upper"
+      ]
+    },
+    {
+      "identity_id": "16",
+      "raw": "200 activities",
+      "parsed_label": "200 activities",
+      "recognized_labels": [
+        "200 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "200 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "200 activities",
+      "parsed": "200 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "adjacent_across_broad_boundary",
+        "broad_lower",
+        "narrow_lower"
+      ]
+    },
+    {
+      "identity_id": "17",
+      "raw": "977 activities",
+      "parsed_label": "977 activities",
+      "recognized_labels": [
+        "977 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "977 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "977 activities",
+      "parsed": "977 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ]
+    },
+    {
+      "identity_id": "18",
+      "raw": "125 activities",
+      "parsed_label": "125 activities",
+      "recognized_labels": [
+        "125 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "125 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "125 activities",
+      "parsed": "125 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "19",
+      "raw": "42 activities",
+      "parsed_label": "42 activities",
+      "recognized_labels": [
+        "42 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "42 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "42 activities",
+      "parsed": "42 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ]
+    },
+    {
+      "identity_id": "20",
+      "raw": "348 activities",
+      "parsed_label": "348 activities",
+      "recognized_labels": [
+        "348 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "348 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "348 activities",
+      "parsed": "348 activities",
+      "classification": "correct",
+      "rounding_error": 0,
+      "contains_exact_value": true,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "21",
+      "raw": "260\u2013269 activities",
+      "parsed_label": "260\u2013269 activities",
+      "recognized_labels": [
+        "260\u2013269 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "260\u2013269 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "260\u2013269 activities",
+      "parsed": "260\u2013269 activities",
+      "classification": "correct",
+      "contains_exact_value": true,
+      "abstraction_width_error": 0,
+      "adjacent_bin_error": false,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior"
+      ]
+    },
+    {
+      "identity_id": "22",
+      "raw": "990\u2013999 activities",
+      "parsed_label": "990\u2013999 activities",
+      "recognized_labels": [
+        "990\u2013999 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "990\u2013999 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "990\u2013999 activities",
+      "parsed": "990\u2013999 activities",
+      "classification": "correct",
+      "contains_exact_value": true,
+      "abstraction_width_error": 0,
+      "adjacent_bin_error": false,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ]
+    },
+    {
+      "identity_id": "23",
+      "raw": "0\u20139 activities",
+      "parsed_label": "0\u20139 activities",
+      "recognized_labels": [
+        "0\u20139 activities"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "0\u20139 activities",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "expected": "0\u20139 activities",
+      "parsed": "0\u20139 activities",
+      "classification": "correct",
+      "contains_exact_value": true,
+      "abstraction_width_error": 0,
+      "adjacent_bin_error": false,
+      "boundary_tags": [
+        "broad_interior",
+        "narrow_interior",
+        "sparse_region"
+      ]
+    }
+  ],
+  "soft": {
+    "00": {
+      "p_expected": 0.999471868430102,
+      "p_baseline_alias": 3.177856232876533e-08,
+      "candidate_mass": 0.9995504168372861,
+      "other_mass": 0.00044958316271392906
+    },
+    "01": {
+      "p_expected": 0.9999810460826691,
+      "p_baseline_alias": 0.9999810460826691,
+      "candidate_mass": 0.9999810600075704,
+      "other_mass": 1.8939992429634067e-05
+    },
+    "02": {
+      "p_expected": 0.999973178604501,
+      "p_baseline_alias": 0.999973178604501,
+      "candidate_mass": 0.9999741328171668,
+      "other_mass": 2.586718283315026e-05
+    },
+    "03": {
+      "p_expected": 0.9999057116290712,
+      "p_baseline_alias": 0.9999057116290712,
+      "candidate_mass": 0.999945871440734,
+      "other_mass": 5.412855926600901e-05
+    },
+    "04": {
+      "p_expected": 0.9999938011552557,
+      "p_baseline_alias": 0.9999938011552557,
+      "candidate_mass": 0.9999938020412735,
+      "other_mass": 6.197958726472663e-06
+    },
+    "05": {
+      "p_expected": 0.9992233426080249,
+      "p_baseline_alias": 0.9992233426080249,
+      "candidate_mass": 0.9992437742028367,
+      "other_mass": 0.0007562257971632791
+    },
+    "06": {
+      "p_expected": 0.9999917746255985,
+      "p_baseline_alias": 0.9999917746255985,
+      "candidate_mass": 0.9999918723244385,
+      "other_mass": 8.127675561464542e-06
+    },
+    "07": {
+      "p_expected": 0.9999815228999964,
+      "p_baseline_alias": 0.9999815228999964,
+      "candidate_mass": 0.9999815716223164,
+      "other_mass": 1.8428377683621378e-05
+    },
+    "08": {
+      "p_expected": 0.999990105703382,
+      "p_baseline_alias": 0.999990105703382,
+      "candidate_mass": 0.9999958701934528,
+      "other_mass": 4.129806547181758e-06
+    },
+    "09": {
+      "p_expected": 0.9999843837563333,
+      "p_baseline_alias": 0.9999843837563333,
+      "candidate_mass": 0.9999866793080268,
+      "other_mass": 1.3320691973239818e-05
+    },
+    "10": {
+      "p_expected": 0.9999362260257831,
+      "p_baseline_alias": 0.9999362260257831,
+      "candidate_mass": 0.999937901392864,
+      "other_mass": 6.209860713601856e-05
+    },
+    "11": {
+      "p_expected": 0.9999460002715109,
+      "p_baseline_alias": 0.9999460002715109,
+      "candidate_mass": 0.9999463834099434,
+      "other_mass": 5.361659005664876e-05
+    },
+    "12": {
+      "p_expected": 0.9999041648063588,
+      "p_baseline_alias": 0.9999041648063588,
+      "candidate_mass": 0.9999042886589812,
+      "other_mass": 9.571134101882262e-05
+    },
+    "13": {
+      "p_expected": 0.9999544636193489,
+      "p_baseline_alias": 0.9999544636193489,
+      "candidate_mass": 0.9999734142383959,
+      "other_mass": 2.6585761604080993e-05
+    },
+    "14": {
+      "p_expected": 0.999975801069864,
+      "p_baseline_alias": 0.999975801069864,
+      "candidate_mass": 0.9999764931224983,
+      "other_mass": 2.3506877501744405e-05
+    },
+    "15": {
+      "p_expected": 0.9999566096913411,
+      "p_baseline_alias": 0.9999566096913411,
+      "candidate_mass": 0.9999568309966579,
+      "other_mass": 4.316900334211393e-05
+    },
+    "16": {
+      "p_expected": 0.9998678097721683,
+      "p_baseline_alias": 0.9998678097721683,
+      "candidate_mass": 0.9999088713633806,
+      "other_mass": 9.112863661941972e-05
+    },
+    "17": {
+      "p_expected": 0.9998216906107488,
+      "p_baseline_alias": 0.9998216906107488,
+      "candidate_mass": 0.9998235857019823,
+      "other_mass": 0.00017641429801773523
+    },
+    "18": {
+      "p_expected": 0.9999594704850789,
+      "p_baseline_alias": 0.9999594704850789,
+      "candidate_mass": 0.9999594872771399,
+      "other_mass": 4.051272286009766e-05
+    },
+    "19": {
+      "p_expected": 0.9998463569454258,
+      "p_baseline_alias": 0.9998463569454258,
+      "candidate_mass": 0.9998948242950175,
+      "other_mass": 0.0001051757049824742
+    },
+    "20": {
+      "p_expected": 0.9999427823467157,
+      "p_baseline_alias": 0.9999427823467157,
+      "candidate_mass": 0.9999506295109746,
+      "other_mass": 4.937048902542429e-05
+    },
+    "21": {
+      "p_expected": 0.9997569691701352,
+      "p_baseline_alias": 0.9997569691701352,
+      "candidate_mass": 0.9997960183369223,
+      "other_mass": 0.00020398166307766807
+    },
+    "22": {
+      "p_expected": 0.9999260938845327,
+      "p_baseline_alias": 0.9999260938845327,
+      "candidate_mass": 0.9999265861278924,
+      "other_mass": 7.3413872107575e-05
+    },
+    "23": {
+      "p_expected": 0.9999324126940081,
+      "p_baseline_alias": 0.9999324126940081,
+      "candidate_mass": 0.9999442580392719,
+      "other_mass": 5.574196072810622e-05
+    }
+  },
+  "soft_probs_full": {
+    "00": {
+      "0 years": 2.811790926347346e-10,
+      "0\u20139 activities": 1.701051041632199e-10,
+      "0\u20139 years": 4.2164835646498384e-13,
+      "0\u201399 activities": 5.0956308363743435e-20,
+      "10 years": 7.482562757246489e-05,
+      "100\u2013199 activities": 1.7477387769756272e-10,
+      "10\u201314 years": 0.999471868430102,
+      "10\u201319 years": 1.549531536796784e-06,
+      "12 years": 4.378310226159985e-08,
+      "120 activities": 1.1665149674157597e-09,
+      "120\u2013129 activities": 5.135726061207771e-16,
+      "125 activities": 3.7129464093893794e-12,
+      "126 activities": 1.2054935073667715e-12,
+      "129 activities": 8.368304161947331e-12,
+      "13 years": 5.918806977351687e-07,
+      "130 activities": 1.1379290859975456e-13,
+      "14 years": 3.177856232876533e-08,
+      "15 years": 2.4746478163989644e-08,
+      "15\u201319 years": 1.2596429567602874e-12,
+      "17 years": 1.3640436688203548e-06,
+      "19 years": 1.0680575473148782e-07,
+      "199 activities": 3.2619784013874154e-12,
+      "20 years": 7.464506846833422e-09,
+      "200 activities": 7.711056997413273e-12,
+      "200\u2013299 activities": 1.0489881769208598e-20,
+      "20\u201329 years": 2.346596428495085e-10,
+      "260\u2013269 activities": 6.388623252182167e-22,
+      "300\u2013399 activities": 3.584318232108083e-27,
+      "30\u201334 years": 7.013258398221316e-11,
+      "30\u201339 years": 2.2611453622585146e-18,
+      "340\u2013349 activities": 8.680163480958956e-21,
+      "348 activities": 3.861227011374468e-12,
+      "350 activities": 5.308832553177981e-25,
+      "35\u201339 years": 4.585247284773116e-16,
+      "38 years": 1.3537602655456982e-12,
+      "40\u201349 activities": 9.92674154037684e-25,
+      "42 activities": 1.6688151837890086e-11,
+      "5\u20139 years": 1.1626183833061947e-12,
+      "970\u2013979 activities": 2.8909979031936285e-21,
+      "977 activities": 5.901339366098588e-10,
+      "990\u2013999 activities": 8.682917263820553e-12,
+      "Unknown": 4.358254272209731e-17
+    },
+    "01": {
+      "0 years": 3.836142498258757e-09,
+      "0\u20139 activities": 1.3801855636831955e-11,
+      "0\u20139 years": 3.019144354406233e-14,
+      "0\u201399 activities": 2.001253915292866e-20,
+      "10 years": 6.938792134053664e-11,
+      "100\u2013199 activities": 7.203073717110402e-17,
+      "10\u201314 years": 4.288995393220885e-09,
+      "10\u201319 years": 5.255288456634746e-13,
+      "12 years": 2.2120068978410143e-09,
+      "120 activities": 2.3802462968999182e-14,
+      "120\u2013129 activities": 9.287271065674452e-19,
+      "125 activities": 3.854841182278655e-16,
+      "126 activities": 3.938029203684743e-17,
+      "129 activities": 1.5247124903531543e-15,
+      "13 years": 2.7681861514985624e-10,
+      "130 activities": 6.698775479833727e-20,
+      "14 years": 6.681165248533099e-10,
+      "15 years": 0.9999810460826691,
+      "15\u201319 years": 1.2789739832703065e-09,
+      "17 years": 8.506875775254263e-11,
+      "19 years": 2.4361226749045614e-11,
+      "199 activities": 5.112262516428803e-18,
+      "20 years": 1.0876901943711415e-09,
+      "200 activities": 5.372247071562226e-18,
+      "200\u2013299 activities": 1.3934006753899922e-24,
+      "20\u201329 years": 5.546238419864793e-14,
+      "260\u2013269 activities": 4.698679829445258e-27,
+      "300\u2013399 activities": 8.743148482941234e-26,
+      "30\u201334 years": 5.307601757791664e-11,
+      "30\u201339 years": 4.651470503009673e-18,
+      "340\u2013349 activities": 4.789752509555071e-24,
+      "348 activities": 1.3198037838404383e-16,
+      "350 activities": 7.072777119081676e-25,
+      "35\u201339 years": 9.102813871814729e-14,
+      "38 years": 1.9637496300374847e-11,
+      "40\u201349 activities": 7.138832908305458e-25,
+      "42 activities": 1.4947303384520286e-12,
+      "5\u20139 years": 1.9000307502053558e-13,
+      "970\u2013979 activities": 4.989305540936414e-24,
+      "977 activities": 8.335517505990433e-12,
+      "990\u2013999 activities": 7.553179299896415e-14,
+      "Unknown": 5.73744712627939e-20
+    },
+    "02": {
+      "0 years": 1.1250129802699772e-07,
+      "0\u20139 activities": 1.3776119745720336e-11,
+      "0\u20139 years": 1.2157383005232681e-11,
+      "0\u201399 activities": 2.45456816181788e-20,
+      "10 years": 1.4267940746101348e-07,
+      "100\u2013199 activities": 1.0351015800983669e-16,
+      "10\u201314 years": 3.0203377391131326e-07,
+      "10\u201319 years": 5.04341418930707e-12,
+      "12 years": 1.2619826334830108e-08,
+      "120 activities": 2.4289002333688197e-17,
+      "120\u2013129 activities": 7.915726458062516e-22,
+      "125 activities": 2.4430801407339227e-17,
+      "126 activities": 4.059913353797844e-19,
+      "129 activities": 2.7956862634309567e-16,
+      "13 years": 1.6373519513669452e-07,
+      "130 activities": 1.2407409228061707e-18,
+      "14 years": 4.320325145394475e-10,
+      "15 years": 1.4166006807871887e-09,
+      "15\u201319 years": 4.339234032621043e-17,
+      "17 years": 7.73435460061832e-08,
+      "19 years": 0.999973178604501,
+      "199 activities": 9.830435381039835e-09,
+      "20 years": 6.475074999159044e-09,
+      "200 activities": 4.2415328108448955e-18,
+      "200\u2013299 activities": 1.130875766315329e-21,
+      "20\u201329 years": 5.888630738117276e-12,
+      "260\u2013269 activities": 9.9194021182891e-21,
+      "300\u2013399 activities": 1.2829168133154736e-23,
+      "30\u201334 years": 1.1136361672624041e-07,
+      "30\u201339 years": 1.1280784081733279e-12,
+      "340\u2013349 activities": 3.922868605310237e-21,
+      "348 activities": 2.696772133027718e-16,
+      "350 activities": 1.1006169258426278e-22,
+      "35\u201339 years": 1.5431586525063317e-12,
+      "38 years": 6.520704705262483e-11,
+      "40\u201349 activities": 2.5181818539130776e-26,
+      "42 activities": 2.9664356245191255e-10,
+      "5\u20139 years": 1.1899194221710067e-11,
+      "970\u2013979 activities": 2.6495510066957224e-22,
+      "977 activities": 2.830542087234422e-13,
+      "990\u2013999 activities": 1.3368287952851087e-08,
+      "Unknown": 1.6706896210142114e-16
+    },
+    "03": {
+      "0 years": 1.9888850312392116e-06,
+      "0\u20139 activities": 5.552740694077807e-09,
+      "0\u20139 years": 3.3017799754715076e-11,
+      "0\u201399 activities": 5.008108722140285e-19,
+      "10 years": 1.076866912612641e-08,
+      "100\u2013199 activities": 2.027110644137578e-16,
+      "10\u201314 years": 2.401834581076125e-09,
+      "10\u201319 years": 4.203586697654492e-15,
+      "12 years": 6.899096513698984e-11,
+      "120 activities": 2.238320557867304e-17,
+      "120\u2013129 activities": 7.324208361905914e-21,
+      "125 activities": 7.147279774079022e-20,
+      "126 activities": 1.543093161677342e-20,
+      "129 activities": 3.038134823128458e-18,
+      "13 years": 6.10082132670841e-11,
+      "130 activities": 6.416840886071536e-21,
+      "14 years": 9.35591586876064e-12,
+      "15 years": 1.3885443409114911e-09,
+      "15\u201319 years": 3.678865883489631e-19,
+      "17 years": 1.18589605160372e-06,
+      "19 years": 6.222986162721384e-09,
+      "199 activities": 4.1616009106995324e-18,
+      "20 years": 0.9999057116290712,
+      "200 activities": 1.0704534222260062e-10,
+      "200\u2013299 activities": 5.4133713273757686e-14,
+      "20\u201329 years": 6.786666195898935e-08,
+      "260\u2013269 activities": 5.536264850921185e-22,
+      "300\u2013399 activities": 2.1856378705410162e-20,
+      "30\u201334 years": 3.366073360002305e-05,
+      "30\u201339 years": 8.793257126830227e-09,
+      "340\u2013349 activities": 2.6228202006661983e-19,
+      "348 activities": 4.076033306648991e-11,
+      "350 activities": 4.292038403550039e-16,
+      "35\u201339 years": 2.1430263310841843e-08,
+      "38 years": 3.1890889750110936e-06,
+      "40\u201349 activities": 1.2258377616606964e-19,
+      "42 activities": 1.043219878856231e-08,
+      "5\u20139 years": 2.9530919130798666e-11,
+      "970\u2013979 activities": 2.4274242589013404e-21,
+      "977 activities": 1.0582682731054847e-12,
+      "990\u2013999 activities": 2.2045710808309416e-14,
+      "Unknown": 1.8025629077301075e-17
+    },
+    "04": {
+      "0 years": 8.587099492200927e-10,
+      "0\u20139 activities": 2.5226768159795993e-13,
+      "0\u20139 years": 1.926087059952603e-15,
+      "0\u201399 activities": 4.399069664370836e-23,
+      "10 years": 4.463650205247478e-13,
+      "100\u2013199 activities": 7.967005196138799e-24,
+      "10\u201314 years": 3.7828967996699574e-17,
+      "10\u201319 years": 1.4089959816490406e-22,
+      "12 years": 5.105493288001934e-12,
+      "120 activities": 5.376634632020923e-19,
+      "120\u2013129 activities": 5.440861538675827e-23,
+      "125 activities": 8.636432180515226e-22,
+      "126 activities": 3.2725109328991665e-22,
+      "129 activities": 5.994927884766525e-21,
+      "13 years": 1.5275495311236537e-14,
+      "130 activities": 5.0028563621289e-25,
+      "14 years": 2.4132873980282565e-12,
+      "15 years": 8.095878059605136e-16,
+      "15\u201319 years": 8.78659805561416e-27,
+      "17 years": 0.9999938011552557,
+      "19 years": 2.389471555125067e-13,
+      "199 activities": 3.1774040347851937e-22,
+      "20 years": 1.4012553275418792e-11,
+      "200 activities": 2.2670866279964307e-19,
+      "200\u2013299 activities": 1.589503989860156e-23,
+      "20\u201329 years": 1.5676202329857176e-18,
+      "260\u2013269 activities": 5.386900098357913e-23,
+      "300\u2013399 activities": 5.319213610130254e-25,
+      "30\u201334 years": 1.436472557095008e-12,
+      "30\u201339 years": 7.943698514642035e-16,
+      "340\u2013349 activities": 9.832160500540757e-24,
+      "348 activities": 1.301946021032307e-17,
+      "350 activities": 1.801926499723506e-27,
+      "35\u201339 years": 3.829894526590523e-18,
+      "38 years": 2.2179396655544942e-13,
+      "40\u201349 activities": 6.689688319929294e-20,
+      "42 activities": 2.284394840261007e-16,
+      "5\u20139 years": 5.312309417508447e-15,
+      "970\u2013979 activities": 3.175421020907839e-22,
+      "977 activities": 3.1561379714667553e-12,
+      "990\u2013999 activities": 7.835057888617215e-17,
+      "Unknown": 2.0701734414076107e-19
+    },
+    "05": {
+      "0 years": 1.8548189045636197e-07,
+      "0\u20139 activities": 1.0786411921132053e-12,
+      "0\u20139 years": 6.085277627597002e-14,
+      "0\u201399 activities": 3.775617151456308e-21,
+      "10 years": 5.181986987048659e-12,
+      "100\u2013199 activities": 3.224128919170182e-22,
+      "10\u201314 years": 3.0806840723891935e-14,
+      "10\u201319 years": 1.1392943419941281e-19,
+      "12 years": 7.755910189319291e-10,
+      "120 activities": 4.510120967423101e-19,
+      "120\u2013129 activities": 5.636192732172194e-23,
+      "125 activities": 5.762342977315637e-21,
+      "126 activities": 2.8948109009166516e-21,
+      "129 activities": 1.2445319417550842e-18,
+      "13 years": 2.2961595659558224e-13,
+      "130 activities": 4.9683359940172084e-24,
+      "14 years": 1.131905299087028e-15,
+      "15 years": 5.805622712013238e-14,
+      "15\u201319 years": 2.3341745015934288e-23,
+      "17 years": 3.067635025076014e-09,
+      "19 years": 9.081424461959929e-13,
+      "199 activities": 7.883843002065617e-21,
+      "20 years": 3.57199863152739e-08,
+      "200 activities": 8.941993292003452e-16,
+      "200\u2013299 activities": 3.354197683439789e-22,
+      "20\u201329 years": 1.498880186514675e-15,
+      "260\u2013269 activities": 2.3107665579022245e-24,
+      "300\u2013399 activities": 6.60825043567032e-18,
+      "30\u201334 years": 2.0191382606016683e-05,
+      "30\u201339 years": 5.859987791704779e-11,
+      "340\u2013349 activities": 1.4525854576992632e-17,
+      "348 activities": 2.5430588294933793e-11,
+      "350 activities": 1.4885368700688292e-18,
+      "35\u201339 years": 6.837795296056949e-09,
+      "38 years": 0.9992233426080249,
+      "40\u201349 activities": 1.7613327721540109e-19,
+      "42 activities": 4.121892148849795e-09,
+      "5\u20139 years": 8.966747627628495e-12,
+      "970\u2013979 activities": 9.765092858979403e-18,
+      "977 activities": 3.944726294548829e-09,
+      "990\u2013999 activities": 1.6214022810580154e-10,
+      "Unknown": 7.18554652171189e-17
+    },
+    "06": {
+      "0 years": 0.9999917746255985,
+      "0\u20139 activities": 1.506067474170935e-08,
+      "0\u20139 years": 1.6730901691443337e-10,
+      "0\u201399 activities": 4.194153459700666e-18,
+      "10 years": 2.2280854302464978e-16,
+      "100\u2013199 activities": 4.0253441300211876e-23,
+      "10\u201314 years": 8.636498178258171e-18,
+      "10\u201319 years": 3.0396926502682706e-22,
+      "12 years": 1.5227708743145718e-08,
+      "120 activities": 1.8883242252815337e-16,
+      "120\u2013129 activities": 9.4264664914432e-19,
+      "125 activities": 4.805461535369184e-18,
+      "126 activities": 1.5809086204564318e-16,
+      "129 activities": 1.6247475130496647e-14,
+      "13 years": 7.60476800122766e-16,
+      "130 activities": 2.816852687182306e-26,
+      "14 years": 1.2955715162567646e-18,
+      "15 years": 6.304700371865456e-16,
+      "15\u201319 years": 7.107519070863407e-27,
+      "17 years": 2.4935662862009026e-15,
+      "19 years": 8.877557457901358e-13,
+      "199 activities": 1.1531505598855157e-17,
+      "20 years": 6.545527843359027e-08,
+      "200 activities": 1.1751787032842396e-11,
+      "200\u2013299 activities": 2.0252463246596885e-19,
+      "20\u201329 years": 1.3850253107270538e-12,
+      "260\u2013269 activities": 9.705231455275267e-23,
+      "300\u2013399 activities": 1.6387763680754453e-23,
+      "30\u201334 years": 2.7828115762197164e-10,
+      "30\u201339 years": 5.6603559915544586e-14,
+      "340\u2013349 activities": 2.098803957481217e-20,
+      "348 activities": 5.967215521976337e-12,
+      "350 activities": 1.3448746942659702e-20,
+      "35\u201339 years": 2.4342432622157906e-12,
+      "38 years": 5.19685162487292e-10,
+      "40\u201349 activities": 4.633216372960755e-24,
+      "42 activities": 1.55708690818788e-11,
+      "5\u20139 years": 4.630712851636776e-14,
+      "970\u2013979 activities": 2.9196884563521784e-23,
+      "977 activities": 4.4392291084177685e-11,
+      "990\u2013999 activities": 9.073899261100717e-10,
+      "Unknown": 1.456766383943458e-18
+    },
+    "07": {
+      "0 years": 7.128739154293393e-09,
+      "0\u20139 activities": 3.275824474497225e-11,
+      "0\u20139 years": 2.501123427238103e-13,
+      "0\u201399 activities": 2.196020108140313e-20,
+      "10 years": 2.278555574165606e-11,
+      "100\u2013199 activities": 1.2605496479492067e-21,
+      "10\u201314 years": 1.0544929072033168e-13,
+      "10\u201319 years": 8.17264757318378e-19,
+      "12 years": 0.9999815228999964,
+      "120 activities": 3.8135220793973774e-11,
+      "120\u2013129 activities": 6.015768291257162e-15,
+      "125 activities": 3.196155181392992e-12,
+      "126 activities": 2.486086604625033e-12,
+      "129 activities": 1.2254107010585445e-11,
+      "13 years": 1.4930877345894597e-10,
+      "130 activities": 3.247309239517081e-23,
+      "14 years": 5.732195973544286e-13,
+      "15 years": 1.8795236632347886e-12,
+      "15\u201319 years": 9.697732445795245e-23,
+      "17 years": 2.789459447101779e-10,
+      "19 years": 1.361499165729791e-13,
+      "199 activities": 1.3951790268209766e-23,
+      "20 years": 8.006302344016808e-10,
+      "200 activities": 3.560610522372399e-16,
+      "200\u2013299 activities": 6.210656787715602e-22,
+      "20\u201329 years": 1.836984016786964e-16,
+      "260\u2013269 activities": 1.4186993954348178e-22,
+      "300\u2013399 activities": 9.67082676120294e-25,
+      "30\u201334 years": 4.05590802910461e-11,
+      "30\u201339 years": 3.035678550829461e-15,
+      "340\u2013349 activities": 1.6939061982503855e-24,
+      "348 activities": 2.4351291369839452e-17,
+      "350 activities": 1.6959505408328858e-22,
+      "35\u201339 years": 4.2793811534422396e-12,
+      "38 years": 6.935309256993307e-12,
+      "40\u201349 activities": 1.1496437385533972e-25,
+      "42 activities": 4.5129465219898327e-13,
+      "5\u20139 years": 5.268637788258507e-13,
+      "970\u2013979 activities": 1.4935482878398427e-20,
+      "977 activities": 4.018554080549103e-08,
+      "990\u2013999 activities": 1.1833665004391917e-11,
+      "Unknown": 1.5061723738547754e-17
+    },
+    "08": {
+      "0 years": 1.1618130919705442e-10,
+      "0\u20139 activities": 5.504191746448452e-14,
+      "0\u20139 years": 1.6621218735908749e-15,
+      "0\u201399 activities": 2.567540356216404e-23,
+      "10 years": 3.432075728489347e-08,
+      "100\u2013199 activities": 2.4876464902718753e-22,
+      "10\u201314 years": 6.037302330427731e-14,
+      "10\u201319 years": 1.3482734844096377e-19,
+      "12 years": 4.222698247254211e-06,
+      "120 activities": 2.7263428754107364e-11,
+      "120\u2013129 activities": 6.196829038820473e-18,
+      "125 activities": 1.1544790321829102e-17,
+      "126 activities": 4.0600798836180016e-17,
+      "129 activities": 2.3410780394499298e-15,
+      "13 years": 0.999990105703382,
+      "130 activities": 2.0038713671090387e-11,
+      "14 years": 1.357417460590331e-07,
+      "15 years": 1.3709469925456301e-06,
+      "15\u201319 years": 2.212116269452866e-20,
+      "17 years": 4.0586206777184664e-10,
+      "19 years": 2.0407912055661753e-10,
+      "199 activities": 2.2934023939116602e-17,
+      "20 years": 9.886953749035292e-13,
+      "200 activities": 5.534687967574472e-21,
+      "200\u2013299 activities": 2.694870457515961e-26,
+      "20\u201329 years": 8.557605785456954e-19,
+      "260\u2013269 activities": 1.4486702978242553e-25,
+      "300\u2013399 activities": 1.8686734781888542e-24,
+      "30\u201334 years": 1.1813151089369668e-12,
+      "30\u201339 years": 1.871328850054449e-16,
+      "340\u2013349 activities": 4.1057484087228564e-21,
+      "348 activities": 1.284849374419928e-15,
+      "350 activities": 3.3302976664165195e-22,
+      "35\u201339 years": 7.030026031746556e-14,
+      "38 years": 1.5857075587234055e-12,
+      "40\u201349 activities": 2.9814771379269324e-24,
+      "42 activities": 3.864535902348366e-12,
+      "5\u20139 years": 3.918895589058098e-14,
+      "970\u2013979 activities": 1.222380271024123e-18,
+      "977 activities": 7.092607170260929e-14,
+      "990\u2013999 activities": 9.81186535598268e-13,
+      "Unknown": 1.0411039847077815e-18
+    },
+    "09": {
+      "0 years": 9.206625944406357e-09,
+      "0\u20139 activities": 2.5536849626542998e-11,
+      "0\u20139 years": 3.2146150779732927e-13,
+      "0\u201399 activities": 1.2113436888410993e-21,
+      "10 years": 2.103696034538296e-12,
+      "100\u2013199 activities": 5.197062816946151e-21,
+      "10\u201314 years": 2.8055753484621207e-14,
+      "10\u201319 years": 9.664238423611608e-17,
+      "12 years": 2.3343453428678045e-11,
+      "120 activities": 2.48661722616781e-17,
+      "120\u2013129 activities": 1.971839439042557e-22,
+      "125 activities": 1.40565972103666e-18,
+      "126 activities": 1.2121418661364438e-20,
+      "129 activities": 1.2279574922318296e-19,
+      "13 years": 6.473108557370523e-09,
+      "130 activities": 1.3882519507589497e-18,
+      "14 years": 2.1498964306518833e-13,
+      "15 years": 7.579391491419585e-12,
+      "15\u201319 years": 9.219484911548691e-23,
+      "17 years": 6.822793897295633e-10,
+      "19 years": 4.056937055802237e-12,
+      "199 activities": 6.536962607564725e-20,
+      "20 years": 2.1546921540781282e-09,
+      "200 activities": 1.4654986219760352e-16,
+      "200\u2013299 activities": 1.1115215763465637e-20,
+      "20\u201329 years": 5.895834648740009e-14,
+      "260\u2013269 activities": 2.435514838788194e-23,
+      "300\u2013399 activities": 4.874400272813054e-21,
+      "30\u201334 years": 0.9999843837563333,
+      "30\u201339 years": 2.260222438922398e-06,
+      "340\u2013349 activities": 2.7456635086483173e-24,
+      "348 activities": 9.664352114884016e-17,
+      "350 activities": 6.983830676711573e-24,
+      "35\u201339 years": 1.3324460483202575e-12,
+      "38 years": 1.3321393466267401e-08,
+      "40\u201349 activities": 1.0307765900119387e-21,
+      "42 activities": 2.634088384769664e-09,
+      "5\u20139 years": 4.754610206064956e-11,
+      "970\u2013979 activities": 1.8791389045215058e-18,
+      "977 activities": 7.449394074279439e-10,
+      "990\u2013999 activities": 4.594591541150721e-15,
+      "Unknown": 3.0425518294874683e-17
+    },
+    "10": {
+      "0 years": 1.223846583234512e-11,
+      "0\u20139 activities": 2.835952111963531e-08,
+      "0\u20139 years": 4.831384960501327e-11,
+      "0\u201399 activities": 1.2408971518756864e-17,
+      "10 years": 3.949514802308593e-11,
+      "100\u2013199 activities": 4.8990094970631376e-23,
+      "10\u201314 years": 2.0637164745949906e-17,
+      "10\u201319 years": 1.6054943038093737e-19,
+      "12 years": 5.838032291417072e-15,
+      "120 activities": 4.39777001017689e-12,
+      "120\u2013129 activities": 4.350926208081662e-19,
+      "125 activities": 4.011440038671445e-15,
+      "126 activities": 4.2285538368448804e-16,
+      "129 activities": 1.5556619948827552e-16,
+      "13 years": 3.547549589989253e-13,
+      "130 activities": 1.4017612962058924e-12,
+      "14 years": 3.6269605704960785e-13,
+      "15 years": 1.8235434628665997e-11,
+      "15\u201319 years": 2.900323650788042e-19,
+      "17 years": 1.058126828917431e-11,
+      "19 years": 1.5184668532898735e-08,
+      "199 activities": 6.456413474323139e-07,
+      "20 years": 3.0974286295759358e-12,
+      "200 activities": 1.1852604313839691e-08,
+      "200\u2013299 activities": 1.074790921864071e-18,
+      "20\u201329 years": 1.194802726510378e-12,
+      "260\u2013269 activities": 7.126278144681535e-30,
+      "300\u2013399 activities": 3.150084322003667e-26,
+      "30\u201334 years": 1.9372036719673886e-09,
+      "30\u201339 years": 3.235259468299364e-14,
+      "340\u2013349 activities": 5.214699725181588e-21,
+      "348 activities": 7.00787071158086e-08,
+      "350 activities": 8.382470140116681e-20,
+      "35\u201339 years": 9.112646528413508e-13,
+      "38 years": 1.6575271906281813e-09,
+      "40\u201349 activities": 8.045842686075146e-24,
+      "42 activities": 6.34571824381088e-09,
+      "5\u20139 years": 0.9999362260257831,
+      "970\u2013979 activities": 7.307579226071048e-18,
+      "977 activities": 8.941648035167355e-07,
+      "990\u2013999 activities": 4.352209850038699e-12,
+      "Unknown": 3.816214951079154e-17
+    },
+    "11": {
+      "0 years": 5.2790887982019775e-15,
+      "0\u20139 activities": 6.69051413406326e-10,
+      "0\u20139 years": 3.037489051024102e-14,
+      "0\u201399 activities": 9.25585790581915e-20,
+      "10 years": 1.5580315607028775e-17,
+      "100\u2013199 activities": 2.73665738657797e-25,
+      "10\u201314 years": 1.639139152749694e-16,
+      "10\u201319 years": 2.8016671374153836e-20,
+      "12 years": 1.5147749195428136e-19,
+      "120 activities": 3.041042899330238e-18,
+      "120\u2013129 activities": 9.981839112240775e-25,
+      "125 activities": 4.42003409305572e-18,
+      "126 activities": 1.3625063733192872e-17,
+      "129 activities": 9.367859613209148e-18,
+      "13 years": 2.2831013360890117e-17,
+      "130 activities": 1.2219742156837246e-17,
+      "14 years": 2.3511386731607067e-19,
+      "15 years": 2.963923837742727e-17,
+      "15\u201319 years": 7.086290742837079e-22,
+      "17 years": 1.5662885269271707e-17,
+      "19 years": 1.2912674665365614e-12,
+      "199 activities": 2.8441050550714527e-08,
+      "20 years": 5.9443770494343156e-09,
+      "200 activities": 2.6112773803950204e-10,
+      "200\u2013299 activities": 2.9648587881840117e-19,
+      "20\u201329 years": 4.034321771526311e-09,
+      "260\u2013269 activities": 6.87830432520221e-18,
+      "300\u2013399 activities": 7.574782029878664e-28,
+      "30\u201334 years": 1.7255960124555844e-08,
+      "30\u201339 years": 2.3189773780108296e-16,
+      "340\u2013349 activities": 5.533774133928681e-20,
+      "348 activities": 1.6421164743957241e-09,
+      "350 activities": 1.441507055104901e-12,
+      "35\u201339 years": 0.9999460002715109,
+      "38 years": 7.815886282972833e-13,
+      "40\u201349 activities": 4.372216776224963e-20,
+      "42 activities": 1.2436113581185327e-09,
+      "5\u20139 years": 3.1603513472528377e-10,
+      "970\u2013979 activities": 1.9780725214940894e-22,
+      "977 activities": 2.3980608681593306e-08,
+      "990\u2013999 activities": 2.9934662160261404e-07,
+      "Unknown": 6.895733308109476e-18
+    },
+    "12": {
+      "0 years": 7.284131771881808e-14,
+      "0\u20139 activities": 8.583572309567902e-10,
+      "0\u20139 years": 3.6973105906967406e-13,
+      "0\u201399 activities": 2.9570425919257156e-19,
+      "10 years": 1.8273538786421138e-10,
+      "100\u2013199 activities": 1.9852275903307894e-20,
+      "10\u201314 years": 3.381903813250026e-12,
+      "10\u201319 years": 3.0558247045527187e-14,
+      "12 years": 1.18610975280741e-08,
+      "120 activities": 2.3121109259887487e-10,
+      "120\u2013129 activities": 2.2721285213800202e-18,
+      "125 activities": 7.734017162993218e-08,
+      "126 activities": 0.9999041648063588,
+      "129 activities": 1.4164856887404365e-09,
+      "13 years": 1.5648138543103932e-12,
+      "130 activities": 1.07540966061425e-12,
+      "14 years": 7.643591209648818e-15,
+      "15 years": 3.1970590798865955e-14,
+      "15\u201319 years": 4.172918857590971e-18,
+      "17 years": 5.354336923341664e-13,
+      "19 years": 5.061860844301058e-14,
+      "199 activities": 8.972123382514621e-13,
+      "20 years": 1.884104285546063e-08,
+      "200 activities": 4.343483460979247e-12,
+      "200\u2013299 activities": 3.162461189863934e-19,
+      "20\u201329 years": 1.5119165329150024e-12,
+      "260\u2013269 activities": 2.8097100221361663e-20,
+      "300\u2013399 activities": 1.8805475605351102e-30,
+      "30\u201334 years": 1.0586858362419015e-13,
+      "30\u201339 years": 1.3496658251457458e-20,
+      "340\u2013349 activities": 1.573283411418539e-24,
+      "348 activities": 3.0219737338156665e-16,
+      "350 activities": 2.8185007321682357e-18,
+      "35\u201339 years": 1.4153104797832812e-09,
+      "38 years": 1.5794002984480052e-15,
+      "40\u201349 activities": 6.951799546979153e-24,
+      "42 activities": 2.9277672059240286e-11,
+      "5\u20139 years": 7.713203745605806e-13,
+      "970\u2013979 activities": 8.083898757486352e-28,
+      "977 activities": 5.153512336092834e-10,
+      "990\u2013999 activities": 1.114682894124844e-08,
+      "Unknown": 7.891778969786754e-17
+    },
+    "13": {
+      "0 years": 1.5941406044223133e-16,
+      "0\u20139 activities": 7.185093830187277e-09,
+      "0\u20139 years": 8.412881591466615e-12,
+      "0\u201399 activities": 2.3564720241792157e-18,
+      "10 years": 5.788003483665664e-10,
+      "100\u2013199 activities": 9.76739671977006e-22,
+      "10\u201314 years": 1.0480418118307074e-11,
+      "10\u201319 years": 2.7047156390487796e-15,
+      "12 years": 2.335548213332305e-09,
+      "120 activities": 0.9999544636193489,
+      "120\u2013129 activities": 1.1417559787601236e-11,
+      "125 activities": 1.589322612933874e-10,
+      "126 activities": 3.581594223303841e-10,
+      "129 activities": 1.1031927748276214e-09,
+      "13 years": 3.701392789094132e-12,
+      "130 activities": 5.137581438982178e-15,
+      "14 years": 1.1166668996397592e-12,
+      "15 years": 5.854030085967611e-14,
+      "15\u201319 years": 1.2896423157395017e-21,
+      "17 years": 8.955388461066833e-12,
+      "19 years": 5.440132426672681e-12,
+      "199 activities": 2.762621369561538e-11,
+      "20 years": 1.8886255410922472e-05,
+      "200 activities": 1.7219041903893326e-08,
+      "200\u2013299 activities": 1.4614750385013687e-17,
+      "20\u201329 years": 2.391209696107033e-09,
+      "260\u2013269 activities": 1.1746844127402244e-17,
+      "300\u2013399 activities": 3.9510117268639083e-25,
+      "30\u201334 years": 2.4592500819636623e-10,
+      "30\u201339 years": 5.737914935848182e-19,
+      "340\u2013349 activities": 2.6559230225278244e-26,
+      "348 activities": 7.896422126385596e-17,
+      "350 activities": 4.714321163953966e-24,
+      "35\u201339 years": 1.1165367112913687e-14,
+      "38 years": 5.843928178193956e-17,
+      "40\u201349 activities": 7.52465168791819e-23,
+      "42 activities": 2.7885369012471084e-10,
+      "5\u20139 years": 2.4319378251058256e-11,
+      "970\u2013979 activities": 1.2360173172821118e-27,
+      "977 activities": 3.765014839396881e-09,
+      "990\u2013999 activities": 2.8642316226594645e-08,
+      "Unknown": 8.448700143854253e-18
+    },
+    "14": {
+      "0 years": 4.910280018018499e-16,
+      "0\u20139 activities": 1.8166193278252334e-09,
+      "0\u20139 years": 2.1270421331885515e-12,
+      "0\u201399 activities": 4.2168987160049933e-19,
+      "10 years": 2.6204506875685245e-09,
+      "100\u2013199 activities": 8.807827314259593e-22,
+      "10\u201314 years": 3.5803033380087515e-12,
+      "10\u201319 years": 1.1269809013218687e-14,
+      "12 years": 3.4663241069161144e-07,
+      "120 activities": 6.023430945891103e-08,
+      "120\u2013129 activities": 4.440003443586012e-19,
+      "125 activities": 1.1253246490139803e-07,
+      "126 activities": 1.6373423873755044e-07,
+      "129 activities": 0.999975801069864,
+      "13 years": 2.0474801370516465e-12,
+      "130 activities": 7.934619156714745e-14,
+      "14 years": 6.414914030798434e-11,
+      "15 years": 4.747832143111852e-13,
+      "15\u201319 years": 3.1986158565668085e-25,
+      "17 years": 2.190512270627099e-09,
+      "19 years": 5.090230725479622e-10,
+      "199 activities": 4.178246213468094e-11,
+      "20 years": 1.2259183300050846e-10,
+      "200 activities": 3.038375350717335e-13,
+      "200\u2013299 activities": 4.382271435338963e-20,
+      "20\u201329 years": 3.0001635320245488e-15,
+      "260\u2013269 activities": 1.9560441949000208e-20,
+      "300\u2013399 activities": 6.944580048373022e-26,
+      "30\u201334 years": 3.189346566584299e-11,
+      "30\u201339 years": 5.32357960496975e-16,
+      "340\u2013349 activities": 4.5425529068668245e-20,
+      "348 activities": 7.729413601964446e-13,
+      "350 activities": 5.237215218396553e-23,
+      "35\u201339 years": 7.386671843239797e-15,
+      "38 years": 5.65835268292222e-16,
+      "40\u201349 activities": 1.634110150091119e-22,
+      "42 activities": 1.3113274721127023e-10,
+      "5\u20139 years": 8.413577952172164e-12,
+      "970\u2013979 activities": 2.418256779428378e-25,
+      "977 activities": 6.950272297553977e-10,
+      "990\u2013999 activities": 6.782055539260086e-10,
+      "Unknown": 3.4136485451547706e-18
+    },
+    "15": {
+      "0 years": 6.30429904138049e-16,
+      "0\u20139 activities": 9.639605808604314e-10,
+      "0\u20139 years": 9.450336413198205e-12,
+      "0\u201399 activities": 7.90123991108853e-19,
+      "10 years": 2.556440132779533e-10,
+      "100\u2013199 activities": 4.967151018751606e-19,
+      "10\u201314 years": 1.547953163979257e-10,
+      "10\u201319 years": 1.2182421409114553e-15,
+      "12 years": 3.724265044767289e-11,
+      "120 activities": 5.711115308134034e-12,
+      "120\u2013129 activities": 2.5835561755683267e-20,
+      "125 activities": 2.4845606434512395e-14,
+      "126 activities": 8.501778055050071e-16,
+      "129 activities": 2.751772123152557e-10,
+      "13 years": 7.406456764474239e-12,
+      "130 activities": 4.086301985539543e-15,
+      "14 years": 6.0619065431175686e-15,
+      "15 years": 2.4363708682995993e-11,
+      "15\u201319 years": 2.287284697331885e-18,
+      "17 years": 1.2078486858749986e-09,
+      "19 years": 1.8553913626159784e-07,
+      "199 activities": 0.9999566096913411,
+      "20 years": 1.072232874962158e-08,
+      "200 activities": 2.70915026942894e-09,
+      "200\u2013299 activities": 2.486580785308455e-15,
+      "20\u201329 years": 5.75113676739858e-14,
+      "260\u2013269 activities": 3.5550520661338755e-26,
+      "300\u2013399 activities": 4.369983813046566e-25,
+      "30\u201334 years": 2.7593234311007666e-09,
+      "30\u201339 years": 3.1043146908584523e-16,
+      "340\u2013349 activities": 8.3142750673403e-20,
+      "348 activities": 1.0165681375889616e-11,
+      "350 activities": 9.547984881294306e-24,
+      "35\u201339 years": 1.2465804762380168e-15,
+      "38 years": 5.611932271141905e-12,
+      "40\u201349 activities": 5.65967458146987e-23,
+      "42 activities": 3.5801691682155286e-10,
+      "5\u20139 years": 5.1555582904522804e-11,
+      "970\u2013979 activities": 1.9476241648138358e-22,
+      "977 activities": 1.471921498339874e-08,
+      "990\u2013999 activities": 1.4891136738867021e-09,
+      "Unknown": 1.9798262352860568e-17
+    },
+    "16": {
+      "0 years": 2.2422887008439227e-13,
+      "0\u20139 activities": 2.633631966136198e-09,
+      "0\u20139 years": 9.49836177191419e-12,
+      "0\u201399 activities": 2.59236773238552e-18,
+      "10 years": 7.802207231755251e-14,
+      "100\u2013199 activities": 9.031718047501938e-19,
+      "10\u201314 years": 8.779804012817613e-14,
+      "10\u201319 years": 7.844922988102593e-19,
+      "12 years": 4.291673276089637e-12,
+      "120 activities": 6.778617193598517e-10,
+      "120\u2013129 activities": 1.5679165251594714e-17,
+      "125 activities": 3.0383170687113013e-09,
+      "126 activities": 2.681477357454897e-09,
+      "129 activities": 2.021043294719142e-06,
+      "13 years": 4.429845155158923e-17,
+      "130 activities": 7.063751481084354e-14,
+      "14 years": 3.040788165902964e-17,
+      "15 years": 1.2361167686267478e-18,
+      "15\u201319 years": 1.9718784909850386e-25,
+      "17 years": 9.60120040698705e-13,
+      "19 years": 8.702102639946547e-15,
+      "199 activities": 1.1625097980658165e-10,
+      "20 years": 1.4738513987285122e-05,
+      "200 activities": 0.9998678097721683,
+      "200\u2013299 activities": 2.1949813905437199e-10,
+      "20\u201329 years": 1.103723954040071e-08,
+      "260\u2013269 activities": 2.0394080877688345e-11,
+      "300\u2013399 activities": 1.2884135869640426e-23,
+      "30\u201334 years": 4.59585058886434e-12,
+      "30\u201339 years": 1.511054226589144e-17,
+      "340\u2013349 activities": 1.3553489824887935e-20,
+      "348 activities": 3.228048152988766e-10,
+      "350 activities": 4.4713881978989746e-20,
+      "35\u201339 years": 1.6494479717420508e-15,
+      "38 years": 1.8560581024336734e-11,
+      "40\u201349 activities": 7.923378422333032e-28,
+      "42 activities": 2.593194560030776e-11,
+      "5\u20139 years": 7.761179243137529e-09,
+      "970\u2013979 activities": 4.073638370839554e-23,
+      "977 activities": 2.426701391002481e-05,
+      "990\u2013999 activities": 6.447055719339265e-09,
+      "Unknown": 1.0209399484139322e-18
+    },
+    "17": {
+      "0 years": 4.61191025322175e-16,
+      "0\u20139 activities": 2.843513243496351e-08,
+      "0\u20139 years": 9.538925677518921e-12,
+      "0\u201399 activities": 5.176586956101479e-18,
+      "10 years": 2.0894406867612532e-18,
+      "100\u2013199 activities": 9.797836946356743e-25,
+      "10\u201314 years": 4.385840650600602e-18,
+      "10\u201319 years": 9.171911103942144e-23,
+      "12 years": 4.6481463376830495e-15,
+      "120 activities": 8.236350181260406e-14,
+      "120\u2013129 activities": 2.02781206441558e-21,
+      "125 activities": 6.809296806823433e-08,
+      "126 activities": 5.7758590487927855e-12,
+      "129 activities": 1.8751471148327488e-12,
+      "13 years": 3.185033600511558e-20,
+      "130 activities": 2.522017814890292e-18,
+      "14 years": 4.929621821055845e-20,
+      "15 years": 5.121276239191668e-19,
+      "15\u201319 years": 3.2190034984922794e-22,
+      "17 years": 8.286942748077978e-19,
+      "19 years": 4.205140529380111e-21,
+      "199 activities": 2.1353594741553102e-20,
+      "20 years": 1.7767309155835316e-11,
+      "200 activities": 8.119657874304381e-09,
+      "200\u2013299 activities": 4.389289844287323e-17,
+      "20\u201329 years": 3.708420029286449e-15,
+      "260\u2013269 activities": 1.4636520415576322e-17,
+      "300\u2013399 activities": 1.0216361076573057e-24,
+      "30\u201334 years": 2.963899556775795e-10,
+      "30\u201339 years": 3.1643777036541337e-16,
+      "340\u2013349 activities": 6.4644514835705716e-24,
+      "348 activities": 1.2354506711948798e-10,
+      "350 activities": 2.8054545624820553e-19,
+      "35\u201339 years": 2.590687672749578e-12,
+      "38 years": 1.3523874127363045e-11,
+      "40\u201349 activities": 8.198482642660053e-29,
+      "42 activities": 2.436731782304746e-11,
+      "5\u20139 years": 8.555227903205659e-10,
+      "970\u2013979 activities": 3.266393149807634e-21,
+      "977 activities": 0.9998216906107488,
+      "990\u2013999 activities": 1.7890924865259638e-06,
+      "Unknown": 6.29187476340805e-17
+    },
+    "18": {
+      "0 years": 1.4195580755547746e-15,
+      "0\u20139 activities": 3.353906974891742e-10,
+      "0\u20139 years": 7.336641648751319e-13,
+      "0\u201399 activities": 8.22103516672765e-19,
+      "10 years": 1.29403328120971e-10,
+      "100\u2013199 activities": 7.180079445996791e-18,
+      "10\u201314 years": 1.1729993535809735e-12,
+      "10\u201319 years": 1.761051648388239e-15,
+      "12 years": 6.691586091292782e-10,
+      "120 activities": 4.277592566242102e-11,
+      "120\u2013129 activities": 4.3404425048222324e-20,
+      "125 activities": 0.9999594704850789,
+      "126 activities": 2.969265723108354e-10,
+      "129 activities": 6.495227685836775e-13,
+      "13 years": 2.7668732885746474e-10,
+      "130 activities": 3.2987313840807774e-11,
+      "14 years": 8.488659168217497e-11,
+      "15 years": 5.203592157466292e-10,
+      "15\u201319 years": 6.5566206495313705e-18,
+      "17 years": 4.705593027872159e-11,
+      "19 years": 5.135105484033675e-12,
+      "199 activities": 8.030867182586408e-11,
+      "20 years": 8.120447333759972e-09,
+      "200 activities": 6.5342863189731426e-12,
+      "200\u2013299 activities": 1.5936197538637925e-19,
+      "20\u201329 years": 7.986135304820454e-13,
+      "260\u2013269 activities": 7.623087250353686e-17,
+      "300\u2013399 activities": 4.115916006763689e-25,
+      "30\u201334 years": 2.4002219019073682e-11,
+      "30\u201339 years": 2.7542415939724503e-16,
+      "340\u2013349 activities": 2.3549179480603274e-20,
+      "348 activities": 9.662688893911735e-11,
+      "350 activities": 2.315679431721073e-17,
+      "35\u201339 years": 1.9345622802500719e-10,
+      "38 years": 4.005561916028452e-11,
+      "40\u201349 activities": 1.0241730850097954e-24,
+      "42 activities": 1.1621721538177712e-10,
+      "5\u20139 years": 1.9759358010438518e-11,
+      "970\u2013979 activities": 1.0174484764148606e-19,
+      "977 activities": 5.28278961006086e-09,
+      "990\u2013999 activities": 3.6773802389108705e-10,
+      "Unknown": 5.393052158919442e-16
+    },
+    "19": {
+      "0 years": 1.2537691377674239e-15,
+      "0\u20139 activities": 3.2229444788535316e-08,
+      "0\u20139 years": 6.557670775037328e-12,
+      "0\u201399 activities": 2.835432406731272e-17,
+      "10 years": 1.775178475082882e-14,
+      "100\u2013199 activities": 6.021283244810932e-20,
+      "10\u201314 years": 6.055398601286404e-14,
+      "10\u201319 years": 1.6573000834674578e-17,
+      "12 years": 7.349879564373096e-13,
+      "120 activities": 2.58769302654467e-11,
+      "120\u2013129 activities": 1.4537025559019166e-18,
+      "125 activities": 3.2777188824581526e-06,
+      "126 activities": 1.2480105219849201e-09,
+      "129 activities": 1.490710645069044e-10,
+      "13 years": 1.5126033645847096e-13,
+      "130 activities": 4.383408922638357e-12,
+      "14 years": 1.5112637984507573e-14,
+      "15 years": 6.291092592000423e-11,
+      "15\u201319 years": 2.837575605447619e-16,
+      "17 years": 1.30357889600184e-11,
+      "19 years": 2.0183447030193117e-13,
+      "199 activities": 1.0428604763721574e-10,
+      "20 years": 8.895335778143441e-06,
+      "200 activities": 1.6252098799964193e-07,
+      "200\u2013299 activities": 1.8415395486186327e-14,
+      "20\u201329 years": 2.6506775791525303e-07,
+      "260\u2013269 activities": 1.03765711750351e-12,
+      "300\u2013399 activities": 3.80936178102387e-22,
+      "30\u201334 years": 3.844580885288483e-09,
+      "30\u201339 years": 1.0587043535693179e-13,
+      "340\u2013349 activities": 1.5928012482268749e-16,
+      "348 activities": 1.4728374197044854e-05,
+      "350 activities": 7.177995444439781e-19,
+      "35\u201339 years": 1.7286543746974817e-14,
+      "38 years": 1.315196331312681e-12,
+      "40\u201349 activities": 3.4654619426528084e-20,
+      "42 activities": 0.9998463569454258,
+      "5\u20139 years": 1.2999079877610803e-05,
+      "970\u2013979 activities": 1.3537193162071287e-20,
+      "977 activities": 8.101499109176325e-06,
+      "990\u2013999 activities": 6.116569747397179e-11,
+      "Unknown": 3.845867140240877e-17
+    },
+    "20": {
+      "0 years": 3.6242391749186795e-15,
+      "0\u20139 activities": 5.897730933732403e-10,
+      "0\u20139 years": 3.8958364565641924e-14,
+      "0\u201399 activities": 1.1919749313172768e-18,
+      "10 years": 3.5914799927305225e-10,
+      "100\u2013199 activities": 3.00369563421812e-16,
+      "10\u201314 years": 1.1031718618083993e-09,
+      "10\u201319 years": 2.110528152741255e-12,
+      "12 years": 1.1066736359799968e-18,
+      "120 activities": 2.5855307299042486e-18,
+      "120\u2013129 activities": 9.47430446476537e-26,
+      "125 activities": 4.761092606227645e-22,
+      "126 activities": 8.253511077105625e-23,
+      "129 activities": 3.1077523735931497e-21,
+      "13 years": 5.797032517037254e-18,
+      "130 activities": 5.147268375148948e-22,
+      "14 years": 1.1609863057473957e-19,
+      "15 years": 5.803058856778011e-18,
+      "15\u201319 years": 1.1015865321968087e-22,
+      "17 years": 1.0181533317478651e-16,
+      "19 years": 5.783776692872619e-19,
+      "199 activities": 9.163082732566277e-23,
+      "20 years": 1.8480426386343937e-11,
+      "200 activities": 2.417487565593216e-09,
+      "200\u2013299 activities": 4.481955771061557e-21,
+      "20\u201329 years": 2.503319918587681e-12,
+      "260\u2013269 activities": 1.2718148918310365e-08,
+      "300\u2013399 activities": 2.5241229514389234e-17,
+      "30\u201334 years": 7.528620670678705e-10,
+      "30\u201339 years": 1.5938830115226297e-09,
+      "340\u2013349 activities": 3.69933535554676e-13,
+      "348 activities": 0.9999427823467157,
+      "350 activities": 1.699005735200721e-12,
+      "35\u201339 years": 2.6113819890594757e-13,
+      "38 years": 1.48628178199856e-11,
+      "40\u201349 activities": 2.95474923888879e-29,
+      "42 activities": 1.4162010728252643e-09,
+      "5\u20139 years": 1.286402091734482e-10,
+      "970\u2013979 activities": 6.447846829570485e-19,
+      "977 activities": 7.723588394560944e-06,
+      "990\u2013999 activities": 1.0245621834779121e-07,
+      "Unknown": 7.57345253333859e-18
+    },
+    "21": {
+      "0 years": 3.2659600318736344e-13,
+      "0\u20139 activities": 2.699074613298882e-07,
+      "0\u20139 years": 1.3885346518914601e-11,
+      "0\u201399 activities": 4.881075351780835e-18,
+      "10 years": 1.4165183304831595e-08,
+      "100\u2013199 activities": 9.435766937412054e-13,
+      "10\u201314 years": 7.186149937417974e-08,
+      "10\u201319 years": 1.874602376361453e-11,
+      "12 years": 7.054789659787071e-14,
+      "120 activities": 7.047202788270901e-14,
+      "120\u2013129 activities": 1.3020977026309756e-18,
+      "125 activities": 9.761161485825574e-19,
+      "126 activities": 2.4934779324641498e-18,
+      "129 activities": 1.8611191791450795e-16,
+      "13 years": 3.1291208021240887e-13,
+      "130 activities": 1.7267998819020033e-17,
+      "14 years": 2.484371950371091e-12,
+      "15 years": 1.7950289500786266e-10,
+      "15\u201319 years": 5.274480254663397e-13,
+      "17 years": 7.040453880104154e-12,
+      "19 years": 2.4414380623427954e-11,
+      "199 activities": 2.463442467698002e-16,
+      "20 years": 1.4254339690549542e-12,
+      "200 activities": 1.0404534064121103e-11,
+      "200\u2013299 activities": 2.599856322171224e-16,
+      "20\u201329 years": 6.205463496311508e-10,
+      "260\u2013269 activities": 0.9997569691701352,
+      "300\u2013399 activities": 1.7280533782415527e-23,
+      "30\u201334 years": 3.969828234272889e-10,
+      "30\u201339 years": 7.365243479985256e-17,
+      "340\u2013349 activities": 3.220797747255774e-14,
+      "348 activities": 1.7142763619808162e-06,
+      "350 activities": 4.796234731390547e-18,
+      "35\u201339 years": 2.0143204062782465e-09,
+      "38 years": 5.661643362650388e-12,
+      "40\u201349 activities": 3.166419316520274e-24,
+      "42 activities": 1.5224157477127947e-08,
+      "5\u20139 years": 6.114819748159525e-09,
+      "970\u2013979 activities": 2.7802167034364066e-22,
+      "977 activities": 1.5262930520452772e-05,
+      "990\u2013999 activities": 2.169138908416993e-05,
+      "Unknown": 1.5784069253941672e-17
+    },
+    "22": {
+      "0 years": 1.3347117617705297e-15,
+      "0\u20139 activities": 4.943158760850639e-09,
+      "0\u20139 years": 6.100343874300783e-13,
+      "0\u201399 activities": 2.7216328654488404e-19,
+      "10 years": 5.388716325594823e-09,
+      "100\u2013199 activities": 1.1787851033407973e-20,
+      "10\u201314 years": 9.363685618384833e-10,
+      "10\u201319 years": 5.7532287677542235e-15,
+      "12 years": 1.8347406386619043e-12,
+      "120 activities": 3.691469507678035e-17,
+      "120\u2013129 activities": 3.240021547006306e-23,
+      "125 activities": 1.711560425086248e-19,
+      "126 activities": 3.6231458515164194e-19,
+      "129 activities": 4.414155678053016e-18,
+      "13 years": 1.0663165956700608e-12,
+      "130 activities": 2.080683902090135e-20,
+      "14 years": 1.620145538701562e-14,
+      "15 years": 5.712282845550145e-13,
+      "15\u201319 years": 8.168269607723694e-19,
+      "17 years": 9.921302691732824e-14,
+      "19 years": 2.2078159902335006e-08,
+      "199 activities": 9.314329998892637e-14,
+      "20 years": 8.708855232070753e-12,
+      "200 activities": 8.230816141290072e-11,
+      "200\u2013299 activities": 1.9419218877373095e-17,
+      "20\u201329 years": 7.228611721163234e-11,
+      "260\u2013269 activities": 1.4111426657561871e-08,
+      "300\u2013399 activities": 2.6808361779376585e-23,
+      "30\u201334 years": 2.7398514094445256e-12,
+      "30\u201339 years": 1.2192523472910663e-18,
+      "340\u2013349 activities": 1.744953689459493e-15,
+      "348 activities": 1.805142438074758e-10,
+      "350 activities": 2.8913132031046073e-15,
+      "35\u201339 years": 3.124567189687032e-09,
+      "38 years": 1.429567778946648e-12,
+      "40\u201349 activities": 3.911518546596238e-25,
+      "42 activities": 4.0547895236833954e-10,
+      "5\u20139 years": 1.8336396658046898e-10,
+      "970\u2013979 activities": 9.810275928591226e-22,
+      "977 activities": 4.4071982983725354e-07,
+      "990\u2013999 activities": 0.9999260938845327,
+      "Unknown": 9.371719408893681e-17
+    },
+    "23": {
+      "0 years": 2.510992570395829e-08,
+      "0\u20139 activities": 0.9999324126940081,
+      "0\u20139 years": 1.1478129512186951e-05,
+      "0\u201399 activities": 4.824237630276669e-12,
+      "10 years": 2.644679823973212e-12,
+      "100\u2013199 activities": 2.9694110604951144e-22,
+      "10\u201314 years": 2.3793361006294124e-10,
+      "10\u201319 years": 1.2891559758223364e-15,
+      "12 years": 8.47088173927126e-13,
+      "120 activities": 8.751785476235183e-16,
+      "120\u2013129 activities": 6.630352455871472e-22,
+      "125 activities": 8.954647971552334e-20,
+      "126 activities": 4.547040311893024e-19,
+      "129 activities": 6.339854503203023e-17,
+      "13 years": 4.320034251556019e-14,
+      "130 activities": 2.3999491639559388e-21,
+      "14 years": 4.799230338122023e-16,
+      "15 years": 1.0280047528690042e-17,
+      "15\u201319 years": 7.467184079390164e-24,
+      "17 years": 3.683600475589045e-11,
+      "19 years": 7.038174244415804e-15,
+      "199 activities": 7.122373276719598e-20,
+      "20 years": 1.973777810617758e-12,
+      "200 activities": 1.0528177271081187e-12,
+      "200\u2013299 activities": 1.3130843732945611e-17,
+      "20\u201329 years": 2.126979862143593e-10,
+      "260\u2013269 activities": 9.683994312038461e-11,
+      "300\u2013399 activities": 8.552204172812043e-24,
+      "30\u201334 years": 3.6009333662945904e-13,
+      "30\u201339 years": 4.839476691521355e-21,
+      "340\u2013349 activities": 3.8042768856270535e-21,
+      "348 activities": 5.235108206975053e-16,
+      "350 activities": 9.002699821307372e-23,
+      "35\u201339 years": 2.895918083938076e-16,
+      "38 years": 8.943267711571227e-15,
+      "40\u201349 activities": 5.630300391508069e-24,
+      "42 activities": 5.4348644323961105e-12,
+      "5\u20139 years": 5.83440527195271e-12,
+      "970\u2013979 activities": 1.2706342566446864e-24,
+      "977 activities": 1.1779866016608007e-07,
+      "990\u2013999 activities": 2.236998232963686e-07,
+      "Unknown": 9.976143381300281e-17
+    }
+  },
+  "dual_oracle": {
+    "00": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 0.00010625279492980874,
+          "cosine": 2.7415182346501865e-09,
+          "js": 2.4512328875500148e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.41411074211022,
+          "cosine": 0.9999999681466684,
+          "js": 0.6931423238028152
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 0.00010528689323233694,
+          "cosine": 2.6736010072525573e-09,
+          "js": 2.3023654706428163e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.4074923013783198,
+          "cosine": 0.9999992947349171,
+          "js": 0.6929871678561762
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 0.00010625279492980874,
+          "cosine": 2.7415182346501865e-09,
+          "js": 2.4512328875500148e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.41411074211022,
+          "cosine": 0.9999999681466684,
+          "js": 0.6931423238028152
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.41400448931529,
+      "delta_retrain_l2": 1.4073870144850875,
+      "delta_oracle_l2": 1.41400448931529,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "01": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.3350513018161172e-08,
+          "cosine": 0.0,
+          "js": 3.605515817537667e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 6.23531527339963e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 1.8647766378610996e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.769794551773234e-08,
+          "cosine": 1.1102230246251565e-16,
+          "js": 9.566798397134478e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.54366975550882e-06,
+          "cosine": 3.2740476996195866e-13,
+          "js": 4.4209922084623546e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.3350513018161172e-08,
+          "cosine": 0.0,
+          "js": 3.605515817537667e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 6.23531527339963e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 1.8647766378610996e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.9002639715835133e-08,
+      "delta_retrain_l2": 1.5059718099910876e-06,
+      "delta_oracle_l2": 4.9002639715835133e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "02": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 6.98088383035037e-07,
+          "cosine": 3.652633751016765e-14,
+          "js": 1.5083373850054956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.308976989766468e-07,
+          "cosine": 8.215650382226158e-14,
+          "js": 2.872869453096035e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.8880406019503894e-06,
+          "cosine": 3.043787444312329e-12,
+          "js": 1.5747820727669031e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.7000281092544874e-05,
+          "cosine": 4.354738791789714e-11,
+          "js": 4.879714472469479e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 6.98088383035037e-07,
+          "cosine": 3.652633751016765e-14,
+          "js": 1.5083373850054956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.308976989766468e-07,
+          "cosine": 8.215650382226158e-14,
+          "js": 2.872869453096035e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 3.2809315941609725e-08,
+      "delta_retrain_l2": 1.2112240490594485e-05,
+      "delta_oracle_l2": 3.2809315941609725e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "03": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.2499954654434775e-05,
+          "cosine": 5.74067904324238e-10,
+          "js": 1.3847541983670368e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 5.116031385161701e-05,
+          "cosine": 5.586330287243868e-10,
+          "js": 1.20992215026789e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.632437062757071e-05,
+          "cosine": 5.634547273203339e-10,
+          "js": 1.2023602460393595e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.0712935491754326e-05,
+          "cosine": 6.518480200057297e-10,
+          "js": 1.6767149676386828e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.2499954654434775e-05,
+          "cosine": 5.74067904324238e-10,
+          "js": 1.3847541983670368e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 5.116031385161701e-05,
+          "cosine": 5.586330287243868e-10,
+          "js": 1.20992215026789e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -1.3396408028177657e-06,
+      "delta_retrain_l2": -5.6114351358163876e-06,
+      "delta_oracle_l2": -1.3396408028177657e-06,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "04": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 8.348126360879341e-10,
+          "cosine": 0.0,
+          "js": 4.071211718554879e-10
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.2313236429626275e-07,
+          "cosine": 3.275157922644212e-14,
+          "js": 1.1687138646777267e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.301957598689782e-05,
+          "cosine": 2.286160150077876e-11,
+          "js": 3.853862807733569e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.1528397426135631e-05,
+          "cosine": 1.709909991376435e-11,
+          "js": 3.4409825832883065e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 8.348126360879341e-10,
+          "cosine": 0.0,
+          "js": 4.071211718554879e-10
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.2313236429626275e-07,
+          "cosine": 3.275157922644212e-14,
+          "js": 1.1687138646777267e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.222975516601748e-07,
+      "delta_retrain_l2": -1.4911785607621894e-06,
+      "delta_oracle_l2": 4.222975516601748e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "05": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.8163115481746485e-05,
+          "cosine": 2.0431445424407002e-10,
+          "js": 7.13460959801135e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.87392906999062e-05,
+          "cosine": 2.0417900703506575e-10,
+          "js": 7.06932925534201e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.4637794293440548e-05,
+          "cosine": 2.1953394657714398e-10,
+          "js": 9.470779933321718e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 2.5756389168811762e-05,
+          "cosine": 2.1522095217108017e-10,
+          "js": 8.58587482101805e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.8163115481746485e-05,
+          "cosine": 2.0431445424407002e-10,
+          "js": 7.13460959801135e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.87392906999062e-05,
+          "cosine": 2.0417900703506575e-10,
+          "js": 7.06932925534201e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.761752181597167e-07,
+      "delta_retrain_l2": 1.1185948753712138e-06,
+      "delta_oracle_l2": 5.761752181597167e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "06": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.549660117197527e-07,
+          "cosine": 9.35918009759007e-14,
+          "js": 1.542746764965077e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 8.59092081218481e-08,
+          "cosine": 2.7755575615628914e-15,
+          "js": 3.112268666531249e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.284432066933318e-05,
+          "cosine": 1.1085765638796374e-10,
+          "js": 5.855798894690434e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 6.655587757006133e-06,
+          "cosine": 7.421174785804396e-12,
+          "js": 1.7713741213324873e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.549660117197527e-07,
+          "cosine": 9.35918009759007e-14,
+          "js": 1.542746764965077e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 8.59092081218481e-08,
+          "cosine": 2.7755575615628914e-15,
+          "js": 3.112268666531249e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -4.690568035979046e-07,
+      "delta_retrain_l2": -1.6188732912327045e-05,
+      "delta_oracle_l2": -4.690568035979046e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "07": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.581825663757908e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 2.0306086523763886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 5.596268068293196e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 2.3573214814413186e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.1103907279252405e-05,
+          "cosine": 1.8524404232778124e-11,
+          "js": 3.236469990809831e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.470632155604634e-06,
+          "cosine": 2.7567947924467262e-12,
+          "js": 1.3330869706370386e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.581825663757908e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 2.0306086523763886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 5.596268068293196e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 2.3573214814413186e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.4442404535287766e-10,
+      "delta_retrain_l2": -6.633275123647771e-06,
+      "delta_oracle_l2": 1.4442404535287766e-10,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "08": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 7.257008953469295e-06,
+          "cosine": 9.833134306802549e-12,
+          "js": 1.954734729656786e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.070852984031486e-06,
+          "cosine": 9.264922162799394e-12,
+          "js": 1.7213356087079285e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 5.35392934245848e-06,
+          "cosine": 1.0876188838437884e-11,
+          "js": 2.510983675052583e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 5.332909536181967e-06,
+          "cosine": 1.3448353541889446e-11,
+          "js": 3.0763329279609676e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 7.257008953469295e-06,
+          "cosine": 9.833134306802549e-12,
+          "js": 1.954734729656786e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.070852984031486e-06,
+          "cosine": 9.264922162799394e-12,
+          "js": 1.7213356087079285e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -1.8615596943780916e-07,
+      "delta_retrain_l2": -2.101980627651258e-08,
+      "delta_oracle_l2": -1.8615596943780916e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "09": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.7736046998631674e-06,
+          "cosine": 2.880584659692431e-12,
+          "js": 1.061478138826998e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.830341642900603e-06,
+          "cosine": 3.753886090862579e-12,
+          "js": 1.3242965109825508e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.398543401016911e-05,
+          "cosine": 1.9284351893134044e-10,
+          "js": 9.903694180579437e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 0.00011324167135464937,
+          "cosine": 2.7454284401429163e-09,
+          "js": 3.072158564356139e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.7736046998631674e-06,
+          "cosine": 2.880584659692431e-12,
+          "js": 1.061478138826998e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.830341642900603e-06,
+          "cosine": 3.753886090862579e-12,
+          "js": 1.3242965109825508e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.6736943037435566e-08,
+      "delta_retrain_l2": 7.925623734448027e-05,
+      "delta_oracle_l2": 5.6736943037435566e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "10": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.004685055345442e-06,
+          "cosine": 6.112887973586112e-13,
+          "js": 5.814029749221002e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.9452380719156817e-06,
+          "cosine": 6.087352844019733e-13,
+          "js": 5.535786030521832e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.5008389658271968e-06,
+          "cosine": 9.530154443382344e-13,
+          "js": 9.199141381125103e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.6809568417126026e-06,
+          "cosine": 1.283195771861756e-12,
+          "js": 9.75477840506134e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.004685055345442e-06,
+          "cosine": 6.112887973586112e-13,
+          "js": 5.814029749221002e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.9452380719156817e-06,
+          "cosine": 6.087352844019733e-13,
+          "js": 5.535786030521832e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -5.944698342976004e-08,
+      "delta_retrain_l2": 1.8011787588540578e-07,
+      "delta_oracle_l2": -5.944698342976004e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "11": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.660368899946406e-07,
+          "cosine": 4.418687638008123e-14,
+          "js": 1.2001124312964505e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.0851597962430847e-07,
+          "cosine": 3.6193270602780103e-14,
+          "js": 9.399660075953955e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.9041433708122025e-05,
+          "cosine": 4.689959531845034e-11,
+          "js": 5.810288945466007e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.7673823198655736e-06,
+          "cosine": 9.658940314238862e-13,
+          "js": 6.224255495289243e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.660368899946406e-07,
+          "cosine": 4.418687638008123e-14,
+          "js": 1.2001124312964505e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.0851597962430847e-07,
+          "cosine": 3.6193270602780103e-14,
+          "js": 9.399660075953955e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -5.752091037033214e-08,
+      "delta_retrain_l2": -1.727405138825645e-05,
+      "delta_oracle_l2": -5.752091037033214e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "12": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.4462074689529756e-07,
+          "cosine": 3.1086244689504383e-15,
+          "js": 3.723364474141299e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 9.121741068561308e-08,
+          "cosine": 3.774758283725532e-15,
+          "js": 4.593450061325999e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 6.589438959723413e-06,
+          "cosine": 5.502154287739813e-12,
+          "js": 1.8578802471216319e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.196001322724062e-05,
+          "cosine": 1.6143086867259626e-11,
+          "js": 3.645732431755662e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.4462074689529756e-07,
+          "cosine": 3.1086244689504383e-15,
+          "js": 3.723364474141299e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 9.121741068561308e-08,
+          "cosine": 3.774758283725532e-15,
+          "js": 4.593450061325999e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -5.340333620968448e-08,
+      "delta_retrain_l2": 5.370574267517207e-06,
+      "delta_oracle_l2": -5.340333620968448e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "13": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.669992691675201e-05,
+          "cosine": 1.7767398663437461e-10,
+          "js": 6.445490248231708e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.6369892499964512e-05,
+          "cosine": 1.7839718591261544e-10,
+          "js": 6.696172332689406e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.4608598114056566e-05,
+          "cosine": 1.7973034172058533e-10,
+          "js": 7.625892027626046e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 2.5194260150306387e-05,
+          "cosine": 1.8090207110077472e-10,
+          "js": 7.352278743443949e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.669992691675201e-05,
+          "cosine": 1.7767398663437461e-10,
+          "js": 6.445490248231708e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.6369892499964512e-05,
+          "cosine": 1.7839718591261544e-10,
+          "js": 6.696172332689406e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -3.300344167874964e-07,
+      "delta_retrain_l2": 5.856620362498215e-07,
+      "delta_oracle_l2": -3.300344167874964e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "14": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 6.943305751493631e-07,
+          "cosine": 1.0369483049998962e-13,
+          "js": 1.7548883443668844e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.073486655953089e-07,
+          "cosine": 8.770761894538737e-14,
+          "js": 2.744297022398289e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.7232422890312273e-05,
+          "cosine": 2.643496532783729e-11,
+          "js": 4.519851988875038e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 3.3087525649643244e-06,
+          "cosine": 1.5166756739404263e-12,
+          "js": 1.0630616677207617e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 6.943305751493631e-07,
+          "cosine": 1.0369483049998962e-13,
+          "js": 1.7548883443668844e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.073486655953089e-07,
+          "cosine": 8.770761894538737e-14,
+          "js": 2.744297022398289e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.30180904459458e-08,
+      "delta_retrain_l2": -1.3923670325347948e-05,
+      "delta_oracle_l2": 1.30180904459458e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "15": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.4117251293382357e-06,
+          "cosine": 3.1241675912951905e-13,
+          "js": 2.6551257532542135e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.13690293287598e-07,
+          "cosine": 1.3489209749195652e-13,
+          "js": 2.5810523087415784e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.5911650808566483e-05,
+          "cosine": 4.2544079370543386e-11,
+          "js": 4.483228113028133e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.9860798715920065e-06,
+          "cosine": 3.3900660056929155e-12,
+          "js": 1.2629952807742079e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.4117251293382357e-06,
+          "cosine": 3.1241675912951905e-13,
+          "js": 2.6551257532542135e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.13690293287598e-07,
+          "cosine": 1.3489209749195652e-13,
+          "js": 2.5810523087415784e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -6.980348360506377e-07,
+      "delta_retrain_l2": -1.0925570936974477e-05,
+      "delta_oracle_l2": -6.980348360506377e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "16": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.883985292072688e-05,
+          "cosine": 3.902623779694636e-10,
+          "js": 1.246070719840858e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.990424878746393e-05,
+          "cosine": 4.0453507210713724e-10,
+          "js": 1.4120899624036531e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.9808640856352775e-05,
+          "cosine": 4.0461978212391614e-10,
+          "js": 1.4095507784015625e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.26400854410403e-05,
+          "cosine": 3.417094385227415e-10,
+          "js": 1.1772365278590734e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.883985292072688e-05,
+          "cosine": 3.902623779694636e-10,
+          "js": 1.246070719840858e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.990424878746393e-05,
+          "cosine": 4.0453507210713724e-10,
+          "js": 1.4120899624036531e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.0643958667370503e-06,
+      "delta_retrain_l2": -7.168555415312473e-06,
+      "delta_oracle_l2": 1.0643958667370503e-06,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "17": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.451253244814984e-06,
+          "cosine": 1.5865087021893487e-12,
+          "js": 6.551833132905095e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.4959933315430396e-06,
+          "cosine": 1.6048273820956638e-12,
+          "js": 6.665429781009104e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.0569105335360284e-05,
+          "cosine": 2.5075352905190584e-10,
+          "js": 1.0047502377175896e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 7.755682985290658e-07,
+          "cosine": 2.533528942194607e-13,
+          "js": 1.132769436615804e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.451253244814984e-06,
+          "cosine": 1.5865087021893487e-12,
+          "js": 6.551833132905095e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.4959933315430396e-06,
+          "cosine": 1.6048273820956638e-12,
+          "js": 6.665429781009104e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.474008672805543e-08,
+      "delta_retrain_l2": -3.979353703683122e-05,
+      "delta_oracle_l2": 4.474008672805543e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "18": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 9.98343564648321e-08,
+          "cosine": 2.4424906541753444e-15,
+          "js": 2.635939043757519e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.0455161050705827e-07,
+          "cosine": 2.9976021664879227e-15,
+          "js": 3.1212099318253886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.6658131739440234e-05,
+          "cosine": 4.502886952195695e-11,
+          "js": 4.7363545914405505e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 5.998807304438281e-06,
+          "cosine": 4.59199345215211e-12,
+          "js": 1.7981417125772812e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 9.98343564648321e-08,
+          "cosine": 2.4424906541753444e-15,
+          "js": 2.635939043757519e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.0455161050705827e-07,
+          "cosine": 2.9976021664879227e-15,
+          "js": 3.1212099318253886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.717254042226177e-09,
+      "delta_retrain_l2": -1.0659324435001953e-05,
+      "delta_oracle_l2": 4.717254042226177e-09,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "19": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.373657280649984e-05,
+          "cosine": 2.7042423855760944e-10,
+          "js": 1.6701003509047245e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 5.37628771114364e-05,
+          "cosine": 2.707635227139349e-10,
+          "js": 1.677336223925376e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.8018035214160174e-05,
+          "cosine": 2.722434500057602e-10,
+          "js": 1.665021733360288e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.371613633313663e-05,
+          "cosine": 1.8690715641866973e-10,
+          "js": 1.2647034252835266e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.373657280649984e-05,
+          "cosine": 2.7042423855760944e-10,
+          "js": 1.6701003509047245e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 5.37628771114364e-05,
+          "cosine": 2.707635227139349e-10,
+          "js": 1.677336223925376e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 2.630430493655799e-08,
+      "delta_retrain_l2": -4.301898881023541e-06,
+      "delta_oracle_l2": 2.630430493655799e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "20": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.101024093563837e-05,
+          "cosine": 2.983568947456661e-11,
+          "js": 2.7200840893907814e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.0998878190030514e-05,
+          "cosine": 2.9835134363054294e-11,
+          "js": 2.711425040925941e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 6.779329809078092e-06,
+          "cosine": 1.7402079777184554e-11,
+          "js": 1.6075206105081773e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 8.59611360049364e-06,
+          "cosine": 3.379940771708334e-11,
+          "js": 4.3968905860021935e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.101024093563837e-05,
+          "cosine": 2.983568947456661e-11,
+          "js": 2.7200840893907814e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.0998878190030514e-05,
+          "cosine": 2.9835134363054294e-11,
+          "js": 2.711425040925941e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -1.1362745607855693e-08,
+      "delta_retrain_l2": 1.8167837914155479e-06,
+      "delta_oracle_l2": -1.1362745607855693e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "21": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.6303152947473365e-05,
+          "cosine": 3.490325806154715e-10,
+          "js": 1.2925662592233632e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.695993796888281e-05,
+          "cosine": 3.5341152226919803e-10,
+          "js": 1.3632237478207132e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 7.023586670897666e-05,
+          "cosine": 1.2746860234003066e-09,
+          "js": 3.299760252560788e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 3.529600508015302e-05,
+          "cosine": 5.300028194099582e-10,
+          "js": 2.051603666017936e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.6303152947473365e-05,
+          "cosine": 3.490325806154715e-10,
+          "js": 1.2925662592233632e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.695993796888281e-05,
+          "cosine": 3.5341152226919803e-10,
+          "js": 1.3632237478207132e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 6.567850214094447e-07,
+      "delta_retrain_l2": -3.493986162882364e-05,
+      "delta_oracle_l2": 6.567850214094447e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "22": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 6.195537179329541e-07,
+          "cosine": 8.915090887740007e-14,
+          "js": 1.2999932706822402e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 6.609988866672257e-07,
+          "cosine": 9.747758156208874e-14,
+          "js": 1.6965476369461292e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 5.9314343544332666e-05,
+          "cosine": 6.53554543816881e-10,
+          "js": 1.542028179973433e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 0.0007353395418340748,
+          "cosine": 1.2970525542499445e-07,
+          "js": 0.00018239461648097128
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 6.195537179329541e-07,
+          "cosine": 8.915090887740007e-14,
+          "js": 1.2999932706822402e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 6.609988866672257e-07,
+          "cosine": 9.747758156208874e-14,
+          "js": 1.6965476369461292e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.144516873427167e-08,
+      "delta_retrain_l2": 0.0006760251982897421,
+      "delta_oracle_l2": 4.144516873427167e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "23": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 7.765246153895723e-06,
+          "cosine": 1.4250045587971272e-11,
+          "js": 4.820091871342333e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.413925221759995e-06,
+          "cosine": 1.4410361792727144e-11,
+          "js": 6.822484031589367e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.050600985888985e-05,
+          "cosine": 3.0943858586596207e-10,
+          "js": 5.931288686854779e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 0.00015434347008111643,
+          "cosine": 4.141877063545962e-09,
+          "js": 3.6565117919501955e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 7.765246153895723e-06,
+          "cosine": 1.4250045587971272e-11,
+          "js": 4.820091871342333e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.413925221759995e-06,
+          "cosine": 1.4410361792727144e-11,
+          "js": 6.822484031589367e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -3.5132093213572733e-07,
+      "delta_retrain_l2": 0.00011383746022222658,
+      "delta_oracle_l2": -3.5132093213572733e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    }
+  },
+  "oracle_families": {
+    "00": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 0.00010625279492980874,
+          "cosine": 2.7415182346501865e-09,
+          "js": 2.4512328875500148e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.41411074211022,
+          "cosine": 0.9999999681466684,
+          "js": 0.6931423238028152
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 0.00010528689323233694,
+          "cosine": 2.6736010072525573e-09,
+          "js": 2.3023654706428163e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.4074923013783198,
+          "cosine": 0.9999992947349171,
+          "js": 0.6929871678561762
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 0.00010625279492980874,
+          "cosine": 2.7415182346501865e-09,
+          "js": 2.4512328875500148e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.41411074211022,
+          "cosine": 0.9999999681466684,
+          "js": 0.6931423238028152
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.41400448931529,
+      "delta_retrain_l2": 1.4073870144850875,
+      "delta_oracle_l2": 1.41400448931529,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "01": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.3350513018161172e-08,
+          "cosine": 0.0,
+          "js": 3.605515817537667e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 6.23531527339963e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 1.8647766378610996e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.769794551773234e-08,
+          "cosine": 1.1102230246251565e-16,
+          "js": 9.566798397134478e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.54366975550882e-06,
+          "cosine": 3.2740476996195866e-13,
+          "js": 4.4209922084623546e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.3350513018161172e-08,
+          "cosine": 0.0,
+          "js": 3.605515817537667e-09
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 6.23531527339963e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 1.8647766378610996e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.9002639715835133e-08,
+      "delta_retrain_l2": 1.5059718099910876e-06,
+      "delta_oracle_l2": 4.9002639715835133e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "02": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 6.98088383035037e-07,
+          "cosine": 3.652633751016765e-14,
+          "js": 1.5083373850054956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.308976989766468e-07,
+          "cosine": 8.215650382226158e-14,
+          "js": 2.872869453096035e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.8880406019503894e-06,
+          "cosine": 3.043787444312329e-12,
+          "js": 1.5747820727669031e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.7000281092544874e-05,
+          "cosine": 4.354738791789714e-11,
+          "js": 4.879714472469479e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 6.98088383035037e-07,
+          "cosine": 3.652633751016765e-14,
+          "js": 1.5083373850054956e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.308976989766468e-07,
+          "cosine": 8.215650382226158e-14,
+          "js": 2.872869453096035e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 3.2809315941609725e-08,
+      "delta_retrain_l2": 1.2112240490594485e-05,
+      "delta_oracle_l2": 3.2809315941609725e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "03": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.2499954654434775e-05,
+          "cosine": 5.74067904324238e-10,
+          "js": 1.3847541983670368e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 5.116031385161701e-05,
+          "cosine": 5.586330287243868e-10,
+          "js": 1.20992215026789e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.632437062757071e-05,
+          "cosine": 5.634547273203339e-10,
+          "js": 1.2023602460393595e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.0712935491754326e-05,
+          "cosine": 6.518480200057297e-10,
+          "js": 1.6767149676386828e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.2499954654434775e-05,
+          "cosine": 5.74067904324238e-10,
+          "js": 1.3847541983670368e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 5.116031385161701e-05,
+          "cosine": 5.586330287243868e-10,
+          "js": 1.20992215026789e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -1.3396408028177657e-06,
+      "delta_retrain_l2": -5.6114351358163876e-06,
+      "delta_oracle_l2": -1.3396408028177657e-06,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "04": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 8.348126360879341e-10,
+          "cosine": 0.0,
+          "js": 4.071211718554879e-10
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.2313236429626275e-07,
+          "cosine": 3.275157922644212e-14,
+          "js": 1.1687138646777267e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.301957598689782e-05,
+          "cosine": 2.286160150077876e-11,
+          "js": 3.853862807733569e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.1528397426135631e-05,
+          "cosine": 1.709909991376435e-11,
+          "js": 3.4409825832883065e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 8.348126360879341e-10,
+          "cosine": 0.0,
+          "js": 4.071211718554879e-10
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.2313236429626275e-07,
+          "cosine": 3.275157922644212e-14,
+          "js": 1.1687138646777267e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.222975516601748e-07,
+      "delta_retrain_l2": -1.4911785607621894e-06,
+      "delta_oracle_l2": 4.222975516601748e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "05": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.8163115481746485e-05,
+          "cosine": 2.0431445424407002e-10,
+          "js": 7.13460959801135e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.87392906999062e-05,
+          "cosine": 2.0417900703506575e-10,
+          "js": 7.06932925534201e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.4637794293440548e-05,
+          "cosine": 2.1953394657714398e-10,
+          "js": 9.470779933321718e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 2.5756389168811762e-05,
+          "cosine": 2.1522095217108017e-10,
+          "js": 8.58587482101805e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.8163115481746485e-05,
+          "cosine": 2.0431445424407002e-10,
+          "js": 7.13460959801135e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.87392906999062e-05,
+          "cosine": 2.0417900703506575e-10,
+          "js": 7.06932925534201e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.761752181597167e-07,
+      "delta_retrain_l2": 1.1185948753712138e-06,
+      "delta_oracle_l2": 5.761752181597167e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "06": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.549660117197527e-07,
+          "cosine": 9.35918009759007e-14,
+          "js": 1.542746764965077e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 8.59092081218481e-08,
+          "cosine": 2.7755575615628914e-15,
+          "js": 3.112268666531249e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.284432066933318e-05,
+          "cosine": 1.1085765638796374e-10,
+          "js": 5.855798894690434e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 6.655587757006133e-06,
+          "cosine": 7.421174785804396e-12,
+          "js": 1.7713741213324873e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.549660117197527e-07,
+          "cosine": 9.35918009759007e-14,
+          "js": 1.542746764965077e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 8.59092081218481e-08,
+          "cosine": 2.7755575615628914e-15,
+          "js": 3.112268666531249e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -4.690568035979046e-07,
+      "delta_retrain_l2": -1.6188732912327045e-05,
+      "delta_oracle_l2": -4.690568035979046e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "07": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.581825663757908e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 2.0306086523763886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 5.596268068293196e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 2.3573214814413186e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.1103907279252405e-05,
+          "cosine": 1.8524404232778124e-11,
+          "js": 3.236469990809831e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.470632155604634e-06,
+          "cosine": 2.7567947924467262e-12,
+          "js": 1.3330869706370386e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.581825663757908e-08,
+          "cosine": 7.771561172376096e-16,
+          "js": 2.0306086523763886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 5.596268068293196e-08,
+          "cosine": 9.992007221626409e-16,
+          "js": 2.3573214814413186e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.4442404535287766e-10,
+      "delta_retrain_l2": -6.633275123647771e-06,
+      "delta_oracle_l2": 1.4442404535287766e-10,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "08": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 7.257008953469295e-06,
+          "cosine": 9.833134306802549e-12,
+          "js": 1.954734729656786e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.070852984031486e-06,
+          "cosine": 9.264922162799394e-12,
+          "js": 1.7213356087079285e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 5.35392934245848e-06,
+          "cosine": 1.0876188838437884e-11,
+          "js": 2.510983675052583e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 5.332909536181967e-06,
+          "cosine": 1.3448353541889446e-11,
+          "js": 3.0763329279609676e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 7.257008953469295e-06,
+          "cosine": 9.833134306802549e-12,
+          "js": 1.954734729656786e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.070852984031486e-06,
+          "cosine": 9.264922162799394e-12,
+          "js": 1.7213356087079285e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -1.8615596943780916e-07,
+      "delta_retrain_l2": -2.101980627651258e-08,
+      "delta_oracle_l2": -1.8615596943780916e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "09": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.7736046998631674e-06,
+          "cosine": 2.880584659692431e-12,
+          "js": 1.061478138826998e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.830341642900603e-06,
+          "cosine": 3.753886090862579e-12,
+          "js": 1.3242965109825508e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 3.398543401016911e-05,
+          "cosine": 1.9284351893134044e-10,
+          "js": 9.903694180579437e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 0.00011324167135464937,
+          "cosine": 2.7454284401429163e-09,
+          "js": 3.072158564356139e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.7736046998631674e-06,
+          "cosine": 2.880584659692431e-12,
+          "js": 1.061478138826998e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.830341642900603e-06,
+          "cosine": 3.753886090862579e-12,
+          "js": 1.3242965109825508e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 5.6736943037435566e-08,
+      "delta_retrain_l2": 7.925623734448027e-05,
+      "delta_oracle_l2": 5.6736943037435566e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "10": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.004685055345442e-06,
+          "cosine": 6.112887973586112e-13,
+          "js": 5.814029749221002e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.9452380719156817e-06,
+          "cosine": 6.087352844019733e-13,
+          "js": 5.535786030521832e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.5008389658271968e-06,
+          "cosine": 9.530154443382344e-13,
+          "js": 9.199141381125103e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.6809568417126026e-06,
+          "cosine": 1.283195771861756e-12,
+          "js": 9.75477840506134e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.004685055345442e-06,
+          "cosine": 6.112887973586112e-13,
+          "js": 5.814029749221002e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.9452380719156817e-06,
+          "cosine": 6.087352844019733e-13,
+          "js": 5.535786030521832e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -5.944698342976004e-08,
+      "delta_retrain_l2": 1.8011787588540578e-07,
+      "delta_oracle_l2": -5.944698342976004e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "11": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.660368899946406e-07,
+          "cosine": 4.418687638008123e-14,
+          "js": 1.2001124312964505e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.0851597962430847e-07,
+          "cosine": 3.6193270602780103e-14,
+          "js": 9.399660075953955e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.9041433708122025e-05,
+          "cosine": 4.689959531845034e-11,
+          "js": 5.810288945466007e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.7673823198655736e-06,
+          "cosine": 9.658940314238862e-13,
+          "js": 6.224255495289243e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.660368899946406e-07,
+          "cosine": 4.418687638008123e-14,
+          "js": 1.2001124312964505e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.0851597962430847e-07,
+          "cosine": 3.6193270602780103e-14,
+          "js": 9.399660075953955e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -5.752091037033214e-08,
+      "delta_retrain_l2": -1.727405138825645e-05,
+      "delta_oracle_l2": -5.752091037033214e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "12": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.4462074689529756e-07,
+          "cosine": 3.1086244689504383e-15,
+          "js": 3.723364474141299e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 9.121741068561308e-08,
+          "cosine": 3.774758283725532e-15,
+          "js": 4.593450061325999e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 6.589438959723413e-06,
+          "cosine": 5.502154287739813e-12,
+          "js": 1.8578802471216319e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 1.196001322724062e-05,
+          "cosine": 1.6143086867259626e-11,
+          "js": 3.645732431755662e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.4462074689529756e-07,
+          "cosine": 3.1086244689504383e-15,
+          "js": 3.723364474141299e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 9.121741068561308e-08,
+          "cosine": 3.774758283725532e-15,
+          "js": 4.593450061325999e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -5.340333620968448e-08,
+      "delta_retrain_l2": 5.370574267517207e-06,
+      "delta_oracle_l2": -5.340333620968448e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "13": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.669992691675201e-05,
+          "cosine": 1.7767398663437461e-10,
+          "js": 6.445490248231708e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.6369892499964512e-05,
+          "cosine": 1.7839718591261544e-10,
+          "js": 6.696172332689406e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 2.4608598114056566e-05,
+          "cosine": 1.7973034172058533e-10,
+          "js": 7.625892027626046e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 2.5194260150306387e-05,
+          "cosine": 1.8090207110077472e-10,
+          "js": 7.352278743443949e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.669992691675201e-05,
+          "cosine": 1.7767398663437461e-10,
+          "js": 6.445490248231708e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.6369892499964512e-05,
+          "cosine": 1.7839718591261544e-10,
+          "js": 6.696172332689406e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -3.300344167874964e-07,
+      "delta_retrain_l2": 5.856620362498215e-07,
+      "delta_oracle_l2": -3.300344167874964e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "14": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 6.943305751493631e-07,
+          "cosine": 1.0369483049998962e-13,
+          "js": 1.7548883443668844e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.073486655953089e-07,
+          "cosine": 8.770761894538737e-14,
+          "js": 2.744297022398289e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.7232422890312273e-05,
+          "cosine": 2.643496532783729e-11,
+          "js": 4.519851988875038e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 3.3087525649643244e-06,
+          "cosine": 1.5166756739404263e-12,
+          "js": 1.0630616677207617e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 6.943305751493631e-07,
+          "cosine": 1.0369483049998962e-13,
+          "js": 1.7548883443668844e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.073486655953089e-07,
+          "cosine": 8.770761894538737e-14,
+          "js": 2.744297022398289e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.30180904459458e-08,
+      "delta_retrain_l2": -1.3923670325347948e-05,
+      "delta_oracle_l2": 1.30180904459458e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "15": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.4117251293382357e-06,
+          "cosine": 3.1241675912951905e-13,
+          "js": 2.6551257532542135e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.13690293287598e-07,
+          "cosine": 1.3489209749195652e-13,
+          "js": 2.5810523087415784e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.5911650808566483e-05,
+          "cosine": 4.2544079370543386e-11,
+          "js": 4.483228113028133e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.9860798715920065e-06,
+          "cosine": 3.3900660056929155e-12,
+          "js": 1.2629952807742079e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.4117251293382357e-06,
+          "cosine": 3.1241675912951905e-13,
+          "js": 2.6551257532542135e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.13690293287598e-07,
+          "cosine": 1.3489209749195652e-13,
+          "js": 2.5810523087415784e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -6.980348360506377e-07,
+      "delta_retrain_l2": -1.0925570936974477e-05,
+      "delta_oracle_l2": -6.980348360506377e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "16": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.883985292072688e-05,
+          "cosine": 3.902623779694636e-10,
+          "js": 1.246070719840858e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.990424878746393e-05,
+          "cosine": 4.0453507210713724e-10,
+          "js": 1.4120899624036531e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.9808640856352775e-05,
+          "cosine": 4.0461978212391614e-10,
+          "js": 1.4095507784015625e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.26400854410403e-05,
+          "cosine": 3.417094385227415e-10,
+          "js": 1.1772365278590734e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.883985292072688e-05,
+          "cosine": 3.902623779694636e-10,
+          "js": 1.246070719840858e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.990424878746393e-05,
+          "cosine": 4.0453507210713724e-10,
+          "js": 1.4120899624036531e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 1.0643958667370503e-06,
+      "delta_retrain_l2": -7.168555415312473e-06,
+      "delta_oracle_l2": 1.0643958667370503e-06,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "17": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 2.451253244814984e-06,
+          "cosine": 1.5865087021893487e-12,
+          "js": 6.551833132905095e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 2.4959933315430396e-06,
+          "cosine": 1.6048273820956638e-12,
+          "js": 6.665429781009104e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.0569105335360284e-05,
+          "cosine": 2.5075352905190584e-10,
+          "js": 1.0047502377175896e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 7.755682985290658e-07,
+          "cosine": 2.533528942194607e-13,
+          "js": 1.132769436615804e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 2.451253244814984e-06,
+          "cosine": 1.5865087021893487e-12,
+          "js": 6.551833132905095e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 2.4959933315430396e-06,
+          "cosine": 1.6048273820956638e-12,
+          "js": 6.665429781009104e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.474008672805543e-08,
+      "delta_retrain_l2": -3.979353703683122e-05,
+      "delta_oracle_l2": 4.474008672805543e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "18": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 9.98343564648321e-08,
+          "cosine": 2.4424906541753444e-15,
+          "js": 2.635939043757519e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.0455161050705827e-07,
+          "cosine": 2.9976021664879227e-15,
+          "js": 3.1212099318253886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 1.6658131739440234e-05,
+          "cosine": 4.502886952195695e-11,
+          "js": 4.7363545914405505e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 5.998807304438281e-06,
+          "cosine": 4.59199345215211e-12,
+          "js": 1.7981417125772812e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 9.98343564648321e-08,
+          "cosine": 2.4424906541753444e-15,
+          "js": 2.635939043757519e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.0455161050705827e-07,
+          "cosine": 2.9976021664879227e-15,
+          "js": 3.1212099318253886e-08
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.717254042226177e-09,
+      "delta_retrain_l2": -1.0659324435001953e-05,
+      "delta_oracle_l2": 4.717254042226177e-09,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "19": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 5.373657280649984e-05,
+          "cosine": 2.7042423855760944e-10,
+          "js": 1.6701003509047245e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 5.37628771114364e-05,
+          "cosine": 2.707635227139349e-10,
+          "js": 1.677336223925376e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.8018035214160174e-05,
+          "cosine": 2.722434500057602e-10,
+          "js": 1.665021733360288e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 4.371613633313663e-05,
+          "cosine": 1.8690715641866973e-10,
+          "js": 1.2647034252835266e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 5.373657280649984e-05,
+          "cosine": 2.7042423855760944e-10,
+          "js": 1.6701003509047245e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 5.37628771114364e-05,
+          "cosine": 2.707635227139349e-10,
+          "js": 1.677336223925376e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 2.630430493655799e-08,
+      "delta_retrain_l2": -4.301898881023541e-06,
+      "delta_oracle_l2": 2.630430493655799e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "20": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 1.101024093563837e-05,
+          "cosine": 2.983568947456661e-11,
+          "js": 2.7200840893907814e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 1.0998878190030514e-05,
+          "cosine": 2.9835134363054294e-11,
+          "js": 2.711425040925941e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 6.779329809078092e-06,
+          "cosine": 1.7402079777184554e-11,
+          "js": 1.6075206105081773e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 8.59611360049364e-06,
+          "cosine": 3.379940771708334e-11,
+          "js": 4.3968905860021935e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 1.101024093563837e-05,
+          "cosine": 2.983568947456661e-11,
+          "js": 2.7200840893907814e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 1.0998878190030514e-05,
+          "cosine": 2.9835134363054294e-11,
+          "js": 2.711425040925941e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -1.1362745607855693e-08,
+      "delta_retrain_l2": 1.8167837914155479e-06,
+      "delta_oracle_l2": -1.1362745607855693e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "21": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 4.6303152947473365e-05,
+          "cosine": 3.490325806154715e-10,
+          "js": 1.2925662592233632e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 4.695993796888281e-05,
+          "cosine": 3.5341152226919803e-10,
+          "js": 1.3632237478207132e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 7.023586670897666e-05,
+          "cosine": 1.2746860234003066e-09,
+          "js": 3.299760252560788e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 3.529600508015302e-05,
+          "cosine": 5.300028194099582e-10,
+          "js": 2.051603666017936e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 4.6303152947473365e-05,
+          "cosine": 3.490325806154715e-10,
+          "js": 1.2925662592233632e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 4.695993796888281e-05,
+          "cosine": 3.5341152226919803e-10,
+          "js": 1.3632237478207132e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 6.567850214094447e-07,
+      "delta_retrain_l2": -3.493986162882364e-05,
+      "delta_oracle_l2": 6.567850214094447e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "22": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 6.195537179329541e-07,
+          "cosine": 8.915090887740007e-14,
+          "js": 1.2999932706822402e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 6.609988866672257e-07,
+          "cosine": 9.747758156208874e-14,
+          "js": 1.6965476369461292e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 5.9314343544332666e-05,
+          "cosine": 6.53554543816881e-10,
+          "js": 1.542028179973433e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 0.0007353395418340748,
+          "cosine": 1.2970525542499445e-07,
+          "js": 0.00018239461648097128
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 6.195537179329541e-07,
+          "cosine": 8.915090887740007e-14,
+          "js": 1.2999932706822402e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 6.609988866672257e-07,
+          "cosine": 9.747758156208874e-14,
+          "js": 1.6965476369461292e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": 4.144516873427167e-08,
+      "delta_retrain_l2": 0.0006760251982897421,
+      "delta_oracle_l2": 4.144516873427167e-08,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    },
+    "23": {
+      "matched_finetune": {
+        "distance": {
+          "l2": 7.765246153895723e-06,
+          "cosine": 1.4250045587971272e-11,
+          "js": 4.820091871342333e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_finetune": {
+        "distance": {
+          "l2": 7.413925221759995e-06,
+          "cosine": 1.4410361792727144e-11,
+          "js": 6.822484031589367e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched_retrain": {
+        "distance": {
+          "l2": 4.050600985888985e-05,
+          "cosine": 3.0943858586596207e-10,
+          "js": 5.931288686854779e-06
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo_retrain": {
+        "distance": {
+          "l2": 0.00015434347008111643,
+          "cosine": 4.141877063545962e-09,
+          "js": 3.6565117919501955e-05
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "matched": {
+        "distance": {
+          "l2": 7.765246153895723e-06,
+          "cosine": 1.4250045587971272e-11,
+          "js": 4.820091871342333e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "loo": {
+        "distance": {
+          "l2": 7.413925221759995e-06,
+          "cosine": 1.4410361792727144e-11,
+          "js": 6.822484031589367e-07
+        },
+        "reliable": true,
+        "reason": null
+      },
+      "delta_ft_l2": -3.5132093213572733e-07,
+      "delta_retrain_l2": 0.00011383746022222658,
+      "delta_oracle_l2": -3.5132093213572733e-07,
+      "delta_reliable": true,
+      "delta_retrain_reliable": true
+    }
+  },
+  "oracle_block_version": "g3_1",
+  "e2e": {
+    "level": "association-only",
+    "reason": "no image router for numeric profiles (CelebA g redesign is separate)"
+  },
+  "e2e_rows": [],
+  "criteria": {
+    "cell_pass": true,
+    "failed_criteria": [],
+    "checks": {
+      "strict_expected_accuracy==1.0": true,
+      "min_target_p_desired>=0.90": true,
+      "max_target_p_source<=0.01": true,
+      "min_candidate_mass>=0.99": true,
+      "retained_strict_accuracy==1.0": true,
+      "sibling_strict_accuracy==1.0": true,
+      "wrong_branch_rate==0": true,
+      "unparseable_outputs==0": true,
+      "multi_label_outputs==0": true
+    },
+    "strict_expected_accuracy": 1.0,
+    "retain_acc": 1.0,
+    "sibling_acc": null,
+    "sibling_ids": [],
+    "min_target_p_desired": 0.999471868430102,
+    "max_target_p_source": 3.177856232876533e-08,
+    "min_candidate_mass": 0.9992437742028367,
+    "wrong_branch_ids": [],
+    "unparseable_ids": [],
+    "multi_label_ids": []
+  },
+  "oracle_reevaluation_note": "G3.1 CPU re-evaluation: distances recomputed from stored candidate-label distributions; edited checkpoint and its metrics unchanged; families distinguish baseline-h fine-tuning references from fresh-init retraining references"
+}

@@ -1,19 +1,20 @@
 {
   "kind": "e2c_v3_method_baselines_report_v1",
   "dataset": "salmu",
+  "smoke": false,
   "produced_by": "scripts/e2c_v3_method_baselines.py",
-  "generated_at": "2026-09-07T21:46:00+00:00",
+  "generated_at": "2026-09-08T08:50:05+00:00",
   "provenance": {
-    "commit": "2cd3cb298f88db547500b17cb31dbf9268675505",
-    "runner_script_sha256": "c7eaea1a98e52a135c00df054fe8e62a3646d1cf19fa2002074a6ec6272aba81",
+    "commit": "2a580cd903245713f4e70a368299ddfe0b41cbe7",
+    "runner_script_sha256": "bb96767e98640df147064a13ab525bc74da45ce3cab75744438521467c5c549f",
     "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
     "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
     "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
-    "dirty": false,
+    "dirty": true,
     "dirty_executed_code": [],
     "clean_code_required": true,
-    "started_utc": "2026-09-07T17:50:21Z",
-    "device": "cuda:0"
+    "started_utc": "2026-09-08T08:50:05Z",
+    "device": "cpu"
   },
   "design": {
     "mb_manifest_sha256": "73ba7e86557b70aa6159e0e1ac311e775c50026463030529eceacaab3a6c49e2",
@@ -377,9 +378,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -389,7 +388,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "the pre-edit route h: nothing was trained for this row, it is the floor the others are measured against"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -519,9 +523,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_granularity_cell",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -531,6 +533,14 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "unavailable": "no oracle_results.json beside the checkpoint"
             }
           },
           "trainable_parameters": {
@@ -657,9 +667,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_granularity_cell",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -669,7 +677,13 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "aliased_to": "sft_target",
+            "why": "an alias row: it reports sft_target's weights and measurement, so it has no cost of its own and counting one would double-count the method"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -795,9 +809,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 2003.1,
-            "steps_requested": 500,
-            "steps_executed": 500,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -810,7 +822,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 2003.1,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -950,9 +966,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 611.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -965,7 +979,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 611.0,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -1098,9 +1116,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 693.4,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -1113,7 +1129,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 693.4,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -1239,9 +1259,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 707.2,
-            "steps_requested": 500,
-            "steps_executed": 500,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -1254,7 +1272,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 707.2,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -1406,9 +1428,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 693.2,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -1421,7 +1441,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 693.2,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -1555,9 +1579,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_matched_retrain_oracle",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -1567,6 +1589,21 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/salmu/oracles/matched_retrain_gx_sal_s_L1_00060576/oracle_results.json",
+              "family": "matched_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 5,
+              "seed": 17
             }
           },
           "trainable_parameters": {
@@ -1694,9 +1731,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_loo_retrain_oracle",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -1706,6 +1741,21 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/salmu/oracles/loo_retrain_gx_sal_s_L1_00060576/oracle_results.json",
+              "family": "loo_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 0,
+              "seed": 17
             }
           },
           "trainable_parameters": {
@@ -1838,9 +1888,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -1850,7 +1898,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -1999,9 +2052,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -2011,7 +2062,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -2161,9 +2217,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -2173,7 +2227,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -2332,9 +2391,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -2344,7 +2401,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "the pre-edit route h: nothing was trained for this row, it is the floor the others are measured against"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -2472,9 +2534,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_granularity_cell",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -2484,6 +2544,14 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "unavailable": "no oracle_results.json beside the checkpoint"
             }
           },
           "trainable_parameters": {
@@ -2608,9 +2676,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_granularity_cell",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -2620,7 +2686,13 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "aliased_to": "sft_target",
+            "why": "an alias row: it reports sft_target's weights and measurement, so it has no cost of its own and counting one would double-count the method"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -2744,9 +2816,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 1428.0,
-            "steps_requested": 500,
-            "steps_executed": 500,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -2759,7 +2829,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 1428.0,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -2888,9 +2962,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 575.6,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -2903,7 +2975,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 575.6,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -3032,9 +3108,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 634.3,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -3047,7 +3121,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 634.3,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -3171,9 +3249,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 635.9,
-            "steps_requested": 500,
-            "steps_executed": 500,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -3186,7 +3262,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 635.9,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -3336,9 +3416,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 650.8,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -3351,7 +3429,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 650.8,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -3482,9 +3564,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_matched_retrain_oracle",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -3494,6 +3574,21 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/salmu/oracles/matched_retrain_gx_sal_s_L2_00039880/oracle_results.json",
+              "family": "matched_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 5,
+              "seed": 17
             }
           },
           "trainable_parameters": {
@@ -3621,9 +3716,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_loo_retrain_oracle",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -3633,6 +3726,21 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/salmu/oracles/loo_retrain_gx_sal_s_L2_00039880/oracle_results.json",
+              "family": "loo_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 0,
+              "seed": 17
             }
           },
           "trainable_parameters": {
@@ -3765,9 +3873,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -3777,7 +3883,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -3926,9 +4037,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -3938,7 +4047,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -4087,9 +4201,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 1,
               "source_pairs": 1,
@@ -4099,7 +4211,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -4281,9 +4398,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -4293,7 +4408,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "the pre-edit route h: nothing was trained for this row, it is the floor the others are measured against"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -4440,9 +4560,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_granularity_cell",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -4452,6 +4570,14 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "unavailable": "no oracle_results.json beside the checkpoint"
             }
           },
           "trainable_parameters": {
@@ -4594,9 +4720,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_granularity_cell",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -4606,7 +4730,13 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "aliased_to": "sft_target",
+            "why": "an alias row: it reports sft_target's weights and measurement, so it has no cost of its own and counting one would double-count the method"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -4752,9 +4882,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 1445.1,
-            "steps_requested": 500,
-            "steps_executed": 500,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -4767,7 +4895,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 1445.1,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -4918,9 +5050,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 591.1,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -4933,7 +5063,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 591.1,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -5080,9 +5214,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 662.5,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -5095,7 +5227,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 662.5,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -5237,9 +5373,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 659.8,
-            "steps_requested": 500,
-            "steps_executed": 500,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -5252,7 +5386,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 659.8,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -5416,9 +5554,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 637.5,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "trained_here",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -5431,7 +5567,11 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 637.5,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -5580,9 +5720,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_matched_retrain_oracle",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -5592,6 +5730,21 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/salmu/oracles/matched_retrain_gx_sal_mix_0/oracle_results.json",
+              "family": "matched_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 5,
+              "seed": 17
             }
           },
           "trainable_parameters": {
@@ -5738,9 +5891,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "reused_loo_retrain_oracle",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -5750,6 +5901,21 @@
                 "source": 250,
                 "retain": 150
               }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/salmu/oracles/loo_retrain_gx_sal_mix_0/oracle_results.json",
+              "family": "loo_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 0,
+              "seed": 17
             }
           },
           "trainable_parameters": {
@@ -5902,9 +6068,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -5914,7 +6078,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -6085,9 +6254,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -6097,7 +6264,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -6269,9 +6441,7 @@
             "scope": "transformation targets only; refusal controls never contribute to this distance"
           },
           "training_time": {
-            "train_sec": 0.0,
-            "steps_requested": 500,
-            "steps_executed": null,
+            "weights_source": "baseline_route_unchanged",
             "items": {
               "target_pairs": 3,
               "source_pairs": 3,
@@ -6281,7 +6451,12 @@
                 "source": 250,
                 "retain": 150
               }
-            }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
           },
           "trainable_parameters": {
             "trainable_parameters": 1966080,
@@ -6392,6 +6567,8 @@
       "failed_criteria_union": [],
       "worst_delta_retrain_l2": 1.1237193751425092,
       "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 3,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6429,6 +6606,8 @@
       "failed_criteria_union": [],
       "worst_delta_retrain_l2": 1.1237193751425092,
       "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6471,6 +6650,8 @@
       ],
       "worst_delta_retrain_l2": 1.1237268941911847,
       "total_train_sec": 4876.2,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6516,6 +6697,8 @@
       ],
       "worst_delta_retrain_l2": -0.19891896184622992,
       "total_train_sec": 1777.7,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6553,6 +6736,8 @@
       "failed_criteria_union": [],
       "worst_delta_retrain_l2": 1.123728743911717,
       "total_train_sec": 1990.2,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6590,6 +6775,8 @@
       "failed_criteria_union": [],
       "worst_delta_retrain_l2": 1.1237273041142433,
       "total_train_sec": 2002.9,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6635,6 +6822,8 @@
       ],
       "worst_delta_retrain_l2": null,
       "total_train_sec": 1981.5,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6672,6 +6861,8 @@
       "failed_criteria_union": [],
       "worst_delta_retrain_l2": 1.1237289192390418,
       "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 3,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6721,6 +6912,8 @@
       ],
       "worst_delta_retrain_l2": -0.47998688849177806,
       "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6764,6 +6957,8 @@
       ],
       "worst_delta_retrain_l2": -0.5361153552953195,
       "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6808,6 +7003,8 @@
       ],
       "worst_delta_retrain_l2": -0.33126596199777725,
       "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
       "trainable_parameters": {
         "trainable_parameters": 1966080,
         "total_parameters": 9411779824,
@@ -6853,10 +7050,15 @@
     ]
   },
   "archive": {
-    "release_dir": "releases/e2c_methodbaselines_salmu_2cd3cb2",
+    "release_dir": "releases/e2c_methodbaselines_salmu_2a580cd",
     "hf_upload_ok": true,
-    "hf_revision": "dedcf32a61f8696122cc1bffaa964b533c9bef81",
-    "n_files": 15
+    "hf_revision": "80491cfddbeca6b0886e6ce87ce976cfdf83256a",
+    "n_files": 15,
+    "report_archived": {
+      "file": "method_baselines_salmu.json",
+      "sha256": "e74ff298c27f80d6b15dc19fa90dafc2f2f491b977479eb9e2006896de61695f",
+      "note": "this run's report as written BEFORE its own archive block was filled in: an archived report cannot carry the revision it is archived under"
+    }
   },
-  "elapsed_sec": 14138.8
+  "elapsed_sec": 0.4
 }

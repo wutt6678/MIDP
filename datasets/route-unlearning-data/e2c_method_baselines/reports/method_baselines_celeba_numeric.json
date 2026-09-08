@@ -1,0 +1,4811 @@
+{
+  "kind": "e2c_v3_method_baselines_report_v1",
+  "dataset": "celeba_numeric",
+  "smoke": false,
+  "produced_by": "scripts/e2c_v3_method_baselines.py",
+  "generated_at": "2026-09-08T08:54:34+00:00",
+  "provenance": {
+    "commit": "2a580cd903245713f4e70a368299ddfe0b41cbe7",
+    "runner_script_sha256": "bb96767e98640df147064a13ab525bc74da45ce3cab75744438521467c5c549f",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "dirty": true,
+    "dirty_executed_code": [],
+    "clean_code_required": true,
+    "started_utc": "2026-09-08T08:54:33Z",
+    "device": "cpu"
+  },
+  "design": {
+    "mb_manifest_sha256": "616ca46091fc75d7881187aa595e85ae5e89a58de46b11f57ed1694a78701370",
+    "edit_seed": 17,
+    "rep_set_policy": "one representative per transformation TYPE (the same representatives GX2B/GX2S used); the full 147-cell matrix is deliberately NOT multiplied out before viable methods are identified",
+    "budget_policy": {
+      "identical_across_trainable_methods": [
+        "target pairs and their repeat",
+        "source pairs and their repeat",
+        "retain pairs and their repeat",
+        "steps",
+        "warmup",
+        "lr",
+        "edit seed",
+        "LoRA configuration",
+        "initialization (the frozen baseline route h, loaded fail-closed before every method)"
+      ],
+      "may_differ": [
+        "the objective and which pair set feeds which side of it"
+      ],
+      "sanctioned_exception": {
+        "rows": [
+          "matched_retrain",
+          "loo_retrain"
+        ],
+        "reason": "fresh-retrain oracles keep their own frozen protocol (3000/200/2e-5, target x5, retain x50, fresh LoRA init, seed 17); they are references for the distance metric, not budget-matched competitors, and every row records its own recipe so the difference is never implicit"
+      }
+    },
+    "methods": {
+      "sft_target": {
+        "label": "direct supervised fine-tuning (frozen cell E)",
+        "objective": "teacher-forced CE descent on target+retain pairs",
+        "trainer": "reuse_granularity_cell",
+        "ascent_set": null,
+        "descent_set": [
+          "target",
+          "retain"
+        ],
+        "budget": "edit",
+        "trains": false,
+        "note": "the existing seed-17 edited cell checkpoint is reused after hash validation and re-scored by this runner",
+        "installs_target": true,
+        "budget_mismatch_ok": false
+      },
+      "cf_relabel": {
+        "label": "counterfactual supervised relabeling",
+        "objective": "teacher-forced CE descent toward the counterfactual label",
+        "trainer": "alias",
+        "aliased_to": "sft_target",
+        "ascent_set": null,
+        "descent_set": [
+          "target",
+          "retain"
+        ],
+        "budget": "edit",
+        "trains": false,
+        "note": "for a transformation target the counterfactual label IS the requested coarser label, so CF and direct SFT coincide by construction; recorded as an alias, never as independent evidence",
+        "installs_target": true,
+        "budget_mismatch_ok": false
+      },
+      "gd_distribution": {
+        "label": "GD distribution matching toward the coarser label",
+        "objective": "KL(one-hot(target) || normalized full-sequence candidate scores) + retain descent",
+        "trainer": "mb.train_gd_target",
+        "ascent_set": null,
+        "descent_set": [
+          "retain"
+        ],
+        "distribution_set": "target",
+        "anchor_set": null,
+        "budget": "edit",
+        "trains": true,
+        "note": "full-sequence label scores, batched; the refusal variant's first-token matching cannot express a bin transformation because '15 years' and the 15-19 bin share a first token",
+        "installs_target": true,
+        "budget_mismatch_ok": false
+      },
+      "ga_retain_descent": {
+        "label": "gradient ascent on the source + retain descent",
+        "objective": "ascent on the source association, descent on retain+target",
+        "trainer": "rv.train_ga",
+        "ascent_set": "source",
+        "descent_set": [
+          "retain",
+          "target"
+        ],
+        "anchor_set": null,
+        "budget": "edit",
+        "trains": true,
+        "note": "rv.train_ga as corrected in RV: ascent on the forget side only, so retention is genuinely trained",
+        "installs_target": true,
+        "budget_mismatch_ok": false
+      },
+      "npo": {
+        "label": "Negative Preference Optimization vs the pre-edit reference",
+        "objective": "-log sigmoid(beta * (loss_theta - loss_ref)) on the source association + 0.1 * retain/target descent",
+        "trainer": "rv.train_npo",
+        "beta": 1.0,
+        "ascent_set": "source",
+        "descent_set": [
+          "retain",
+          "target"
+        ],
+        "anchor_set": null,
+        "budget": "edit",
+        "trains": true,
+        "note": "beta frozen at the RV3 value; reference = pre-edit route",
+        "installs_target": true,
+        "budget_mismatch_ok": false
+      },
+      "kl_anchored_edit": {
+        "label": "KL-anchored editing (descent + anchor)",
+        "objective": "CE descent on target+retain + beta_kl * KL(pi_theta || pi_ref) on retain prompts",
+        "trainer": "mb.train_kl_anchored_edit",
+        "beta_kl": 0.5,
+        "ascent_set": null,
+        "descent_set": [
+          "target",
+          "retain"
+        ],
+        "anchor_set": [
+          "retain"
+        ],
+        "budget": "edit",
+        "trains": true,
+        "note": "the transformation reading of 'KL-anchored editing': the anchor bounds drift while the descent installs the label",
+        "installs_target": true,
+        "budget_mismatch_ok": false
+      },
+      "kl_ascent_anchor": {
+        "label": "rv.train_kl as shipped for deletion (ascent + anchor)",
+        "objective": "ascent on the source association + beta_kl * KL(pi_theta || pi_ref) on the retain set, and no CE descent anywhere",
+        "trainer": "rv.train_kl",
+        "beta_kl": 0.5,
+        "ascent_set": "source",
+        "descent_set": [],
+        "anchor_set": [
+          "retain"
+        ],
+        "budget": "edit",
+        "trains": true,
+        "note": "kept as its own row: it has NO descent term, so it cannot install a coarser label -- measured, not asserted",
+        "installs_target": false,
+        "budget_mismatch_ok": false
+      },
+      "prompt_only": {
+        "label": "prompting-only policy (no weight change)",
+        "objective": "none: frozen baseline route under instruction policies",
+        "trainer": "prompt",
+        "ascent_set": null,
+        "descent_set": [],
+        "budget": "none",
+        "trains": false,
+        "note": "retention and sibling numbers are 1.0 BY CONSTRUCTION (weights untouched) and are never presented as a method advantage",
+        "installs_target": false,
+        "budget_mismatch_ok": false
+      },
+      "matched_retrain": {
+        "label": "fresh matched retraining (oracle)",
+        "objective": "fresh-LoRA supervised training on target+retain with the original route protocol",
+        "trainer": "reuse_matched_retrain_oracle",
+        "ascent_set": null,
+        "descent_set": [
+          "target",
+          "retain"
+        ],
+        "budget": "oracle",
+        "trains": false,
+        "note": "the existing matched_retrain oracle checkpoint is reused; 3000/200/2e-5 is NOT the edit budget and is flagged.  This is the WEIGHTED matched reference (target x5) every existing Delta_retrain number was measured against; whether the reading survives WITHOUT the boost is GX2B's question and is not re-litigated here",
+        "installs_target": true,
+        "budget_mismatch_ok": true
+      }
+    },
+    "references": {
+      "baseline_route": {
+        "label": "pre-edit baseline route h (floor)",
+        "trainer": "reuse_baseline_route",
+        "budget": "none",
+        "trains": false,
+        "note": "the association route before any edit; no target installed",
+        "installs_target": false,
+        "budget_mismatch_ok": false
+      },
+      "loo_retrain": {
+        "label": "fresh leave-one-out retraining (deletion reference)",
+        "trainer": "reuse_loo_retrain_oracle",
+        "budget": "oracle",
+        "trains": false,
+        "note": "the reference Delta_retrain is measured against",
+        "installs_target": false,
+        "budget_mismatch_ok": true
+      }
+    },
+    "required_metrics": [
+      "transformation_success",
+      "source_label_suppression",
+      "retention",
+      "sibling_preservation",
+      "wrong_branch_rate",
+      "candidate_validity",
+      "matched_vs_loo_oracle_distance",
+      "training_time",
+      "trainable_parameters"
+    ],
+    "reported_metrics": [
+      "transformation_success",
+      "source_label_suppression",
+      "retention",
+      "sibling_preservation",
+      "wrong_branch_rate",
+      "candidate_validity",
+      "matched_vs_loo_oracle_distance",
+      "training_time",
+      "trainable_parameters",
+      "frozen_cell_criteria"
+    ],
+    "scoring_limitation": {
+      "missing_termination_event": true,
+      "candidate_mass_is": "sum of normalized full-sequence label scores WITHOUT a termination event; overlapping candidate strings can sum above 1",
+      "consequence": "normalized candidate-score comparisons and gated distances remain comparable across methods and to every existing artifact, but min_candidate_mass>=0.99 is a threshold on a SCORE SUM, not on a probability",
+      "same_scorer_as": "scripts/e2c_v3_research_validity.py full_sequence_label_probs + build_candidate_summary, the frozen scorer every other artifact uses"
+    },
+    "prompt_policy_roles": [
+      "canonical_control",
+      "coarsen_instruction",
+      "rule_statement",
+      "fewshot_other_branch"
+    ],
+    "pass_criteria_reference": {
+      "strict_expected_accuracy": 1.0,
+      "min_target_p_desired": 0.9,
+      "max_target_p_source": 0.01,
+      "min_candidate_mass": 0.99,
+      "retained_strict_accuracy": 1.0,
+      "sibling_strict_accuracy": 1.0,
+      "max_wrong_branch_rate": 0.0,
+      "max_unparseable_outputs": 0,
+      "max_multi_label_outputs": 0,
+      "e2e_policy": "unconditional E2E is NOT a pass requirement where the frozen route failed its held-out gate; association and routing conclusions are gated separately"
+    }
+  },
+  "cache_validation": {
+    "policy": {
+      "required_to_match": [
+        "kind",
+        "dataset",
+        "set_id",
+        "seed",
+        "row_id",
+        "recipe",
+        "checkpoint_sha256",
+        "provenance.mb_manifest_sha256",
+        "provenance.shared_scoring_script_sha256"
+      ],
+      "recorded_not_required": [
+        "provenance.runner_script_sha256",
+        "provenance.git_commit",
+        "train_sec"
+      ],
+      "on_mismatch": "quarantine as <stem>.stale-<sha8(reasons)>.json and rerun the row; a stale row is never aggregated"
+    },
+    "stale_records_quarantined": [],
+    "cached_rows_rejected_at_aggregation": []
+  },
+  "comparison": {
+    "gx_num_s_exact_to_narrow_Y02": {
+      "set_id": "gx_num_s_exact_to_narrow_Y02",
+      "mode": "single_exact_to_narrow",
+      "transformation_targets": [
+        "01"
+      ],
+      "refusal_controls": [],
+      "n_rows_expected": 13,
+      "n_rows_evaluated": 13,
+      "table": [
+        {
+          "row_id": "baseline_route",
+          "row_type": "reference",
+          "label": "pre-edit baseline route h (floor)",
+          "objective": null,
+          "weights_source": "baseline_route",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "01": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 0.9999899865198352,
+            "any_hard_leak": true,
+            "per_target_p_source": {
+              "01": 0.9999899865198352
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 23,
+              "under_abstraction": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9996615287267646,
+            "mean_candidate_score_sum": 0.9999085360214282,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.414205829356498,
+            "worst_l2_loo_retrain": 1.4122513409547097,
+            "mean_delta_retrain_l2": -0.001954488401788357,
+            "worst_delta_retrain_l2": -0.001954488401788357,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 1.414205829356498,
+                "l2_loo_retrain": 1.4122513409547097,
+                "l2_matched_finetune": 1.4142129860094594,
+                "l2_loo_finetune": 5.230455135696462e-08,
+                "delta_retrain_l2": -0.001954488401788357,
+                "delta_ft_l2": -1.414212933704908,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "the pre-edit route h: nothing was trained for this row, it is the floor the others are measured against"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "max_target_p_source<=0.01",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": false,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "sft_target",
+          "row_type": "method",
+          "label": "direct supervised fine-tuning (frozen cell E)",
+          "objective": "teacher-forced CE descent on target+retain pairs",
+          "weights_source": "reused_granularity_cell",
+          "budget": "edit",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "01": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 3.850722642961737e-09,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 3.850722642961737e-09
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "19",
+            "worst_retained_p_expected": 0.9996486903582203
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9996566972674993,
+            "mean_candidate_score_sum": 0.9999090619210196,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 7.685306842418116e-06,
+            "worst_l2_loo_retrain": 1.4123192986922444,
+            "mean_delta_retrain_l2": 1.412311613385402,
+            "worst_delta_retrain_l2": 1.412311613385402,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 7.685306842418116e-06,
+                "l2_loo_retrain": 1.4123192986922444,
+                "l2_matched_finetune": 5.330151091018907e-07,
+                "l2_loo_finetune": 1.4142135480708975,
+                "delta_retrain_l2": 1.412311613385402,
+                "delta_ft_l2": 1.4142130150557883,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_granularity_cell",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "unavailable": "no oracle_results.json beside the checkpoint"
+            }
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "cf_relabel",
+          "row_type": "alias",
+          "label": "counterfactual supervised relabeling",
+          "objective": "teacher-forced CE descent toward the counterfactual label",
+          "weights_source": "reused_granularity_cell",
+          "budget": "edit",
+          "trains": false,
+          "aliased_to": "sft_target",
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "01": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 3.850722642961737e-09,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 3.850722642961737e-09
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "19",
+            "worst_retained_p_expected": 0.9996486903582203
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9996566972674993,
+            "mean_candidate_score_sum": 0.9999090619210196,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 7.685306842418116e-06,
+            "worst_l2_loo_retrain": 1.4123192986922444,
+            "mean_delta_retrain_l2": 1.412311613385402,
+            "worst_delta_retrain_l2": 1.412311613385402,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 7.685306842418116e-06,
+                "l2_loo_retrain": 1.4123192986922444,
+                "l2_matched_finetune": 5.330151091018907e-07,
+                "l2_loo_finetune": 1.4142135480708975,
+                "delta_retrain_l2": 1.412311613385402,
+                "delta_ft_l2": 1.4142130150557883,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_granularity_cell",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "aliased_to": "sft_target",
+            "why": "an alias row: it reports sft_target's weights and measurement, so it has no cost of its own and counting one would double-count the method"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "gd_distribution",
+          "row_type": "method",
+          "label": "GD distribution matching toward the coarser label",
+          "objective": "KL(one-hot(target) || normalized full-sequence candidate scores) + retain descent",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "01": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 1.9554221799301865e-08,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 1.9554221799301865e-08
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "09",
+            "worst_retained_p_expected": 0.9997183605548848
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9443529502964474,
+            "mean_candidate_score_sum": 0.9976050090206764,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 7.665727566422767e-06,
+            "worst_l2_loo_retrain": 1.412319291003722,
+            "mean_delta_retrain_l2": 1.4123116252761556,
+            "worst_delta_retrain_l2": 1.4123116252761556,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 7.665727566422767e-06,
+                "l2_loo_retrain": 1.412319291003722,
+                "l2_matched_finetune": 5.147574739879813e-07,
+                "l2_loo_finetune": 1.4142135284688206,
+                "delta_retrain_l2": 1.4123116252761556,
+                "delta_ft_l2": 1.4142130137113467,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 2537.1,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "ga_retain_descent",
+          "row_type": "method",
+          "label": "gradient ascent on the source + retain descent",
+          "objective": "ascent on the source association, descent on retain+target",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "01": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 8.709631198059309e-141,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 8.709631198059309e-141
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 0.8260869565217391,
+            "drifted_ids": [
+              "00",
+              "02",
+              "14",
+              "21"
+            ],
+            "worst_retained_identity": "00",
+            "worst_retained_p_expected": 0.009951877408974697
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.041666666666666664,
+            "ids": [
+              "14"
+            ],
+            "classification_counts": {
+              "unparseable": 4,
+              "correct": 19,
+              "wrong_branch": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [
+              "00",
+              "01",
+              "02",
+              "21"
+            ],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.16666666666666666,
+            "min_candidate_score_sum": 1.0909832925300963e-06,
+            "mean_candidate_score_sum": 0.8193363160826016,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": null,
+            "worst_l2_loo_retrain": null,
+            "mean_delta_retrain_l2": null,
+            "worst_delta_retrain_l2": null,
+            "closer_to_matched_than_loo": null,
+            "n_targets": 1,
+            "n_targets_reliable": 0,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": null,
+                "l2_loo_retrain": null,
+                "l2_matched_finetune": null,
+                "l2_loo_finetune": null,
+                "delta_retrain_l2": null,
+                "delta_ft_l2": null,
+                "delta_retrain_reliable": false,
+                "reason_matched_retrain": "candidate mass too small to renormalize (model=1.091e-06, oracle=1.000e+00, threshold=1.000e-02); output lies outside the recognized label set, distance not established",
+                "reason_loo_retrain": "candidate mass too small to renormalize (model=1.091e-06, oracle=9.040e-01, threshold=1.000e-02); output lies outside the recognized label set, distance not established"
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 609.7,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "retained_strict_accuracy==1.0",
+              "strict_expected_accuracy==1.0",
+              "unparseable_outputs==0",
+              "wrong_branch_rate==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": false,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": false,
+              "unparseable_outputs==0": false,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "npo",
+          "row_type": "method",
+          "label": "Negative Preference Optimization vs the pre-edit reference",
+          "objective": "-log sigmoid(beta * (loss_theta - loss_ref)) on the source association + 0.1 * retain/target descent",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "01": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 4.465660947180028e-24,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 4.465660947180028e-24
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9984290081682514
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9987576994065035,
+            "mean_candidate_score_sum": 0.9996510829307672,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 7.695237533403078e-06,
+            "worst_l2_loo_retrain": 1.4123193058921748,
+            "mean_delta_retrain_l2": 1.4123116106546414,
+            "worst_delta_retrain_l2": 1.4123116106546414,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 7.695237533403078e-06,
+                "l2_loo_retrain": 1.4123193058921748,
+                "l2_matched_finetune": 5.438120013256531e-07,
+                "l2_loo_finetune": 1.414213557978655,
+                "delta_retrain_l2": 1.4123116106546414,
+                "delta_ft_l2": 1.4142130141666536,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 695.4,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "kl_anchored_edit",
+          "row_type": "method",
+          "label": "KL-anchored editing (descent + anchor)",
+          "objective": "CE descent on target+retain + beta_kl * KL(pi_theta || pi_ref) on retain prompts",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "01": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 5.714669830578664e-07,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 5.714669830578664e-07
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9998376551834914
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9998405846508731,
+            "mean_candidate_score_sum": 0.9999449524271244,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 6.88947380699208e-06,
+            "worst_l2_loo_retrain": 1.4123189036590043,
+            "mean_delta_retrain_l2": 1.4123120141851973,
+            "worst_delta_retrain_l2": 1.4123120141851973,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 6.88947380699208e-06,
+                "l2_loo_retrain": 1.4123189036590043,
+                "l2_matched_finetune": 2.7873866474656085e-07,
+                "l2_loo_finetune": 1.414212752191195,
+                "delta_retrain_l2": 1.4123120141851973,
+                "delta_ft_l2": 1.41421247345253,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 731.5,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "kl_ascent_anchor",
+          "row_type": "method",
+          "label": "rv.train_kl as shipped for deletion (ascent + anchor)",
+          "objective": "ascent on the source association + beta_kl * KL(pi_theta || pi_ref) on the retain set, and no CE descent anywhere",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "01": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 2.6630161029078893e-147,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 2.6630161029078893e-147
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 0.043478260869565216,
+            "drifted_ids": [
+              "00",
+              "02",
+              "03",
+              "04",
+              "05",
+              "06",
+              "07",
+              "08",
+              "09",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15",
+              "16",
+              "17",
+              "18",
+              "19",
+              "21",
+              "22",
+              "23"
+            ],
+            "worst_retained_identity": "00",
+            "worst_retained_p_expected": 7.52400009967926e-88
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "unparseable": 23,
+              "correct": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [
+              "00",
+              "01",
+              "02",
+              "03",
+              "04",
+              "05",
+              "06",
+              "07",
+              "08",
+              "09",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15",
+              "16",
+              "17",
+              "18",
+              "19",
+              "21",
+              "22",
+              "23"
+            ],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.9583333333333334,
+            "min_candidate_score_sum": 3.4672597842801182e-18,
+            "mean_candidate_score_sum": 0.052796365386970856,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": null,
+            "worst_l2_loo_retrain": null,
+            "mean_delta_retrain_l2": null,
+            "worst_delta_retrain_l2": null,
+            "closer_to_matched_than_loo": null,
+            "n_targets": 1,
+            "n_targets_reliable": 0,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": null,
+                "l2_loo_retrain": null,
+                "l2_matched_finetune": null,
+                "l2_loo_finetune": null,
+                "delta_retrain_l2": null,
+                "delta_ft_l2": null,
+                "delta_retrain_reliable": false,
+                "reason_matched_retrain": "candidate mass too small to renormalize (model=3.467e-18, oracle=1.000e+00, threshold=1.000e-02); output lies outside the recognized label set, distance not established",
+                "reason_loo_retrain": "candidate mass too small to renormalize (model=3.467e-18, oracle=9.040e-01, threshold=1.000e-02); output lies outside the recognized label set, distance not established"
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 854.0,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "retained_strict_accuracy==1.0",
+              "strict_expected_accuracy==1.0",
+              "unparseable_outputs==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": false,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": false,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "matched_retrain",
+          "row_type": "method",
+          "label": "fresh matched retraining (oracle)",
+          "objective": "fresh-LoRA supervised training on target+retain with the original route protocol",
+          "weights_source": "reused_matched_retrain_oracle",
+          "budget": "oracle",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "01": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 5.422198599420551e-06,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 5.422198599420551e-06
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9992955335868622
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9994559629690871,
+            "mean_candidate_score_sum": 0.9998697071465364,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 0.0,
+            "worst_l2_loo_retrain": 1.4123154394113708,
+            "mean_delta_retrain_l2": 1.4123154394113708,
+            "worst_delta_retrain_l2": 1.4123154394113708,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 0.0,
+                "l2_loo_retrain": 1.4123154394113708,
+                "l2_matched_finetune": 7.156850116223486e-06,
+                "l2_loo_finetune": 1.414205862818176,
+                "delta_retrain_l2": 1.4123154394113708,
+                "delta_ft_l2": 1.4141987059680596,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_matched_retrain_oracle",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/celeba_numeric/oracles/matched_retrain_gx_num_s_exact_to_narrow_Y02/oracle_results.json",
+              "family": "matched_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 5,
+              "seed": 17
+            }
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "loo_retrain",
+          "row_type": "reference",
+          "label": "fresh leave-one-out retraining (deletion reference)",
+          "objective": null,
+          "weights_source": "reused_loo_retrain_oracle",
+          "budget": "oracle",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "01": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 8.673116201651715e-05,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 8.673116201651715e-05
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9994669550610341
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 23,
+              "under_abstraction": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9040176200755554,
+            "mean_candidate_score_sum": 0.9959125037151219,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.4123154394113708,
+            "worst_l2_loo_retrain": 0.0,
+            "mean_delta_retrain_l2": -1.4123154394113708,
+            "worst_delta_retrain_l2": -1.4123154394113708,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 1.4123154394113708,
+                "l2_loo_retrain": 0.0,
+                "l2_matched_finetune": 1.412319012025221,
+                "l2_loo_finetune": 1.4122513745030487,
+                "delta_retrain_l2": -1.4123154394113708,
+                "delta_ft_l2": -6.763752217220365e-05,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_loo_retrain_oracle",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/celeba_numeric/oracles/loo_retrain_gx_num_s_exact_to_narrow_Y02/oracle_results.json",
+              "family": "loo_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 0,
+              "seed": 17
+            }
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "prompt_only__coarsen_instruction",
+          "row_type": "prompt",
+          "label": "prompting-only policy (no weight change)",
+          "objective": "none: frozen baseline route under instruction policies",
+          "weights_source": "baseline_route_unchanged",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "01": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 0.00013753787579639628,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 0.00013753787579639628
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.041666666666666664,
+            "ids": [
+              "01"
+            ],
+            "classification_counts": {
+              "correct": 23,
+              "wrong_branch": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.2617558417913989,
+            "mean_candidate_score_sum": 0.9691487779143831,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.2486150800717728,
+            "worst_l2_loo_retrain": 1.3043759152904144,
+            "mean_delta_retrain_l2": 0.05576083521864161,
+            "worst_delta_retrain_l2": 0.05576083521864161,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 1.2486150800717728,
+                "l2_loo_retrain": 1.3043759152904144,
+                "l2_matched_finetune": 1.2486188241407696,
+                "l2_loo_finetune": 1.306084505792433,
+                "delta_retrain_l2": 0.05576083521864161,
+                "delta_ft_l2": 0.057465681651663436,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route_unchanged",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0",
+              "wrong_branch_rate==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": false,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": {
+            "role": "coarsen_instruction",
+            "mode": "(a) primary: the policy is applied to the transformed members only; every other member keeps the canonical prompt",
+            "texts": {
+              "01": "Identity code: GRN_01. Generate the alias for this identity as the 5-year experience band that contains their exact years of experience, instead of the exact number of years."
+            }
+          },
+          "over_application_probe": {
+            "mode": "over-application probe: the policy applied to every member, hard generation only; descriptive, never part of the primary comparison",
+            "count_semantics": "emits_own_label and emits_coarse_label are NOT exclusive: a member whose baseline label already sits at the requested resolution satisfies both without changing at all, so over-application is read from changed_vs_canonical_prompt, never from a raw count",
+            "compared_against": "the baseline_route row's strict parse of the same identity under the canonical prompt, at identical weights",
+            "n_members": 24,
+            "n_non_target_members": 23,
+            "non_target_emitting_own_label": 1,
+            "non_target_emitting_their_own_coarse_label": 1,
+            "non_target_other_or_unparseable": 22,
+            "non_target_coarse_label_outside_vocabulary": 4,
+            "non_target_changed_vs_canonical_prompt": 22
+          }
+        },
+        {
+          "row_id": "prompt_only__rule_statement",
+          "row_type": "prompt",
+          "label": "prompting-only policy (no weight change)",
+          "objective": "none: frozen baseline route under instruction policies",
+          "weights_source": "baseline_route_unchanged",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "01": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 0.0009779267733028972,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 0.0009779267733028972
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 23,
+              "unparseable": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [
+              "01"
+            ],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.041666666666666664,
+            "min_candidate_score_sum": 0.15116372121503005,
+            "mean_candidate_score_sum": 0.9645407728903677,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.0771044096284563,
+            "worst_l2_loo_retrain": 1.155203423670878,
+            "mean_delta_retrain_l2": 0.07809901404242159,
+            "worst_delta_retrain_l2": 0.07809901404242159,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 1.0771044096284563,
+                "l2_loo_retrain": 1.155203423670878,
+                "l2_matched_finetune": 1.0771086933402823,
+                "l2_loo_finetune": 1.1535304956632184,
+                "delta_retrain_l2": 0.07809901404242159,
+                "delta_ft_l2": 0.07642180232293616,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route_unchanged",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0",
+              "unparseable_outputs==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": false,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": {
+            "role": "rule_statement",
+            "mode": "(a) primary: the policy is applied to the transformed members only; every other member keeps the canonical prompt",
+            "texts": {
+              "01": "Identity code: GRN_01. Policy: years of experience are reported as the frozen 5-year band containing the exact value (bin edges are multiples of 5 from the schema anchor), not as the exact value. Generate the alias."
+            }
+          },
+          "over_application_probe": {
+            "mode": "over-application probe: the policy applied to every member, hard generation only; descriptive, never part of the primary comparison",
+            "count_semantics": "emits_own_label and emits_coarse_label are NOT exclusive: a member whose baseline label already sits at the requested resolution satisfies both without changing at all, so over-application is read from changed_vs_canonical_prompt, never from a raw count",
+            "compared_against": "the baseline_route row's strict parse of the same identity under the canonical prompt, at identical weights",
+            "n_members": 24,
+            "n_non_target_members": 23,
+            "non_target_emitting_own_label": 0,
+            "non_target_emitting_their_own_coarse_label": 3,
+            "non_target_other_or_unparseable": 20,
+            "non_target_coarse_label_outside_vocabulary": 4,
+            "non_target_changed_vs_canonical_prompt": 23
+          }
+        },
+        {
+          "row_id": "prompt_only__fewshot_other_branch",
+          "row_type": "prompt",
+          "label": "prompting-only policy (no weight change)",
+          "objective": "none: frozen baseline route under instruction policies",
+          "weights_source": "baseline_route_unchanged",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "01": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 3.516900593257398e-06,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "01": 3.516900593257398e-06
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 23,
+              "unparseable": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [
+              "01"
+            ],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.041666666666666664,
+            "min_candidate_score_sum": 0.07643113998308793,
+            "mean_candidate_score_sum": 0.9614269153390368,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.2146812069684003,
+            "worst_l2_loo_retrain": 1.2188134670946076,
+            "mean_delta_retrain_l2": 0.004132260126207266,
+            "worst_delta_retrain_l2": 0.004132260126207266,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "01": {
+                "l2_matched_retrain": 1.2146812069684003,
+                "l2_loo_retrain": 1.2188134670946076,
+                "l2_matched_finetune": 1.2146853244143248,
+                "l2_loo_finetune": 1.2218090492616012,
+                "delta_retrain_l2": 0.004132260126207266,
+                "delta_ft_l2": 0.007123724847276414,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route_unchanged",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0",
+              "unparseable_outputs==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": false,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": {
+            "role": "fewshot_other_branch",
+            "mode": "(a) primary: the policy is applied to the transformed members only; every other member keeps the canonical prompt",
+            "texts": {
+              "01": "Map each identity code to its 5-year experience band.\nGRN_00 -> 10\u201314 years\nGRN_03 -> 20\u201324 years\nIdentity code: GRN_01. Generate the alias."
+            }
+          },
+          "over_application_probe": {
+            "mode": "over-application probe: the policy applied to every member, hard generation only; descriptive, never part of the primary comparison",
+            "count_semantics": "emits_own_label and emits_coarse_label are NOT exclusive: a member whose baseline label already sits at the requested resolution satisfies both without changing at all, so over-application is read from changed_vs_canonical_prompt, never from a raw count",
+            "compared_against": "the baseline_route row's strict parse of the same identity under the canonical prompt, at identical weights",
+            "n_members": 24,
+            "n_non_target_members": 23,
+            "non_target_emitting_own_label": 0,
+            "non_target_emitting_their_own_coarse_label": 1,
+            "non_target_other_or_unparseable": 22,
+            "non_target_coarse_label_outside_vocabulary": 4,
+            "non_target_changed_vs_canonical_prompt": 23
+          }
+        }
+      ]
+    },
+    "gx_num_s_exact_to_broad_Y04": {
+      "set_id": "gx_num_s_exact_to_broad_Y04",
+      "mode": "single_exact_to_broad",
+      "transformation_targets": [
+        "03"
+      ],
+      "refusal_controls": [],
+      "n_rows_expected": 13,
+      "n_rows_evaluated": 13,
+      "table": [
+        {
+          "row_id": "baseline_route",
+          "row_type": "reference",
+          "label": "pre-edit baseline route h (floor)",
+          "objective": null,
+          "weights_source": "baseline_route",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "03": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 0.9998477871762991,
+            "any_hard_leak": true,
+            "per_target_p_source": {
+              "03": 0.9998477871762991
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 23,
+              "under_abstraction": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9996615287267646,
+            "mean_candidate_score_sum": 0.9999085360214282,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.4141469863119207,
+            "worst_l2_loo_retrain": 1.2506199779465266,
+            "mean_delta_retrain_l2": -0.16352700836539413,
+            "worst_delta_retrain_l2": -0.16352700836539413,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 1.4141469863119207,
+                "l2_loo_retrain": 1.2506199779465266,
+                "l2_matched_finetune": 1.4141408762274184,
+                "l2_loo_finetune": 7.400710674772622e-05,
+                "delta_retrain_l2": -0.16352700836539413,
+                "delta_ft_l2": -1.4140668691206706,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "the pre-edit route h: nothing was trained for this row, it is the floor the others are measured against"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "max_target_p_source<=0.01",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": false,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "sft_target",
+          "row_type": "method",
+          "label": "direct supervised fine-tuning (frozen cell E)",
+          "objective": "teacher-forced CE descent on target+retain pairs",
+          "weights_source": "reused_granularity_cell",
+          "budget": "edit",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "03": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 6.475084544596133e-07,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 6.475084544596133e-07
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9997398094183004
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9997573437548024,
+            "mean_candidate_score_sum": 0.9999229533295689,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 5.343467502983657e-05,
+            "worst_l2_loo_retrain": 1.2506614693532878,
+            "mean_delta_retrain_l2": 1.250608034678258,
+            "worst_delta_retrain_l2": 1.250608034678258,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 5.343467502983657e-05,
+                "l2_loo_retrain": 1.2506614693532878,
+                "l2_matched_finetune": 4.44323300167102e-05,
+                "l2_loo_finetune": 1.4141560943495572,
+                "delta_retrain_l2": 1.250608034678258,
+                "delta_ft_l2": 1.4141116620195406,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_granularity_cell",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "unavailable": "no oracle_results.json beside the checkpoint"
+            }
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "cf_relabel",
+          "row_type": "alias",
+          "label": "counterfactual supervised relabeling",
+          "objective": "teacher-forced CE descent toward the counterfactual label",
+          "weights_source": "reused_granularity_cell",
+          "budget": "edit",
+          "trains": false,
+          "aliased_to": "sft_target",
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "03": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 6.475084544596133e-07,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 6.475084544596133e-07
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9997398094183004
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9997573437548024,
+            "mean_candidate_score_sum": 0.9999229533295689,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 5.343467502983657e-05,
+            "worst_l2_loo_retrain": 1.2506614693532878,
+            "mean_delta_retrain_l2": 1.250608034678258,
+            "worst_delta_retrain_l2": 1.250608034678258,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 5.343467502983657e-05,
+                "l2_loo_retrain": 1.2506614693532878,
+                "l2_matched_finetune": 4.44323300167102e-05,
+                "l2_loo_finetune": 1.4141560943495572,
+                "delta_retrain_l2": 1.250608034678258,
+                "delta_ft_l2": 1.4141116620195406,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_granularity_cell",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "aliased_to": "sft_target",
+            "why": "an alias row: it reports sft_target's weights and measurement, so it has no cost of its own and counting one would double-count the method"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "gd_distribution",
+          "row_type": "method",
+          "label": "GD distribution matching toward the coarser label",
+          "objective": "KL(one-hot(target) || normalized full-sequence candidate scores) + retain descent",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "03": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 8.859843289810379e-11,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 8.859843289810379e-11
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9997494620775187
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.977210585296924,
+            "mean_candidate_score_sum": 0.9989879371415357,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 2.748864189160661e-07,
+            "worst_l2_loo_retrain": 1.2506932466888934,
+            "mean_delta_retrain_l2": 1.2506929718024744,
+            "worst_delta_retrain_l2": 1.2506929718024744,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 2.748864189160661e-07,
+                "l2_loo_retrain": 1.2506932466888934,
+                "l2_matched_finetune": 1.0210547333596588e-05,
+                "l2_loo_finetune": 1.4141846557807662,
+                "delta_retrain_l2": 1.2506929718024744,
+                "delta_ft_l2": 1.4141744452334326,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 1968.5,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "ga_retain_descent",
+          "row_type": "method",
+          "label": "gradient ascent on the source + retain descent",
+          "objective": "ascent on the source association, descent on retain+target",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "03": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 2.467829143694758e-98,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 2.467829143694758e-98
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 0.8695652173913043,
+            "drifted_ids": [
+              "05",
+              "06",
+              "10"
+            ],
+            "worst_retained_identity": "05",
+            "worst_retained_p_expected": 4.632242763255286e-06
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.041666666666666664,
+            "ids": [
+              "06"
+            ],
+            "classification_counts": {
+              "correct": 20,
+              "unparseable": 3,
+              "wrong_branch": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [
+              "03",
+              "05",
+              "10"
+            ],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.125,
+            "min_candidate_score_sum": 0.05757771329332901,
+            "mean_candidate_score_sum": 0.7916634725675156,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.189536580251816,
+            "worst_l2_loo_retrain": 0.9895575210279433,
+            "mean_delta_retrain_l2": -0.19997905922387282,
+            "worst_delta_retrain_l2": -0.19997905922387282,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 1.189536580251816,
+                "l2_loo_retrain": 0.9895575210279433,
+                "l2_matched_finetune": 1.189529307074069,
+                "l2_loo_finetune": 1.1895040897448055,
+                "delta_retrain_l2": -0.19997905922387282,
+                "delta_ft_l2": -2.5217329263416133e-05,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 668.5,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "retained_strict_accuracy==1.0",
+              "strict_expected_accuracy==1.0",
+              "unparseable_outputs==0",
+              "wrong_branch_rate==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": false,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": false,
+              "unparseable_outputs==0": false,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "npo",
+          "row_type": "method",
+          "label": "Negative Preference Optimization vs the pre-edit reference",
+          "objective": "-log sigmoid(beta * (loss_theta - loss_ref)) on the source association + 0.1 * retain/target descent",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "03": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 2.027423756523185e-23,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 2.027423756523185e-23
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "21",
+            "worst_retained_p_expected": 0.9983201492493651
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9980251750345573,
+            "mean_candidate_score_sum": 0.9994953452466923,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 0.0024315169575574174,
+            "worst_l2_loo_retrain": 1.2491648872215038,
+            "mean_delta_retrain_l2": 1.2467333702639463,
+            "worst_delta_retrain_l2": 1.2467333702639463,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 0.0024315169575574174,
+                "l2_loo_retrain": 1.2491648872215038,
+                "l2_matched_finetune": 0.002422167577396386,
+                "l2_loo_finetune": 1.412833168853074,
+                "delta_retrain_l2": 1.2467333702639463,
+                "delta_ft_l2": 1.4104110012756776,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 693.5,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "kl_anchored_edit",
+          "row_type": "method",
+          "label": "KL-anchored editing (descent + anchor)",
+          "objective": "CE descent on target+retain + beta_kl * KL(pi_theta || pi_ref) on retain prompts",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "03": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 9.42113626436559e-07,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 9.42113626436559e-07
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "21",
+            "worst_retained_p_expected": 0.9998387271640494
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9998622749983425,
+            "mean_candidate_score_sum": 0.9999468270870929,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 0.00011486951385789361,
+            "worst_l2_loo_retrain": 1.2506176415717347,
+            "mean_delta_retrain_l2": 1.2505027720578767,
+            "worst_delta_retrain_l2": 1.2505027720578767,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 0.00011486951385789361,
+                "l2_loo_retrain": 1.2506176415717347,
+                "l2_matched_finetune": 0.00010537528727190466,
+                "l2_loo_finetune": 1.414117125567775,
+                "delta_retrain_l2": 1.2505027720578767,
+                "delta_ft_l2": 1.414011750280503,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 686.7,
+            "steps_requested": 500,
+            "steps_executed": 500,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "kl_ascent_anchor",
+          "row_type": "method",
+          "label": "rv.train_kl as shipped for deletion (ascent + anchor)",
+          "objective": "ascent on the source association + beta_kl * KL(pi_theta || pi_ref) on the retain set, and no CE descent anywhere",
+          "weights_source": "trained_here",
+          "budget": "edit",
+          "trains": true,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "03": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 5.2151750117525146e-136,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 5.2151750117525146e-136
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 0.34782608695652173,
+            "drifted_ids": [
+              "05",
+              "06",
+              "07",
+              "09",
+              "10",
+              "11",
+              "12",
+              "13",
+              "15",
+              "16",
+              "17",
+              "19",
+              "21",
+              "22",
+              "23"
+            ],
+            "worst_retained_identity": "16",
+            "worst_retained_p_expected": 1.1395509102936994e-43
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.25,
+            "ids": [
+              "03",
+              "07",
+              "10",
+              "11",
+              "13",
+              "15"
+            ],
+            "classification_counts": {
+              "correct": 8,
+              "wrong_branch": 6,
+              "unparseable": 10
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [
+              "05",
+              "06",
+              "09",
+              "12",
+              "16",
+              "17",
+              "19",
+              "21",
+              "22",
+              "23"
+            ],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.4166666666666667,
+            "min_candidate_score_sum": 1.672726438483051e-10,
+            "mean_candidate_score_sum": 0.6488941002663028,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.4139822104683017,
+            "worst_l2_loo_retrain": 1.250431857982094,
+            "mean_delta_retrain_l2": -0.16355035248620764,
+            "worst_delta_retrain_l2": -0.16355035248620764,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 1.4139822104683017,
+                "l2_loo_retrain": 1.250431857982094,
+                "l2_matched_finetune": 1.4139760970154995,
+                "l2_loo_finetune": 1.4139549000076184,
+                "delta_retrain_l2": -0.16355035248620764,
+                "delta_ft_l2": -2.1197007881168517e-05,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "trained_here",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "target_item_count": 250,
+              "source_item_count": 250,
+              "retain_item_count": 3450,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 718.2,
+            "steps_requested": 500,
+            "steps_executed": null,
+            "timing_source": "measured_in_this_row"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "retained_strict_accuracy==1.0",
+              "strict_expected_accuracy==1.0",
+              "unparseable_outputs==0",
+              "wrong_branch_rate==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": false,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": false,
+              "unparseable_outputs==0": false,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "matched_retrain",
+          "row_type": "method",
+          "label": "fresh matched retraining (oracle)",
+          "objective": "fresh-LoRA supervised training on target+retain with the original route protocol",
+          "weights_source": "reused_matched_retrain_oracle",
+          "budget": "oracle",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 1.0,
+            "all_targets_strict": true,
+            "per_target_strict": {
+              "03": true
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 4.363374866061238e-09,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 4.363374866061238e-09
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9991025190430036
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 24
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.9991776551046816,
+            "mean_candidate_score_sum": 0.9998429087348915,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 0.0,
+            "worst_l2_loo_retrain": 1.250693436189935,
+            "mean_delta_retrain_l2": 1.250693436189935,
+            "worst_delta_retrain_l2": 1.250693436189935,
+            "closer_to_matched_than_loo": true,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 0.0,
+                "l2_loo_retrain": 1.250693436189935,
+                "l2_matched_finetune": 1.048156294560774e-05,
+                "l2_loo_finetune": 1.4141848203548182,
+                "delta_retrain_l2": 1.250693436189935,
+                "delta_ft_l2": 1.4141743387918726,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_matched_retrain_oracle",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/celeba_numeric/oracles/matched_retrain_gx_num_s_exact_to_broad_Y04/oracle_results.json",
+              "family": "matched_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 5,
+              "seed": 17
+            }
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": true,
+            "failed_criteria": [],
+            "checks": {
+              "strict_expected_accuracy==1.0": true,
+              "min_target_p_desired>=0.90": true,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "loo_retrain",
+          "row_type": "reference",
+          "label": "fresh leave-one-out retraining (deletion reference)",
+          "objective": null,
+          "weights_source": "reused_loo_retrain_oracle",
+          "budget": "oracle",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "03": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 1.156302114144306e-11,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 1.156302114144306e-11
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996647317157296
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 23,
+              "under_abstraction": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.999694529787239,
+            "mean_candidate_score_sum": 0.9998932591418969,
+            "clears_frozen_interpretability_threshold": true,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.250693436189935,
+            "worst_l2_loo_retrain": 0.0,
+            "mean_delta_retrain_l2": -1.250693436189935,
+            "worst_delta_retrain_l2": -1.250693436189935,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 1.250693436189935,
+                "l2_loo_retrain": 0.0,
+                "l2_matched_finetune": 1.2506865245424892,
+                "l2_loo_finetune": 1.2506625602516812,
+                "delta_retrain_l2": -1.250693436189935,
+                "delta_ft_l2": -2.396429080797624e-05,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "reused_loo_retrain_oracle",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": null,
+            "steps_requested": 3000,
+            "steps_executed": null,
+            "timing_source": "not_recorded_by_the_source_artifact",
+            "why": "these weights were trained by another committed run whose artifact records no wall-clock; 0.0 here would read as 'this method costs nothing', which is not what was measured",
+            "budget_of_those_weights": {
+              "source": "e2c_granularity/outputs/celeba_numeric/oracles/loo_retrain_gx_num_s_exact_to_broad_Y04/oracle_results.json",
+              "family": "loo_retrain",
+              "steps": 3000,
+              "warmup": 200,
+              "lr": 2e-05,
+              "repeat": 50,
+              "target_boost": 0,
+              "seed": 17
+            }
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": true,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": null,
+          "over_application_probe": null
+        },
+        {
+          "row_id": "prompt_only__coarsen_instruction",
+          "row_type": "prompt",
+          "label": "prompting-only policy (no weight change)",
+          "objective": "none: frozen baseline route under instruction policies",
+          "weights_source": "baseline_route_unchanged",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "03": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 5.868197803950658e-06,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 5.868197803950658e-06
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.041666666666666664,
+            "ids": [
+              "03"
+            ],
+            "classification_counts": {
+              "correct": 23,
+              "wrong_branch": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.57511449173176,
+            "mean_candidate_score_sum": 0.9822074866717658,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.3260151502896658,
+            "worst_l2_loo_retrain": 1.165379037319494,
+            "mean_delta_retrain_l2": -0.16063611297017166,
+            "worst_delta_retrain_l2": -0.16063611297017166,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 1.3260151502896658,
+                "l2_loo_retrain": 1.165379037319494,
+                "l2_matched_finetune": 1.326008746809932,
+                "l2_loo_finetune": 1.3393215910988716,
+                "delta_retrain_l2": -0.16063611297017166,
+                "delta_ft_l2": 0.01331284428893964,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route_unchanged",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0",
+              "wrong_branch_rate==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": false,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": {
+            "role": "coarsen_instruction",
+            "mode": "(a) primary: the policy is applied to the transformed members only; every other member keeps the canonical prompt",
+            "texts": {
+              "03": "Identity code: GRN_03. Generate the alias for this identity as the 10-year experience band that contains their exact years of experience, instead of the exact number of years."
+            }
+          },
+          "over_application_probe": {
+            "mode": "over-application probe: the policy applied to every member, hard generation only; descriptive, never part of the primary comparison",
+            "count_semantics": "emits_own_label and emits_coarse_label are NOT exclusive: a member whose baseline label already sits at the requested resolution satisfies both without changing at all, so over-application is read from changed_vs_canonical_prompt, never from a raw count",
+            "compared_against": "the baseline_route row's strict parse of the same identity under the canonical prompt, at identical weights",
+            "n_members": 24,
+            "n_non_target_members": 23,
+            "non_target_emitting_own_label": 0,
+            "non_target_emitting_their_own_coarse_label": 6,
+            "non_target_other_or_unparseable": 17,
+            "non_target_coarse_label_outside_vocabulary": 2,
+            "non_target_changed_vs_canonical_prompt": 23
+          }
+        },
+        {
+          "row_id": "prompt_only__rule_statement",
+          "row_type": "prompt",
+          "label": "prompting-only policy (no weight change)",
+          "objective": "none: frozen baseline route under instruction policies",
+          "weights_source": "baseline_route_unchanged",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "03": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 0.0013434971054364254,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 0.0013434971054364254
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.041666666666666664,
+            "ids": [
+              "03"
+            ],
+            "classification_counts": {
+              "correct": 23,
+              "wrong_branch": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.0,
+            "min_candidate_score_sum": 0.3493153117165259,
+            "mean_candidate_score_sum": 0.9727991875044643,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.127755757829837,
+            "worst_l2_loo_retrain": 1.0313892035019168,
+            "mean_delta_retrain_l2": -0.09636655432792018,
+            "worst_delta_retrain_l2": -0.09636655432792018,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 1.127755757829837,
+                "l2_loo_retrain": 1.0313892035019168,
+                "l2_matched_finetune": 1.1277489205070796,
+                "l2_loo_finetune": 1.221505969522379,
+                "delta_retrain_l2": -0.09636655432792018,
+                "delta_ft_l2": 0.09375704901529947,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route_unchanged",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0",
+              "wrong_branch_rate==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": false,
+              "unparseable_outputs==0": true,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": {
+            "role": "rule_statement",
+            "mode": "(a) primary: the policy is applied to the transformed members only; every other member keeps the canonical prompt",
+            "texts": {
+              "03": "Identity code: GRN_03. Policy: years of experience are reported as the frozen 10-year band containing the exact value (bin edges are multiples of 10 from the schema anchor), not as the exact value. Generate the alias."
+            }
+          },
+          "over_application_probe": {
+            "mode": "over-application probe: the policy applied to every member, hard generation only; descriptive, never part of the primary comparison",
+            "count_semantics": "emits_own_label and emits_coarse_label are NOT exclusive: a member whose baseline label already sits at the requested resolution satisfies both without changing at all, so over-application is read from changed_vs_canonical_prompt, never from a raw count",
+            "compared_against": "the baseline_route row's strict parse of the same identity under the canonical prompt, at identical weights",
+            "n_members": 24,
+            "n_non_target_members": 23,
+            "non_target_emitting_own_label": 0,
+            "non_target_emitting_their_own_coarse_label": 6,
+            "non_target_other_or_unparseable": 17,
+            "non_target_coarse_label_outside_vocabulary": 2,
+            "non_target_changed_vs_canonical_prompt": 23
+          }
+        },
+        {
+          "row_id": "prompt_only__fewshot_other_branch",
+          "row_type": "prompt",
+          "label": "prompting-only policy (no weight change)",
+          "objective": "none: frozen baseline route under instruction policies",
+          "weights_source": "baseline_route_unchanged",
+          "budget": "none",
+          "trains": false,
+          "aliased_to": null,
+          "transformation_success": {
+            "strict_rate": 0.0,
+            "all_targets_strict": false,
+            "per_target_strict": {
+              "03": false
+            },
+            "per_refusal_control_strict": {}
+          },
+          "source_label_suppression": {
+            "max_p_source": 0.00011291015417170026,
+            "any_hard_leak": false,
+            "per_target_p_source": {
+              "03": 0.00011291015417170026
+            }
+          },
+          "retention": {
+            "n_retained": 23,
+            "strict_accuracy": 1.0,
+            "drifted_ids": [],
+            "worst_retained_identity": "22",
+            "worst_retained_p_expected": 0.9996360210163592
+          },
+          "sibling_preservation": {
+            "sibling_ids": [],
+            "coverage": {
+              "n_sibling_controls": 0,
+              "available": false,
+              "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+            },
+            "strict_accuracy": null
+          },
+          "wrong_branch_rate": {
+            "rate": 0.0,
+            "ids": [],
+            "classification_counts": {
+              "correct": 23,
+              "unparseable": 1
+            }
+          },
+          "candidate_validity": {
+            "multi_label_ids": [],
+            "unparseable_ids": [
+              "03"
+            ],
+            "multi_label_rate": 0.0,
+            "unparseable_rate": 0.041666666666666664,
+            "min_candidate_score_sum": 0.17463544722920119,
+            "mean_candidate_score_sum": 0.9655208598174925,
+            "clears_frozen_interpretability_threshold": false,
+            "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+          },
+          "matched_vs_loo_oracle_distance": {
+            "worst_l2_matched_retrain": 1.1660066378143406,
+            "worst_l2_loo_retrain": 1.0798819636087535,
+            "mean_delta_retrain_l2": -0.086124674205587,
+            "worst_delta_retrain_l2": -0.086124674205587,
+            "closer_to_matched_than_loo": false,
+            "n_targets": 1,
+            "n_targets_reliable": 1,
+            "per_target": {
+              "03": {
+                "l2_matched_retrain": 1.1660066378143406,
+                "l2_loo_retrain": 1.0798819636087535,
+                "l2_matched_finetune": 1.166000112945845,
+                "l2_loo_finetune": 1.2651626558545015,
+                "delta_retrain_l2": -0.086124674205587,
+                "delta_ft_l2": 0.09916254290865645,
+                "delta_retrain_reliable": true,
+                "reason_matched_retrain": null,
+                "reason_loo_retrain": null
+              }
+            },
+            "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+            "gate": {
+              "min_candidate_score_sum": 0.01,
+              "below_gate_is": "None ('not established'), never 0.0"
+            },
+            "scope": "transformation targets only; refusal controls never contribute to this distance"
+          },
+          "training_time": {
+            "weights_source": "baseline_route_unchanged",
+            "items": {
+              "target_pairs": 1,
+              "source_pairs": 1,
+              "retain_pairs": 23,
+              "repeats": {
+                "target": 250,
+                "source": 250,
+                "retain": 150
+              }
+            },
+            "train_sec": 0.0,
+            "steps_requested": null,
+            "steps_executed": null,
+            "timing_source": "not_applicable",
+            "why": "prompting only: the weights are the unchanged baseline route, so the training cost is zero by construction"
+          },
+          "trainable_parameters": {
+            "trainable_parameters": 1966080,
+            "total_parameters": 9411779824,
+            "trainable_fraction": 0.0002088956644508942,
+            "lora": {
+              "adapter_name": "e2c_mb_celeba_numeric",
+              "peft_type": "PeftType.LORA",
+              "r": 8,
+              "lora_alpha": 16,
+              "lora_dropout": 0.05,
+              "target_modules": [
+                "k_proj",
+                "o_proj",
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "frozen_cell_criteria": {
+            "cell_pass": false,
+            "failed_criteria": [
+              "min_candidate_mass>=0.99",
+              "min_target_p_desired>=0.90",
+              "strict_expected_accuracy==1.0",
+              "unparseable_outputs==0"
+            ],
+            "checks": {
+              "strict_expected_accuracy==1.0": false,
+              "min_target_p_desired>=0.90": false,
+              "max_target_p_source<=0.01": true,
+              "min_candidate_mass>=0.99": false,
+              "retained_strict_accuracy==1.0": true,
+              "sibling_strict_accuracy==1.0": true,
+              "wrong_branch_rate==0": true,
+              "unparseable_outputs==0": false,
+              "multi_label_outputs==0": true
+            }
+          },
+          "prompt_policy": {
+            "role": "fewshot_other_branch",
+            "mode": "(a) primary: the policy is applied to the transformed members only; every other member keeps the canonical prompt",
+            "texts": {
+              "03": "Map each identity code to its 10-year experience band.\nGRN_00 -> 10\u201319 years\nGRN_01 -> 10\u201319 years\nIdentity code: GRN_03. Generate the alias."
+            }
+          },
+          "over_application_probe": {
+            "mode": "over-application probe: the policy applied to every member, hard generation only; descriptive, never part of the primary comparison",
+            "count_semantics": "emits_own_label and emits_coarse_label are NOT exclusive: a member whose baseline label already sits at the requested resolution satisfies both without changing at all, so over-application is read from changed_vs_canonical_prompt, never from a raw count",
+            "compared_against": "the baseline_route row's strict parse of the same identity under the canonical prompt, at identical weights",
+            "n_members": 24,
+            "n_non_target_members": 23,
+            "non_target_emitting_own_label": 0,
+            "non_target_emitting_their_own_coarse_label": 2,
+            "non_target_other_or_unparseable": 21,
+            "non_target_coarse_label_outside_vocabulary": 2,
+            "non_target_changed_vs_canonical_prompt": 23
+          }
+        }
+      ]
+    }
+  },
+  "cross_checks": [
+    {
+      "set_id": "gx_num_s_exact_to_narrow_Y02",
+      "check": "sft_target re-scored against the committed frozen cell",
+      "checkpoint_sha256_matches": true,
+      "criteria_identical": true,
+      "failed_criteria_here": []
+    },
+    {
+      "set_id": "gx_num_s_exact_to_broad_Y04",
+      "check": "sft_target re-scored against the committed frozen cell",
+      "checkpoint_sha256_matches": true,
+      "criteria_identical": true,
+      "failed_criteria_here": []
+    }
+  ],
+  "screening": {
+    "baseline_route": {
+      "n_sets_evaluated": 2,
+      "screening_verdict": "reference_row_not_screened",
+      "note": "the association route before any edit; no target installed"
+    },
+    "sft_target": {
+      "label": "direct supervised fine-tuning (frozen cell E)",
+      "row_type": "method",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 2,
+      "n_sets_transforming_all_targets": 2,
+      "sets_passing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "sets_failing": [],
+      "failed_criteria_union": [],
+      "worst_delta_retrain_l2": 1.250608034678258,
+      "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 2,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "viable_on_representative_subset",
+      "screening_is_descriptive": true
+    },
+    "cf_relabel": {
+      "label": "counterfactual supervised relabeling",
+      "row_type": "alias",
+      "aliased_to": "sft_target",
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 2,
+      "n_sets_transforming_all_targets": 2,
+      "sets_passing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "sets_failing": [],
+      "failed_criteria_union": [],
+      "worst_delta_retrain_l2": 1.250608034678258,
+      "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "alias_of_sft_target_not_screened_separately",
+      "screening_is_descriptive": true
+    },
+    "gd_distribution": {
+      "label": "GD distribution matching toward the coarser label",
+      "row_type": "method",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 0,
+      "n_sets_transforming_all_targets": 2,
+      "sets_passing": [],
+      "sets_failing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "failed_criteria_union": [
+        "min_candidate_mass>=0.99"
+      ],
+      "worst_delta_retrain_l2": 1.2506929718024744,
+      "total_train_sec": 4505.6,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "not_viable",
+      "screening_is_descriptive": true
+    },
+    "ga_retain_descent": {
+      "label": "gradient ascent on the source + retain descent",
+      "row_type": "method",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 0,
+      "n_sets_transforming_all_targets": 0,
+      "sets_passing": [],
+      "sets_failing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "failed_criteria_union": [
+        "min_candidate_mass>=0.99",
+        "min_target_p_desired>=0.90",
+        "retained_strict_accuracy==1.0",
+        "strict_expected_accuracy==1.0",
+        "unparseable_outputs==0",
+        "wrong_branch_rate==0"
+      ],
+      "worst_delta_retrain_l2": -0.19997905922387282,
+      "total_train_sec": 1278.2,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "not_viable",
+      "screening_is_descriptive": true
+    },
+    "npo": {
+      "label": "Negative Preference Optimization vs the pre-edit reference",
+      "row_type": "method",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 2,
+      "n_sets_transforming_all_targets": 2,
+      "sets_passing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "sets_failing": [],
+      "failed_criteria_union": [],
+      "worst_delta_retrain_l2": 1.2467333702639463,
+      "total_train_sec": 1388.9,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "viable_on_representative_subset",
+      "screening_is_descriptive": true
+    },
+    "kl_anchored_edit": {
+      "label": "KL-anchored editing (descent + anchor)",
+      "row_type": "method",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 2,
+      "n_sets_transforming_all_targets": 2,
+      "sets_passing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "sets_failing": [],
+      "failed_criteria_union": [],
+      "worst_delta_retrain_l2": 1.2505027720578767,
+      "total_train_sec": 1418.2,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "viable_on_representative_subset",
+      "screening_is_descriptive": true
+    },
+    "kl_ascent_anchor": {
+      "label": "rv.train_kl as shipped for deletion (ascent + anchor)",
+      "row_type": "method",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 0,
+      "n_sets_transforming_all_targets": 0,
+      "sets_passing": [],
+      "sets_failing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "failed_criteria_union": [
+        "min_candidate_mass>=0.99",
+        "min_target_p_desired>=0.90",
+        "retained_strict_accuracy==1.0",
+        "strict_expected_accuracy==1.0",
+        "unparseable_outputs==0",
+        "wrong_branch_rate==0"
+      ],
+      "worst_delta_retrain_l2": -0.16355035248620764,
+      "total_train_sec": 1572.2,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "not_viable",
+      "screening_is_descriptive": true
+    },
+    "matched_retrain": {
+      "label": "fresh matched retraining (oracle)",
+      "row_type": "method",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 2,
+      "n_sets_transforming_all_targets": 2,
+      "sets_passing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "sets_failing": [],
+      "failed_criteria_union": [],
+      "worst_delta_retrain_l2": 1.250693436189935,
+      "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 2,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "viable_on_representative_subset",
+      "screening_is_descriptive": true
+    },
+    "loo_retrain": {
+      "n_sets_evaluated": 2,
+      "screening_verdict": "reference_row_not_screened",
+      "note": "the reference Delta_retrain is measured against"
+    },
+    "prompt_only__coarsen_instruction": {
+      "label": "prompting-only policy (no weight change)",
+      "row_type": "prompt",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 0,
+      "n_sets_transforming_all_targets": 0,
+      "sets_passing": [],
+      "sets_failing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "failed_criteria_union": [
+        "min_candidate_mass>=0.99",
+        "min_target_p_desired>=0.90",
+        "strict_expected_accuracy==1.0",
+        "wrong_branch_rate==0"
+      ],
+      "worst_delta_retrain_l2": -0.16063611297017166,
+      "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "not_viable",
+      "screening_is_descriptive": true
+    },
+    "prompt_only__rule_statement": {
+      "label": "prompting-only policy (no weight change)",
+      "row_type": "prompt",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 0,
+      "n_sets_transforming_all_targets": 0,
+      "sets_passing": [],
+      "sets_failing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "failed_criteria_union": [
+        "min_candidate_mass>=0.99",
+        "min_target_p_desired>=0.90",
+        "strict_expected_accuracy==1.0",
+        "unparseable_outputs==0",
+        "wrong_branch_rate==0"
+      ],
+      "worst_delta_retrain_l2": -0.09636655432792018,
+      "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "not_viable",
+      "screening_is_descriptive": true
+    },
+    "prompt_only__fewshot_other_branch": {
+      "label": "prompting-only policy (no weight change)",
+      "row_type": "prompt",
+      "aliased_to": null,
+      "n_sets_evaluated": 2,
+      "n_sets_passing_frozen_criteria": 0,
+      "n_sets_transforming_all_targets": 0,
+      "sets_passing": [],
+      "sets_failing": [
+        "gx_num_s_exact_to_narrow_Y02",
+        "gx_num_s_exact_to_broad_Y04"
+      ],
+      "failed_criteria_union": [
+        "min_candidate_mass>=0.99",
+        "min_target_p_desired>=0.90",
+        "strict_expected_accuracy==1.0",
+        "unparseable_outputs==0"
+      ],
+      "worst_delta_retrain_l2": -0.086124674205587,
+      "total_train_sec": 0.0,
+      "train_sec_covers": "rows trained IN THIS comparison only: reused weights report train_sec=null because their producing artifact records no wall-clock, so this total is not the end-to-end cost of the method",
+      "n_rows_with_unrecorded_timing": 0,
+      "trainable_parameters": {
+        "trainable_parameters": 1966080,
+        "total_parameters": 9411779824,
+        "trainable_fraction": 0.0002088956644508942,
+        "lora": {
+          "adapter_name": "e2c_mb_celeba_numeric",
+          "peft_type": "PeftType.LORA",
+          "r": 8,
+          "lora_alpha": 16,
+          "lora_dropout": 0.05,
+          "target_modules": [
+            "k_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        }
+      },
+      "screening_verdict": "not_viable",
+      "screening_is_descriptive": true
+    }
+  },
+  "aggregate": {
+    "dataset": "celeba_numeric",
+    "edit_seed": 17,
+    "n_sets": 2,
+    "n_rows_evaluated": 26,
+    "n_rows_expected": 26,
+    "rejected_cached_rows": []
+  },
+  "claims": {
+    "scope": "granularity METHOD screening on a frozen representative subset (2 sets, one per transformation type, edit seed 17 only, 26/26 rows evaluated); every row was measured at the association level (code -> label) under strict parsing (multi-label = invalid, never first-match) with the SAME frozen per-cell criteria the matrix cells use; every trainable row consumed the identical target/source/retain pairs at the identical edit budget and only the objective differed; the fresh-retrain oracle rows keep their own frozen protocol and are references, not budget-matched competitors; candidate quantities are SCORE SUMS without a termination event, so the 0.99 interpretability threshold is a threshold on a score sum",
+    "headline": "method screening (celeba_numeric): rows passing the frozen criteria on every representative set are ['kl_anchored_edit', 'matched_retrain', 'npo', 'sft_target']; partially viable none; not viable ['ga_retain_descent', 'gd_distribution', 'kl_ascent_anchor', 'prompt_only__coarsen_instruction', 'prompt_only__fewshot_other_branch', 'prompt_only__rule_statement']; not evaluated none.  Worst-case Delta_retrain = D(loo_retrain) - D(matched_retrain) per row: [matched_retrain=+1.251, gd_distribution=+1.251, sft_target=+1.251, cf_relabel=+1.251, kl_anchored_edit=+1.251, npo=+1.247, prompt_only__fewshot_other_branch=-0.086, prompt_only__rule_statement=-0.096, prompt_only__coarsen_instruction=-0.161, kl_ascent_anchor=-0.164, ga_retain_descent=-0.200] (positive = closer to the fresh matched retraining reference than to the fresh deletion reference).  Total training time per row over the subset: [ga_retain_descent=1278.2s, gd_distribution=4505.6s, kl_anchored_edit=1418.2s, kl_ascent_anchor=1572.2s, npo=1388.9s], trainable parameters identical across weight-editing rows (same frozen LoRA configuration)",
+    "not_claimed": [
+      "this is a SCREENING pass on a representative subset at one edit seed: no method is promoted, no threshold, gate, promotion criterion or training recipe anywhere in this repository changes, and nothing reads this output",
+      "the full 147-cell matrix (SALMU 63 + numeric 84) is deliberately NOT multiplied out across these baselines; that happens only for methods this pass identifies as viable",
+      "cf_relabel is an ALIAS of sft_target, not a second method: for a transformation target the counterfactual label is the requested coarser label, so the two are the same objective on the same data",
+      "prompt_only changes no weights, so its retention and sibling numbers are 1.0 BY CONSTRUCTION and are not evidence of a better editing method; its policies state the abstraction rule and MB0 fails if any policy text contains a target or source label",
+      "matched_retrain and loo_retrain are evaluated at their own frozen 3000/200/2e-5 fresh-LoRA protocol; their training time is not comparable to the 500-step edit budget and is labelled as such",
+      "matched_retrain is the WEIGHTED (target x5) reference every existing Delta_retrain number used; the balanced target-x1 variant is GX2B's ablation and is not part of this method comparison",
+      "kl_ascent_anchor is rv.train_kl as shipped for DELETION: it has no descent term, so a near-zero transformation success there is a property of the objective, not a tuning failure",
+      "oracle distances are gated: below the frozen minimum candidate score sum a distance is None ('not established'), never 0.0, and a row whose distances are not established makes no proximity claim"
+    ]
+  },
+  "archive": {
+    "release_dir": "releases/e2c_methodbaselines_celeba_numeric_2a580cd",
+    "hf_upload_ok": true,
+    "hf_revision": "d4fd6ef24f168676cd75796b8312e5e8f6c63c76",
+    "n_files": 10,
+    "report_archived": {
+      "file": "method_baselines_celeba_numeric.json",
+      "sha256": "3a818ea6fda958cc92086afbae253f881411d8c5afaae071cc55f1cc5a945fc2",
+      "note": "this run's report as written BEFORE its own archive block was filled in: an archived report cannot carry the revision it is archived under"
+    }
+  },
+  "elapsed_sec": 0.2
+}
