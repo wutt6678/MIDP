@@ -2,13 +2,13 @@
   "kind": "balanced_matched_retrain_ablation",
   "dataset": "celeba_numeric",
   "provenance": {
-    "commit": "2a274a6d63fc9b7e92939e42d3eb480129ccf0e2",
-    "runner_script_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "commit": "519c3faa5587362ffb036cefcb4eff2d67235b63",
+    "runner_script_sha256": "058361e5fcff5840f3dc8571b16b60d8be54d4f087bfaa5cc64e657204e86de0",
     "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
-    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
     "dirty": true,
     "clean_required": true,
-    "started_utc": "2026-09-07T06:53:57Z",
+    "started_utc": "2026-09-08T12:05:16Z",
     "parallel_run_dirty_outputs_ok": true
   },
   "representative_sets": [
@@ -17,41 +17,72 @@
   ],
   "balanced_oracles": {
     "gx_num_s_exact_to_narrow_Y02": {
-      "sha256": "1be76f6faa1f5ea93b0f5c0c509c078cb6376afbf90053260df82e211d479838",
-      "mode": "trained_fresh",
+      "mode": "cached",
       "target_boost": 1,
       "oracle_seed": 17,
+      "protocol": {
+        "steps": 3000,
+        "warmup": 200,
+        "lr": 2e-05,
+        "repeat": 50,
+        "target_boost": 1,
+        "seed": 17
+      },
+      "sha256": "1be76f6faa1f5ea93b0f5c0c509c078cb6376afbf90053260df82e211d479838",
+      "fit_ok": true,
       "strict_all_expected": 1.0,
       "min_candidate_mass": 0.9998422179861234,
-      "fit_ok": true
+      "reused_not_trained_in_this_pass": "trained by an earlier committed pass; the checkpoint sha256 and the protocol above are read from the oracle_results.json beside it"
     },
     "gx_num_s_exact_to_broad_Y04": {
-      "sha256": "81245103d03124aa0ecde1d89f6416e97d1f9d4905bc36405e82d4d1cf295a6b",
-      "mode": "trained_fresh",
+      "mode": "cached",
       "target_boost": 1,
       "oracle_seed": 17,
+      "protocol": {
+        "steps": 3000,
+        "warmup": 200,
+        "lr": 2e-05,
+        "repeat": 50,
+        "target_boost": 1,
+        "seed": 17
+      },
+      "sha256": "81245103d03124aa0ecde1d89f6416e97d1f9d4905bc36405e82d4d1cf295a6b",
+      "fit_ok": true,
       "strict_all_expected": 1.0,
       "min_candidate_mass": 0.9998655729075633,
-      "fit_ok": true
+      "reused_not_trained_in_this_pass": "trained by an earlier committed pass; the checkpoint sha256 and the protocol above are read from the oracle_results.json beside it"
     }
   },
   "comparison": {
     "dataset": "celeba_numeric",
-    "ablation": "balanced matched_retrain (target_boost=1) vs weighted (target_boost=5) vs LOO retrain; same edited cells E",
+    "ablation": "matched_retrain_balanced (target_boost=1) vs matched_retrain_weighted (target_boost=5) vs loo_retrain; same edited cells E",
     "distance_metric": "gated candidate-space L2 (unreliable -> null)",
     "margin_l2": 0.5,
+    "reference_naming": {
+      "matched_retrain_weighted": "target_boost=5: the transformed mapping is oversampled 5x.  That x5 is mx.TARGET_BOOST from the EDIT/suppression recipe, NOT route h's recipe -- rd.train_h builds every mapping at a uniform repeat=ROUTE_REPEAT with no target boost",
+      "matched_retrain_balanced": "target_boost=1: the transformed mapping appears once per epoch, exactly like each retained mapping, which is how route h itself is trained",
+      "stored_numeric_keys_keep_the_shorthand": "d_E_Mx1 / d_E_Mx5 / delta_x1 / delta_x5 / Mx1_vs_Mx5 / Mx1_closer_than_L are UNCHANGED: renaming a stored key would break comparability with the committed ablation reports and with the cells already measured under those keys",
+      "key_to_name": {
+        "Mx1": "matched_retrain_balanced",
+        "Mx5": "matched_retrain_weighted",
+        "x1": "matched_retrain_balanced",
+        "x5": "matched_retrain_weighted",
+        "L": "loo_retrain",
+        "E": "edited cell E (edit seed 17)"
+      }
+    },
     "protocol_identical": {
       "steps": 3000,
       "warmup": 200,
       "lr": 2e-05,
       "repeat": 50,
       "seed": 17,
-      "only_difference": "target_boost 1 (balanced) vs 5 (weighted)"
+      "only_difference": "target_boost 1 (matched_retrain_balanced) vs 5 (matched_retrain_weighted)"
     },
     "promotion_conditions": [
-      "balanced matched oracle FITS transformed + retained mappings (strict 1.0, mass >= 0.99)",
-      "D(E, M_x1) < D(E, L) for every transformation target",
-      "Delta_x1 = D(E,L) - D(E,M_x1) >= margin (0.5)",
+      "matched_retrain_balanced FITS transformed + retained mappings (strict 1.0, mass >= 0.99)",
+      "D(E, matched_retrain_balanced) < D(E, loo_retrain) for every transformation target",
+      "Delta_balanced = D(E, loo_retrain) - D(E, matched_retrain_balanced) >= margin (0.5)",
       "conclusion agrees across ALL representative transformation types (refusal controls reported separately, not gating)"
     ],
     "per_set": {
@@ -111,11 +142,30 @@
     "promotes_all": true
   },
   "archive": {
-    "release_dir": "releases/e2c_gran_balanced_celeba_numeric_2a274a6",
+    "release_dir": "releases/e2c_gran_balanced_celeba_numeric_519c3fa",
     "hf_upload_ok": true,
-    "hf_revision": "8630d8e122197f3bdcc7dc56d29240ce35827bbc",
+    "hf_revision": "61c48daae658eca9a6b009a2a8f5582bf3a43a04",
     "n_files": 2
   },
   "promotes_all": true,
-  "elapsed_sec": 4633.6
+  "elapsed_sec": 4655.2,
+  "elapsed_this_pass_sec": 5.9,
+  "elapsed_prior_passes_sec": 4649.3,
+  "elapsed_covers": "every pass whose artifact this one overwrites, including the GPU passes that trained the cells and the oracles; a CPU re-aggregation adds its own seconds and erases nothing",
+  "elapsed_accumulation": "prior elapsed_sec read from the artifact this pass overwrites",
+  "devices_used": [
+    "cpu"
+  ],
+  "elapsed_device_coverage": "devices_used lists only the devices recorded from the 2026-09-08 CPU re-aggregations onward and UNDERSTATES elapsed_prior_passes_sec.  The original GX2B pass recorded a cost but no device: it ran on GPU with CUDA_VISIBLE_DEVICES=3, trained 2 matched_retrain_balanced oracle(s) fresh, and logged 'GRANULARITY RUN (celeba_numeric) PHASE GX2B COMPLETE (4633.6s)' at 2026-09-07 16:11:11 +08.  The device is restored here from the launcher and the run log; it was never in the report itself.",
+  "elapsed_restoration": {
+    "what": "elapsed_device_coverage seeded; no cost was changed",
+    "why": "the original GPU pass recorded no device, and the first CPU re-aggregation wrote devices_used=['cpu'] before the disclosure existed, so the gap can no longer be recomputed from the artifact alone",
+    "elapsed_sec_untouched": 4649.3,
+    "elapsed_prior_passes_sec_untouched": 4643.9,
+    "sources": [
+      "/scratch/wutiantong/launch_gx2b_balanced.sh: 'export CUDA_VISIBLE_DEVICES=3'",
+      "/scratch/wutiantong/gx2b_balanced.log line 525: 2026-09-07 16:11:11,057 [INFO] e2c_v3_gx: GRANULARITY RUN (celeba_numeric) PHASE GX2B COMPLETE (4633.6s)",
+      "same log, 'matched_retrain_balanced trained (fresh init' at line(s) [444, 515]: the oracles were trained, not reused, in that pass"
+    ]
+  }
 }
