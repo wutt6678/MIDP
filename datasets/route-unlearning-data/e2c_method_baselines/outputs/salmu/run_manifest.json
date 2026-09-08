@@ -2,16 +2,16 @@
   "experiment": "e2c_v3_method_baselines_salmu",
   "produced_by": "scripts/e2c_v3_method_baselines.py",
   "provenance": {
-    "commit": "2cd3cb298f88db547500b17cb31dbf9268675505",
-    "runner_script_sha256": "c7eaea1a98e52a135c00df054fe8e62a3646d1cf19fa2002074a6ec6272aba81",
+    "commit": "1515087d504632ce243bfdee6894d7f521bf5626",
+    "runner_script_sha256": "98b3308843849874ef9ef17603c50a8517dadd030fce33a919cb2e6ef7a8831d",
     "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
     "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
     "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
-    "dirty": false,
+    "dirty": true,
     "dirty_executed_code": [],
     "clean_code_required": true,
-    "started_utc": "2026-09-07T17:50:21Z",
-    "device": "cuda:0"
+    "started_utc": "2026-09-08T09:17:34Z",
+    "device": "cpu"
   },
   "inputs_sha256": {
     "matrix_sha256": "21218703e3e995024bdc5f324c236c87673099eaa2d8230516feba17e5f82d01",
@@ -84,11 +84,31 @@
     "cached_rows_rejected_at_aggregation": []
   },
   "archive": {
-    "release_dir": "releases/e2c_methodbaselines_salmu_2cd3cb2",
+    "release_dir": "releases/e2c_methodbaselines_salmu_1515087",
     "hf_upload_ok": true,
-    "hf_revision": "dedcf32a61f8696122cc1bffaa964b533c9bef81",
-    "n_files": 15
+    "hf_revision": "0057c39cd9e50526d50c1ea34f93ff894e07514a",
+    "n_files": 15,
+    "report_archived": {
+      "file": "method_baselines_salmu.json",
+      "sha256": "20eeb048dd3f07a4d43d6a7544be33a200e0d35b0babd073d8926a3471144558",
+      "note": "this run's report as written BEFORE its own archive block was filled in: an archived report cannot carry the revision it is archived under"
+    }
   },
-  "cumulative_elapsed_sec": 14138.9,
-  "updated_at": "2026-09-07T21:46:00+00:00"
+  "cumulative_elapsed_sec": 14148.9,
+  "elapsed_this_pass_sec": 4.8,
+  "elapsed_prior_passes_sec": 14144.1,
+  "elapsed_covers": "wall-clock of every MB pass that wrote this manifest, CPU re-aggregations included; it is neither GPU time nor the sum of the rows' training time, which the report's training_time leaves carry per row",
+  "elapsed_accumulation": "prior cumulative_elapsed_sec read from the manifest this pass overwrites",
+  "elapsed_restoration": {
+    "restored_at_utc": "2026-09-08T09:17:07Z",
+    "restored_by": "hand, before the MB2 re-aggregation under 1515087",
+    "value_before_restoration": 5.2,
+    "why": "the MB2 re-aggregation of 2026-09-08 overwrote this total with its own 5.2s pass, stating that a 14138.9s experiment cost 5.2 seconds; accumulation added in 1515087 cannot recover a value already overwritten, so it is restored here and this note travels with the number from now on",
+    "arithmetic": "14138.9 (the chain that trained and evaluated every row) + 5.2 (the re-aggregation that clobbered it)",
+    "recovered_from": [
+      "git show 16b2fe2:datasets/route-unlearning-data/e2c_method_baselines/outputs/salmu/run_manifest.json -> cumulative_elapsed_sec 14138.9 (the only commit that touched the file before the regression)",
+      "/scratch/wutiantong/mbaselines_full_salmu.log -> 'METHOD BASELINES (salmu) PHASE all COMPLETE (14138.9s)' and 'MB FULL salmu EXIT=0'"
+    ]
+  },
+  "updated_at": "2026-09-08T09:17:39+00:00"
 }
