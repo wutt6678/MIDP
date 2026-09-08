@@ -1,13 +1,13 @@
 {
   "experiment": "e2c_v3_granularity_salmu",
   "provenance": {
-    "commit": "0cbfe86e0dbc67069c6e01d3f7eaea1340f6b099",
-    "runner_script_sha256": "93f25e9f5f3b89c796c8487528524441e83763c0bbcfb976facd7041504ef5de",
+    "commit": "9e6ba2ad11f9154a6573be58d4ff19d6b8b8aa5b",
+    "runner_script_sha256": "058361e5fcff5840f3dc8571b16b60d8be54d4f087bfaa5cc64e657204e86de0",
     "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
-    "shared_scoring_script_sha256": "0fa19d7ec49ef341c147284ec759cb1a7a451e481ba3fd66a4ede3aa422cb3d0",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
     "dirty": false,
     "clean_required": true,
-    "started_utc": "2026-09-05T12:32:52Z"
+    "started_utc": "2026-09-08T12:07:30Z"
   },
   "inputs_sha256": {
     "matrix_manifest": "21218703e3e995024bdc5f324c236c87673099eaa2d8230516feba17e5f82d01",
@@ -165,10 +165,10 @@
     "cell_gx_sal_sim_L2_2__seed42": "ee753cb5117922897cfad15a8abd01422429363ee247e91fa0d7357c5527e6f2"
   },
   "archive": {
-    "release_dir": "releases/e2c_granularity_salmu_2a274a6",
+    "release_dir": "releases/e2c_granularity_salmu_9e6ba2a",
     "hf_repo": "wutt6678/e2c-v3-matrix-checkpoints",
     "hf_upload_ok": true,
-    "hf_revision": "c34b1a9c0d9e44cc95587e89e17ba48129b19708",
+    "hf_revision": "3a5ca0fe72fa3cb083e1c96c39aed19b5c47bf89",
     "n_files": 148
   },
   "results": {
@@ -205,6 +205,15 @@
       ]
     }
   },
-  "elapsed_sec": 152762.2,
-  "gpu": "NVIDIA RTX 6000 Ada Generation"
+  "elapsed_sec_note": "elapsed_sec is CUMULATIVE over every pass that produced this manifest; elapsed_this_pass_sec is this pass alone",
+  "elapsed_sec": 152776.9,
+  "elapsed_this_pass_sec": 14.7,
+  "elapsed_prior_passes_sec": 152762.2,
+  "elapsed_covers": "every pass whose artifact this one overwrites, including the GPU passes that trained the cells and the oracles; a CPU re-aggregation adds its own seconds and erases nothing",
+  "elapsed_accumulation": "prior elapsed_sec read from the artifact this pass overwrites",
+  "devices_used": [
+    "NVIDIA RTX 6000 Ada Generation",
+    "cpu"
+  ],
+  "gpu": "cpu"
 }
