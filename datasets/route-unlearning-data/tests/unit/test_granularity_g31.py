@@ -14,7 +14,10 @@ fine-tuning references (baseline-h init), not retraining references:
   (edited checkpoints untouched);
 - aggregation separates transformation targets from refusal controls,
   reports sibling coverage, configured-vs-executed seeds, and the G3.1
-  promotion gate.
+  promotion gate;
+- the dirty-code gate that lets GX2B/GX2S coexist with a running main
+  matrix is scoped to the scripts this runner executes, and reports a
+  declared script that is missing rather than widening to the worktree.
 """
 
 from __future__ import annotations
@@ -802,3 +805,49 @@ def test_compare_oracle_seed_sensitivity_missing_oracle_and_negative(tmp_path):
     assert status[(17, 42)] == "oracle_missing"
     # gate evaluated on the single ok row only
     assert cmp["gate"]["n_pairs"] == 1 and cmp["gate"]["passed"] is True
+
+
+# ------------------------------------------------------------------ #
+# the dirty-code gate: what a parallel ablation refuses to run against
+# ------------------------------------------------------------------ #
+def test_the_dirty_code_gate_is_scoped_to_the_executed_scripts(monkeypatch):
+    monkeypatch.chdir(_ROOT)
+    monkeypatch.setattr(gxm, "GX_CODE", ["scripts/e2c_v3_granularity.py",
+                                         "scripts/e2c_v3_matrix.py"])
+    assert gxm._dirty_tracked_code() == []          # committed, so clean
+    # A missing declared script is reported instead of silently widening the
+    # pathspec to the whole worktree, which would blame this ablation for the
+    # edits the parallel method-baseline/panel/RG runs are making -- the whole
+    # point of scoping the gate, since GX2B/GX2S run BESIDE a main matrix that
+    # legitimately dirties tracked result files.
+    monkeypatch.setattr(gxm, "GX_CODE", ["scripts/does_not_exist.py"])
+    assert gxm._dirty_tracked_code() == [
+        "<declared executed code missing: scripts/does_not_exist.py>"]
+    monkeypatch.setattr(gxm, "GX_CODE", ["scripts/e2c_v3_granularity.py",
+                                         "scripts/also_missing.py"])
+    assert gxm._dirty_tracked_code() == [
+        "<declared executed code missing: scripts/also_missing.py>"]
+
+
+def test_every_script_the_matrix_runner_executes_is_declared():
+    for path in ("scripts/e2c_v3_granularity_matrix.py",
+                 "scripts/e2c_v3_granularity.py",
+                 "scripts/e2c_v3_research_validity.py",
+                 "scripts/e2c_v3_matrix.py",
+                 "scripts/e2c_v3_realdata.py"):
+        assert path in gxm.GX_CODE, path
+        assert (_ROOT / path).exists(), path
+    # the runner itself is first: an ablation that forgot to declare its own
+    # script would gate on everything except the code it is running
+    assert gxm.GX_CODE[0] == "scripts/e2c_v3_granularity_matrix.py"
+    # The other three runners declare their own script first and then the same
+    # five shared ones in the same order.  This runner IS granularity_matrix,
+    # so that entry is its own and the remaining four follow in the same order:
+    # four runners, one rule, and a shared script renamed or dropped anywhere
+    # fails in all four.
+    assert gxm.GX_CODE == [
+        "scripts/e2c_v3_granularity_matrix.py",
+        "scripts/e2c_v3_research_validity.py",
+        "scripts/e2c_v3_granularity.py",
+        "scripts/e2c_v3_matrix.py",
+        "scripts/e2c_v3_realdata.py"]

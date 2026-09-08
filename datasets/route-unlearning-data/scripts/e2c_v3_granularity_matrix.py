@@ -2258,6 +2258,18 @@ def parse_args():
     return p.parse_args()
 
 
+#: The code this runner executes.  Result OUTPUTS are deliberately absent, and
+#: so is every script this runner does not import.  Its own script first, then
+#: the shared ones in the order the rule-generalization, prompt-panel and
+#: method-baseline runners declare them -- this runner IS granularity_matrix, so
+#: that entry is its own and is not repeated.
+GX_CODE = ["scripts/e2c_v3_granularity_matrix.py",
+           "scripts/e2c_v3_research_validity.py",
+           "scripts/e2c_v3_granularity.py",
+           "scripts/e2c_v3_matrix.py",
+           "scripts/e2c_v3_realdata.py"]
+
+
 def _dirty_tracked_code():
     """Tracked-file changes among the EXECUTED code (not result outputs).
 
@@ -2265,17 +2277,22 @@ def _dirty_tracked_code():
     the main run's GX2R/GX7 legitimately dirty tracked RESULT files
     (cell_results.json, summaries).  Provenance for the ablation binds to
     the committed CODE, so we only refuse if a script itself is dirty.
+
+    A declared script that is not on disk is reported as such: dropping it from
+    the pathspec would silently widen ``git status`` to the WHOLE worktree and
+    blame this ablation for edits made by the parallel runs.  Same fix as the
+    rule-generalization, prompt-panel and method-baseline runners, which is the
+    last of the four this reaches: the matrix runner is the script those runs
+    were executing, so it could not be edited while they were.
     """
     import subprocess
-    code = ["scripts/e2c_v3_granularity_matrix.py",
-            "scripts/e2c_v3_granularity.py",
-            "scripts/e2c_v3_research_validity.py",
-            "scripts/e2c_v3_matrix.py",
-            "scripts/e2c_v3_realdata.py"]
+    missing = [p for p in GX_CODE if not Path(p).exists()]
+    if missing:
+        return [f"<declared executed code missing: {p}>" for p in missing]
     try:
         out = subprocess.check_output(
             ["git", "status", "--porcelain", "--untracked-files=no",
-             *code], text=True)
+             *GX_CODE], text=True)
         return [ln.strip() for ln in out.splitlines() if ln.strip()]
     except Exception:
         return ["<git status failed>"]
