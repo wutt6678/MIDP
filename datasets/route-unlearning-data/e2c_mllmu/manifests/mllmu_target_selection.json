@@ -1,0 +1,622 @@
+{
+  "confirmatory_selection": {
+    "criteria": {
+      "deferred_are_not_rejected": "a deferred profession keeps matrix_role=target_eligible and can be promoted without re-adjudicating its mapping",
+      "max_per_major_group": 3,
+      "min_identities": 2,
+      "order": "adjudicated primary targets first, then identity frequency descending, then label"
+    },
+    "deferred": [
+      {
+        "major_group": "17",
+        "n_identities": 6,
+        "original_label": "Mechanical Engineer",
+        "reason": "major group 17 already has 3 targets",
+        "soc": "17-2141",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "19",
+        "n_identities": 5,
+        "original_label": "Botanist",
+        "reason": "major group 19 already has 3 targets",
+        "soc": "19-1013",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "17",
+        "n_identities": 3,
+        "original_label": "Environmental Engineer",
+        "reason": "major group 17 already has 3 targets",
+        "soc": "17-2081",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "17",
+        "n_identities": 2,
+        "original_label": "Aerospace Engineer",
+        "reason": "major group 17 already has 3 targets",
+        "soc": "17-2011",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "19",
+        "n_identities": 2,
+        "original_label": "Clinical Psychologist",
+        "reason": "major group 19 already has 3 targets",
+        "soc": "19-3033",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "17",
+        "n_identities": 2,
+        "original_label": "Landscape Architect",
+        "reason": "major group 17 already has 3 targets",
+        "soc": "17-1012",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "19",
+        "n_identities": 2,
+        "original_label": "Urban Planner",
+        "reason": "major group 19 already has 3 targets",
+        "soc": "19-3051",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "27",
+        "n_identities": 1,
+        "original_label": "Art Director",
+        "reason": "fewer than 2 identities, so a strict-accuracy gate would rest on one observation",
+        "soc": "27-1011",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "27",
+        "n_identities": 1,
+        "original_label": "Fashion Designer",
+        "reason": "fewer than 2 identities, so a strict-accuracy gate would rest on one observation",
+        "soc": "27-1022",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "19",
+        "n_identities": 1,
+        "original_label": "Hydrologist",
+        "reason": "fewer than 2 identities, so a strict-accuracy gate would rest on one observation",
+        "soc": "19-2043",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "27",
+        "n_identities": 1,
+        "original_label": "Interior Designer",
+        "reason": "fewer than 2 identities, so a strict-accuracy gate would rest on one observation",
+        "soc": "27-1025",
+        "still": "target_eligible, promotable"
+      },
+      {
+        "major_group": "27",
+        "n_identities": 1,
+        "original_label": "Orchestra Conductor",
+        "reason": "fewer than 2 identities, so a strict-accuracy gate would rest on one observation",
+        "soc": "27-2041",
+        "still": "target_eligible, promotable"
+      }
+    ],
+    "n_selected": 12,
+    "per_major_group": {
+      "15": 2,
+      "17": 3,
+      "19": 3,
+      "25": 1,
+      "27": 1,
+      "29": 2
+    },
+    "selected_targets": [
+      "Architect",
+      "Biomedical Engineer",
+      "Civil Engineer",
+      "Cultural Anthropologist",
+      "Data Scientist",
+      "Environmental Scientist",
+      "Graphic Designer",
+      "Marine Biologist",
+      "Museum Curator",
+      "Pediatrician",
+      "Software Engineer",
+      "Veterinarian"
+    ]
+  },
+  "controls_require_hierarchy": true,
+  "coverage_counts_distinct_leaves": "a duplicate raw profession contributes ZERO additional hierarchy-coverage count; coverage is the number of distinct SOC leaf codes among targets, which must equal the number of targets",
+  "different_leaves_sharing_a_parent": {},
+  "duplicate_demotions": [
+    {
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Marine Biologist": 84,
+        "Wildlife Biologist": 3
+      },
+      "now": "same_leaf_retention_control",
+      "raw_label": "Wildlife Biologist",
+      "representative": "Marine Biologist",
+      "soc": "19-1023",
+      "was": "target_eligible",
+      "why": "shares one SOC leaf with the representative, so it is not an independent transformation target; it stays in the hierarchy as a same-leaf control and contributes zero additional coverage"
+    },
+    {
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Ecologist": 1,
+        "Environmental Scientist": 65
+      },
+      "now": "same_leaf_retention_control",
+      "raw_label": "Ecologist",
+      "representative": "Environmental Scientist",
+      "soc": "19-2041",
+      "was": "target_eligible",
+      "why": "shares one SOC leaf with the representative, so it is not an independent transformation target; it stays in the hierarchy as a same-leaf control and contributes zero additional coverage"
+    }
+  ],
+  "duplicate_targets": {
+    "15-1252": [
+      "software developer",
+      "software engineer"
+    ],
+    "19-1023": [
+      "marine biologist",
+      "wildlife biologist"
+    ],
+    "19-2041": [
+      "ecologist",
+      "environmental scientist"
+    ],
+    "19-3091": [
+      "archaeologist",
+      "cultural anthropologist"
+    ],
+    "25-4012": [
+      "art curator",
+      "museum curator"
+    ]
+  },
+  "eligible_targets": [
+    "Aerospace Engineer",
+    "Architect",
+    "Art Director",
+    "Biomedical Engineer",
+    "Botanist",
+    "Civil Engineer",
+    "Clinical Psychologist",
+    "Cultural Anthropologist",
+    "Data Scientist",
+    "Environmental Engineer",
+    "Environmental Scientist",
+    "Fashion Designer",
+    "Graphic Designer",
+    "Hydrologist",
+    "Interior Designer",
+    "Landscape Architect",
+    "Marine Biologist",
+    "Mechanical Engineer",
+    "Museum Curator",
+    "Orchestra Conductor",
+    "Pediatrician",
+    "Software Engineer",
+    "Urban Planner",
+    "Veterinarian"
+  ],
+  "frozen_before_training": true,
+  "g4b_is_a_hard_gate": true,
+  "hierarchy_artifact": {
+    "content_sha256": "ca0edbdda3761d45e1ab8a69351a9204246acc4cd40c3b301bba807dffa83b97",
+    "path": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json"
+  },
+  "identity_counts": {
+    "Aerospace Engineer": 2,
+    "Agricultural Scientist": 1,
+    "Archaeologist": 4,
+    "Architect": 41,
+    "Art Conservator": 2,
+    "Art Curator": 6,
+    "Art Director": 1,
+    "Art Gallery Curator": 1,
+    "Art Historian": 3,
+    "Bioinformatics Researcher": 1,
+    "Biomedical Engineer": 10,
+    "Biomedical Scientist": 1,
+    "Biotechnologist": 1,
+    "Botanist": 5,
+    "CEO of a Renewable Energy Company": 1,
+    "Civil Engineer": 13,
+    "Clinical Psychologist": 2,
+    "Culinary Artist": 1,
+    "Cultural Anthropologist": 5,
+    "Data Scientist": 2,
+    "Ecologist": 1,
+    "Educational Consultant": 1,
+    "Environmental Consultant": 3,
+    "Environmental Engineer": 3,
+    "Environmental Researcher": 1,
+    "Environmental Scientist": 65,
+    "Environmentalist": 1,
+    "Fashion Designer": 1,
+    "Freelance Writer": 1,
+    "Geriatric Specialist": 1,
+    "Graphic Designer": 19,
+    "Healthcare Administrator": 1,
+    "Healthcare Consultant": 1,
+    "High school student": 1,
+    "History Professor": 2,
+    "Human Rights Advocate": 1,
+    "Hydrologist": 1,
+    "Interior Designer": 1,
+    "Landscape Architect": 2,
+    "Landscape Photographer": 1,
+    "Literary Editor": 1,
+    "Marine Biologist": 84,
+    "Marine Ecologist": 1,
+    "Marketing Director": 1,
+    "Mechanical Engineer": 6,
+    "Molecular Biologist": 1,
+    "Museum Curator": 10,
+    "N/A": 1,
+    "NA": 2,
+    "NA (Student)": 1,
+    "Orchestra Conductor": 1,
+    "Pediatric Nurse": 2,
+    "Pediatrician": 8,
+    "Professor of History": 1,
+    "Renewable Energy Consultant": 1,
+    "Retired Architect": 2,
+    "Retired Pharmacist": 1,
+    "Robotics Engineer": 1,
+    "Software Architect": 4,
+    "Software Developer": 15,
+    "Software Developer at an AI firm": 1,
+    "Software Development Manager": 1,
+    "Software Engineer": 117,
+    "Structural Engineer": 1,
+    "Student": 12,
+    "University Professor": 1,
+    "Urban Planner": 2,
+    "Veterinarian": 3,
+    "Veterinary Surgeon": 2,
+    "Wildlife Biologist": 3,
+    "Wildlife Photographer": 2
+  },
+  "kind": "mllmu_g6_target_selection",
+  "matrix_roles": {
+    "Aerospace Engineer": "target_eligible",
+    "Agricultural Scientist": "excluded_out_of_scope",
+    "Archaeologist": "same_leaf_retention_control",
+    "Architect": "target_eligible",
+    "Art Conservator": "excluded_out_of_scope",
+    "Art Curator": "same_leaf_retention_control",
+    "Art Director": "target_eligible",
+    "Art Gallery Curator": "excluded_out_of_scope",
+    "Art Historian": "excluded_out_of_scope",
+    "Bioinformatics Researcher": "excluded_out_of_scope",
+    "Biomedical Engineer": "target_eligible",
+    "Biomedical Scientist": "excluded_out_of_scope",
+    "Biotechnologist": "retained_only",
+    "Botanist": "target_eligible",
+    "CEO of a Renewable Energy Company": "excluded_out_of_scope",
+    "Civil Engineer": "target_eligible",
+    "Clinical Psychologist": "target_eligible",
+    "Culinary Artist": "excluded_out_of_scope",
+    "Cultural Anthropologist": "primary_target",
+    "Data Scientist": "target_eligible",
+    "Ecologist": "same_leaf_retention_control",
+    "Educational Consultant": "excluded_out_of_scope",
+    "Environmental Consultant": "excluded_out_of_scope",
+    "Environmental Engineer": "target_eligible",
+    "Environmental Researcher": "excluded_out_of_scope",
+    "Environmental Scientist": "target_eligible",
+    "Environmentalist": "excluded_out_of_scope",
+    "Fashion Designer": "target_eligible",
+    "Freelance Writer": "excluded_out_of_scope",
+    "Geriatric Specialist": "excluded_out_of_scope",
+    "Graphic Designer": "target_eligible",
+    "Healthcare Administrator": "excluded_out_of_scope",
+    "Healthcare Consultant": "excluded_out_of_scope",
+    "High school student": "excluded_out_of_scope",
+    "History Professor": "excluded_out_of_scope",
+    "Human Rights Advocate": "excluded_out_of_scope",
+    "Hydrologist": "target_eligible",
+    "Interior Designer": "target_eligible",
+    "Landscape Architect": "target_eligible",
+    "Landscape Photographer": "excluded_out_of_scope",
+    "Literary Editor": "excluded_out_of_scope",
+    "Marine Biologist": "target_eligible",
+    "Marine Ecologist": "excluded_out_of_scope",
+    "Marketing Director": "excluded_out_of_scope",
+    "Mechanical Engineer": "target_eligible",
+    "Molecular Biologist": "excluded_out_of_scope",
+    "Museum Curator": "primary_target",
+    "N/A": "excluded_out_of_scope",
+    "NA": "excluded_out_of_scope",
+    "NA (Student)": "excluded_out_of_scope",
+    "Orchestra Conductor": "target_eligible",
+    "Pediatric Nurse": "excluded_out_of_scope",
+    "Pediatrician": "target_eligible",
+    "Professor of History": "excluded_out_of_scope",
+    "Renewable Energy Consultant": "excluded_out_of_scope",
+    "Retired Architect": "excluded_out_of_scope",
+    "Retired Pharmacist": "excluded_out_of_scope",
+    "Robotics Engineer": "excluded_out_of_scope",
+    "Software Architect": "excluded_out_of_scope",
+    "Software Developer": "same_leaf_retention_control",
+    "Software Developer at an AI firm": "excluded_out_of_scope",
+    "Software Development Manager": "excluded_out_of_scope",
+    "Software Engineer": "primary_target",
+    "Structural Engineer": "excluded_out_of_scope",
+    "Student": "excluded_out_of_scope",
+    "University Professor": "excluded_out_of_scope",
+    "Urban Planner": "target_eligible",
+    "Veterinarian": "target_eligible",
+    "Veterinary Surgeon": "excluded_out_of_scope",
+    "Wildlife Biologist": "same_leaf_retention_control",
+    "Wildlife Photographer": "excluded_out_of_scope"
+  },
+  "n_distinct_leaf_codes": 12,
+  "n_eligible_targets": 24,
+  "n_selected_targets": 12,
+  "non_occupational_labels_removed_from_the_matrix": "gx.sibling_controls unpacks a 3-element chain for every identity, so a label with no hierarchy cannot serve even as an unrelated control; the non-occupational labels are therefore out of the G6 matrix entirely and are never described as occupational siblings or cousins",
+  "override_registry": {
+    "applied": [
+      "Archaeologist",
+      "Art Curator",
+      "Biotechnologist",
+      "Botanist",
+      "Cultural Anthropologist",
+      "Ecologist",
+      "High school student",
+      "Marine Biologist",
+      "Museum Curator",
+      "N/A",
+      "NA",
+      "NA (Student)",
+      "Orchestra Conductor",
+      "Software Architect",
+      "Software Developer",
+      "Software Engineer",
+      "Student"
+    ],
+    "n_applied": 17,
+    "not_found_in_source": [],
+    "path": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_manual_overrides.json",
+    "precedence": [
+      "manual_override",
+      "exact_title",
+      "automatic",
+      "exclusion"
+    ],
+    "sha256": "6c11e13b2325b1853824a89476293124bb99ed4e4d4e7ada1315ba4dfd5a0766"
+  },
+  "pre_freeze_checks": {
+    "all_excluded_labels_carry_explicit_reasons": true,
+    "alternate_raw_labels_are_controls_not_targets": true,
+    "artifact_and_selection_manifest_commitment": "enforced by G7 and by verify_hierarchy after the freeze: the hierarchy artifact and the target-selection manifest must be tracked before any G6 training",
+    "every_target_has_one_canonical_soc_leaf": true,
+    "every_target_has_valid_l1_and_l2_parents": true,
+    "g4b_reports_zero_selected_target_collisions": true,
+    "manual_overrides_and_rejected_alternatives_recorded": true,
+    "official_spelling_preserved_in_external_title": true,
+    "source_labels_retain_dataset_spelling": true,
+    "source_soc_file_is_committed": true,
+    "target_count_equals_distinct_leaf_count": true
+  },
+  "primary_targets": [
+    "Cultural Anthropologist",
+    "Museum Curator",
+    "Software Engineer"
+  ],
+  "representative_per_soc_leaf": {
+    "15-1252": {
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Software Developer": 15,
+        "Software Engineer": 117
+      },
+      "n_raw_labels": 2,
+      "representative": "Software Engineer",
+      "same_leaf_controls": [
+        "Software Developer"
+      ],
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "15-2051": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Data Scientist",
+      "same_leaf_controls": []
+    },
+    "17-1011": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Architect",
+      "same_leaf_controls": []
+    },
+    "17-1012": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Landscape Architect",
+      "same_leaf_controls": []
+    },
+    "17-2011": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Aerospace Engineer",
+      "same_leaf_controls": []
+    },
+    "17-2031": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Biomedical Engineer",
+      "same_leaf_controls": []
+    },
+    "17-2051": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Civil Engineer",
+      "same_leaf_controls": []
+    },
+    "17-2081": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Environmental Engineer",
+      "same_leaf_controls": []
+    },
+    "17-2141": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Mechanical Engineer",
+      "same_leaf_controls": []
+    },
+    "19-1013": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Botanist",
+      "same_leaf_controls": []
+    },
+    "19-1023": {
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Marine Biologist": 84,
+        "Wildlife Biologist": 3
+      },
+      "n_raw_labels": 2,
+      "representative": "Marine Biologist",
+      "same_leaf_controls": [
+        "Wildlife Biologist"
+      ],
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "19-1029": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Biotechnologist",
+      "same_leaf_controls": []
+    },
+    "19-2041": {
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Ecologist": 1,
+        "Environmental Scientist": 65
+      },
+      "n_raw_labels": 2,
+      "representative": "Environmental Scientist",
+      "same_leaf_controls": [
+        "Ecologist"
+      ],
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "19-2043": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Hydrologist",
+      "same_leaf_controls": []
+    },
+    "19-3033": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Clinical Psychologist",
+      "same_leaf_controls": []
+    },
+    "19-3051": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Urban Planner",
+      "same_leaf_controls": []
+    },
+    "19-3091": {
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Archaeologist": 4,
+        "Cultural Anthropologist": 5
+      },
+      "n_raw_labels": 2,
+      "representative": "Cultural Anthropologist",
+      "same_leaf_controls": [
+        "Archaeologist"
+      ],
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "25-4012": {
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Art Curator": 6,
+        "Museum Curator": 10
+      },
+      "n_raw_labels": 2,
+      "representative": "Museum Curator",
+      "same_leaf_controls": [
+        "Art Curator"
+      ],
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "27-1011": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Art Director",
+      "same_leaf_controls": []
+    },
+    "27-1022": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Fashion Designer",
+      "same_leaf_controls": []
+    },
+    "27-1024": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Graphic Designer",
+      "same_leaf_controls": []
+    },
+    "27-1025": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Interior Designer",
+      "same_leaf_controls": []
+    },
+    "27-2041": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Orchestra Conductor",
+      "same_leaf_controls": []
+    },
+    "29-1131": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Veterinarian",
+      "same_leaf_controls": []
+    },
+    "29-1221": {
+      "decided_by": "only one raw label maps here",
+      "n_raw_labels": 1,
+      "representative": "Pediatrician",
+      "same_leaf_controls": []
+    }
+  },
+  "selected_targets": [
+    "Architect",
+    "Biomedical Engineer",
+    "Civil Engineer",
+    "Cultural Anthropologist",
+    "Data Scientist",
+    "Environmental Scientist",
+    "Graphic Designer",
+    "Marine Biologist",
+    "Museum Curator",
+    "Pediatrician",
+    "Software Engineer",
+    "Veterinarian"
+  ],
+  "shared_parent_is_not_a_collision": "two different SOC occupations may share a level-1 or level-2 parent; coarsening sibling occupations to a common parent is a legitimate experiment and must not be rejected",
+  "source_table": {
+    "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+    "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15"
+  }
+}

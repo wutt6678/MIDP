@@ -590,42 +590,82 @@ def test_the_proposal_csv_leaves_every_decision_blank(tmp_path, monkeypatch):
     assert set(mh.PROPOSAL_COLUMNS) <= set(rows[0])
 
 
-def test_g4b_reports_two_professions_collapsing_onto_one_code(tmp_path, monkeypatch):
-    """Synonyms are legitimate, but they are ONE target, not two.
+def test_g4b_is_scoped_to_selected_targets_and_is_a_hard_gate(tmp_path, monkeypatch):
+    """Duplicates are legitimate in the table; they are invalid only as targets.
 
-    G4 keys on the normalized label, so it cannot see "Software Engineer" and
-    "Software Developer" both mapped to 15-1252.  Left unreported, a matrix
-    would test the same transformation twice and count it as two professions.
+    Two raw professions sharing one SOC leaf is expected -- the lower-frequency
+    one is a same-leaf retention control.  What must fail, hard, is selecting
+    BOTH as confirmatory targets, because that counts one transformation twice.
     """
     table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
     monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
 
-    def rec(label, mtype):
+    def rec(label, role="target_eligible", mtype="synonym"):
         return mh.build_record(label, table, mtype, external_code="15-1252",
-                               confidence=0.9, reviewer_decision="retained",
-                               reviewer="test")
+                               confidence=0.95, reviewer_decision="retained",
+                               reviewer="test", matrix_role=role)
 
-    gates = mh.run_gates([rec("Software Developer", "synonym")], table)
-    assert gates["gates"]["G4b_no_duplicate_targets"]["shared_codes"] == {}
-    assert gates["gates"]["G4b_no_duplicate_targets"]["warnings"] == []
+    both = [rec("Software Developer"), rec("Software Engineer", mtype="manual")]
 
-    both = [rec("Software Developer", "synonym"), rec("Software Engineer", "manual")]
-    gates = mh.run_gates(both, table)
-    g4b = gates["gates"]["G4b_no_duplicate_targets"]
-    assert g4b["shared_codes"] == {"15-1252": ["software developer",
-                                               "software engineer"]}
-    assert g4b["warn_only"] is True
-    assert g4b["passed"] is True, "a warning must not fail the freeze"
-    assert "ONE transformation target, not 2" in g4b["warnings"][0]
-    assert "overstates" in g4b["consequence"]
-    assert any("15-1252" in w for w in gates["warnings"])
-    # G4 itself stays silent: the labels differ, so it genuinely cannot see this
-    assert gates["gates"]["G4_no_incompatible_branches"]["passed"] is True
+    # neither selected: recorded, not a failure
+    g = mh.run_gates(both, table, selected_targets=[])["gates"][
+        "G4b_no_duplicate_targets"]
+    assert g["warn_only"] is False, "G4b is a hard gate for matrix generation"
+    assert g["passed"] is True and g["n_issues"] == 0
+    assert g["duplicate_targets"] == {"15-1252": ["software developer",
+                                                  "software engineer"]}
+    assert g["scope"].startswith("selected transformation targets")
 
-    # the guard is not vacuous: as a hard gate it fails
-    monkeypatch.setattr(mh, "G4B_IS_A_WARN", False)
-    hard = mh.run_gates(both, table)["gates"]["G4b_no_duplicate_targets"]
-    assert hard["passed"] is False and hard["issues"]
+    # both selected as targets: the hard gate fires
+    g = mh.run_gates(both, table,
+                     selected_targets=["Software Developer",
+                                       "Software Engineer"])["gates"][
+        "G4b_no_duplicate_targets"]
+    assert g["passed"] is False
+    assert g["n_targets_selected"] == 2 and g["n_distinct_leaf_codes"] == 1
+    assert "target collision on SOC leaf 15-1252" in g["issues"][0]
+    assert "same_leaf_retention_control" in g["issues"][0]
+
+    # one demoted to a same-leaf control and not selected: clean
+    fixed = [rec("Software Developer", role="same_leaf_retention_control"),
+             rec("Software Engineer", mtype="manual")]
+    g = mh.run_gates(fixed, table,
+                     selected_targets=["Software Engineer"])["gates"][
+        "G4b_no_duplicate_targets"]
+    assert g["passed"] is True
+    assert g["n_targets_selected"] == 1 == g["n_distinct_leaf_codes"]
+    # a control must never be selected as a target either
+    g = mh.run_gates(fixed, table, selected_targets=["Software Developer",
+                                                     "Software Engineer"])[
+        "gates"]["G4b_no_duplicate_targets"]
+    assert g["passed"] is False
+    assert "a same-leaf duplicate is a control, never a target" in g["issues"][0]
+
+
+def test_g4b_does_not_reject_different_occupations_sharing_a_parent(tmp_path, monkeypatch):
+    """Coarsening sibling occupations to a common parent is the experiment.
+
+    17-1011 Architects and 17-1012 Landscape Architects are different leaves
+    under one broad occupation.  Rejecting that would forbid the sibling
+    transformation G6 exists to test, so it is recorded as legitimate.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, PROPOSAL_TABLE, "p2.csv"))
+    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    recs = [mh.build_record("Architect", table, "exact", 0.95, "retained",
+                            external_code="17-1011", reviewer="t",
+                            matrix_role="target_eligible"),
+            mh.build_record("Landscape Architect", table, "exact", 0.95,
+                            "retained", external_code="17-1012", reviewer="t",
+                            matrix_role="target_eligible")]
+    g = mh.run_gates(recs, table, selected_targets=["Architect",
+                                                    "Landscape Architect"])[
+        "gates"]["G4b_no_duplicate_targets"]
+    assert g["passed"] is True and g["n_issues"] == 0
+    assert g["n_targets_selected"] == 2 == g["n_distinct_leaf_codes"]
+    assert g["different_leaves_sharing_a_parent"] == {"17-1010": ["17-1011",
+                                                                   "17-1012"]}
+    assert "must not be rejected" in g["shared_parent_is_not_a_collision"]
+    assert g["duplicate_targets"] == {}
 
 
 def test_duplicate_targets_are_carried_into_the_frozen_artifact(tmp_path, monkeypatch):
@@ -633,23 +673,378 @@ def test_duplicate_targets_are_carried_into_the_frozen_artifact(tmp_path, monkey
     table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
     monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
 
-    def rec(label, mtype):
+    def rec(label, mtype, adjudication=None):
         return mh.build_record(label, table, mtype, external_code="15-1252",
                                confidence=0.9, reviewer_decision="retained",
-                               reviewer="test")
+                               reviewer="test", adjudication=adjudication)
 
+    # G8 fails a manual mapping that carries no adjudication, so the override has
+    # to travel with the record -- an override is not an unexplained code edit.
+    adj = {"raw_label": "Software Engineer", "decision": "manual_override",
+           "chosen_soc": "15-1252", "chosen_title": "Software Developers",
+           "rejected_candidates": [{"soc": "17-2199",
+                                    "reason": "wrong occupational branch"}],
+           "target_eligible": True, "decided_before_experiment": True}
     records = [rec("Software Developer", "synonym"),
-               rec("Software Engineer", "manual")]
+               rec("Software Engineer", "manual", adj)]
     gates = mh.run_gates(records, table)
+    assert gates["gates"]["G8_pre_freeze_checklist"]["checks"][
+        "manual_overrides_and_rejected_alternatives_recorded"] is True
     art = mh.freeze_hierarchy(table, records, gates,
                               path=tmp_path / "hier.json")
     assert art["duplicate_targets"] == {"15-1252": ["software developer",
                                                      "software engineer"]}
+    # an unadjudicated manual mapping is a hard pre-freeze failure, not a warning
+    gates2 = mh.run_gates([rec("Software Engineer", "manual")], table)
+    with pytest.raises(RuntimeError, match="refusing to freeze"):
+        mh.freeze_hierarchy(table, [rec("Software Engineer", "manual")], gates2,
+                            path=tmp_path / "hier2.json")
+    assert not (tmp_path / "hier2.json").exists()
+
+
+def test_parents_come_from_the_table_not_from_arithmetic(tmp_path):
+    """29-1221 sits under broad 29-1210, and 29-1220 does not exist.
+
+    Arithmetic on the numbering says the broad parent of 29-1221 is 29-1220.
+    The pinned release has no such row -- "Pediatricians, General" sits directly
+    under "Physicians", which also holds 29-1211..29-1229.  Deriving the parent
+    would have meant inventing its title, which is what G1 forbids; resolving it
+    from the table's own level rows gives the real one and records the
+    disagreement instead of hiding it.
+    """
+    text = """\
+Major Group,Minor Group,Broad Occupation,Detailed Occupation,Detailed O*NET-SOC,SOC or O*NET-SOC 2019 Title
+29-0000,,,,,Healthcare Practitioners and Technical Occupations
+,29-1000,,,,Healthcare Diagnosing or Treating Practitioners
+,,29-1210,,,Physicians
+,,,29-1216,,General Internal Medicine Physicians
+,,,29-1221,,"Pediatricians, General"
+"""
+    table = mh.load_taxonomy_table(_write(tmp_path, text, "phys.csv"))
+    assert mh.soc_levels("29-1221")["broad_occupation"] == "29-1220"
+    assert "29-1220" not in table["by_code"], "the arithmetic parent is absent"
+    parents = mh.parents_from_table("29-1221", table)
+    assert parents["broad_occupation"] == "29-1210"
+    assert parents["minor_group"] == "29-1000"
+    assert parents["arithmetic_disagreements"] == ["broad_occupation",
+                                                   "minor_group"]
+    r = mh.build_record("Pediatrician", table, "manual", 0.95, "retained",
+                        external_code="29-1221", reviewer="t")
+    assert r["level2_parent"] == {"code": "29-1210", "title": "Physicians",
+                                  "level": "broad_occupation"}
+    assert r["parents_resolved_from"] == "source_table"
+    assert r["parent_arithmetic_disagreements"]["broad_occupation"] == {
+        "arithmetic": "29-1220", "source_table": "29-1210"}
+    # a code the table does not carry resolves to nothing rather than a guess
+    assert mh.parents_from_table("29-9999", table) == {}
+
+
+def test_the_confirmatory_selection_is_capped_and_defers_with_reasons(tmp_path):
+    """Deferred is not rejected: the role stays target_eligible.
+
+    A target with a single identity would make a strict-accuracy gate rest on one
+    observation, and a branch holding every target would leave no sibling to
+    preserve -- so both are capped, and each omission records why.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, PROPOSAL_TABLE, "p3.csv"))
+    recs = []
+    for label, code, role in (("Architect", "17-1011", "primary_target"),
+                              ("Landscape Architect", "17-1012", "target_eligible"),
+                              ("Database Architects Person", "15-1243",
+                               "target_eligible"),
+                              ("Data Scientist", "15-2051", "target_eligible")):
+        recs.append(mh.build_record(label, table, "exact", 0.95, "retained",
+                                    external_code=code, reviewer="t",
+                                    matrix_role=role))
+    counts = {"Architect": 41, "Landscape Architect": 2,
+              "Database Architects Person": 5, "Data Scientist": 2}
+    out = mh.select_confirmatory_targets(recs, counts, max_per_major_group=1,
+                                         min_identities=2)
+    # frequency outranks lexical order: "Data Scientist" sorts first but has 2
+    # identities against "Database Architects Person"'s 5, so it is the one that
+    # misses the single-per-branch cap.  Lexical order is only the LAST criterion.
+    assert out["selected_targets"] == ["Architect", "Database Architects Person"]
+    assert out["per_major_group"] == {"15": 1, "17": 1}
+    deferred = {d["original_label"]: d["reason"] for d in out["deferred"]}
+    assert "already has 1 targets" in deferred["Landscape Architect"]
+    assert "already has 1 targets" in deferred["Data Scientist"]
+    assert all(d["still"] == "target_eligible, promotable"
+               for d in out["deferred"])
+    # the branch is recorded structurally, not only inside the reason text
+    by_lab = {d["original_label"]: d for d in out["deferred"]}
+    assert by_lab["Landscape Architect"]["major_group"] == "17"
+    assert by_lab["Data Scientist"]["major_group"] == "15"
+    # equal frequency falls through to the deterministic lexical tie-breaker
+    tie = dict(counts, **{"Database Architects Person": 2})
+    out3 = mh.select_confirmatory_targets(recs, tie, max_per_major_group=1,
+                                          min_identities=2)
+    assert out3["selected_targets"] == ["Architect", "Data Scientist"]
+    # a single-identity profession is deferred on evidence, not on branch
+    counts2 = dict(counts, **{"Data Scientist": 1})
+    out2 = mh.select_confirmatory_targets(recs, counts2, max_per_major_group=3,
+                                          min_identities=2)
+    assert "Data Scientist" not in out2["selected_targets"]
+    assert "one observation" in {
+        d["original_label"]: d["reason"] for d in out2["deferred"]}["Data Scientist"]
+    # an eligible record with no SOC leaf is deferred with a reason, not crashed
+    orphan = mh.build_record("Ghost", table, "ambiguous", 0.5, "retained",
+                             reviewer="t", matrix_role="target_eligible")
+    assert orphan["external_occupation_id"] is None
+    out4 = mh.select_confirmatory_targets([orphan], {"Ghost": 9})
+    assert out4["selected_targets"] == []
+    assert "no canonical SOC leaf" in out4["deferred"][0]["reason"]
+
+
+# ---------------------------------------------------------------------- #
+# adjudication: the override registry and its precedence
+# ---------------------------------------------------------------------- #
+_OV = {"raw_label": "Software Engineer", "decision": "manual_override",
+       "chosen_soc": "15-1252", "chosen_title": "Software Developers",
+       "rejected_candidates": [{"soc": "17-2199", "reason": "wrong branch"}],
+       "target_eligible": True,
+       "rationale": "software engineering is the software-developer occupation",
+       "decided_before_experiment": True}
+
+
+def _registry(tmp_path, entries, name="ov.json"):
+    p = tmp_path / name
+    p.write_text(json.dumps({"overrides": entries}), encoding="utf-8")
+    return p
+
+
+def test_the_override_registry_refuses_an_unexplained_or_unfrozen_decision(tmp_path):
+    """A registry that cannot be audited is refused outright, not defaulted.
+
+    Each refusal names the field, because "the registry failed to load" tells a
+    reviewer nothing about which adjudication to fix.  A MISSING registry is
+    different from a malformed one: no overrides yet is a legitimate state.
+    """
+    assert mh.load_manual_overrides(tmp_path / "absent.json") == {}
+    ok = mh.load_manual_overrides(_registry(tmp_path, [_OV]))
+    assert ok["Software Engineer"]["chosen_soc"] == "15-1252"
+
+    for entries, needle in (
+            ([{k: v for k, v in _OV.items() if k != "rationale"}], "rationale"),
+            ([dict(_OV, decided_before_experiment=False)],
+             "decided_before_experiment"),
+            ([dict(_OV, decision="guessed")], "not one of"),
+            # only an exclusion may omit the code it maps to
+            ([dict(_OV, decision="same_mapping", chosen_soc="")], "chosen_soc"),
+    ):
+        with pytest.raises(RuntimeError) as exc:
+            mh.load_manual_overrides(_registry(tmp_path, entries))
+        assert needle in str(exc.value), needle
+    # an exclusion needs no code, and still needs a rationale
+    exc = dict(_OV, raw_label="Software Architect", decision="exclude",
+               chosen_soc=None, chosen_title=None, target_eligible=False)
+    assert "Software Architect" in mh.load_manual_overrides(
+        _registry(tmp_path, [exc]))
+
+
+def test_a_manual_override_outranks_a_higher_scoring_automatic_proposal(tmp_path):
+    """manual > exact title > automatic > exclusion, and nothing reverses it.
+
+    The precedence matters precisely when the automatic ranker disagrees: for
+    Software Engineer the lexical matcher's best recall reaches the generic
+    residual 17-2199, and a frozen adjudication must still win.  A model
+    proposal is data here, not authority.
+    """
+    ovs = mh.load_manual_overrides(_registry(tmp_path, [_OV]))
+    auto = {"best_match_kind": "exact_title", "best_recall": 1.0,
+            "ambiguous": False,
+            "candidates": [{"code": "17-2199", "major_group": "17",
+                            "title": "Engineers, All Other"}]}
+    dec, prec = mh.resolve_mapping("Software Engineer", ovs, auto)
+    assert prec == "manual_override" and dec["chosen_soc"] == "15-1252"
+    # with no override the same proposal is accepted at the exact-title rung
+    dec2, prec2 = mh.resolve_mapping("Software Engineer", {}, auto)
+    assert (prec2, dec2["chosen_soc"]) == ("exact_title", "17-2199")
+    # an ambiguous top rank never resolves automatically, it excludes with why
+    amb = dict(auto, ambiguous=True)
+    dec3, prec3 = mh.resolve_mapping("Architect", {}, amb)
+    assert prec3 == "exclusion" and dec3["decision"] == "exclude"
+    assert dec3["target_eligible"] is False and "ambiguous=True" in dec3["rationale"]
+    # a partial recall is not a mapping either
+    weak = dict(auto, best_match_kind="head_tokens", best_recall=0.5,
+                ambiguous=False)
+    assert mh.resolve_mapping("X", {}, weak)[1] == "exclusion"
+
+
+def test_semantic_cleanliness_only_separates_what_the_first_two_criteria_cannot():
+    """Criterion 3 is a tie-break of last resort before lexical order.
+
+    It is a deterministic proxy, not a judgement: catch-all leaf, then a
+    non-occupational qualifier, then fewer modifiers.  It must never outrank
+    confidence or frequency, so ``select_target_representatives`` only reaches
+    it when both are tied.
+    """
+    c = mh._semantic_cleanliness
+    # each arm pinned directly: a comparison alone can be carried by a LATER arm,
+    # and "all"/"other" are stopwords so "Biological Scientists, All Other" has
+    # the same token count as many a clean label.  "Engineers, All Other" and
+    # "Biotechnologist" both reduce to one token, so ONLY the catch-all arm can
+    # order them -- which is what makes this pair a real test of that arm.
+    assert c("Engineers, All Other")[0] == 1 and c("Biotechnologist")[0] == 0
+    assert c("Engineers, All Other")[2] == c("Biotechnologist")[2] == 1
+    assert c("Biotechnologist") < c("Engineers, All Other")
+    assert c("Retired Architect")[1] == 1 and c("Architect")[1] == 0
+    assert c("Architect") < c("Retired Architect")
+    assert c("Curator") < c("Museum Art Curator")
+    assert c("Art Curator")[:3] == c("Museum Curator")[:3], \
+        "the real duplicate pairs are separated by frequency, not by semantics"
+    # the arms are ordered: a catch-all outranks a qualifier, which outranks
+    # modifier count, so a clean two-word label still beats a residual leaf
+    assert c("Museum Art Curator") < c("Engineers, All Other")
+
+
+def test_the_representative_rule_picks_the_named_winners_on_frequency(tmp_path):
+    """The frozen rule reproduces the adjudicated pairs from counts alone.
+
+    Software Engineer over Software Developer (117 v 15), Museum Curator over
+    Art Curator (10 v 6), Cultural Anthropologist over Archaeologist (5 v 4) --
+    all three decided by identity frequency at equal confidence, and the losers
+    become same-leaf retention controls rather than being dropped.  Confidence
+    still outranks frequency when it differs.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+
+    def rec(label, code, conf=0.95, role=None):
+        return mh.build_record(label, table, "manual", conf, "retained",
+                               external_code=code, reviewer="t",
+                               matrix_role=role)
+
+    counts = {"Software Engineer": 117, "Software Developer": 15,
+              "Museum Curator": 10, "Art Curator": 6,
+              "Cultural Anthropologist": 5, "Archaeologist": 4}
+    recs = [rec("Software Developer", "15-1252"), rec("Software Engineer", "15-1252"),
+            rec("Art Curator", "25-4012"), rec("Museum Curator", "25-4012"),
+            rec("Archaeologist", "19-3091"), rec("Cultural Anthropologist", "19-3091")]
+    sel = mh.select_target_representatives(recs, counts)
+    assert [sel["15-1252"]["representative"], sel["25-4012"]["representative"],
+            sel["19-3091"]["representative"]] == [
+                "Software Engineer", "Museum Curator", "Cultural Anthropologist"]
+    assert sel["15-1252"]["same_leaf_controls"] == ["Software Developer"]
+    assert all(v["decided_by"] == "identity frequency" for v in sel.values())
+    assert all(v["n_raw_labels"] == 2 for v in sel.values())
+    # a lower-frequency label with strictly higher confidence wins instead
+    conf = mh.select_target_representatives(
+        [rec("Software Developer", "15-1252", conf=0.99),
+         rec("Software Engineer", "15-1252", conf=0.90)], counts)
+    assert conf["15-1252"]["representative"] == "Software Developer"
+    assert conf["15-1252"]["decided_by"] == "mapping confidence"
 
 
 # ---------------------------------------------------------------------- #
 # freeze / verify
 # ---------------------------------------------------------------------- #
+def test_recorded_paths_are_portable_and_tracking_is_cwd_independent(
+        tmp_path, monkeypatch):
+    """A committed artifact must verify from another clone and another cwd.
+
+    ``verify_hierarchy`` re-opens the table the artifact names, so an absolute
+    recorded path made the frozen hierarchy unverifiable anywhere but the
+    machine that wrote it.  Separately, ``git ls-files`` resolves a relative
+    pathspec against the process cwd, so the tracked check could report a
+    committed file as untracked when the CLI was run from elsewhere.
+    """
+    tracked = mh.SCRIPT_DIR / "e2c_v3_mllmu_hierarchy.py"
+    rel = mh.record_path(tracked)
+    assert not rel.startswith("/"), rel
+    assert mh.resolve_path(rel) == tracked.resolve()
+    # a path outside the repository stays absolute: there is nothing to anchor to
+    outside = tmp_path / "x.csv"
+    outside.write_text("a\n", encoding="utf-8")
+    assert mh.record_path(outside).startswith("/")
+    assert mh.resolve_path(mh.record_path(outside)) == outside.resolve()
+    assert mh._is_tracked(outside) is False
+
+    here = Path.cwd()
+    assert mh._is_tracked(tracked) is True
+    try:
+        monkeypatch.chdir(tmp_path)
+        assert mh._is_tracked(tracked) is True, \
+            "the tracked check must not depend on the process cwd"
+        # REPO_ROOT wins over cwd when the same relative path exists under both:
+        # resolving against cwd here would silently read a DIFFERENT file that
+        # merely happens to share a layout, and the sha256 check would then
+        # compare the wrong bytes.
+        decoy = tmp_path / rel
+        decoy.parent.mkdir(parents=True, exist_ok=True)
+        decoy.write_text("not the real table\n", encoding="utf-8")
+        assert mh.resolve_path(rel) == tracked.resolve()
+        assert mh.resolve_path(rel) != decoy.resolve()
+    finally:
+        monkeypatch.chdir(here)
+
+    # and a frozen artifact carries no machine-specific prefix for a repo file
+    table = mh.load_taxonomy_table(tracked.parent.parent /
+                                   "e2c_mllmu" / "external" /
+                                   "soc_2019_structure.csv")
+    assert not table["path"].startswith("/")
+    assert table["path_absolute_at_freeze"].startswith("/")
+    rec = mh.build_record("Software Developer", table, "synonym",
+                          external_code="15-1252", confidence=0.95,
+                          reviewer_decision="retained", reviewer="t")
+    assert not rec["source_ref"]["path"].startswith("/")
+
+
+def test_the_official_title_is_verbatim_and_only_the_output_label_may_shorten(
+        tmp_path, monkeypatch):
+    """The authority field keeps the release's own words, including the long ones.
+
+    19-2041 is officially "Environmental Scientists and Specialists, Including
+    Health".  Shortening ``external_title`` would make the mapping unauditable
+    against the pinned release, while forcing the long form into the model's
+    output vocabulary would make a strict-accuracy gate measure transcription
+    instead of the transformation -- so the two fields are separate, and G8
+    fails a shortened authority field specifically.
+    """
+    # isolate the spelling check: G8's other conditions are satisfied here, so a
+    # failure can only come from the field under test.
+    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    table = mh.load_taxonomy_table(_write(tmp_path, PROPOSAL_TABLE, "t.csv"))
+    long_title = "Environmental Scientists and Specialists, Including Health"
+    assert table["by_code"]["19-2041"] == long_title
+    adj = {"raw_label": "Ecologist", "decision": "manual_override",
+           "chosen_soc": "19-2041", "chosen_title": long_title,
+           "rejected_candidates": [], "target_eligible": True,
+           "rationale": "ecology is environmental science",
+           "decided_before_experiment": True}
+
+    r = mh.build_record("Ecologist", table, "manual", 0.95, "retained",
+                        external_code="19-2041", reviewer="t", adjudication=adj,
+                        output_label="Environmental Scientists and Specialists")
+    assert r["external_title"] == long_title
+    assert r["output_label"] == "Environmental Scientists and Specialists"
+    assert r["output_label_is_shortened"] is True
+    g8 = mh.run_gates([r], table)["gates"]["G8_pre_freeze_checklist"]
+    assert g8["checks"]["official_spelling_preserved_in_external_title"] is True
+    assert g8["passed"] is True, g8["issues"]
+
+    # without an explicit output_label the official title IS the output label
+    plain = mh.build_record("Ecologist", table, "manual", 0.95, "retained",
+                            external_code="19-2041", reviewer="t")
+    assert plain["output_label"] == long_title
+    assert "output_label_is_shortened" not in plain
+
+    # shortening the AUTHORITY field instead is a hard pre-freeze failure, and
+    # it is the ONLY thing that changed between the two records
+    bad = dict(r, external_title="Environmental Scientists and Specialists")
+    g8b = mh.run_gates([bad], table)["gates"]["G8_pre_freeze_checklist"]
+    assert g8b["checks"]["official_spelling_preserved_in_external_title"] is False
+    assert g8b["passed"] is False
+    assert len(g8b["issues"]) == 1 and "verbatim" in g8b["issues"][0]
+
+    # the release's own spelling survives even where the dataset differs: SOC
+    # writes "Archeologists", the source label writes "Archaeologist"
+    a = mh.build_record("Archaeologist", table, "manual", 0.95, "retained",
+                        external_code="19-3091", reviewer="t")
+    assert a["external_title"] == "Anthropologists and Archeologists"
+    assert a["original_label"] == "Archaeologist", \
+        "the source label keeps the dataset spelling; only the external title " \
+        "follows the release"
+
+
 def test_a_hierarchy_that_fails_its_own_gates_is_never_written(tmp_path, monkeypatch):
     """``freeze_hierarchy`` refuses to produce a committed input from a failure.
 
@@ -705,7 +1100,8 @@ def test_g7_fails_until_the_artifact_is_committed(tmp_path, monkeypatch):
     """The hierarchy must be committed BEFORE any G6 training.
 
     An untracked hierarchy is not an input anyone can audit, so G7 refuses it
-    and a downstream builder refuses to read it.
+    and a downstream builder refuses to read it.  G8 fails alongside it, because
+    the same commitment requirement covers the source SOC table.
     """
     table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
     records = [mh.build_record(
@@ -715,12 +1111,51 @@ def test_g7_fails_until_the_artifact_is_committed(tmp_path, monkeypatch):
     monkeypatch.setattr(mh, "HIERARCHY_PATH", tmp_path / "hier.json")
     monkeypatch.setattr(mh, "_is_tracked", lambda path: False)
     gates = mh.run_gates(records, table)
-    assert gates["failed_gates"] == ["G7_committed_before_training"]
+    assert gates["failed_gates"] == ["G7_committed_before_training",
+                                     "G8_pre_freeze_checklist"]
     assert "not tracked by git" in gates["gates"][
         "G7_committed_before_training"]["issues"][0]
+    g8 = gates["gates"]["G8_pre_freeze_checklist"]
+    assert g8["checks"]["source_soc_file_is_committed"] is False
+    assert "source SOC table" in g8["issues"][0]
 
     monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
-    assert mh.run_gates(records, table)["passed"] is True
+    ok = mh.run_gates(records, table)
+    assert ok["passed"] is True and ok["failed_gates"] == []
+
+
+def test_the_first_write_may_leave_only_g7_outstanding(tmp_path, monkeypatch):
+    """G7 cannot be satisfied by the write that creates the file.
+
+    The artifact is necessarily untracked until the commit that follows the
+    freeze, so refusing to write on G7 alone would make the first freeze
+    impossible.  It is recorded as pending instead of being waived, and any
+    other failing gate still blocks the write absolutely.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    records = [mh.build_record(
+        "Software Developer", table, "synonym", external_code="15-1252",
+        confidence=0.95, reviewer_decision="retained", reviewer="test")]
+    monkeypatch.setattr(mh, "_is_tracked", lambda path: False)
+    gates = mh.run_gates(records, table)
+    assert gates["failed_gates"] == ["G7_committed_before_training",
+                                     "G8_pre_freeze_checklist"]
+    target = tmp_path / "hier.json"
+    # two gates outstanding, one of them not G7 -> refused
+    with pytest.raises(RuntimeError) as exc:
+        mh.freeze_hierarchy(table, records, gates, path=target)
+    assert "refusing to freeze" in str(exc.value)
+    assert not target.exists()
+
+    # G7 alone outstanding -> written, and the pending state is recorded
+    monkeypatch.setattr(mh, "_is_tracked",
+                        lambda path: str(path).endswith("table.csv"))
+    gates = mh.run_gates(records, table)
+    assert gates["failed_gates"] == ["G7_committed_before_training"]
+    art = mh.freeze_hierarchy(table, records, gates, path=target)
+    assert target.exists()
+    assert art["g7_status"].startswith("pending_commit")
+    assert "before any G6 training" in art["g7_status"]
 
 
 def test_verify_re_reads_the_table_and_fails_if_the_hash_moved(tmp_path, monkeypatch):

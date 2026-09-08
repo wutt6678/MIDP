@@ -1,0 +1,3520 @@
+{
+  "kind": "mllmu_external_profession_hierarchy",
+  "audited": true,
+  "g7_status": "pending_commit: this artifact must be committed before any G6 training or matrix build",
+  "taxonomy": "2018 SOC / O*NET-SOC 2019",
+  "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+  "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+  "source_table": {
+    "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+    "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+    "path_relative_to": "repository root",
+    "path_absolute_at_freeze": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+    "n_rows": 1596,
+    "layout": "wide_official",
+    "header_line": 4,
+    "n_preamble_rows_skipped": 3,
+    "licence": "2018 SOC structure: U.S. government work, public domain.  O*NET-SOC 2019 content: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/), attribution to the O*NET Resource Center.  Committed here as the frozen external authority for G6.0; see source_table.sha256.",
+    "code_column": "Major Group + Minor Group + Broad Occupation + Detailed Occupation + Detailed O*NET-SOC",
+    "title_column": "SOC or O*NET-SOC 2019 Title",
+    "levels_present": {
+      "major_group": 23,
+      "minor_group": 98,
+      "broad_occupation": 459,
+      "detailed_occupation": 867
+    },
+    "allow_quarantine": false,
+    "n_quarantined_rows": 0,
+    "quarantined_rows": [],
+    "quarantine_note": null
+  },
+  "required_record_fields": [
+    "original_label",
+    "normalized_label",
+    "taxonomy",
+    "taxonomy_version",
+    "external_occupation_id",
+    "level1_parent",
+    "level2_parent",
+    "mapping_type",
+    "source_ref",
+    "confidence",
+    "reviewer_decision"
+  ],
+  "records": [
+    {
+      "original_label": "Aerospace Engineer",
+      "normalized_label": "aerospace engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "17-2011",
+      "candidate_external_ids": [
+        "17-2011"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Aerospace Engineer",
+        "decision": "automatic",
+        "chosen_soc": "17-2011",
+        "chosen_title": "Aerospace Engineers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 2
+      },
+      "external_title": "Aerospace Engineers",
+      "output_label": "Aerospace Engineers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "17-2000",
+        "title": "Engineers"
+      },
+      "level2_parent": {
+        "code": "17-2010",
+        "title": "Aerospace Engineers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "17-0000",
+        "title": "Architecture and Engineering Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Agricultural Scientist",
+      "normalized_label": "agricultural scientist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Agricultural Scientist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Archaeologist",
+      "normalized_label": "archaeologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-3091",
+      "candidate_external_ids": [
+        "19-3091"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "same_leaf_retention_control",
+      "adjudication": {
+        "raw_label": "Archaeologist",
+        "decision": "same_mapping",
+        "chosen_soc": "19-3091",
+        "chosen_title": "Anthropologists and Archeologists",
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "same_leaf_retention_control",
+        "confidence": 0.95,
+        "note": "the pinned release spells the occupation 'Archeologists'; the official spelling is preserved verbatim in external_title and the dataset spelling is preserved verbatim in original_label",
+        "rationale": "same SOC leaf as Cultural Anthropologist, so not an independent transformation target; retained as a same-leaf control",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 4
+      },
+      "external_title": "Anthropologists and Archeologists",
+      "output_label": "Anthropologists and Archeologists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-3000",
+        "title": "Social Scientists and Related Workers"
+      },
+      "level2_parent": {
+        "code": "19-3090",
+        "title": "Miscellaneous Social Scientists and Related Workers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Architect",
+      "normalized_label": "architect",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "17-1011",
+      "candidate_external_ids": [
+        "17-1011"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Architect",
+        "decision": "automatic",
+        "chosen_soc": "17-1011",
+        "chosen_title": "Architects, Except Landscape and Naval",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 41
+      },
+      "external_title": "Architects, Except Landscape and Naval",
+      "output_label": "Architects, Except Landscape and Naval",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "17-1000",
+        "title": "Architects, Surveyors, and Cartographers"
+      },
+      "level2_parent": {
+        "code": "17-1010",
+        "title": "Architects, Except Naval",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "17-0000",
+        "title": "Architecture and Engineering Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Art Conservator",
+      "normalized_label": "art conservator",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Art Conservator' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Art Curator",
+      "normalized_label": "art curator",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "25-4012",
+      "candidate_external_ids": [
+        "25-4012"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "same_leaf_retention_control",
+      "adjudication": {
+        "raw_label": "Art Curator",
+        "decision": "same_mapping",
+        "chosen_soc": "25-4012",
+        "chosen_title": "Curators",
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "same_leaf_retention_control",
+        "confidence": 0.95,
+        "rationale": "same SOC leaf as Museum Curator, so not an independent transformation target; retained as a same-leaf control",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 6
+      },
+      "external_title": "Curators",
+      "output_label": "Curators",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "25-4000",
+        "title": "Librarians, Curators, and Archivists"
+      },
+      "level2_parent": {
+        "code": "25-4010",
+        "title": "Archivists, Curators, and Museum Technicians",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "25-0000",
+        "title": "Educational Instruction and Library Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Art Director",
+      "normalized_label": "art director",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "27-1011",
+      "candidate_external_ids": [
+        "27-1011"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Art Director",
+        "decision": "automatic",
+        "chosen_soc": "27-1011",
+        "chosen_title": "Art Directors",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 1
+      },
+      "external_title": "Art Directors",
+      "output_label": "Art Directors",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "27-1000",
+        "title": "Art and Design Workers"
+      },
+      "level2_parent": {
+        "code": "27-1010",
+        "title": "Artists and Related Workers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "27-0000",
+        "title": "Arts, Design, Entertainment, Sports, and Media Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Art Gallery Curator",
+      "normalized_label": "art gallery curator",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Art Gallery Curator' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Art Historian",
+      "normalized_label": "art historian",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Art Historian' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Bioinformatics Researcher",
+      "normalized_label": "bioinformatics researcher",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Bioinformatics Researcher' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Biomedical Engineer",
+      "normalized_label": "biomedical engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "17-2031",
+      "candidate_external_ids": [
+        "17-2031"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Biomedical Engineer",
+        "decision": "automatic",
+        "chosen_soc": "17-2031",
+        "chosen_title": "Bioengineers and Biomedical Engineers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 10
+      },
+      "external_title": "Bioengineers and Biomedical Engineers",
+      "output_label": "Bioengineers and Biomedical Engineers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "17-2000",
+        "title": "Engineers"
+      },
+      "level2_parent": {
+        "code": "17-2030",
+        "title": "Bioengineers and Biomedical Engineers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "17-0000",
+        "title": "Architecture and Engineering Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Biomedical Scientist",
+      "normalized_label": "biomedical scientist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Biomedical Scientist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Biotechnologist",
+      "normalized_label": "biotechnologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-1029",
+      "candidate_external_ids": [
+        "19-1029"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.7,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "retained_only",
+      "adjudication": {
+        "raw_label": "Biotechnologist",
+        "decision": "manual_override",
+        "chosen_soc": "19-1029",
+        "chosen_title": "Biological Scientists, All Other",
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "retained_only",
+        "confidence": 0.7,
+        "rationale": "retained-only initially, not a confirmatory target: 'All Other' is already a catch-all leaf and produces a less interpretable granularity transition",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 1
+      },
+      "external_title": "Biological Scientists, All Other",
+      "output_label": "Biological Scientists, All Other",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-1000",
+        "title": "Life Scientists"
+      },
+      "level2_parent": {
+        "code": "19-1020",
+        "title": "Biological Scientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Botanist",
+      "normalized_label": "botanist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-1013",
+      "candidate_external_ids": [
+        "19-1013"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.9,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Botanist",
+        "decision": "manual_override",
+        "chosen_soc": "19-1013",
+        "chosen_title": "Soil and Plant Scientists",
+        "rejected_candidates": [],
+        "target_eligible": true,
+        "matrix_role": "target_eligible",
+        "confidence": 0.9,
+        "rationale": "the lexical matcher finds no candidate because SOC has no 'Botanists' title; plant science is the defensible manual mapping",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 5
+      },
+      "external_title": "Soil and Plant Scientists",
+      "output_label": "Soil and Plant Scientists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-1000",
+        "title": "Life Scientists"
+      },
+      "level2_parent": {
+        "code": "19-1010",
+        "title": "Agricultural and Food Scientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "CEO of a Renewable Energy Company",
+      "normalized_label": "ceo of a renewable energy company",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='none', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'CEO of a Renewable Energy Company' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Civil Engineer",
+      "normalized_label": "civil engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "17-2051",
+      "candidate_external_ids": [
+        "17-2051"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Civil Engineer",
+        "decision": "automatic",
+        "chosen_soc": "17-2051",
+        "chosen_title": "Civil Engineers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 13
+      },
+      "external_title": "Civil Engineers",
+      "output_label": "Civil Engineers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "17-2000",
+        "title": "Engineers"
+      },
+      "level2_parent": {
+        "code": "17-2050",
+        "title": "Civil Engineers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "17-0000",
+        "title": "Architecture and Engineering Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Clinical Psychologist",
+      "normalized_label": "clinical psychologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-3033",
+      "candidate_external_ids": [
+        "19-3033"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Clinical Psychologist",
+        "decision": "automatic",
+        "chosen_soc": "19-3033",
+        "chosen_title": "Clinical and Counseling Psychologists",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 2
+      },
+      "external_title": "Clinical and Counseling Psychologists",
+      "output_label": "Clinical and Counseling Psychologists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-3000",
+        "title": "Social Scientists and Related Workers"
+      },
+      "level2_parent": {
+        "code": "19-3030",
+        "title": "Psychologists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Culinary Artist",
+      "normalized_label": "culinary artist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Culinary Artist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Cultural Anthropologist",
+      "normalized_label": "cultural anthropologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-3091",
+      "candidate_external_ids": [
+        "19-3091"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "primary_target",
+      "adjudication": {
+        "raw_label": "Cultural Anthropologist",
+        "decision": "manual_override",
+        "chosen_soc": "19-3091",
+        "chosen_title": "Anthropologists and Archeologists",
+        "rejected_candidates": [
+          {
+            "soc": "25-1062",
+            "title": "Area, Ethnic, and Cultural Studies Teachers, Postsecondary",
+            "reason": "teaching occupation rather than the research occupation; wrong branch"
+          }
+        ],
+        "target_eligible": true,
+        "matrix_role": "primary_target",
+        "confidence": 0.95,
+        "rationale": "chosen over Archaeologist because it has greater coverage, 5 versus 4",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 5
+      },
+      "external_title": "Anthropologists and Archeologists",
+      "output_label": "Anthropologists and Archeologists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-3000",
+        "title": "Social Scientists and Related Workers"
+      },
+      "level2_parent": {
+        "code": "19-3090",
+        "title": "Miscellaneous Social Scientists and Related Workers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Data Scientist",
+      "normalized_label": "data scientist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "15-2051",
+      "candidate_external_ids": [
+        "15-2051"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Data Scientist",
+        "decision": "automatic",
+        "chosen_soc": "15-2051",
+        "chosen_title": "Data Scientists",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 2
+      },
+      "external_title": "Data Scientists",
+      "output_label": "Data Scientists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "15-2000",
+        "title": "Mathematical Science Occupations"
+      },
+      "level2_parent": {
+        "code": "15-2050",
+        "title": "Data Scientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "15-0000",
+        "title": "Computer and Mathematical Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Ecologist",
+      "normalized_label": "ecologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-2041",
+      "candidate_external_ids": [
+        "19-2041"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "same_leaf_retention_control",
+      "adjudication": {
+        "raw_label": "Ecologist",
+        "decision": "manual_override",
+        "chosen_soc": "19-2041",
+        "chosen_title": "Environmental Scientists and Specialists, Including Health",
+        "shorter_output_label": "Environmental Scientists and Specialists",
+        "rejected_candidates": [],
+        "target_eligible": true,
+        "matrix_role": "target_eligible",
+        "confidence": 0.95,
+        "rationale": "ecology sits inside environmental science; the official title in the pinned release is the longer form and is preserved verbatim in external_title, while a shorter frozen output label is allowed",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 1
+      },
+      "output_label": "Environmental Scientists and Specialists",
+      "output_label_is_shortened": true,
+      "external_title": "Environmental Scientists and Specialists, Including Health",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-2000",
+        "title": "Physical Scientists"
+      },
+      "level2_parent": {
+        "code": "19-2040",
+        "title": "Environmental Scientists and Geoscientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      },
+      "target_eligible": false,
+      "demoted_by_duplicate_policy": true
+    },
+    {
+      "original_label": "Educational Consultant",
+      "normalized_label": "educational consultant",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Educational Consultant' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Environmental Consultant",
+      "normalized_label": "environmental consultant",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Environmental Consultant' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Environmental Engineer",
+      "normalized_label": "environmental engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "17-2081",
+      "candidate_external_ids": [
+        "17-2081"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Environmental Engineer",
+        "decision": "automatic",
+        "chosen_soc": "17-2081",
+        "chosen_title": "Environmental Engineers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 3
+      },
+      "external_title": "Environmental Engineers",
+      "output_label": "Environmental Engineers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "17-2000",
+        "title": "Engineers"
+      },
+      "level2_parent": {
+        "code": "17-2080",
+        "title": "Environmental Engineers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "17-0000",
+        "title": "Architecture and Engineering Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Environmental Researcher",
+      "normalized_label": "environmental researcher",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Environmental Researcher' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Environmental Scientist",
+      "normalized_label": "environmental scientist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-2041",
+      "candidate_external_ids": [
+        "19-2041"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Environmental Scientist",
+        "decision": "automatic",
+        "chosen_soc": "19-2041",
+        "chosen_title": "Environmental Scientists and Specialists, Including Health",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 65
+      },
+      "external_title": "Environmental Scientists and Specialists, Including Health",
+      "output_label": "Environmental Scientists and Specialists, Including Health",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-2000",
+        "title": "Physical Scientists"
+      },
+      "level2_parent": {
+        "code": "19-2040",
+        "title": "Environmental Scientists and Geoscientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Environmentalist",
+      "normalized_label": "environmentalist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='none', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Environmentalist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Fashion Designer",
+      "normalized_label": "fashion designer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "27-1022",
+      "candidate_external_ids": [
+        "27-1022"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Fashion Designer",
+        "decision": "automatic",
+        "chosen_soc": "27-1022",
+        "chosen_title": "Fashion Designers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 1
+      },
+      "external_title": "Fashion Designers",
+      "output_label": "Fashion Designers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "27-1000",
+        "title": "Art and Design Workers"
+      },
+      "level2_parent": {
+        "code": "27-1020",
+        "title": "Designers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "27-0000",
+        "title": "Arts, Design, Entertainment, Sports, and Media Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Freelance Writer",
+      "normalized_label": "freelance writer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Freelance Writer' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Geriatric Specialist",
+      "normalized_label": "geriatric specialist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Geriatric Specialist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Graphic Designer",
+      "normalized_label": "graphic designer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "27-1024",
+      "candidate_external_ids": [
+        "27-1024"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Graphic Designer",
+        "decision": "automatic",
+        "chosen_soc": "27-1024",
+        "chosen_title": "Graphic Designers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 19
+      },
+      "external_title": "Graphic Designers",
+      "output_label": "Graphic Designers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "27-1000",
+        "title": "Art and Design Workers"
+      },
+      "level2_parent": {
+        "code": "27-1020",
+        "title": "Designers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "27-0000",
+        "title": "Arts, Design, Entertainment, Sports, and Media Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Healthcare Administrator",
+      "normalized_label": "healthcare administrator",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Healthcare Administrator' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Healthcare Consultant",
+      "normalized_label": "healthcare consultant",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Healthcare Consultant' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "High school student",
+      "normalized_label": "high school student",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "not an occupation; a Student variant, out of hierarchy scope",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "adjudication": {
+        "raw_label": "High school student",
+        "decision": "exclude",
+        "chosen_soc": null,
+        "chosen_title": null,
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "excluded_out_of_scope",
+        "confidence": null,
+        "exclusion_reason": "not an occupation; a Student variant, out of hierarchy scope",
+        "rationale": "non-occupation",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 1
+      },
+      "unmapped_reason": "no published title matches 'High school student' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "History Professor",
+      "normalized_label": "history professor",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'History Professor' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Human Rights Advocate",
+      "normalized_label": "human rights advocate",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Human Rights Advocate' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Hydrologist",
+      "normalized_label": "hydrologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-2043",
+      "candidate_external_ids": [
+        "19-2043"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Hydrologist",
+        "decision": "automatic",
+        "chosen_soc": "19-2043",
+        "chosen_title": "Hydrologists",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 1
+      },
+      "external_title": "Hydrologists",
+      "output_label": "Hydrologists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-2000",
+        "title": "Physical Scientists"
+      },
+      "level2_parent": {
+        "code": "19-2040",
+        "title": "Environmental Scientists and Geoscientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Interior Designer",
+      "normalized_label": "interior designer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "27-1025",
+      "candidate_external_ids": [
+        "27-1025"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Interior Designer",
+        "decision": "automatic",
+        "chosen_soc": "27-1025",
+        "chosen_title": "Interior Designers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 1
+      },
+      "external_title": "Interior Designers",
+      "output_label": "Interior Designers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "27-1000",
+        "title": "Art and Design Workers"
+      },
+      "level2_parent": {
+        "code": "27-1020",
+        "title": "Designers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "27-0000",
+        "title": "Arts, Design, Entertainment, Sports, and Media Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Landscape Architect",
+      "normalized_label": "landscape architect",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "17-1012",
+      "candidate_external_ids": [
+        "17-1012"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Landscape Architect",
+        "decision": "automatic",
+        "chosen_soc": "17-1012",
+        "chosen_title": "Landscape Architects",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 2
+      },
+      "external_title": "Landscape Architects",
+      "output_label": "Landscape Architects",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "17-1000",
+        "title": "Architects, Surveyors, and Cartographers"
+      },
+      "level2_parent": {
+        "code": "17-1010",
+        "title": "Architects, Except Naval",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "17-0000",
+        "title": "Architecture and Engineering Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Landscape Photographer",
+      "normalized_label": "landscape photographer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Landscape Photographer' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Literary Editor",
+      "normalized_label": "literary editor",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Literary Editor' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Marine Biologist",
+      "normalized_label": "marine biologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-1023",
+      "candidate_external_ids": [
+        "19-1023"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Marine Biologist",
+        "decision": "manual_override",
+        "chosen_soc": "19-1023",
+        "chosen_title": "Zoologists and Wildlife Biologists",
+        "rejected_candidates": [
+          {
+            "soc": "19-1011",
+            "title": "Animal Scientists",
+            "reason": "oriented toward domesticated and agricultural animals; weaker mapping"
+          }
+        ],
+        "target_eligible": true,
+        "matrix_role": "target_eligible",
+        "confidence": 0.95,
+        "rationale": "marine biology is a specialization of zoology and wildlife biology",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 84
+      },
+      "external_title": "Zoologists and Wildlife Biologists",
+      "output_label": "Zoologists and Wildlife Biologists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-1000",
+        "title": "Life Scientists"
+      },
+      "level2_parent": {
+        "code": "19-1020",
+        "title": "Biological Scientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Marine Ecologist",
+      "normalized_label": "marine ecologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Marine Ecologist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Marketing Director",
+      "normalized_label": "marketing director",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Marketing Director' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Mechanical Engineer",
+      "normalized_label": "mechanical engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "17-2141",
+      "candidate_external_ids": [
+        "17-2141"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Mechanical Engineer",
+        "decision": "automatic",
+        "chosen_soc": "17-2141",
+        "chosen_title": "Mechanical Engineers",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 6
+      },
+      "external_title": "Mechanical Engineers",
+      "output_label": "Mechanical Engineers",
+      "parents_resolved_from": "source_table",
+      "parent_arithmetic_disagreements": {
+        "minor_group": {
+          "arithmetic": "17-2100",
+          "source_table": "17-2000"
+        }
+      },
+      "minor_group_parent": {
+        "code": "17-2000",
+        "title": "Engineers"
+      },
+      "level2_parent": {
+        "code": "17-2140",
+        "title": "Mechanical Engineers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "17-0000",
+        "title": "Architecture and Engineering Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Molecular Biologist",
+      "normalized_label": "molecular biologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Molecular Biologist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Museum Curator",
+      "normalized_label": "museum curator",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "25-4012",
+      "candidate_external_ids": [
+        "25-4012"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "primary_target",
+      "adjudication": {
+        "raw_label": "Museum Curator",
+        "decision": "manual_override",
+        "chosen_soc": "25-4012",
+        "chosen_title": "Curators",
+        "rejected_candidates": [
+          {
+            "soc": "25-4013",
+            "title": "Museum Technicians and Conservators",
+            "reason": "technician and conservator work, not the curatorial occupation"
+          }
+        ],
+        "target_eligible": true,
+        "matrix_role": "primary_target",
+        "confidence": 0.95,
+        "rationale": "chosen over Art Curator because it has greater coverage, 10 versus 6",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 10
+      },
+      "external_title": "Curators",
+      "output_label": "Curators",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "25-4000",
+        "title": "Librarians, Curators, and Archivists"
+      },
+      "level2_parent": {
+        "code": "25-4010",
+        "title": "Archivists, Curators, and Museum Technicians",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "25-0000",
+        "title": "Educational Instruction and Library Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "N/A",
+      "normalized_label": "n/a",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "missing-value marker in the source dataset, not an occupation",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "adjudication": {
+        "raw_label": "N/A",
+        "decision": "exclude",
+        "chosen_soc": null,
+        "chosen_title": null,
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "excluded_out_of_scope",
+        "confidence": null,
+        "exclusion_reason": "missing-value marker in the source dataset, not an occupation",
+        "rationale": "non-occupation",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 1
+      },
+      "unmapped_reason": "no published title matches 'N/A' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "NA",
+      "normalized_label": "na",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "missing-value marker in the source dataset, not an occupation",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "adjudication": {
+        "raw_label": "NA",
+        "decision": "exclude",
+        "chosen_soc": null,
+        "chosen_title": null,
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "excluded_out_of_scope",
+        "confidence": null,
+        "exclusion_reason": "missing-value marker in the source dataset, not an occupation",
+        "rationale": "non-occupation",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 2
+      },
+      "unmapped_reason": "no published title matches 'NA' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "NA (Student)",
+      "normalized_label": "na (student)",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "missing-value marker combined with a non-occupation; out of hierarchy scope",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "adjudication": {
+        "raw_label": "NA (Student)",
+        "decision": "exclude",
+        "chosen_soc": null,
+        "chosen_title": null,
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "excluded_out_of_scope",
+        "confidence": null,
+        "exclusion_reason": "missing-value marker combined with a non-occupation; out of hierarchy scope",
+        "rationale": "non-occupation",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 1
+      },
+      "unmapped_reason": "no published title matches 'NA (Student)' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Orchestra Conductor",
+      "normalized_label": "orchestra conductor",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "27-2041",
+      "candidate_external_ids": [
+        "27-2041"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.9,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Orchestra Conductor",
+        "decision": "manual_override",
+        "chosen_soc": "27-2041",
+        "chosen_title": "Music Directors and Composers",
+        "rejected_candidates": [],
+        "target_eligible": true,
+        "matrix_role": "target_eligible",
+        "confidence": 0.9,
+        "rationale": "the lexical matcher finds no candidate because SOC has no 'Conductor' title; music directors is the defensible manual mapping",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 1
+      },
+      "external_title": "Music Directors and Composers",
+      "output_label": "Music Directors and Composers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "27-2000",
+        "title": "Entertainers and Performers, Sports and Related Workers"
+      },
+      "level2_parent": {
+        "code": "27-2040",
+        "title": "Musicians, Singers, and Related Workers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "27-0000",
+        "title": "Arts, Design, Entertainment, Sports, and Media Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Pediatric Nurse",
+      "normalized_label": "pediatric nurse",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Pediatric Nurse' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Pediatrician",
+      "normalized_label": "pediatrician",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "29-1221",
+      "candidate_external_ids": [
+        "29-1221"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Pediatrician",
+        "decision": "automatic",
+        "chosen_soc": "29-1221",
+        "chosen_title": "Pediatricians, General",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 8
+      },
+      "external_title": "Pediatricians, General",
+      "output_label": "Pediatricians, General",
+      "parents_resolved_from": "source_table",
+      "parent_arithmetic_disagreements": {
+        "broad_occupation": {
+          "arithmetic": "29-1220",
+          "source_table": "29-1210"
+        },
+        "minor_group": {
+          "arithmetic": "29-1200",
+          "source_table": "29-1000"
+        }
+      },
+      "minor_group_parent": {
+        "code": "29-1000",
+        "title": "Healthcare Diagnosing or Treating Practitioners"
+      },
+      "level2_parent": {
+        "code": "29-1210",
+        "title": "Physicians",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "29-0000",
+        "title": "Healthcare Practitioners and Technical Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Professor of History",
+      "normalized_label": "professor of history",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Professor of History' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Renewable Energy Consultant",
+      "normalized_label": "renewable energy consultant",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='none', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Renewable Energy Consultant' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Retired Architect",
+      "normalized_label": "retired architect",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Retired Architect' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Retired Pharmacist",
+      "normalized_label": "retired pharmacist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Retired Pharmacist' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Robotics Engineer",
+      "normalized_label": "robotics engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Robotics Engineer' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Software Architect",
+      "normalized_label": "software architect",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "too ambiguous between software development, systems architecture and database architecture to use in the confirmatory matrix; may appear later in an ambiguity-sensitivity appendix",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "adjudication": {
+        "raw_label": "Software Architect",
+        "decision": "exclude",
+        "chosen_soc": null,
+        "chosen_title": null,
+        "rejected_candidates": [
+          {
+            "soc": "15-1243",
+            "title": "Database Architects",
+            "reason": "the automatic top rank, and wrong: database architecture is not software architecture"
+          },
+          {
+            "soc": "15-1241",
+            "title": "Computer Network Architects",
+            "reason": "network architecture, a different occupation"
+          },
+          {
+            "soc": "15-1252",
+            "title": "Software Developers",
+            "reason": "plausible but would collide with the Software Engineer leaf"
+          }
+        ],
+        "target_eligible": false,
+        "matrix_role": "excluded_out_of_scope",
+        "confidence": null,
+        "exclusion_reason": "too ambiguous between software development, systems architecture and database architecture to use in the confirmatory matrix; may appear later in an ambiguity-sensitivity appendix",
+        "rationale": "not confirmatory",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 4
+      },
+      "unmapped_reason": "no published title matches 'Software Architect' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Software Developer",
+      "normalized_label": "software developer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "15-1252",
+      "candidate_external_ids": [
+        "15-1252"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "same_leaf_retention_control",
+      "adjudication": {
+        "raw_label": "Software Developer",
+        "decision": "same_mapping",
+        "chosen_soc": "15-1252",
+        "chosen_title": "Software Developers",
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "same_leaf_retention_control",
+        "confidence": 0.95,
+        "rationale": "same SOC leaf as Software Engineer, so not an independent transformation target; retained as a same-leaf control -- editing a Software Engineer identity should not change an unrelated Software Developer identity even though both share the external occupational leaf",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 15
+      },
+      "external_title": "Software Developers",
+      "output_label": "Software Developers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "15-1200",
+        "title": "Computer Occupations"
+      },
+      "level2_parent": {
+        "code": "15-1250",
+        "title": "Software and Web Developers, Programmers, and Testers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "15-0000",
+        "title": "Computer and Mathematical Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Software Developer at an AI firm",
+      "normalized_label": "software developer at an ai firm",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Software Developer at an AI firm' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Software Development Manager",
+      "normalized_label": "software development manager",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Software Development Manager' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Software Engineer",
+      "normalized_label": "software engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "15-1252",
+      "candidate_external_ids": [
+        "15-1252"
+      ],
+      "mapping_type": "manual",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "primary_target",
+      "adjudication": {
+        "raw_label": "Software Engineer",
+        "decision": "manual_override",
+        "chosen_soc": "15-1252",
+        "chosen_title": "Software Developers",
+        "rejected_candidates": [
+          {
+            "soc": "17-2199",
+            "title": "Engineers, All Other",
+            "reason": "generic engineering residual category; wrong occupational branch"
+          }
+        ],
+        "target_eligible": true,
+        "matrix_role": "primary_target",
+        "confidence": 0.95,
+        "rationale": "software engineering is represented by the software-developer occupation; chosen over Software Developer because it has substantially greater coverage, 117 versus 15",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 117
+      },
+      "external_title": "Software Developers",
+      "output_label": "Software Developers",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "15-1200",
+        "title": "Computer Occupations"
+      },
+      "level2_parent": {
+        "code": "15-1250",
+        "title": "Software and Web Developers, Programmers, and Testers",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "15-0000",
+        "title": "Computer and Mathematical Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Structural Engineer",
+      "normalized_label": "structural engineer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Structural Engineer' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Student",
+      "normalized_label": "student",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "not an occupation; out of hierarchy scope. Cannot serve as a retained-only control either, because gx.sibling_controls unpacks a 3-element chain for every identity and would raise on an identity with none",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "adjudication": {
+        "raw_label": "Student",
+        "decision": "exclude",
+        "chosen_soc": null,
+        "chosen_title": null,
+        "rejected_candidates": [],
+        "target_eligible": false,
+        "matrix_role": "excluded_out_of_scope",
+        "confidence": null,
+        "exclusion_reason": "not an occupation; out of hierarchy scope. Cannot serve as a retained-only control either, because gx.sibling_controls unpacks a 3-element chain for every identity and would raise on an identity with none",
+        "rationale": "non-occupation",
+        "decided_before_experiment": true,
+        "precedence": "manual_override",
+        "n_identities": 12
+      },
+      "unmapped_reason": "no published title matches 'Student' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "University Professor",
+      "normalized_label": "university professor",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='none', ambiguous=False",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'University Professor' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Urban Planner",
+      "normalized_label": "urban planner",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-3051",
+      "candidate_external_ids": [
+        "19-3051"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Urban Planner",
+        "decision": "automatic",
+        "chosen_soc": "19-3051",
+        "chosen_title": "Urban and Regional Planners",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 2
+      },
+      "external_title": "Urban and Regional Planners",
+      "output_label": "Urban and Regional Planners",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-3000",
+        "title": "Social Scientists and Related Workers"
+      },
+      "level2_parent": {
+        "code": "19-3050",
+        "title": "Urban and Regional Planners",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Veterinarian",
+      "normalized_label": "veterinarian",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "29-1131",
+      "candidate_external_ids": [
+        "29-1131"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "target_eligible",
+      "adjudication": {
+        "raw_label": "Veterinarian",
+        "decision": "automatic",
+        "chosen_soc": "29-1131",
+        "chosen_title": "Veterinarians",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 3
+      },
+      "external_title": "Veterinarians",
+      "output_label": "Veterinarians",
+      "parents_resolved_from": "source_table",
+      "parent_arithmetic_disagreements": {
+        "minor_group": {
+          "arithmetic": "29-1100",
+          "source_table": "29-1000"
+        }
+      },
+      "minor_group_parent": {
+        "code": "29-1000",
+        "title": "Healthcare Diagnosing or Treating Practitioners"
+      },
+      "level2_parent": {
+        "code": "29-1130",
+        "title": "Veterinarians",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "29-0000",
+        "title": "Healthcare Practitioners and Technical Occupations",
+        "level": "major_group"
+      }
+    },
+    {
+      "original_label": "Veterinary Surgeon",
+      "normalized_label": "veterinary surgeon",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Veterinary Surgeon' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    },
+    {
+      "original_label": "Wildlife Biologist",
+      "normalized_label": "wildlife biologist",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": "19-1023",
+      "candidate_external_ids": [
+        "19-1023"
+      ],
+      "mapping_type": "synonym",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": 0.95,
+      "reviewer_decision": "retained",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": null,
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "same_leaf_retention_control",
+      "adjudication": {
+        "raw_label": "Wildlife Biologist",
+        "decision": "automatic",
+        "chosen_soc": "19-1023",
+        "chosen_title": "Zoologists and Wildlife Biologists",
+        "target_eligible": true,
+        "precedence": "automatic",
+        "n_identities": 3
+      },
+      "external_title": "Zoologists and Wildlife Biologists",
+      "output_label": "Zoologists and Wildlife Biologists",
+      "parents_resolved_from": "source_table",
+      "minor_group_parent": {
+        "code": "19-1000",
+        "title": "Life Scientists"
+      },
+      "level2_parent": {
+        "code": "19-1020",
+        "title": "Biological Scientists",
+        "level": "broad_occupation"
+      },
+      "level1_parent": {
+        "code": "19-0000",
+        "title": "Life, Physical, and Social Science Occupations",
+        "level": "major_group"
+      },
+      "target_eligible": false,
+      "demoted_by_duplicate_policy": true
+    },
+    {
+      "original_label": "Wildlife Photographer",
+      "normalized_label": "wildlife photographer",
+      "taxonomy": "2018 SOC / O*NET-SOC 2019",
+      "taxonomy_version": "2018",
+      "taxonomy_publisher": "U.S. Bureau of Labor Statistics (2018 SOC); O*NET Resource Center (O*NET-SOC 2019)",
+      "taxonomy_url": "https://www.onetcenter.org/taxonomy.html",
+      "external_occupation_id": null,
+      "candidate_external_ids": [],
+      "mapping_type": "ambiguous",
+      "mapping_authority": "reviewer",
+      "source_ref": {
+        "kind": "source_table_sha256",
+        "sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "url": "https://www.onetcenter.org/taxonomy.html"
+      },
+      "confidence": null,
+      "reviewer_decision": "excluded",
+      "reviewer": "frozen_adjudication_registry",
+      "exclusion_reason": "no unambiguous mapping: best_match_kind='tokens', ambiguous=True",
+      "l2_level_used": "broad_occupation",
+      "matrix_role": "excluded_out_of_scope",
+      "unmapped_reason": "no published title matches 'Wildlife Photographer' after normalization, so there is no external identifier to anchor a parent chain",
+      "level1_parent": null,
+      "level2_parent": null
+    }
+  ],
+  "n_records": 71,
+  "n_retained": 30,
+  "duplicate_targets": {
+    "15-1252": [
+      "software developer",
+      "software engineer"
+    ],
+    "19-1023": [
+      "marine biologist",
+      "wildlife biologist"
+    ],
+    "19-2041": [
+      "ecologist",
+      "environmental scientist"
+    ],
+    "19-3091": [
+      "archaeologist",
+      "cultural anthropologist"
+    ],
+    "25-4012": [
+      "art curator",
+      "museum curator"
+    ]
+  },
+  "target_selection": {
+    "15-1252": {
+      "representative": "Software Engineer",
+      "same_leaf_controls": [
+        "Software Developer"
+      ],
+      "n_raw_labels": 2,
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Software Developer": 15,
+        "Software Engineer": 117
+      },
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "15-2051": {
+      "representative": "Data Scientist",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "17-1011": {
+      "representative": "Architect",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "17-1012": {
+      "representative": "Landscape Architect",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "17-2011": {
+      "representative": "Aerospace Engineer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "17-2031": {
+      "representative": "Biomedical Engineer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "17-2051": {
+      "representative": "Civil Engineer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "17-2081": {
+      "representative": "Environmental Engineer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "17-2141": {
+      "representative": "Mechanical Engineer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "19-1013": {
+      "representative": "Botanist",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "19-1023": {
+      "representative": "Marine Biologist",
+      "same_leaf_controls": [
+        "Wildlife Biologist"
+      ],
+      "n_raw_labels": 2,
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Marine Biologist": 84,
+        "Wildlife Biologist": 3
+      },
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "19-1029": {
+      "representative": "Biotechnologist",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "19-2041": {
+      "representative": "Environmental Scientist",
+      "same_leaf_controls": [
+        "Ecologist"
+      ],
+      "n_raw_labels": 2,
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Ecologist": 1,
+        "Environmental Scientist": 65
+      },
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "19-2043": {
+      "representative": "Hydrologist",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "19-3033": {
+      "representative": "Clinical Psychologist",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "19-3051": {
+      "representative": "Urban Planner",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "19-3091": {
+      "representative": "Cultural Anthropologist",
+      "same_leaf_controls": [
+        "Archaeologist"
+      ],
+      "n_raw_labels": 2,
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Archaeologist": 4,
+        "Cultural Anthropologist": 5
+      },
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "25-4012": {
+      "representative": "Museum Curator",
+      "same_leaf_controls": [
+        "Art Curator"
+      ],
+      "n_raw_labels": 2,
+      "decided_by": "identity frequency",
+      "identity_counts": {
+        "Art Curator": 6,
+        "Museum Curator": 10
+      },
+      "selection_rule": "mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order as the final tie-break only"
+    },
+    "27-1011": {
+      "representative": "Art Director",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "27-1022": {
+      "representative": "Fashion Designer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "27-1024": {
+      "representative": "Graphic Designer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "27-1025": {
+      "representative": "Interior Designer",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "27-2041": {
+      "representative": "Orchestra Conductor",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "29-1131": {
+      "representative": "Veterinarian",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    },
+    "29-1221": {
+      "representative": "Pediatrician",
+      "same_leaf_controls": [],
+      "n_raw_labels": 1,
+      "decided_by": "only one raw label maps here"
+    }
+  },
+  "pre_freeze_checks": {
+    "every_target_has_one_canonical_soc_leaf": true,
+    "every_target_has_valid_l1_and_l2_parents": true,
+    "g4b_reports_zero_selected_target_collisions": true,
+    "target_count_equals_distinct_leaf_count": true,
+    "alternate_raw_labels_are_controls_not_targets": true,
+    "official_spelling_preserved_in_external_title": true,
+    "source_labels_retain_dataset_spelling": true,
+    "manual_overrides_and_rejected_alternatives_recorded": true,
+    "all_excluded_labels_carry_explicit_reasons": true,
+    "source_soc_file_is_committed": true,
+    "artifact_and_selection_manifest_commitment": "enforced by G7 and by verify_hierarchy after the freeze: the hierarchy artifact and the target-selection manifest must be tracked before any G6 training"
+  },
+  "n_ambiguous_excluded": 41,
+  "retained_labels": [
+    "Aerospace Engineer",
+    "Archaeologist",
+    "Architect",
+    "Art Curator",
+    "Art Director",
+    "Biomedical Engineer",
+    "Biotechnologist",
+    "Botanist",
+    "Civil Engineer",
+    "Clinical Psychologist",
+    "Cultural Anthropologist",
+    "Data Scientist",
+    "Ecologist",
+    "Environmental Engineer",
+    "Environmental Scientist",
+    "Fashion Designer",
+    "Graphic Designer",
+    "Hydrologist",
+    "Interior Designer",
+    "Landscape Architect",
+    "Marine Biologist",
+    "Mechanical Engineer",
+    "Museum Curator",
+    "Orchestra Conductor",
+    "Pediatrician",
+    "Software Developer",
+    "Software Engineer",
+    "Urban Planner",
+    "Veterinarian",
+    "Wildlife Biologist"
+  ],
+  "selected_targets": [
+    "Architect",
+    "Biomedical Engineer",
+    "Civil Engineer",
+    "Cultural Anthropologist",
+    "Data Scientist",
+    "Environmental Scientist",
+    "Graphic Designer",
+    "Marine Biologist",
+    "Museum Curator",
+    "Pediatrician",
+    "Software Engineer",
+    "Veterinarian"
+  ],
+  "identity_ids": [],
+  "hierarchy_of": {
+    "Aerospace Engineer": [
+      "Aerospace Engineer",
+      "Aerospace Engineers",
+      "Architecture and Engineering Occupations"
+    ],
+    "Archaeologist": [
+      "Archaeologist",
+      "Miscellaneous Social Scientists and Related Workers",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Architect": [
+      "Architect",
+      "Architects, Except Naval",
+      "Architecture and Engineering Occupations"
+    ],
+    "Art Curator": [
+      "Art Curator",
+      "Archivists, Curators, and Museum Technicians",
+      "Educational Instruction and Library Occupations"
+    ],
+    "Art Director": [
+      "Art Director",
+      "Artists and Related Workers",
+      "Arts, Design, Entertainment, Sports, and Media Occupations"
+    ],
+    "Biomedical Engineer": [
+      "Biomedical Engineer",
+      "Bioengineers and Biomedical Engineers",
+      "Architecture and Engineering Occupations"
+    ],
+    "Biotechnologist": [
+      "Biotechnologist",
+      "Biological Scientists",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Botanist": [
+      "Botanist",
+      "Agricultural and Food Scientists",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Civil Engineer": [
+      "Civil Engineer",
+      "Civil Engineers",
+      "Architecture and Engineering Occupations"
+    ],
+    "Clinical Psychologist": [
+      "Clinical Psychologist",
+      "Psychologists",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Cultural Anthropologist": [
+      "Cultural Anthropologist",
+      "Miscellaneous Social Scientists and Related Workers",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Data Scientist": [
+      "Data Scientist",
+      "Data Scientists",
+      "Computer and Mathematical Occupations"
+    ],
+    "Ecologist": [
+      "Ecologist",
+      "Environmental Scientists and Geoscientists",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Environmental Engineer": [
+      "Environmental Engineer",
+      "Environmental Engineers",
+      "Architecture and Engineering Occupations"
+    ],
+    "Environmental Scientist": [
+      "Environmental Scientist",
+      "Environmental Scientists and Geoscientists",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Fashion Designer": [
+      "Fashion Designer",
+      "Designers",
+      "Arts, Design, Entertainment, Sports, and Media Occupations"
+    ],
+    "Graphic Designer": [
+      "Graphic Designer",
+      "Designers",
+      "Arts, Design, Entertainment, Sports, and Media Occupations"
+    ],
+    "Hydrologist": [
+      "Hydrologist",
+      "Environmental Scientists and Geoscientists",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Interior Designer": [
+      "Interior Designer",
+      "Designers",
+      "Arts, Design, Entertainment, Sports, and Media Occupations"
+    ],
+    "Landscape Architect": [
+      "Landscape Architect",
+      "Architects, Except Naval",
+      "Architecture and Engineering Occupations"
+    ],
+    "Marine Biologist": [
+      "Marine Biologist",
+      "Biological Scientists",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Mechanical Engineer": [
+      "Mechanical Engineer",
+      "Mechanical Engineers",
+      "Architecture and Engineering Occupations"
+    ],
+    "Museum Curator": [
+      "Museum Curator",
+      "Archivists, Curators, and Museum Technicians",
+      "Educational Instruction and Library Occupations"
+    ],
+    "Orchestra Conductor": [
+      "Orchestra Conductor",
+      "Musicians, Singers, and Related Workers",
+      "Arts, Design, Entertainment, Sports, and Media Occupations"
+    ],
+    "Pediatrician": [
+      "Pediatrician",
+      "Physicians",
+      "Healthcare Practitioners and Technical Occupations"
+    ],
+    "Software Developer": [
+      "Software Developer",
+      "Software and Web Developers, Programmers, and Testers",
+      "Computer and Mathematical Occupations"
+    ],
+    "Software Engineer": [
+      "Software Engineer",
+      "Software and Web Developers, Programmers, and Testers",
+      "Computer and Mathematical Occupations"
+    ],
+    "Urban Planner": [
+      "Urban Planner",
+      "Urban and Regional Planners",
+      "Life, Physical, and Social Science Occupations"
+    ],
+    "Veterinarian": [
+      "Veterinarian",
+      "Veterinarians",
+      "Healthcare Practitioners and Technical Occupations"
+    ],
+    "Wildlife Biologist": [
+      "Wildlife Biologist",
+      "Biological Scientists",
+      "Life, Physical, and Social Science Occupations"
+    ]
+  },
+  "gates": {
+    "G1_no_parent_from_model_output": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "criterion": "every level-1 and level-2 code AND title is a row in the retrieved source table, mapping_authority is source_table or reviewer, and the record's source hash matches the table"
+    },
+    "G2_target_parent_not_identical": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "criterion": "no target and no parent share the same normalized text"
+    },
+    "G3_no_cycle": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "n_chains": 30,
+      "criterion": "gx.build_label_dag accepts the derived chains: no label is its own ancestor and no chain repeats a label"
+    },
+    "G4_no_incompatible_branches": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "criterion": "one profession has exactly one chain, and no profession is assigned to two level-1 branches"
+    },
+    "G4b_no_duplicate_targets": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "warnings": [],
+      "warn_only": false,
+      "scope": "selected transformation targets only, not the whole table",
+      "n_targets_selected": 12,
+      "n_distinct_leaf_codes": 12,
+      "duplicate_targets": {
+        "15-1252": [
+          "software developer",
+          "software engineer"
+        ],
+        "19-1023": [
+          "marine biologist",
+          "wildlife biologist"
+        ],
+        "19-2041": [
+          "ecologist",
+          "environmental scientist"
+        ],
+        "19-3091": [
+          "archaeologist",
+          "cultural anthropologist"
+        ],
+        "25-4012": [
+          "art curator",
+          "museum curator"
+        ]
+      },
+      "same_leaf_is_allowed_as": "same_leaf_retention_control",
+      "different_leaves_sharing_a_parent": {},
+      "shared_parent_is_not_a_collision": "two different SOC occupations may share a level-1 or level-2 parent; coarsening sibling occupations to a common parent is a legitimate experiment and must not be rejected",
+      "coverage_counts_distinct_leaves": "a duplicate raw profession contributes ZERO additional hierarchy-coverage count; coverage is the number of distinct SOC leaf codes among targets, which must equal the number of targets",
+      "criterion": "no two confirmatory targets share a SOC leaf code, and no two have identical complete chains",
+      "consequence": "Freezing fails until target collisions are resolved: counting one transformation twice overstates how many distinct transformations were tested."
+    },
+    "G5_ambiguous_excluded": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "n_ambiguous": 41,
+      "ambiguous_labels": [
+        "Agricultural Scientist",
+        "Art Conservator",
+        "Art Gallery Curator",
+        "Art Historian",
+        "Bioinformatics Researcher",
+        "Biomedical Scientist",
+        "CEO of a Renewable Energy Company",
+        "Culinary Artist",
+        "Educational Consultant",
+        "Environmental Consultant",
+        "Environmental Researcher",
+        "Environmentalist",
+        "Freelance Writer",
+        "Geriatric Specialist",
+        "Healthcare Administrator",
+        "Healthcare Consultant",
+        "High school student",
+        "History Professor",
+        "Human Rights Advocate",
+        "Landscape Photographer",
+        "Literary Editor",
+        "Marine Ecologist",
+        "Marketing Director",
+        "Molecular Biologist",
+        "N/A",
+        "NA",
+        "NA (Student)",
+        "Pediatric Nurse",
+        "Professor of History",
+        "Renewable Energy Consultant",
+        "Retired Architect",
+        "Retired Pharmacist",
+        "Robotics Engineer",
+        "Software Architect",
+        "Software Developer at an AI firm",
+        "Software Development Manager",
+        "Structural Engineer",
+        "Student",
+        "University Professor",
+        "Veterinary Surgeon",
+        "Wildlife Photographer"
+      ],
+      "criterion": "mapping_type 'ambiguous' requires reviewer_decision 'excluded', a recorded reason, no external id, and absence from the selected confirmatory targets"
+    },
+    "G6_retained_sibling_where_possible": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "warnings": [
+        "level1_parent 'Healthcare Practitioners and Technical Occupations' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+        "level2_parent 'Bioengineers and Biomedical Engineers' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+        "level2_parent 'Civil Engineers' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+        "level2_parent 'Data Scientists' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+        "level2_parent 'Physicians' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+        "level2_parent 'Veterinarians' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0"
+      ],
+      "warn_only": true,
+      "criterion": "each evaluated parent keeps at least one retained sibling when the included set makes that possible; where it is impossible the control is reported null rather than vacuous"
+    },
+    "G7_committed_before_training": {
+      "passed": false,
+      "n_issues": 1,
+      "issues": [
+        "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json is not tracked by git.  The hierarchy and the selected targets must be committed BEFORE any training phase; a downstream builder refuses an untracked hierarchy."
+      ],
+      "criterion": "the frozen hierarchy artifact is committed before any G6 training or matrix build"
+    },
+    "G8_pre_freeze_checklist": {
+      "passed": true,
+      "n_issues": 0,
+      "issues": [],
+      "checks": {
+        "every_target_has_one_canonical_soc_leaf": true,
+        "every_target_has_valid_l1_and_l2_parents": true,
+        "g4b_reports_zero_selected_target_collisions": true,
+        "target_count_equals_distinct_leaf_count": true,
+        "alternate_raw_labels_are_controls_not_targets": true,
+        "official_spelling_preserved_in_external_title": true,
+        "source_labels_retain_dataset_spelling": true,
+        "manual_overrides_and_rejected_alternatives_recorded": true,
+        "all_excluded_labels_carry_explicit_reasons": true,
+        "source_soc_file_is_committed": true,
+        "artifact_and_selection_manifest_commitment": "enforced by G7 and by verify_hierarchy after the freeze: the hierarchy artifact and the target-selection manifest must be tracked before any G6 training"
+      },
+      "criterion": "nine conditions verified before the hierarchy becomes a committed input"
+    }
+  },
+  "gates_passed": true,
+  "warnings": [
+    "level1_parent 'Healthcare Practitioners and Technical Occupations' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+    "level2_parent 'Bioengineers and Biomedical Engineers' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+    "level2_parent 'Civil Engineers' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+    "level2_parent 'Data Scientists' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+    "level2_parent 'Physicians' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0",
+    "level2_parent 'Veterinarians' has no retained sibling and none was available in the included set: sibling control is NULL for this parent, never a vacuous 1.0"
+  ],
+  "committed_before_training_required": true,
+  "model_use_scope": "a model may PROPOSE a mapping or FLAG ambiguity; it is never the authority.  proposals are stored in proposed_by_model and G1 fails any record whose mapping_authority is not source_table or reviewer",
+  "content_sha256": "ca0edbdda3761d45e1ab8a69351a9204246acc4cd40c3b301bba807dffa83b97"
+}

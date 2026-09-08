@@ -1,0 +1,266 @@
+{
+  "kind": "mllmu_manual_override_registry",
+  "purpose": "Every adjudication that departs from the deterministic title index, recorded before any MLLMU experiment. Precedence: manual_override > exact_title > automatic > exclusion. No model-generated recommendation may override an entry here.",
+  "decided_before_experiment": true,
+  "taxonomy": "2018 SOC / O*NET-SOC 2019",
+  "source_table_sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+  "titles_are_verbatim_from_the_pinned_release": true,
+  "duplicate_policy": "Two raw professions mapping to one SOC occupation are not two transformation targets. The representative is chosen by mapping confidence, then identity frequency, then cleaner occupational semantics, then deterministic lexical order; the loser becomes same_leaf_retention_control and contributes zero additional hierarchy coverage.",
+  "shared_parent_policy": "Two DIFFERENT SOC occupations sharing a level-1 or level-2 parent are not duplicates. Coarsening sibling occupations to a common parent is a legitimate and important experiment.",
+  "non_occupational_policy": "Student and the NA variants are not occupations. gx.sibling_controls does `_job, l1, l2 = hierarchy_of[iid]` and unpacks every entry, so an identity with no chain raises rather than becoming an unrelated control; they are therefore removed from the G6 matrix entirely and must never be described as occupational siblings or cousins.",
+  "overrides": [
+    {
+      "raw_label": "Software Engineer",
+      "decision": "manual_override",
+      "chosen_soc": "15-1252",
+      "chosen_title": "Software Developers",
+      "rejected_candidates": [
+        {
+          "soc": "17-2199",
+          "title": "Engineers, All Other",
+          "reason": "generic engineering residual category; wrong occupational branch"
+        }
+      ],
+      "target_eligible": true,
+      "matrix_role": "primary_target",
+      "confidence": 0.95,
+      "rationale": "software engineering is represented by the software-developer occupation; chosen over Software Developer because it has substantially greater coverage, 117 versus 15",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Software Developer",
+      "decision": "same_mapping",
+      "chosen_soc": "15-1252",
+      "chosen_title": "Software Developers",
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "same_leaf_retention_control",
+      "confidence": 0.95,
+      "rationale": "same SOC leaf as Software Engineer, so not an independent transformation target; retained as a same-leaf control -- editing a Software Engineer identity should not change an unrelated Software Developer identity even though both share the external occupational leaf",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Marine Biologist",
+      "decision": "manual_override",
+      "chosen_soc": "19-1023",
+      "chosen_title": "Zoologists and Wildlife Biologists",
+      "rejected_candidates": [
+        {
+          "soc": "19-1011",
+          "title": "Animal Scientists",
+          "reason": "oriented toward domesticated and agricultural animals; weaker mapping"
+        }
+      ],
+      "target_eligible": true,
+      "matrix_role": "target_eligible",
+      "confidence": 0.95,
+      "rationale": "marine biology is a specialization of zoology and wildlife biology",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Museum Curator",
+      "decision": "manual_override",
+      "chosen_soc": "25-4012",
+      "chosen_title": "Curators",
+      "rejected_candidates": [
+        {
+          "soc": "25-4013",
+          "title": "Museum Technicians and Conservators",
+          "reason": "technician and conservator work, not the curatorial occupation"
+        }
+      ],
+      "target_eligible": true,
+      "matrix_role": "primary_target",
+      "confidence": 0.95,
+      "rationale": "chosen over Art Curator because it has greater coverage, 10 versus 6",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Art Curator",
+      "decision": "same_mapping",
+      "chosen_soc": "25-4012",
+      "chosen_title": "Curators",
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "same_leaf_retention_control",
+      "confidence": 0.95,
+      "rationale": "same SOC leaf as Museum Curator, so not an independent transformation target; retained as a same-leaf control",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Cultural Anthropologist",
+      "decision": "manual_override",
+      "chosen_soc": "19-3091",
+      "chosen_title": "Anthropologists and Archeologists",
+      "rejected_candidates": [
+        {
+          "soc": "25-1062",
+          "title": "Area, Ethnic, and Cultural Studies Teachers, Postsecondary",
+          "reason": "teaching occupation rather than the research occupation; wrong branch"
+        }
+      ],
+      "target_eligible": true,
+      "matrix_role": "primary_target",
+      "confidence": 0.95,
+      "rationale": "chosen over Archaeologist because it has greater coverage, 5 versus 4",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Archaeologist",
+      "decision": "same_mapping",
+      "chosen_soc": "19-3091",
+      "chosen_title": "Anthropologists and Archeologists",
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "same_leaf_retention_control",
+      "confidence": 0.95,
+      "note": "the pinned release spells the occupation 'Archeologists'; the official spelling is preserved verbatim in external_title and the dataset spelling is preserved verbatim in original_label",
+      "rationale": "same SOC leaf as Cultural Anthropologist, so not an independent transformation target; retained as a same-leaf control",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Software Architect",
+      "decision": "exclude",
+      "chosen_soc": null,
+      "chosen_title": null,
+      "rejected_candidates": [
+        {
+          "soc": "15-1243",
+          "title": "Database Architects",
+          "reason": "the automatic top rank, and wrong: database architecture is not software architecture"
+        },
+        {
+          "soc": "15-1241",
+          "title": "Computer Network Architects",
+          "reason": "network architecture, a different occupation"
+        },
+        {
+          "soc": "15-1252",
+          "title": "Software Developers",
+          "reason": "plausible but would collide with the Software Engineer leaf"
+        }
+      ],
+      "target_eligible": false,
+      "matrix_role": "excluded_out_of_scope",
+      "confidence": null,
+      "exclusion_reason": "too ambiguous between software development, systems architecture and database architecture to use in the confirmatory matrix; may appear later in an ambiguity-sensitivity appendix",
+      "rationale": "not confirmatory",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Botanist",
+      "decision": "manual_override",
+      "chosen_soc": "19-1013",
+      "chosen_title": "Soil and Plant Scientists",
+      "rejected_candidates": [],
+      "target_eligible": true,
+      "matrix_role": "target_eligible",
+      "confidence": 0.9,
+      "rationale": "the lexical matcher finds no candidate because SOC has no 'Botanists' title; plant science is the defensible manual mapping",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Ecologist",
+      "decision": "manual_override",
+      "chosen_soc": "19-2041",
+      "chosen_title": "Environmental Scientists and Specialists, Including Health",
+      "shorter_output_label": "Environmental Scientists and Specialists",
+      "rejected_candidates": [],
+      "target_eligible": true,
+      "matrix_role": "target_eligible",
+      "confidence": 0.95,
+      "rationale": "ecology sits inside environmental science; the official title in the pinned release is the longer form and is preserved verbatim in external_title, while a shorter frozen output label is allowed",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Orchestra Conductor",
+      "decision": "manual_override",
+      "chosen_soc": "27-2041",
+      "chosen_title": "Music Directors and Composers",
+      "rejected_candidates": [],
+      "target_eligible": true,
+      "matrix_role": "target_eligible",
+      "confidence": 0.9,
+      "rationale": "the lexical matcher finds no candidate because SOC has no 'Conductor' title; music directors is the defensible manual mapping",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Biotechnologist",
+      "decision": "manual_override",
+      "chosen_soc": "19-1029",
+      "chosen_title": "Biological Scientists, All Other",
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "retained_only",
+      "confidence": 0.7,
+      "rationale": "retained-only initially, not a confirmatory target: 'All Other' is already a catch-all leaf and produces a less interpretable granularity transition",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "Student",
+      "decision": "exclude",
+      "chosen_soc": null,
+      "chosen_title": null,
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "excluded_out_of_scope",
+      "confidence": null,
+      "exclusion_reason": "not an occupation; out of hierarchy scope. Cannot serve as a retained-only control either, because gx.sibling_controls unpacks a 3-element chain for every identity and would raise on an identity with none",
+      "rationale": "non-occupation",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "High school student",
+      "decision": "exclude",
+      "chosen_soc": null,
+      "chosen_title": null,
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "excluded_out_of_scope",
+      "confidence": null,
+      "exclusion_reason": "not an occupation; a Student variant, out of hierarchy scope",
+      "rationale": "non-occupation",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "NA",
+      "decision": "exclude",
+      "chosen_soc": null,
+      "chosen_title": null,
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "excluded_out_of_scope",
+      "confidence": null,
+      "exclusion_reason": "missing-value marker in the source dataset, not an occupation",
+      "rationale": "non-occupation",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "N/A",
+      "decision": "exclude",
+      "chosen_soc": null,
+      "chosen_title": null,
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "excluded_out_of_scope",
+      "confidence": null,
+      "exclusion_reason": "missing-value marker in the source dataset, not an occupation",
+      "rationale": "non-occupation",
+      "decided_before_experiment": true
+    },
+    {
+      "raw_label": "NA (Student)",
+      "decision": "exclude",
+      "chosen_soc": null,
+      "chosen_title": null,
+      "rejected_candidates": [],
+      "target_eligible": false,
+      "matrix_role": "excluded_out_of_scope",
+      "confidence": null,
+      "exclusion_reason": "missing-value marker combined with a non-occupation; out of hierarchy scope",
+      "rationale": "non-occupation",
+      "decided_before_experiment": true
+    }
+  ],
+  "remaining_unmatched_policy": "Every other label the lexical matcher cannot place unambiguously is excluded with a generated reason naming its best_match_kind and ambiguity. None is silently dropped, and none may be retained without an equally defensible manual mapping added here."
+}

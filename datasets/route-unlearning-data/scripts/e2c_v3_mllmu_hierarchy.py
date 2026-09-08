@@ -75,6 +75,28 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+
+def _find_repo_root(start=SCRIPT_DIR):
+    """The git root, by walking up for ``.git``.
+
+    Paths recorded in a COMMITTED artifact have to be portable: an absolute path
+    bakes this machine's checkout location into the file, and then
+    ``verify_hierarchy`` -- which re-reads the table the artifact names -- fails
+    outright on any other clone.  Anchoring at the repo root is what makes the
+    frozen hierarchy re-verifiable by someone who did not write it.
+    """
+    for parent in (start, *start.parents):
+        if (parent / ".git").exists():
+            return parent
+    return start.parent
+
+
+REPO_ROOT = _find_repo_root()
+#: The dataset root this module belongs to; derived from the script's own
+#: location rather than from the process cwd, so the CLI behaves the same
+#: whether it is invoked from here or from the repository root.
+DATASET_ROOT = SCRIPT_DIR.parent
+
 import e2c_v3_granularity as gx
 import e2c_v3_research_validity as rv
 
@@ -82,7 +104,36 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("e2c_v3_mllmu_hier")
 
-MANIFEST_DIR = Path("e2c_mllmu/manifests")
+
+def record_path(p):
+    """Repo-root-relative when the file is in the repo, else absolute.
+
+    This is the form that goes INTO a committed artifact.
+    """
+    p = Path(p).resolve()
+    try:
+        return str(p.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(p)                   # outside the repo: nothing to anchor to
+
+
+def resolve_path(p):
+    """Absolute path for a recorded (possibly repo-relative) path.
+
+    This is the form used to actually OPEN a file.  The repo root is tried
+    first and the cwd second, so an artifact written elsewhere still resolves
+    if the same relative layout is present.
+    """
+    p = Path(p)
+    if p.is_absolute():
+        return p
+    for base in (REPO_ROOT, Path.cwd()):
+        if (base / p).exists():
+            return base / p
+    return REPO_ROOT / p                # canonical guess, even if missing
+
+
+MANIFEST_DIR = DATASET_ROOT / "e2c_mllmu" / "manifests"
 HIERARCHY_PATH = MANIFEST_DIR / "mllmu_hierarchy.json"
 MLLMU_MANIFEST = MANIFEST_DIR / "mllmu_manifest.json"
 FULL_SET = Path("/scratch/wutiantong/datasets/MLLMU-Bench/data/Full_Set.jsonl")
@@ -119,10 +170,37 @@ REQUIRED_RECORD_FIELDS = (
 #: WARN, not FAIL: a parent with no retained sibling is a coverage limit the
 #: matrix has to report, exactly as the numeric G5 run reported its 117/120.
 G6_IS_A_WARN = True
-#: Two professions sharing one SOC code are synonyms, which is legitimate; the
-#: warning exists so a matrix builder does not count them as two targets.  Set
-#: False to make it a hard gate.
-G4B_IS_A_WARN = True
+#: HARD GATE for confirmatory matrix generation, and scoped to the SELECTED
+#: transformation targets rather than to the whole mapping table.  Two raw
+#: professions sharing one SOC occupation is legitimate and useful -- the
+#: lower-frequency duplicate is a same-leaf retention control, testing that
+#: editing one identity does not disturb another that shares its external leaf.
+#: It becomes invalid only when both are counted as distinct transformations.
+G4B_IS_A_WARN = False
+
+#: What a record is FOR.  Distinct from reviewer_decision, which says whether
+#: the mapping was accepted at all: "excluded" conflated two different things,
+#: so a label that is out of hierarchy scope (Student) and a label that is in
+#: scope but must not be transformed (Biotechnologist, whose leaf is the
+#: catch-all "Biological Scientists, All Other") now have separate roles.
+MATRIX_ROLES = (
+    "primary_target",                # transformed, counted as coverage
+    "target_eligible",               # may be transformed; not selected
+    "same_leaf_retention_control",   # shares a leaf with a target; never a
+                                     # target, and NEVER called a sibling
+    "retained_only",                 # in the hierarchy, preserved, not edited
+    "excluded_out_of_scope",         # no hierarchy; out of the G6 matrix
+)
+#: Adjudication precedence.  A frozen manual decision outranks everything, and
+#: no model-generated recommendation may override it -- which is also why
+#: MAPPING_AUTHORITIES has no "model" member.
+PRECEDENCE = ("manual_override", "exact_title", "automatic", "exclusion")
+OVERRIDE_PATH = MANIFEST_DIR / "mllmu_manual_overrides.json"
+#: The control-group contract in gx.sibling_controls does
+#: ``_job, l1, l2 = hierarchy_of[iid]`` and unpacks EVERY entry, so an identity
+#: with no chain raises rather than becoming an "unrelated" control.  Recorded
+#: here because it decides the fate of the non-occupational labels.
+CONTROLS_REQUIRE_HIERARCHY = True
 
 
 # ====================================================================== #
@@ -443,7 +521,10 @@ def load_taxonomy_table(path, allow_quarantine=False):
     else:
         levels_present = levels_by_arithmetic
     return {
-        "path": str(path.resolve()),
+        "path": record_path(path),
+        # kept beside the portable form: the sha256 is the real anchor, and this
+        # records where the bytes actually were when the freeze ran.
+        "path_absolute_at_freeze": str(path.resolve()),
         "sha256": rv.sha256_file(path),
         "layout": "wide_official" if wide else "long_code_and_title",
         "header_line": header_line,
@@ -485,18 +566,63 @@ def lookup_code(table, label):
 # ====================================================================== #
 # records
 # ====================================================================== #
+def parents_from_table(code, table):
+    """Resolve a code's parents from the TABLE's own level rows.
+
+    Arithmetic on the numbering is not sufficient.  ``soc_levels("29-1221")``
+    yields broad parent ``29-1220``, but the pinned release has no such row:
+    "Pediatricians, General" sits directly under broad ``29-1210 Physicians``,
+    which also holds 29-1211..29-1229.  Accepting the arithmetic parent would
+    mean inventing its name -- exactly what G1 exists to prevent, and G1 did
+    catch it, but the derivation was still wrong.
+
+    Within one major group SOC codes sort in hierarchy order, so a parent is the
+    greatest code at that level which is <= the child.  Returns None for a level
+    the table does not carry, rather than guessing one.
+    """
+    lvl = table.get("level_of_code", {})
+    if lvl.get(code) is None:
+        return {}
+    major = f"{str(code).split('-')[0]}-0000"
+    out = {"major_group": major if lvl.get(major) else None}
+    same_major = sorted(c for c in lvl if c.split("-")[0] == str(code).split("-")[0]
+                        and "." not in c)
+    for level, key in (("minor_group", "minor group"),
+                       ("broad_occupation", "broad occupation")):
+        at_level = [c for c in same_major if lvl.get(c) == key and c <= code]
+        out[level] = at_level[-1] if at_level else None
+    out["detailed_occupation"] = code if lvl.get(code) == "detailed occupation" else None
+    arithmetic = soc_levels(code) or {}
+    out["arithmetic_disagreements"] = sorted(
+        k for k in ("minor_group", "broad_occupation")
+        if arithmetic.get(k) and out.get(k) and arithmetic[k] != out[k])
+    return out
+
+
 def build_record(original_label, table, mapping_type, confidence,
                  reviewer_decision, exclusion_reason=None,
                  external_code=None, proposed_by_model=None,
                  reviewer=None, l2_level="broad_occupation",
-                 taxonomy_version="2018"):
+                 taxonomy_version="2018", matrix_role=None,
+                 output_label=None, adjudication=None):
     """One audited profession record, with parents taken from the table.
 
     ``external_code`` is the SOC detailed/broad occupation the reviewer
     accepted.  When it is None the code is looked up by title, and a title that
     matches zero or several rows is recorded as ambiguous rather than guessed.
+
+    ``external_title`` is the official title VERBATIM from the pinned release,
+    and ``output_label`` may be a shorter label for the frozen output space.  The
+    two are kept apart on purpose: 19-2041 is officially "Environmental
+    Scientists and Specialists, Including Health", and shortening the field that
+    records the external authority would make the mapping unauditable, while
+    forcing the long form into the model's output vocabulary would make the
+    strict-accuracy gate measure transcription rather than the transformation.
     """
     norm = normalize_label(original_label)
+    if matrix_role is not None and matrix_role not in MATRIX_ROLES:
+        raise RuntimeError(f"{original_label!r}: matrix_role {matrix_role!r} is "
+                           f"not one of {MATRIX_ROLES}")
     codes = [external_code] if external_code else lookup_code(table,
                                                              original_label)
     rec = {
@@ -519,7 +645,16 @@ def build_record(original_label, table, mapping_type, confidence,
         "reviewer": reviewer,
         "exclusion_reason": exclusion_reason,
         "l2_level_used": l2_level,
+        "matrix_role": matrix_role,
     }
+    if adjudication is not None:
+        # The frozen adjudication: chosen code, the candidates rejected and why,
+        # and the rationale.  G8 fails a manual mapping that lacks it, so an
+        # override cannot survive as an unexplained edit to a code.
+        rec["adjudication"] = adjudication
+    if output_label is not None:
+        rec["output_label"] = output_label
+        rec["output_label_is_shortened"] = True
     if proposed_by_model is not None:
         # Recorded, and explicitly NOT authoritative.  G1 fails if a record's
         # authority is the model rather than the table or a reviewer.
@@ -542,8 +677,22 @@ def build_record(original_label, table, mapping_type, confidence,
     lv = soc_levels(code)
     if lv is None:
         raise RuntimeError(f"{original_label!r}: {code!r} is not a SOC code")
-    l2_code = lv[l2_level]
-    l1_code = lv["major_group"]
+    # the official leaf title, verbatim -- the external authority's own spelling
+    rec["external_title"] = lookup_title(table, code)
+    rec.setdefault("output_label", rec["external_title"])
+    # Parents come from the TABLE, not from arithmetic: see parents_from_table.
+    from_table = parents_from_table(code, table)
+    l2_code = from_table.get(l2_level) or lv[l2_level]
+    l1_code = from_table.get("major_group") or lv["major_group"]
+    rec["parents_resolved_from"] = "source_table" if from_table else "arithmetic"
+    if from_table.get("arithmetic_disagreements"):
+        rec["parent_arithmetic_disagreements"] = {
+            k: {"arithmetic": lv[k], "source_table": from_table.get(k)}
+            for k in from_table["arithmetic_disagreements"]}
+    rec["minor_group_parent"] = (
+        {"code": from_table.get("minor_group"),
+         "title": lookup_title(table, from_table.get("minor_group"))}
+        if from_table.get("minor_group") else None)
     l2_title, l1_title = lookup_title(table, l2_code), lookup_title(table,
                                                                     l1_code)
     rec["level2_parent"] = ({"code": l2_code, "title": l2_title,
@@ -572,9 +721,161 @@ def chain_for(record):
 
 
 # ====================================================================== #
+# adjudication: manual overrides, precedence, representative selection
+# ====================================================================== #
+OVERRIDE_DECISIONS = ("manual_override", "same_mapping", "exclude")
+REQUIRED_OVERRIDE_FIELDS = ("raw_label", "decision", "target_eligible",
+                            "rationale", "decided_before_experiment")
+
+
+def load_manual_overrides(path=OVERRIDE_PATH):
+    """The frozen adjudication registry, keyed by raw label.
+
+    Every override is recorded with the candidate it rejected and why, so an
+    adjudication can be audited after the fact instead of being inferred from
+    the outcome.  ``decided_before_experiment`` must be true: a decision made
+    after seeing a result is not a frozen design choice.
+    """
+    path = Path(path)
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    entries = data["overrides"] if isinstance(data, dict) else data
+    out = {}
+    for e in entries:
+        missing = [f for f in REQUIRED_OVERRIDE_FIELDS if f not in e]
+        if missing:
+            raise RuntimeError(f"override for {e.get('raw_label')!r} is missing "
+                               f"{missing}; an adjudication must be explicit")
+        if e["decision"] not in OVERRIDE_DECISIONS:
+            raise RuntimeError(f"override for {e['raw_label']!r}: decision "
+                               f"{e['decision']!r} is not one of "
+                               f"{OVERRIDE_DECISIONS}")
+        if not e["decided_before_experiment"]:
+            raise RuntimeError(
+                f"override for {e['raw_label']!r} is not marked "
+                f"decided_before_experiment: a decision taken after seeing a "
+                f"result cannot be part of a frozen design")
+        if e["decision"] != "exclude" and not e.get("chosen_soc"):
+            raise RuntimeError(f"override for {e['raw_label']!r}: decision "
+                               f"{e['decision']!r} needs chosen_soc")
+        out[e["raw_label"]] = e
+    return out
+
+
+def resolve_mapping(raw_label, overrides, proposal=None):
+    """Apply the precedence: manual > exact title > automatic > exclusion.
+
+    Returns ``(decision, precedence)``.  A manual override always wins, which is
+    what stops an automatic ranker -- or a model proposal -- from quietly
+    reversing a frozen adjudication.  ``proposal`` is the deterministic
+    candidate list from ``proposal_candidates``; it is consulted only when no
+    override exists.
+    """
+    ov = overrides.get(raw_label)
+    if ov:
+        return ov, "manual_override"
+    p = proposal or {}
+    kind = p.get("best_match_kind", "none")
+    if kind in ("exact_title", "exact_head") and not p.get("ambiguous"):
+        return {"raw_label": raw_label, "decision": "automatic",
+                "chosen_soc": p["candidates"][0]["code"],
+                "chosen_title": p["candidates"][0]["title"],
+                "target_eligible": True}, (
+                    "exact_title" if kind == "exact_title" else "automatic")
+    if kind != "none" and not p.get("ambiguous") and p.get("best_recall", 0) >= 1.0:
+        return {"raw_label": raw_label, "decision": "automatic",
+                "chosen_soc": p["candidates"][0]["code"],
+                "chosen_title": p["candidates"][0]["title"],
+                "target_eligible": True}, "automatic"
+    return {"raw_label": raw_label, "decision": "exclude",
+            "target_eligible": False,
+            "rationale": (f"no unambiguous mapping: best_match_kind={kind!r}, "
+                          f"ambiguous={p.get('ambiguous')}")}, "exclusion"
+
+
+def _semantic_cleanliness(label):
+    """Deterministic proxy for "cleaner occupational semantics".  Lower is cleaner.
+
+    Criterion 3 of the representative-selection rule.  It is deliberately
+    conservative and only separates cases criteria 1 and 2 cannot: a residual
+    catch-all leaf, a non-occupational qualifier, then fewer modifiers.  For the
+    three duplicate pairs that actually occur it is never reached -- identity
+    count decides all three -- which the tests pin rather than assume.
+    """
+    n = normalize_label(label)
+    return (1 if "all other" in n else 0,
+            1 if any(w in n for w in ("retired", "freelance", "student",
+                                      "emeritus", "junior", "senior")) else 0,
+            len(_tokens(label)),
+            n)
+
+
+def select_target_representatives(records, counts):
+    """One target per SOC leaf code, by the frozen selection rule.
+
+    Order: mapping confidence (higher), then identity frequency (higher), then
+    cleaner occupational semantics, then deterministic lexical order as the
+    FINAL tie-breaker only.  The losers are not discarded -- they become
+    same-leaf retention controls, which is a stronger test than dropping them:
+    editing one raw profession must not disturb another that shares its external
+    leaf.
+
+    Two DIFFERENT SOC occupations sharing a parent are not duplicates.  Coarsening
+    sibling occupations to a common parent is a legitimate and important
+    experiment, so only the leaf code and the complete chain are compared.
+    """
+    by_leaf = collections.defaultdict(list)
+    for r in records:
+        code = r.get("external_occupation_id")
+        if code and r.get("reviewer_decision") == "retained":
+            by_leaf[code].append(r)
+    out = {}
+    for code, group in sorted(by_leaf.items()):
+        if len(group) == 1:
+            out[code] = {"representative": group[0]["original_label"],
+                         "same_leaf_controls": [], "n_raw_labels": 1,
+                         "decided_by": "only one raw label maps here"}
+            continue
+        def rank(r):
+            conf = r.get("confidence")
+            return (-(conf if isinstance(conf, (int, float)) else 0.0),
+                    -counts.get(r["original_label"], 0),
+                    _semantic_cleanliness(r["original_label"]))
+        ordered = sorted(group, key=rank)
+        winner, rest = ordered[0], ordered[1:]
+        # which criterion actually separated them, recorded not assumed
+        by_conf = len({r.get("confidence") for r in group}) > 1
+        by_freq = len({counts.get(r["original_label"], 0) for r in group}) > 1
+        decided_by = ("mapping confidence" if by_conf and
+                      rank(winner)[0] < max(rank(r)[0] for r in rest)
+                      else "identity frequency" if by_freq and
+                      rank(winner)[1] < min(rank(r)[1] for r in rest)
+                      else "cleaner occupational semantics" if
+                      len({_semantic_cleanliness(r["original_label"])[:3]
+                            for r in group}) > 1
+                      else "deterministic lexical order (final tie-break)")
+        out[code] = {
+            "representative": winner["original_label"],
+            "same_leaf_controls": [r["original_label"] for r in rest],
+            "n_raw_labels": len(group),
+            "decided_by": decided_by,
+            "identity_counts": {r["original_label"]:
+                                counts.get(r["original_label"], 0)
+                                for r in group},
+            "selection_rule": (
+                "mapping confidence, then identity frequency, then cleaner "
+                "occupational semantics, then deterministic lexical order as "
+                "the final tie-break only"),
+        }
+    return out
+
+
+# ====================================================================== #
 # the seven gates
 # ====================================================================== #
-def run_gates(records, table, selected_targets=None, retained_ids=None):
+def run_gates(records, table, selected_targets=None, retained_ids=None,
+              identity_counts=None):
     """All seven gates, each with its own verdict and reasons.
 
     Returns ``{"passed": bool, "gates": {name: {...}}, "hierarchy_of": ...,
@@ -680,39 +981,97 @@ def run_gates(records, table, selected_targets=None, retained_ids=None):
                       "is assigned to two level-1 branches"),
     }
 
-    # ---- G4b: distinct labels collapsing onto one occupation ------------ #
-    # G4 keys on the normalized LABEL, so it cannot see two different labels
-    # that a reviewer maps to the SAME SOC code.  That is legitimate -- MLLMU's
-    # "Software Engineer" and "Software Developer" really are one occupation,
-    # 15-1252 -- but it is not neutral downstream: both produce the identical
-    # chain, so a matrix that treats them as two professions is testing one
-    # transformation twice and over-reporting its coverage.  Warn, and say so.
+    # ---- G4b: no two confirmatory TARGETS collide --------------------- #
+    # Scoped to the selected targets, NOT to the whole mapping table.  Two raw
+    # professions sharing one SOC occupation is legitimate and useful: the
+    # lower-frequency duplicate is a same-leaf retention control, testing that
+    # editing one identity does not disturb another sharing its external leaf.
+    # It is invalid only when both are counted as distinct transformations.
+    #
+    # Equally important is what this does NOT reject: two DIFFERENT SOC
+    # occupations that share a parent.  Coarsening sibling occupations to a
+    # common parent is a legitimate and important experiment, so duplication is
+    # defined on the leaf code and on the complete chain -- never on a parent.
     by_code = collections.defaultdict(set)
     for r in records:
         if r["reviewer_decision"] == "retained" and r.get("external_occupation_id"):
             by_code[r["external_occupation_id"]].add(r["normalized_label"])
     shared_codes = {c: sorted(v) for c, v in sorted(by_code.items())
                     if len(v) > 1}
-    g4b = [f"{code}: {len(labels)} distinct professions map here "
-           f"({', '.join(repr(x) for x in labels)}), so they are ONE "
-           f"transformation target, not {len(labels)}"
-           for code, labels in shared_codes.items()]
-    g4bw = list(g4b)
-    warnings.extend(g4bw)
+
+    chosen = set(selected_targets or [])
+    target_recs = [r for r in records if r["original_label"] in chosen]
+    g4b = []
+    leaf_seen, chain_seen = {}, {}
+    for r in target_recs:
+        code = r.get("external_occupation_id")
+        role = r.get("matrix_role")
+        if role == "same_leaf_retention_control":
+            g4b.append(f"{r['original_label']!r}: selected as a target but its "
+                       f"matrix_role is same_leaf_retention_control -- a "
+                       f"same-leaf duplicate is a control, never a target")
+            continue
+        if code is None:
+            g4b.append(f"{r['original_label']!r}: selected as a target but has "
+                       f"no external occupation id, so its leaf is undefined")
+            continue
+        if code in leaf_seen:
+            g4b.append(f"target collision on SOC leaf {code}: "
+                       f"{leaf_seen[code]!r} and {r['original_label']!r} are the "
+                       f"same transformation, not two; one must become "
+                       f"same_leaf_retention_control or be deselected")
+        else:
+            leaf_seen[code] = r["original_label"]
+        chain = json.dumps([code,
+                            (r.get("level2_parent") or {}).get("code"),
+                            (r.get("level1_parent") or {}).get("code")],
+                           sort_keys=True)
+        if chain in chain_seen:
+            g4b.append(f"target collision on the complete chain {chain}: "
+                       f"{chain_seen[chain]!r} and {r['original_label']!r}")
+        else:
+            chain_seen[chain] = r["original_label"]
+    # a parent shared by two different leaves is NOT a collision
+    parent_only = collections.defaultdict(list)
+    for r in target_recs:
+        l2 = (r.get("level2_parent") or {}).get("code")
+        if l2 and r.get("external_occupation_id"):
+            parent_only[l2].append(r["external_occupation_id"])
+    shared_parent_ok = {p: sorted(set(c)) for p, c in parent_only.items()
+                        if len(set(c)) > 1}
     gates["G4b_no_duplicate_targets"] = {
         "passed": not g4b or G4B_IS_A_WARN, "n_issues": len(g4b),
         "issues": [] if G4B_IS_A_WARN else g4b,
-        "warnings": g4bw, "warn_only": G4B_IS_A_WARN,
-        "shared_codes": shared_codes,
-        "criterion": ("two distinct professions sharing one external "
-                      "occupation id are reported, because a matrix builder "
-                      "must count them as a single transformation target"),
+        "warnings": [] if not G4B_IS_A_WARN else g4b,
+        "warn_only": G4B_IS_A_WARN,
+        "scope": "selected transformation targets only, not the whole table",
+        "n_targets_selected": len(target_recs),
+        "n_distinct_leaf_codes": len(leaf_seen),
+        "duplicate_targets": shared_codes,
+        "same_leaf_is_allowed_as": "same_leaf_retention_control",
+        "different_leaves_sharing_a_parent": shared_parent_ok,
+        "shared_parent_is_not_a_collision": (
+            "two different SOC occupations may share a level-1 or level-2 "
+            "parent; coarsening sibling occupations to a common parent is a "
+            "legitimate experiment and must not be rejected"),
+        "coverage_counts_distinct_leaves": (
+            "a duplicate raw profession contributes ZERO additional "
+            "hierarchy-coverage count; coverage is the number of distinct SOC "
+            "leaf codes among targets, which must equal the number of targets"),
+        "criterion": ("no two confirmatory targets share a SOC leaf code, and "
+                      "no two have identical complete chains"),
         "consequence": (
-            "Not a defect in the hierarchy -- synonyms are expected.  It is a "
-            "constraint on target selection: G6.1 must pick at most one label "
-            "per external occupation id, or its cell count overstates how many "
-            "distinct transformations were tested."),
+            "Freezing fails until target collisions are resolved: counting one "
+            "transformation twice overstates how many distinct transformations "
+            "were tested."),
     }
+    if not G4B_IS_A_WARN:
+        warnings.extend(g4b)
+    else:
+        warnings.extend(f"{code}: {len(labels)} distinct professions map here "
+                        f"({', '.join(repr(x) for x in labels)}), so they are "
+                        f"ONE transformation target, not {len(labels)}"
+                        for code, labels in shared_codes.items())
 
     # ---- G5: ambiguous excluded from confirmatory cells ---------------- #
     g5 = []
@@ -789,27 +1148,136 @@ def run_gates(records, table, selected_targets=None, retained_ids=None):
     gates["G7_committed_before_training"] = {
         "passed": tracked, "n_issues": 0 if tracked else 1,
         "issues": [] if tracked else [
-            (f"{HIERARCHY_PATH} is not tracked by git.  The hierarchy and the "
+            (f"{record_path(HIERARCHY_PATH)} is not tracked by git.  The "
+             f"hierarchy and the "
              f"selected targets must be committed BEFORE any training phase; "
              f"a downstream builder refuses an untracked hierarchy.")],
         "criterion": ("the frozen hierarchy artifact is committed before any "
                       "G6 training or matrix build"),
     }
 
+    # ---- target selection: one representative per SOC leaf ------------ #
+    selection = select_target_representatives(records, identity_counts or {})
+
+    # ---- G8: the final pre-freeze checklist -------------------------- #
+    # Nine things must hold before a hierarchy may become a committed input.
+    # Each is reported separately so a failure names itself instead of hiding
+    # inside a single boolean.
+    g8, checks = [], {}
+    chosen = list(selected_targets or [])
+    trecs = [r for r in records if r["original_label"] in chosen]
+
+    no_leaf = [r["original_label"] for r in trecs
+               if not r.get("external_occupation_id")]
+    checks["every_target_has_one_canonical_soc_leaf"] = not no_leaf
+    if no_leaf:
+        g8.append(f"targets with no canonical SOC leaf: {no_leaf}")
+
+    bad_parents = [r["original_label"] for r in trecs
+                   if not ((r.get("level1_parent") or {}).get("code")
+                           and (r.get("level1_parent") or {}).get("title")
+                           and (r.get("level2_parent") or {}).get("code")
+                           and (r.get("level2_parent") or {}).get("title"))]
+    checks["every_target_has_valid_l1_and_l2_parents"] = not bad_parents
+    if bad_parents:
+        g8.append(f"targets missing a valid L1/L2 parent code AND title: "
+                  f"{bad_parents}")
+
+    g4b = gates["G4b_no_duplicate_targets"]
+    checks["g4b_reports_zero_selected_target_collisions"] = g4b["n_issues"] == 0
+    if g4b["n_issues"]:
+        g8.append(f"G4b found {g4b['n_issues']} selected-target collision(s)")
+    checks["target_count_equals_distinct_leaf_count"] = (
+        g4b["n_targets_selected"] == g4b["n_distinct_leaf_codes"])
+
+    controls_selected = [r["original_label"] for r in records
+                         if r.get("matrix_role") == "same_leaf_retention_control"
+                         and r["original_label"] in chosen]
+    checks["alternate_raw_labels_are_controls_not_targets"] = (
+        not controls_selected)
+    if controls_selected:
+        g8.append(f"same-leaf duplicates selected as targets: "
+                  f"{controls_selected}; they are retention controls")
+
+    bad_title = [r["original_label"] for r in records
+                 if r.get("external_occupation_id")
+                 and r.get("external_title")
+                 != table["by_code"].get(r["external_occupation_id"])]
+    checks["official_spelling_preserved_in_external_title"] = not bad_title
+    if bad_title:
+        g8.append(f"external_title does not match the pinned release verbatim: "
+                  f"{bad_title}")
+
+    checks["source_labels_retain_dataset_spelling"] = all(
+        r["original_label"] == r["original_label"].strip()
+        and normalize_label(r["original_label"]) != ""
+        for r in records)
+    if not checks["source_labels_retain_dataset_spelling"]:
+        g8.append("a source label was altered or blanked; the raw dataset "
+                  "spelling must be preserved in original_label")
+
+    missing_reg = [r["original_label"] for r in records
+                   if r.get("mapping_type") == "manual"
+                   and not r.get("adjudication")]
+    checks["manual_overrides_and_rejected_alternatives_recorded"] = (
+        not missing_reg)
+    if missing_reg:
+        g8.append(f"manual mappings with no recorded adjudication (chosen "
+                  f"code plus rejected candidates and why): {missing_reg}")
+
+    no_reason = [r["original_label"] for r in records
+                 if r["reviewer_decision"] == "excluded"
+                 and not r.get("exclusion_reason")]
+    checks["all_excluded_labels_carry_explicit_reasons"] = not no_reason
+    if no_reason:
+        g8.append(f"excluded with no exclusion_reason: {no_reason}")
+
+    src_tracked = _is_tracked(resolve_path(table["path"]))
+    checks["source_soc_file_is_committed"] = src_tracked
+    if not src_tracked:
+        g8.append(f"the source SOC table {table['path']} is not tracked by git; "
+                  f"the artifact, the source file, its hash and the "
+                  f"target-selection manifest must all be committed cleanly "
+                  f"before any G6 run")
+    checks["artifact_and_selection_manifest_commitment"] = (
+        "enforced by G7 and by verify_hierarchy after the freeze: the "
+        "hierarchy artifact and the target-selection manifest must be tracked "
+        "before any G6 training")
+
+    gates["G8_pre_freeze_checklist"] = {
+        "passed": not g8, "n_issues": len(g8), "issues": g8,
+        "checks": checks,
+        "criterion": ("nine conditions verified before the hierarchy becomes a "
+                      "committed input"),
+    }
+
     passed = all(g["passed"] for g in gates.values())
     return {"passed": passed, "gates": gates, "warnings": warnings,
             "failed_gates": sorted(n for n, g in gates.items()
                                    if not g["passed"]),
+            "target_selection": selection,
+            "pre_freeze_checks": checks,
             "hierarchy_of": hierarchy_of}
 
 
 def _is_tracked(path):
-    """Is ``path`` tracked by git?  G7's check, and a builder's precondition."""
+    """Is ``path`` tracked by git?  G7's check, and a builder's precondition.
+
+    The pathspec is made repo-relative and git is run from the repo root, so the
+    answer cannot depend on the process cwd: ``git ls-files`` resolves a relative
+    pathspec against cwd, which would silently report a tracked file as
+    untracked whenever the module was invoked from anywhere else.
+    """
     import subprocess
+    p = Path(path).resolve()
+    try:
+        spec = str(p.relative_to(REPO_ROOT))
+    except ValueError:
+        return False            # outside this repository, so not tracked by it
     try:
         subprocess.check_output(
-            ["git", "ls-files", "--error-unmatch", str(path)],
-            stderr=subprocess.DEVNULL)
+            ["git", "ls-files", "--error-unmatch", spec],
+            cwd=REPO_ROOT, stderr=subprocess.DEVNULL)
         return True
     except Exception:
         return False
@@ -866,17 +1334,39 @@ def freeze_hierarchy(table, records, gates, selected_targets=None,
     if not gates["passed"]:
         failed = sorted(k for k, g in gates["gates"].items()
                         if not g["passed"])
-        raise RuntimeError(
-            f"refusing to freeze: gate(s) {failed} did not pass.  A hierarchy "
-            f"that fails its own audit must not become a committed input.")
+        # G7 asks that the artifact be committed before TRAINING, and it cannot
+        # be satisfied by the first write: the file does not exist yet, so it is
+        # necessarily untracked.  Allow G7 alone to be outstanding, record that
+        # it is, and let verify_hierarchy enforce it once the commit exists.
+        # Every other gate still blocks the write absolutely.
+        if failed != ["G7_committed_before_training"]:
+            raise RuntimeError(
+                f"refusing to freeze: gate(s) {failed} did not pass.  A "
+                f"hierarchy that fails its own audit must not become a "
+                f"committed input.")
+        g7_pending = True
+    else:
+        g7_pending = False
     retained = [r for r in records if r["reviewer_decision"] == "retained"]
     artifact = {
         "kind": "mllmu_external_profession_hierarchy",
         "audited": True,
+        # G7 is the one gate the first write cannot satisfy: the artifact is
+        # untracked until the commit that follows this freeze.  Recorded rather
+        # than silently waived, and verify_hierarchy enforces it afterwards.
+        "g7_status": ("pending_commit: this artifact must be committed before "
+                      "any G6 training or matrix build" if g7_pending
+                      else "committed"),
         "taxonomy": TAXONOMY_NAME,
         "taxonomy_publisher": TAXONOMY_PUBLISHER,
         "taxonomy_url": TAXONOMY_URL,
         "source_table": {"path": table["path"], "sha256": table["sha256"],
+                         # "path" is repo-root-relative so this artifact stays
+                         # verifiable from any clone; the absolute form is kept
+                         # as provenance only and is never used to open a file.
+                         "path_relative_to": "repository root",
+                         "path_absolute_at_freeze":
+                             table.get("path_absolute_at_freeze"),
                          "n_rows": table["n_rows"],
                          "layout": table["layout"],
                          "header_line": table["header_line"],
@@ -909,7 +1399,9 @@ def freeze_hierarchy(table, records, gates, selected_targets=None,
         # reading the wrong level silently recorded no duplicates at all.
         "duplicate_targets": (gates.get("gates", {})
                               .get("G4b_no_duplicate_targets", {})
-                              .get("shared_codes", {})),
+                              .get("duplicate_targets", {})),
+        "target_selection": gates.get("target_selection", {}),
+        "pre_freeze_checks": gates.get("pre_freeze_checks", {}),
         "n_ambiguous_excluded": sum(
             1 for r in records if r["mapping_type"] == "ambiguous"),
         "retained_labels": sorted(r["original_label"] for r in retained),
@@ -948,7 +1440,7 @@ def verify_hierarchy(path=HIERARCHY_PATH):
     # The quarantine decision belongs to the artifact, not to the caller: a
     # verification pass must read the table exactly as the freeze did.
     table = load_taxonomy_table(
-        art["source_table"]["path"],
+        resolve_path(art["source_table"]["path"]),
         allow_quarantine=bool(art["source_table"].get("allow_quarantine")))
     if table["sha256"] != art["source_table"]["sha256"]:
         raise RuntimeError(
@@ -957,7 +1449,11 @@ def verify_hierarchy(path=HIERARCHY_PATH):
             f"{art['source_table']['sha256'][:16]}: the external authority "
             f"changed underneath a committed artifact")
     gates = run_gates(art["records"], table,
-                      selected_targets=art.get("selected_targets"))
+                      selected_targets=art.get("selected_targets"),
+                      # counts come from the source, so verification reproduces
+                      # the same representative and confirmatory selection
+                      # instead of falling back to a lexical tie-break
+                      identity_counts=professions_in_source())
     if not gates["passed"]:
         failed = sorted(k for k, g in gates["gates"].items()
                         if not g["passed"])
@@ -1368,6 +1864,279 @@ def build_proposal_csv(table_path, out_path, n_professions=12,
             }
 
 
+#: Confidence assigned by the deterministic title index.  Deliberately the SAME
+#: as a certain manual override, so that where both a manual and an automatic
+#: mapping are equally sure the tie falls to identity frequency -- which is what
+#: the adjudication rationale asks for ("choose Software Engineer, not Software
+#: Developer, because it has substantially greater coverage").  Giving the manual
+#: entry a higher number instead would let a 1-identity label outrank a 65-identity
+#: one on a bookkeeping artifact.
+AUTO_CONFIDENCE = 0.95
+
+
+def build_decided_records(table_path, overrides_path=OVERRIDE_PATH):
+    """Apply the frozen adjudications and return records plus the target list.
+
+    Precedence per label: a manual override wins outright; otherwise an
+    unambiguous match on a published title is accepted automatically; otherwise
+    the label is excluded with a generated reason.  Nothing is dropped silently.
+
+    After the records exist, the duplicate policy is applied: where several raw
+    professions share one SOC leaf, ``select_target_representatives`` picks one by
+    confidence, then frequency, then cleaner semantics, then lexical order, and
+    every other label at that leaf is demoted to ``same_leaf_retention_control``.
+    """
+    table = load_taxonomy_table(table_path)
+    overrides = load_manual_overrides(overrides_path)
+    counts = professions_in_source()
+    records, decisions = [], []
+    for label in sorted(counts):
+        prop = proposal_candidates(label, table)
+        dec, precedence = resolve_mapping(label, overrides, prop)
+        dec = dict(dec)
+        dec["precedence"] = precedence
+        dec["n_identities"] = counts[label]
+        decisions.append(dec)
+        if dec["decision"] == "exclude":
+            reason = dec.get("exclusion_reason") or dec.get("rationale") or (
+                "no unambiguous mapping in the pinned SOC release")
+            records.append(build_record(
+                label, table, "ambiguous", None, "excluded",
+                exclusion_reason=reason,
+                matrix_role=dec.get("matrix_role") or "excluded_out_of_scope",
+                reviewer="frozen_adjudication_registry",
+                adjudication=dec if label in overrides else None))
+            continue
+        mtype = {"manual_override": "manual", "same_mapping": "manual",
+                 "exact_title": "exact"}.get(precedence, "synonym")
+        conf = dec.get("confidence")
+        if conf is None:
+            conf = AUTO_CONFIDENCE
+        records.append(build_record(
+            label, table, mtype, conf, "retained",
+            external_code=dec["chosen_soc"],
+            reviewer="frozen_adjudication_registry",
+            matrix_role=dec.get("matrix_role") or "target_eligible",
+            output_label=dec.get("shorter_output_label"),
+            adjudication=dec))
+
+    # ---- apply the duplicate policy ---------------------------------- #
+    selection = select_target_representatives(records, counts)
+    by_label = {r["original_label"]: r for r in records}
+    demotions = []
+    for code, sel in selection.items():
+        if sel["n_raw_labels"] < 2:
+            continue
+        for loser in sel["same_leaf_controls"]:
+            r = by_label[loser]
+            if r.get("matrix_role") in ("retained_only", "excluded_out_of_scope"):
+                continue
+            was = r.get("matrix_role")
+            if was != "same_leaf_retention_control":
+                demotions.append({
+                    "raw_label": loser, "soc": code,
+                    "was": was, "now": "same_leaf_retention_control",
+                    "representative": sel["representative"],
+                    "decided_by": sel["decided_by"],
+                    "identity_counts": sel.get("identity_counts"),
+                    "why": ("shares one SOC leaf with the representative, so it "
+                            "is not an independent transformation target; it "
+                            "stays in the hierarchy as a same-leaf control and "
+                            "contributes zero additional coverage")})
+                r["matrix_role"] = "same_leaf_retention_control"
+                r["target_eligible"] = False
+                r["demoted_by_duplicate_policy"] = True
+    eligible = {"primary_target", "target_eligible"}
+    eligible_targets = sorted(
+        v["representative"] for v in selection.values()
+        if by_label.get(v["representative"], {}).get("matrix_role") in eligible)
+    confirmatory = select_confirmatory_targets(records, counts)
+    targets = confirmatory["selected_targets"]
+    primary = sorted(r["original_label"] for r in records
+                     if r.get("matrix_role") == "primary_target")
+    return {
+        "table": table, "records": records, "counts": counts,
+        "decisions": decisions, "selection": selection,
+        "selected_targets": targets, "primary_targets": primary,
+        "eligible_targets": eligible_targets,
+        "confirmatory_selection": confirmatory,
+        "duplicate_demotions": demotions,
+        "overrides_applied": sorted(
+            label for label in overrides if label in by_label),
+        "overrides_not_found_in_source": sorted(
+            label for label in overrides if label not in by_label),
+    }
+
+
+SELECTION_PATH = MANIFEST_DIR / "mllmu_target_selection.json"
+
+#: Frozen confirmatory target-selection criteria, chosen before any MLLMU
+#: experiment.  At most 3 targets per SOC major group so the matrix does not pile
+#: into one branch, and at least 2 identities per target so a strict-accuracy
+#: gate is never a single observation with no variance.  Professions that miss
+#: the cut KEEP matrix_role=target_eligible: they are deferred, not rejected, and
+#: can be promoted without re-adjudicating the mapping.
+CONFIRMATORY_MAX_PER_MAJOR_GROUP = 3
+CONFIRMATORY_MIN_IDENTITIES = 2
+
+
+def select_confirmatory_targets(records, counts,
+                                max_per_major_group=CONFIRMATORY_MAX_PER_MAJOR_GROUP,
+                                min_identities=CONFIRMATORY_MIN_IDENTITIES):
+    """The frozen confirmatory target list, deterministically.
+
+    Order: the adjudicated primary targets first, then identity frequency
+    descending, then label -- so the selection is reproducible from the records
+    alone and does not depend on dict ordering.  Returns the chosen labels plus
+    the reason each eligible profession missed the cut, because an unexplained
+    omission is indistinguishable from an accidental one.
+    """
+    eligible = [r for r in records
+                if r.get("matrix_role") in ("primary_target", "target_eligible")]
+    ordered = sorted(eligible, key=lambda r: (
+        0 if r["matrix_role"] == "primary_target" else 1,
+        -counts.get(r["original_label"], 0), r["original_label"]))
+    chosen, taken, skipped = [], collections.Counter(), []
+    for r in ordered:
+        label = r["original_label"]
+        n = counts.get(label, 0)
+        code = r.get("external_occupation_id")
+        # A role is not a mapping: if an eligible record somehow carries no SOC
+        # leaf, defer it with a reason rather than raising TypeError on a slice,
+        # because a crash here loses the whole selection and the reason with it.
+        if not code:
+            skipped.append({"original_label": label, "soc": None,
+                            "major_group": None, "n_identities": n,
+                            "reason": ("role is target-eligible but the record "
+                                       "has no canonical SOC leaf to select on"),
+                            "still": "target_eligible, promotable"})
+            continue
+        group = code[:2]
+        if n < min_identities:
+            skipped.append({"original_label": label, "soc": code,
+                            "major_group": group, "n_identities": n,
+                            "reason": (f"fewer than {min_identities} "
+                                       f"identities, so a strict-accuracy gate "
+                                       f"would rest on one observation"),
+                            "still": "target_eligible, promotable"})
+            continue
+        if taken[group] >= max_per_major_group:
+            skipped.append({"original_label": label, "soc": code,
+                            "major_group": group, "n_identities": n,
+                            "reason": (f"major group {group} already has "
+                                       f"{max_per_major_group} targets"),
+                            "still": "target_eligible, promotable"})
+            continue
+        chosen.append(label)
+        taken[group] += 1
+    return {"selected_targets": sorted(chosen),
+            "n_selected": len(chosen),
+            "per_major_group": {g: taken[g] for g in sorted(taken)},
+            "deferred": skipped,
+            "criteria": {
+                "max_per_major_group": max_per_major_group,
+                "min_identities": min_identities,
+                "order": ("adjudicated primary targets first, then identity "
+                          "frequency descending, then label"),
+                "deferred_are_not_rejected": (
+                    "a deferred profession keeps matrix_role=target_eligible "
+                    "and can be promoted without re-adjudicating its mapping")},
+            }
+
+
+def freeze_decisions(table_path, overrides_path=OVERRIDE_PATH,
+                     hierarchy_path=HIERARCHY_PATH,
+                     selection_path=SELECTION_PATH, quiet=False):
+    """Apply the adjudications, run every gate, and write both artifacts.
+
+    Writes the hierarchy AND a target-selection manifest, because the checklist
+    requires the artifact, the source SOC file, its hash and the target-selection
+    manifest to be committed cleanly together: the selection is a design choice
+    and must be as frozen and as auditable as the hierarchy it selects from.
+
+    Refuses to write anything unless every gate except G7 passes; G7 cannot be
+    satisfied by the first write and is recorded as pending instead.
+    """
+    d = build_decided_records(table_path, overrides_path)
+    gates = run_gates(d["records"], d["table"],
+                      selected_targets=d["selected_targets"],
+                      identity_counts=d["counts"])
+    for name, g in gates["gates"].items():
+        if not quiet:
+            logger.info("G6.0 %-42s %s (%d issue(s))", name,
+                        "PASS" if g["passed"] else "FAIL", g["n_issues"])
+            for issue in g["issues"][:10]:
+                logger.info("    - %s", issue)
+    for w in gates["warnings"]:
+        logger.warning("G6.0 WARN %s", w)
+    outstanding = [n for n in gates["failed_gates"]
+                   if n != "G7_committed_before_training"]
+    if outstanding:
+        raise RuntimeError(f"refusing to freeze: gate(s) {outstanding} did not "
+                           f"pass; nothing was written")
+    art = freeze_hierarchy(d["table"], d["records"], gates,
+                           selected_targets=d["selected_targets"],
+                           path=hierarchy_path)
+    selection = {
+        "kind": "mllmu_g6_target_selection",
+        "frozen_before_training": True,
+        "source_table": {"path": d["table"]["path"],
+                         "sha256": d["table"]["sha256"]},
+        "hierarchy_artifact": {"path": record_path(hierarchy_path),
+                               "content_sha256": art["content_sha256"]},
+        "override_registry": {
+            "path": record_path(overrides_path),
+            "sha256": (rv.sha256_file(overrides_path)
+                       if Path(overrides_path).exists() else None),
+            "n_applied": len(d["overrides_applied"]),
+            "applied": d["overrides_applied"],
+            "not_found_in_source": d["overrides_not_found_in_source"],
+            "precedence": list(PRECEDENCE)},
+        "selected_targets": d["selected_targets"],
+        "n_selected_targets": len(d["selected_targets"]),
+        "eligible_targets": d["eligible_targets"],
+        "n_eligible_targets": len(d["eligible_targets"]),
+        "confirmatory_selection": d["confirmatory_selection"],
+        "primary_targets": d["primary_targets"],
+        "representative_per_soc_leaf": d["selection"],
+        "duplicate_demotions": d["duplicate_demotions"],
+        "duplicate_targets": gates["gates"][
+            "G4b_no_duplicate_targets"]["duplicate_targets"],
+        "different_leaves_sharing_a_parent": gates["gates"][
+            "G4b_no_duplicate_targets"]["different_leaves_sharing_a_parent"],
+        "shared_parent_is_not_a_collision": gates["gates"][
+            "G4b_no_duplicate_targets"]["shared_parent_is_not_a_collision"],
+        "coverage_counts_distinct_leaves": gates["gates"][
+            "G4b_no_duplicate_targets"]["coverage_counts_distinct_leaves"],
+        "n_distinct_leaf_codes": gates["gates"][
+            "G4b_no_duplicate_targets"]["n_distinct_leaf_codes"],
+        "pre_freeze_checks": gates["pre_freeze_checks"],
+        "g4b_is_a_hard_gate": not G4B_IS_A_WARN,
+        "controls_require_hierarchy": CONTROLS_REQUIRE_HIERARCHY,
+        "non_occupational_labels_removed_from_the_matrix": (
+            "gx.sibling_controls unpacks a 3-element chain for every identity, "
+            "so a label with no hierarchy cannot serve even as an unrelated "
+            "control; the non-occupational labels are therefore out of the G6 "
+            "matrix entirely and are never described as occupational siblings "
+            "or cousins"),
+        "matrix_roles": {r["original_label"]: r.get("matrix_role")
+                         for r in d["records"]},
+        "identity_counts": d["counts"],
+    }
+    selection_path = Path(selection_path)
+    selection_path.parent.mkdir(parents=True, exist_ok=True)
+    selection_path.write_text(json.dumps(selection, indent=2, sort_keys=True),
+                              encoding="utf-8")
+    selection["selection_sha256"] = rv.sha256_file(selection_path)
+    return {"hierarchy": art, "selection": selection,
+            "hierarchy_path": record_path(hierarchy_path),
+            "selection_path": record_path(selection_path),
+            "gates_passed": gates["passed"],
+            "g7_status": art["g7_status"],
+            "failed_gates": gates["failed_gates"],
+            "n_warnings": len(gates["warnings"])}
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--taxonomy-table", type=Path, default=None,
@@ -1405,6 +2174,15 @@ def main(argv=None):
                    help="soft cap on professions taken from one SOC major "
                         "group, so the pool does not pile into one branch")
     p.add_argument("--freeze", action="store_true")
+    p.add_argument("--overrides", type=Path, default=OVERRIDE_PATH,
+                   help="frozen manual-adjudication registry")
+    p.add_argument("--decide", action="store_true",
+                   help="dry run: apply the adjudications, run every gate and "
+                        "report the targets, roles and duplicates.  Writes "
+                        "nothing.")
+    p.add_argument("--freeze-decisions", action="store_true",
+                   help="apply the adjudications and write BOTH the hierarchy "
+                        "artifact and the target-selection manifest")
     p.add_argument("--verify", action="store_true")
     p.add_argument("--list-professions", action="store_true")
     args = p.parse_args(argv)
@@ -1430,6 +2208,35 @@ def main(argv=None):
             min_recall=args.min_recall,
             max_per_major_group=args.max_per_major_group)
         print(json.dumps(out, indent=2, default=str))
+        return 0
+    if args.decide or args.freeze_decisions:
+        if not args.taxonomy_table:
+            p.error("--decide / --freeze-decisions need --taxonomy-table")
+        if args.decide:
+            d = build_decided_records(args.taxonomy_table, args.overrides)
+            g = run_gates(d["records"], d["table"],
+                          selected_targets=d["selected_targets"],
+                          identity_counts=d["counts"])
+            print(json.dumps({
+                "selected_targets": d["selected_targets"],
+                "eligible_targets": d["eligible_targets"],
+                "confirmatory_selection": d["confirmatory_selection"],
+                "primary_targets": d["primary_targets"],
+                "duplicate_demotions": d["duplicate_demotions"],
+                "overrides_applied": d["overrides_applied"],
+                "gates": {n: {"passed": x["passed"], "n_issues": x["n_issues"],
+                              "issues": x["issues"]}
+                          for n, x in g["gates"].items()},
+                "failed_gates": g["failed_gates"],
+                "pre_freeze_checks": g["pre_freeze_checks"],
+                "wrote": "nothing",
+            }, indent=2, default=str))
+            return 0
+        out = freeze_decisions(args.taxonomy_table, args.overrides)
+        logger.info("G6.0: hierarchy %s", out["hierarchy"]["content_sha256"])
+        logger.info("G6.0: %s", out["g7_status"])
+        print(json.dumps({k: v for k, v in out.items() if k != "selection"},
+                         indent=2, default=str))
         return 0
     if args.verify:
         out = verify_hierarchy()
