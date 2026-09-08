@@ -232,7 +232,42 @@ def singularize(text):
 # ====================================================================== #
 # source table
 # ====================================================================== #
+_HEADER_SCAN_LIMIT = 40
+
+
+def _looks_like_header(cells):
+    """Does this row name the columns, rather than hold data?"""
+    norm = [re.sub(r"\s+", " ", str(c or "")).strip().lower() for c in cells]
+    levels = sum(1 for c in SOC_LEVEL_COLUMNS if c.lower() in norm)
+    if levels >= 3:
+        return True                     # the official wide layout
+    has_code = any(c and ("code" in c) for c in norm)
+    has_title = any(c and ("title" in c or c == "name") for c in norm)
+    return has_code and has_title       # a hand-made code + title CSV
+
+
 def _read_delimited(path):
+    """Data rows, their true 1-based file lines, the header line, and whether
+    the header was positively identified.
+
+    Official spreadsheet exports commonly carry sheet-title preamble above the
+    real header (the O*NET download has two title lines and a blank one), so
+    the header is LOCATED rather than assumed to be line 1.  Taking a title row
+    as the header is not a harmless off-by-three: it turns every real column
+    name into a data value, so nothing matches and the loader either refuses on
+    an unidentifiable column or, worse, finds a plausible-looking one.
+
+    When no row positively looks like a header, line 1 is used anyway and
+    ``header_found`` is False.  That is deliberate: a hand-made CSV with odd
+    column names should reach the column-identification check, which reports
+    the columns it actually saw, rather than being told only that no header was
+    found.  A data row is never *promoted* to a header, because the fallback
+    fires only when nothing in the scan window matches.
+
+    Line numbers are carried per row rather than enumerated, because blank
+    spacer rows are dropped and a reported line must still point at the real
+    line in the file -- these numbers end up in the frozen artifact.
+    """
     with open(path, newline="", encoding="utf-8-sig") as f:
         sample = f.read(8192)
         f.seek(0)
@@ -240,8 +275,23 @@ def _read_delimited(path):
             dialect = csv.Sniffer().sniff(sample, delimiters=",\t;|")
         except csv.Error:
             dialect = csv.excel
-        rows = list(csv.DictReader(f, dialect=dialect))
-    return rows
+        raw = list(csv.reader(f, dialect=dialect))
+    if not raw:
+        raise RuntimeError(f"{path} is empty")
+    idx = next((i for i, cells in enumerate(raw[:_HEADER_SCAN_LIMIT])
+                if _looks_like_header(cells)), None)
+    header_found = idx is not None
+    if idx is None:
+        idx = 0                             # fall back, and say so
+    header = [str(c or "").strip() for c in raw[idx]]
+    rows, linenos = [], []
+    for offset, values in enumerate(raw[idx + 1:]):
+        if not any(str(v or "").strip() for v in values):
+            continue                        # blank spacer row
+        padded = list(values) + [""] * (len(header) - len(values))
+        rows.append(dict(zip(header, padded[:len(header)])))
+        linenos.append(idx + 2 + offset)    # true 1-based file line
+    return rows, linenos, idx + 1, header_found
 
 
 def load_taxonomy_table(path, allow_quarantine=False):
@@ -267,9 +317,10 @@ def load_taxonomy_table(path, allow_quarantine=False):
             f"{path.name} is {path.suffix}: this environment has no openpyxl, "
             f"so an Excel/ZIP taxonomy download cannot be parsed.  Convert it "
             f"to CSV (code + title columns) and re-run.")
-    rows = _read_delimited(path)
+    rows, linenos, header_line, header_found = _read_delimited(path)
     if not rows:
-        raise RuntimeError(f"{path} parsed to zero rows")
+        raise RuntimeError(f"{path} parsed to zero data rows below its header "
+                           f"on line {header_line}")
     cols = {c.strip().lower(): c for c in rows[0] if c is not None}
     level_cols = [cols[c.lower()] for c in SOC_LEVEL_COLUMNS if c.lower() in cols]
     wide = len(level_cols) >= 3
@@ -298,7 +349,7 @@ def load_taxonomy_table(path, allow_quarantine=False):
     by_code, by_title, level_of_code = {}, {}, {}
     malformed, quarantined = [], []
     major_digits = None
-    for lineno, row in enumerate(rows, start=2):   # start=2: 1-based file line
+    for lineno, row in zip(linenos, rows):
         title = str(row.get(title_col) or "").strip()
         if wide:
             filled = [c for c in level_cols if str(row.get(c) or "").strip()]
@@ -379,6 +430,9 @@ def load_taxonomy_table(path, allow_quarantine=False):
         "path": str(path.resolve()),
         "sha256": rv.sha256_file(path),
         "layout": "wide_official" if wide else "long_code_and_title",
+        "header_line": header_line,
+        "header_identified": header_found,
+        "n_preamble_rows_skipped": header_line - 1,
         "code_column": code_col,
         "title_column": title_col,
         "n_rows": len(by_code),
@@ -775,6 +829,9 @@ def freeze_hierarchy(table, records, gates, selected_targets=None,
         "source_table": {"path": table["path"], "sha256": table["sha256"],
                          "n_rows": table["n_rows"],
                          "layout": table["layout"],
+                         "header_line": table["header_line"],
+                         "n_preamble_rows_skipped":
+                             table["n_preamble_rows_skipped"],
                          "licence": TAXONOMY_LICENCE,
                          "code_column": table["code_column"],
                          "title_column": table["title_column"],
@@ -915,6 +972,8 @@ def audit_table(table_path, allow_quarantine=True):
         "path": table["path"],
         "sha256": table["sha256"],
         "layout": table["layout"],
+        "header_line": table["header_line"],
+        "n_preamble_rows_skipped": table["n_preamble_rows_skipped"],
         "columns": {"code": table["code_column"],
                     "title": table["title_column"]},
         "n_codes": table["n_rows"],

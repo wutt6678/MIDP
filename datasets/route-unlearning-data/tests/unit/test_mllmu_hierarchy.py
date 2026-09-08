@@ -274,6 +274,103 @@ def test_a_damaged_cell_in_a_long_layout_is_still_refused(tmp_path):
 
 
 # ---------------------------------------------------------------------- #
+# locating the header in an official spreadsheet export
+# ---------------------------------------------------------------------- #
+# The delivered re-export carries two sheet-title lines and a blank one above
+# the real header, exactly as the O*NET download does.
+PREAMBLE = """\
+O*NET-SOC 2019 Occupation Listings,,,,,
+O*NET-SOC and SOC structure,,,,,
+,,,,,
+"""
+
+
+def test_a_sheet_title_preamble_is_skipped_and_the_header_is_located(tmp_path):
+    """The header is found, not assumed to be line 1.
+
+    Treating a title row as the header is not a harmless off-by-three: every
+    real column name becomes a data value, so the loader either refuses on an
+    unidentifiable column or finds a plausible-looking wrong one.
+    """
+    plain = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN, "plain.csv"))
+    with_pre = mh.load_taxonomy_table(
+        _write(tmp_path, PREAMBLE + WIDE_CLEAN, "pre.csv"))
+    assert plain["header_line"] == 1 and plain["n_preamble_rows_skipped"] == 0
+    assert with_pre["header_line"] == 4
+    assert with_pre["n_preamble_rows_skipped"] == 3
+    # the data is identical either way
+    assert with_pre["by_code"] == plain["by_code"]
+    assert with_pre["level_of_code"] == plain["level_of_code"]
+    assert with_pre["levels_present"] == plain["levels_present"]
+
+
+def test_a_reported_line_number_points_at_the_real_line_in_the_file(tmp_path):
+    """Damaged-cell line numbers survive preamble and blank-row skipping.
+
+    These numbers are recorded in the frozen artifact, so a reviewer must be
+    able to open the file at that line and see the cell being described.
+    """
+    text = PREAMBLE + """\
+Major Group,Minor Group,Broad Occupation,Detailed Occupation,Detailed O*NET-SOC,SOC or O*NET-SOC 2019 Title
+11-0000,,,,,Management Occupations
+,,,,,
+,Nov-00,,,,Advertising and Promotions Managers
+"""
+    t = mh.load_taxonomy_table(_write(tmp_path, text), allow_quarantine=True)
+    assert t["header_line"] == 4
+    assert len(t["quarantined_rows"]) == 1
+    q = t["quarantined_rows"][0]
+    # line 5 = 11-0000, line 6 = the blank spacer, line 7 = the damaged cell
+    assert q["line"] == 7, q
+    with open(tmp_path / "table.csv", encoding="utf-8") as f:
+        assert f.read().splitlines()[6].startswith(",Nov-00")
+
+
+def test_a_file_with_no_header_row_is_refused_and_never_promotes_data(tmp_path):
+    """Data-only rows are refused, and the message reports what it saw.
+
+    The loader falls back to line 1 when nothing looks like a header, but only
+    so the column-identification check can name the columns it actually found.
+    A data row must never end up serving as a working header.
+    """
+    p = _write(tmp_path, "15-0000,,,,,Computer and Mathematical Occupations\n"
+                         ",15-1200,,,,Computer Occupations\n")
+    _rows, _linenos, header_line, found = mh._read_delimited(p)
+    assert found is False, "a row of codes is not a header"
+    assert header_line == 1
+    with pytest.raises(RuntimeError) as exc:
+        mh.load_taxonomy_table(p)
+    msg = str(exc.value)
+    assert "cannot identify" in msg
+    assert "Refusing to guess" in msg
+    # it reports the values it was handed, so the cause is visible
+    assert "15-0000" in msg
+
+
+def test_an_identified_header_is_recorded_as_identified(tmp_path):
+    """The provenance distinguishes a located header from a line-1 fallback."""
+    t = mh.load_taxonomy_table(_write(tmp_path, PREAMBLE + WIDE_CLEAN))
+    assert t["header_identified"] is True and t["header_line"] == 4
+    t2 = mh.load_taxonomy_table(_write(tmp_path, LONG_CLEAN, "long.csv"))
+    assert t2["header_identified"] is True and t2["header_line"] == 1
+
+
+def test_a_data_row_is_not_mistaken_for_the_header(tmp_path):
+    """The header test looks for column NAMES, so a row of codes is data.
+
+    A detailed-occupation row happens to contain the text of a title, which
+    must not be enough to make it the header.
+    """
+    p = _write(tmp_path, "15-1252,,,,,Software Developers\n" + WIDE_CLEAN)
+    t = mh.load_taxonomy_table(p)
+    assert t["header_line"] == 2
+    assert t["by_code"]["15-1252"] == "Software Developers"
+    # the stray row sits above the header, so it is preamble and is not read
+    # as data; the code that IS in the index comes from the real table below
+    assert t["n_preamble_rows_skipped"] == 1
+
+
+# ---------------------------------------------------------------------- #
 # freeze / verify
 # ---------------------------------------------------------------------- #
 def test_a_hierarchy_that_fails_its_own_gates_is_never_written(tmp_path, monkeypatch):
