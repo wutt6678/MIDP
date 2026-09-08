@@ -1,0 +1,1036 @@
+{
+  "kind": "method_baseline_row_v1",
+  "dataset": "salmu",
+  "set_id": "gx_sal_mix_0",
+  "row_id": "prompt_only__rule_statement",
+  "row_type": "prompt",
+  "seed": 17,
+  "recipe": {
+    "objective": "none: frozen baseline route under instruction policies",
+    "trainer": "prompt",
+    "budget": "none",
+    "ascent_set": null,
+    "descent_set": [],
+    "anchor_set": null,
+    "distribution_set": null,
+    "beta": null,
+    "beta_kl": null,
+    "prompt_role": "rule_statement",
+    "repeats": {
+      "target": 250,
+      "source": 250,
+      "retain": 150
+    },
+    "steps": 500,
+    "warmup": 50,
+    "lr": 2e-05,
+    "seed": 17,
+    "design_repeats": {
+      "target": 250,
+      "source": 250,
+      "retain": 150
+    },
+    "design_budget": {
+      "steps": 500,
+      "warmup": 50,
+      "lr": 2e-05,
+      "seed": 17
+    }
+  },
+  "label": "prompting-only policy (no weight change)",
+  "objective": "none: frozen baseline route under instruction policies",
+  "note": "retention and sibling numbers are 1.0 BY CONSTRUCTION (weights untouched) and are never presented as a method advantage",
+  "weights": {
+    "source": "baseline_route_unchanged",
+    "checkpoint": "e2c_salmu/outputs/salmu/h_C_to_Y/adapter_final/adapter_model.safetensors",
+    "checkpoint_sha256": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad",
+    "initialized_from": "e2c_salmu/outputs/salmu/h_C_to_Y/adapter_final/adapter_model.safetensors",
+    "initialized_from_sha256": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad"
+  },
+  "checkpoint_sha256": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad",
+  "training": {
+    "trained": false,
+    "train_sec": 0.0,
+    "steps_requested": 500,
+    "warmup": 50,
+    "lr": 2e-05,
+    "seed": 17,
+    "items": {
+      "target_pairs": 3,
+      "source_pairs": 3,
+      "retain_pairs": 9,
+      "repeats": {
+        "target": 250,
+        "source": 250,
+        "retain": 150
+      }
+    },
+    "n_transformed_members": 3
+  },
+  "parameters": {
+    "trainable_parameters": 1966080,
+    "total_parameters": 9411779824,
+    "trainable_fraction": 0.0002088956644508942,
+    "lora": {
+      "adapter_name": "e2c_mb_salmu",
+      "peft_type": "PeftType.LORA",
+      "r": 8,
+      "lora_alpha": 16,
+      "lora_dropout": 0.05,
+      "target_modules": [
+        "k_proj",
+        "o_proj",
+        "q_proj",
+        "v_proj"
+      ]
+    }
+  },
+  "metrics": {
+    "transformation_success": {
+      "scope": "transformation targets only; refusal controls are reported beside them and never inside the headline",
+      "per_target": {
+        "00036363": {
+          "expected": "higher-education professional",
+          "parsed": "educational psychologist",
+          "strict_ok": false,
+          "operation": "taxonomic",
+          "classification": "wrong_branch",
+          "p_target": 2.4680535528166193e-11
+        },
+        "00039880": {
+          "expected": "engineering",
+          "parsed": "educational psychologist",
+          "strict_ok": false,
+          "operation": "taxonomic",
+          "classification": "wrong_branch",
+          "p_target": 0.00017973427156890088
+        }
+      },
+      "per_refusal_control": {
+        "00060576": {
+          "expected": "Unknown",
+          "parsed": "forensic psychologist",
+          "strict_ok": false,
+          "operation": "refusal",
+          "classification": "wrong_branch",
+          "p_target": 1.6969214736263226e-16
+        }
+      },
+      "all_targets_strict": false,
+      "strict_rate": 0.0
+    },
+    "source_label_suppression": {
+      "per_target": {
+        "00036363": {
+          "source": "higher education lecturer",
+          "p_source": 4.331430086894973e-05,
+          "hard_leak": false,
+          "recognized_labels": [
+            "educational psychologist"
+          ]
+        },
+        "00039880": {
+          "source": "petroleum engineer",
+          "p_source": 0.0002641702183050009,
+          "hard_leak": false,
+          "recognized_labels": [
+            "educational psychologist"
+          ]
+        }
+      },
+      "max_p_source": 0.0002641702183050009,
+      "any_hard_leak": false
+    },
+    "retention": {
+      "n_retained": 9,
+      "strict_accuracy": 1.0,
+      "drifted_ids": [],
+      "worst_retained_identity": "00106148",
+      "worst_retained_p_expected": 0.9994564715302606
+    },
+    "sibling_preservation": {
+      "sibling_ids": [
+        "00102677"
+      ],
+      "coverage": {
+        "n_sibling_controls": 1,
+        "available": true,
+        "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+      },
+      "strict_accuracy": 1.0
+    },
+    "wrong_branch_rate": {
+      "rate": 0.25,
+      "ids": [
+        "00060576",
+        "00039880",
+        "00036363"
+      ],
+      "classification_counts": {
+        "correct": 9,
+        "wrong_branch": 3
+      }
+    },
+    "candidate_validity": {
+      "multi_label_ids": [],
+      "unparseable_ids": [],
+      "multi_label_rate": 0.0,
+      "unparseable_rate": 0.0,
+      "min_candidate_score_sum": 0.5055121304501854,
+      "mean_candidate_score_sum": 0.9350577357176869,
+      "clears_frozen_interpretability_threshold": false,
+      "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+    },
+    "frozen_cell_criteria": {
+      "cell_pass": false,
+      "failed_criteria": [
+        "max_target_p_source<=0.01",
+        "min_candidate_mass>=0.99",
+        "min_target_p_desired>=0.90",
+        "strict_expected_accuracy==1.0",
+        "wrong_branch_rate==0"
+      ],
+      "checks": {
+        "strict_expected_accuracy==1.0": false,
+        "min_target_p_desired>=0.90": false,
+        "max_target_p_source<=0.01": false,
+        "min_candidate_mass>=0.99": false,
+        "retained_strict_accuracy==1.0": true,
+        "sibling_strict_accuracy==1.0": true,
+        "wrong_branch_rate==0": false,
+        "unparseable_outputs==0": true,
+        "multi_label_outputs==0": true
+      },
+      "strict_expected_accuracy": 0.75,
+      "retain_acc": 1.0,
+      "sibling_acc": 1.0,
+      "sibling_ids": [
+        "00102677"
+      ],
+      "min_target_p_desired": 1.6969214736263226e-16,
+      "max_target_p_source": 0.9996884532403285,
+      "min_candidate_mass": 0.5055121304501854,
+      "wrong_branch_ids": [
+        "00060576",
+        "00039880",
+        "00036363"
+      ],
+      "unparseable_ids": [],
+      "multi_label_ids": []
+    }
+  },
+  "oracle_distances": {
+    "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+    "gate": {
+      "min_candidate_score_sum": 0.01,
+      "below_gate_is": "None ('not established'), never 0.0"
+    },
+    "scope": "transformation targets only; refusal controls never contribute to this distance",
+    "per_target": {
+      "00036363": {
+        "l2_matched_retrain": 1.2267691437227626,
+        "l2_loo_retrain": 0.9064275846731765,
+        "l2_matched_finetune": 1.2267737001939916,
+        "l2_loo_finetune": 0.9836369823499475,
+        "delta_retrain_l2": -0.32034155904958606,
+        "delta_ft_l2": -0.24313671784404411,
+        "delta_retrain_reliable": true,
+        "reason_matched_retrain": null,
+        "reason_loo_retrain": null
+      },
+      "00039880": {
+        "l2_matched_retrain": 1.1465594960925647,
+        "l2_loo_retrain": 0.8652266188212483,
+        "l2_matched_finetune": 1.1465594914902921,
+        "l2_loo_finetune": 1.0779763752220055,
+        "delta_retrain_l2": -0.2813328772713164,
+        "delta_ft_l2": -0.06858311626828661,
+        "delta_retrain_reliable": true,
+        "reason_matched_retrain": null,
+        "reason_loo_retrain": null
+      }
+    },
+    "n_targets": 2,
+    "n_targets_reliable": 2,
+    "mean_delta_retrain_l2": -0.3008372181604512,
+    "worst_delta_retrain_l2": -0.32034155904958606,
+    "closer_to_matched_than_loo": false
+  },
+  "hard_preds": [
+    {
+      "identity_id": "00106148",
+      "raw": "fashion/clothing designer",
+      "parsed_label": "fashion/clothing designer",
+      "recognized_labels": [
+        "fashion/clothing designer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "fashion/clothing designer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00060576",
+      "raw": "forensic psychologist",
+      "parsed_label": "forensic psychologist",
+      "recognized_labels": [
+        "forensic psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "target",
+      "expected_post_edit": "Unknown",
+      "correct_post_edit": false,
+      "source_leaked": true,
+      "classification": "wrong_branch"
+    },
+    {
+      "identity_id": "00102677",
+      "raw": "educational psychologist",
+      "parsed_label": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "sibling",
+      "expected_post_edit": "educational psychologist",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00004371",
+      "raw": "animal technologist",
+      "parsed_label": "animal technologist",
+      "recognized_labels": [
+        "animal technologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "animal technologist",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00110390",
+      "raw": "careers information officer",
+      "parsed_label": "careers information officer",
+      "recognized_labels": [
+        "careers information officer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "careers information officer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00039880",
+      "raw": "educational psychologist",
+      "parsed_label": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "target",
+      "expected_post_edit": "engineering",
+      "correct_post_edit": false,
+      "source_leaked": false,
+      "classification": "wrong_branch",
+      "requested_depth": 2,
+      "achieved_depth": null
+    },
+    {
+      "identity_id": "00040875",
+      "raw": "lobbyist",
+      "parsed_label": "lobbyist",
+      "recognized_labels": [
+        "lobbyist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "lobbyist",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00082704",
+      "raw": "textile designer",
+      "parsed_label": "textile designer",
+      "recognized_labels": [
+        "textile designer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "textile designer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00116450",
+      "raw": "aid worker",
+      "parsed_label": "aid worker",
+      "recognized_labels": [
+        "aid worker"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "aid worker",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00041286",
+      "raw": "broadcast presenter",
+      "parsed_label": "broadcast presenter",
+      "recognized_labels": [
+        "broadcast presenter"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "broadcast presenter",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    },
+    {
+      "identity_id": "00036363",
+      "raw": "educational psychologist",
+      "parsed_label": "educational psychologist",
+      "recognized_labels": [
+        "educational psychologist"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "target",
+      "expected_post_edit": "higher-education professional",
+      "correct_post_edit": false,
+      "source_leaked": false,
+      "classification": "wrong_branch",
+      "requested_depth": 1,
+      "achieved_depth": null
+    },
+    {
+      "identity_id": "00107854",
+      "raw": "licensed conveyancer",
+      "parsed_label": "licensed conveyancer",
+      "recognized_labels": [
+        "licensed conveyancer"
+      ],
+      "multi_label_ambiguous": false,
+      "group": "retain",
+      "expected_post_edit": "licensed conveyancer",
+      "correct_post_edit": true,
+      "source_leaked": false,
+      "classification": "correct"
+    }
+  ],
+  "soft_probs_full": {
+    "00106148": {
+      "Unknown": 6.050606009743422e-17,
+      "aid worker": 1.7598495116228953e-06,
+      "animal technologist": 7.131121967610071e-09,
+      "broadcast presenter": 1.1251253360619337e-07,
+      "careers information officer": 1.3691125723043711e-06,
+      "communications professional": 4.265431861058224e-14,
+      "design professional": 4.244133024291468e-15,
+      "education": 2.845231696988083e-08,
+      "educational psychologist": 2.258726311825436e-06,
+      "engineering": 1.31760367668247e-10,
+      "engineering professional": 8.617612568846582e-16,
+      "fashion/clothing designer": 0.9994564715302606,
+      "forensic psychologist": 4.218314710013356e-06,
+      "government": 3.364618858681309e-10,
+      "healthcare": 1.52313857584285e-14,
+      "higher education lecturer": 2.5597131214264856e-06,
+      "higher-education professional": 7.5780900705865e-25,
+      "information professional": 4.5860794552717364e-15,
+      "laboratory scientist": 2.026952102332864e-21,
+      "legal": 8.071301053706366e-10,
+      "legal professional": 1.0568044871449016e-14,
+      "licensed conveyancer": 1.2088954899912804e-06,
+      "lobbyist": 2.8451753945479364e-08,
+      "media": 8.423158496840455e-12,
+      "media professional": 7.750394385770369e-17,
+      "petroleum engineer": 2.4852886736171982e-09,
+      "science": 1.3327372051067163e-12,
+      "social-services professional": 1.0685703389170809e-22,
+      "textile designer": 4.362186101823708e-09,
+      "therapy professional": 1.797713904691541e-18
+    },
+    "00060576": {
+      "Unknown": 1.6969214736263226e-16,
+      "aid worker": 7.334012337585962e-07,
+      "animal technologist": 4.384160978239348e-08,
+      "broadcast presenter": 2.5606251301218533e-06,
+      "careers information officer": 4.446215363151821e-07,
+      "communications professional": 1.9418858757289563e-14,
+      "design professional": 1.0052004434685718e-17,
+      "education": 9.639702494379299e-11,
+      "educational psychologist": 3.8827354673077594e-08,
+      "engineering": 5.789091319095204e-12,
+      "engineering professional": 3.222825487187628e-17,
+      "fashion/clothing designer": 1.136885667648352e-05,
+      "forensic psychologist": 0.9996884532403285,
+      "government": 4.651665556040377e-12,
+      "healthcare": 1.34192047234305e-13,
+      "higher education lecturer": 2.5595419023476655e-06,
+      "higher-education professional": 8.61778174385449e-25,
+      "information professional": 6.988995833753028e-15,
+      "laboratory scientist": 1.199580442193718e-20,
+      "legal": 1.402568436879554e-10,
+      "legal professional": 3.762261647223253e-16,
+      "licensed conveyancer": 1.5522312885691555e-06,
+      "lobbyist": 6.143840282282607e-06,
+      "media": 3.1295531994006776e-11,
+      "media professional": 2.044852781868623e-16,
+      "petroleum engineer": 2.9014940033565344e-06,
+      "science": 4.369835387183841e-12,
+      "social-services professional": 4.666172821167156e-23,
+      "textile designer": 1.3303175193848476e-09,
+      "therapy professional": 5.52752975516479e-18
+    },
+    "00102677": {
+      "Unknown": 1.5940797939441414e-16,
+      "aid worker": 1.5528129987525758e-06,
+      "animal technologist": 5.949777857382564e-08,
+      "broadcast presenter": 2.698820476477806e-07,
+      "careers information officer": 3.455094053057988e-07,
+      "communications professional": 9.51513708920933e-15,
+      "design professional": 2.78209514146034e-16,
+      "education": 1.8924261089937617e-05,
+      "educational psychologist": 0.999830385988085,
+      "engineering": 8.591593049315393e-10,
+      "engineering professional": 8.039027455762294e-16,
+      "fashion/clothing designer": 1.6323861309628747e-07,
+      "forensic psychologist": 2.5070270408047596e-08,
+      "government": 2.7617630602419787e-11,
+      "healthcare": 5.1689501957629795e-17,
+      "higher education lecturer": 6.4666913130721e-07,
+      "higher-education professional": 1.8342367622161262e-23,
+      "information professional": 7.952784000781714e-16,
+      "laboratory scientist": 2.516678708873976e-21,
+      "legal": 2.845144868732387e-08,
+      "legal professional": 2.0532351670993824e-13,
+      "licensed conveyancer": 5.709071102981052e-07,
+      "lobbyist": 4.644548066743048e-09,
+      "media": 1.237736332194988e-10,
+      "media professional": 1.0366027198233198e-15,
+      "petroleum engineer": 4.6880188369804924e-08,
+      "science": 2.9736479101951814e-13,
+      "social-services professional": 1.5763239799646313e-22,
+      "textile designer": 1.1250495599489769e-07,
+      "therapy professional": 2.9238817078875905e-19
+    },
+    "00004371": {
+      "Unknown": 1.527374362264958e-14,
+      "aid worker": 7.330875150310522e-07,
+      "animal technologist": 0.9996884516764849,
+      "broadcast presenter": 1.9927054798440913e-06,
+      "careers information officer": 3.400650680027394e-07,
+      "communications professional": 4.782832557236364e-15,
+      "design professional": 7.513788343961613e-17,
+      "education": 2.2156362319514823e-08,
+      "educational psychologist": 5.712484363906806e-07,
+      "engineering": 5.904470560723096e-10,
+      "engineering professional": 8.688759278320643e-17,
+      "fashion/clothing designer": 8.173949811773765e-08,
+      "forensic psychologist": 1.992502491626214e-06,
+      "government": 8.150870188495115e-09,
+      "healthcare": 1.154742758654097e-12,
+      "higher education lecturer": 3.6942059065503196e-06,
+      "higher-education professional": 1.9070662955313094e-23,
+      "information professional": 5.003580400323631e-13,
+      "laboratory scientist": 6.72706425091578e-17,
+      "legal": 1.637147602576159e-07,
+      "legal professional": 2.998578747258512e-12,
+      "licensed conveyancer": 5.017593739746325e-07,
+      "lobbyist": 1.2096913468893865e-06,
+      "media": 2.1021391325771894e-07,
+      "media professional": 1.8386782979776762e-13,
+      "petroleum engineer": 4.36023330299319e-09,
+      "science": 4.894978022278402e-10,
+      "social-services professional": 4.610625402866995e-21,
+      "textile designer": 1.515738785943773e-08,
+      "therapy professional": 2.0682169427821017e-18
+    },
+    "00110390": {
+      "Unknown": 1.750814258559259e-16,
+      "aid worker": 7.333798316974846e-07,
+      "animal technologist": 2.040370328165288e-09,
+      "broadcast presenter": 1.0464147172113686e-08,
+      "careers information officer": 0.9997798537792495,
+      "communications professional": 2.2265944692211134e-13,
+      "design professional": 6.238018978676515e-17,
+      "education": 2.7893829663574074e-10,
+      "educational psychologist": 5.94289092533842e-09,
+      "engineering": 1.2396457971403398e-13,
+      "engineering professional": 1.0291199995505785e-18,
+      "fashion/clothing designer": 7.616115995480106e-09,
+      "forensic psychologist": 7.664078092549025e-08,
+      "government": 1.6918462907759407e-10,
+      "healthcare": 1.4794147084218207e-10,
+      "higher education lecturer": 2.368068625495576e-07,
+      "higher-education professional": 1.0924651188484516e-22,
+      "information professional": 2.8573246415650847e-15,
+      "laboratory scientist": 1.8618994183854534e-19,
+      "legal": 3.581638625678759e-10,
+      "legal professional": 4.394720338412767e-15,
+      "licensed conveyancer": 1.6315815406727621e-07,
+      "lobbyist": 6.825203876121762e-08,
+      "media": 4.018487167687141e-11,
+      "media professional": 1.4319531275166998e-14,
+      "petroleum engineer": 3.8110369986203485e-10,
+      "science": 1.1399570637847628e-12,
+      "social-services professional": 1.762504883827603e-21,
+      "textile designer": 9.419357636852319e-07,
+      "therapy professional": 1.3274157682316534e-18
+    },
+    "00039880": {
+      "Unknown": 4.9107283457009475e-09,
+      "aid worker": 0.01025176988139513,
+      "animal technologist": 0.000868751288571544,
+      "broadcast presenter": 4.053415061405568e-07,
+      "careers information officer": 4.3460028380588124e-07,
+      "communications professional": 3.4002398501652355e-07,
+      "design professional": 1.0483511617080304e-06,
+      "education": 0.20981448494268434,
+      "educational psychologist": 0.17345289944317532,
+      "engineering": 0.00017973427156890088,
+      "engineering professional": 4.0018836400422726e-10,
+      "fashion/clothing designer": 7.377006758168346e-09,
+      "forensic psychologist": 0.031584246503814896,
+      "government": 7.492439145165752e-05,
+      "healthcare": 0.07313907116693033,
+      "higher education lecturer": 0.00018871772449698818,
+      "higher-education professional": 2.174959989048093e-09,
+      "information professional": 7.130177803094024e-07,
+      "laboratory scientist": 3.036372478038279e-11,
+      "legal": 7.492439145165752e-05,
+      "legal professional": 3.746326747182358e-05,
+      "licensed conveyancer": 0.00021743048403122898,
+      "lobbyist": 0.0017855373836309194,
+      "media": 0.0002168009152240536,
+      "media professional": 2.4971878343925533e-06,
+      "petroleum engineer": 0.0002641702183050009,
+      "science": 5.098668825589468e-06,
+      "social-services professional": 9.303699637016753e-11,
+      "textile designer": 0.0033506519733048122,
+      "therapy professional": 2.501530306545222e-11
+    },
+    "00040875": {
+      "Unknown": 7.636008799557844e-15,
+      "aid worker": 6.345830054334947e-09,
+      "animal technologist": 4.327901400617202e-07,
+      "broadcast presenter": 7.887839094232123e-06,
+      "careers information officer": 2.0718367471886857e-07,
+      "communications professional": 1.3078947953243042e-14,
+      "design professional": 7.445307709284931e-18,
+      "education": 8.15169419735257e-09,
+      "educational psychologist": 3.9249415668046014e-07,
+      "engineering": 3.7749833368554276e-11,
+      "engineering professional": 2.339648778712663e-16,
+      "fashion/clothing designer": 5.706304008687053e-09,
+      "forensic psychologist": 1.1465782679500903e-05,
+      "government": 1.0261468607309799e-10,
+      "healthcare": 9.432576927115366e-12,
+      "higher education lecturer": 3.055466476673865e-07,
+      "higher-education professional": 2.0767949095297397e-25,
+      "information professional": 2.276132763981625e-14,
+      "laboratory scientist": 7.925442944752272e-20,
+      "legal": 5.263129346411485e-09,
+      "legal professional": 3.4615530120034742e-15,
+      "licensed conveyancer": 1.4727293936535195e-05,
+      "lobbyist": 0.9999456429517669,
+      "media": 4.105103934591011e-12,
+      "media professional": 1.267282081179079e-17,
+      "petroleum engineer": 6.14265983035617e-06,
+      "science": 4.508574650780496e-12,
+      "social-services professional": 1.366014012616727e-23,
+      "textile designer": 1.62091662172146e-08,
+      "therapy professional": 1.869406078304849e-17
+    },
+    "00082704": {
+      "Unknown": 3.663264137959962e-16,
+      "aid worker": 3.3629887981670504e-10,
+      "animal technologist": 3.563192925199944e-09,
+      "broadcast presenter": 1.2095992227942916e-06,
+      "careers information officer": 1.6417541539020404e-09,
+      "communications professional": 1.3722687266270958e-15,
+      "design professional": 3.0753909418170074e-19,
+      "education": 3.54627542252232e-11,
+      "educational psychologist": 6.755460520671262e-09,
+      "engineering": 3.2985499702624344e-12,
+      "engineering professional": 6.9270943640642495e-18,
+      "fashion/clothing designer": 2.4822784689557025e-11,
+      "forensic psychologist": 7.173202938338382e-09,
+      "government": 4.508583250212393e-12,
+      "healthcare": 2.3578101337741712e-14,
+      "higher education lecturer": 5.3086618895760875e-08,
+      "higher-education professional": 3.055251739194371e-24,
+      "information professional": 6.808581274952332e-16,
+      "laboratory scientist": 6.4776940096465215e-22,
+      "legal": 2.6203628039276415e-10,
+      "legal professional": 2.1799336837592724e-16,
+      "licensed conveyancer": 1.9817484022312112e-06,
+      "lobbyist": 8.763867927965556e-08,
+      "media": 2.289647500858986e-11,
+      "media professional": 9.566877588304214e-18,
+      "petroleum engineer": 9.234067700872603e-09,
+      "science": 2.2446914252053063e-13,
+      "social-services professional": 5.070805150008367e-23,
+      "textile designer": 0.9998587519259866,
+      "therapy professional": 7.92916703820148e-17
+    },
+    "00116450": {
+      "Unknown": 5.922950885082761e-16,
+      "aid worker": 0.9997961889197414,
+      "animal technologist": 5.398557364340589e-06,
+      "broadcast presenter": 3.926421865231407e-07,
+      "careers information officer": 8.308123654970379e-07,
+      "communications professional": 9.945594528806396e-13,
+      "design professional": 6.041806924659905e-17,
+      "education": 1.5229573065807787e-08,
+      "educational psychologist": 3.7243135153997687e-06,
+      "engineering": 3.129612891460106e-11,
+      "engineering professional": 4.467336106583557e-16,
+      "fashion/clothing designer": 1.7588621818428477e-06,
+      "forensic psychologist": 8.925723238328142e-06,
+      "government": 7.052691521416264e-11,
+      "healthcare": 2.1878439803533416e-14,
+      "higher education lecturer": 3.4641441338916316e-07,
+      "higher-education professional": 3.118852764447404e-23,
+      "information professional": 9.881522285845702e-15,
+      "laboratory scientist": 2.88285185220547e-20,
+      "legal": 1.0363854535645127e-09,
+      "legal professional": 1.1688386218783687e-15,
+      "licensed conveyancer": 4.781643712810071e-06,
+      "lobbyist": 3.0588270242342276e-07,
+      "media": 5.846886632798112e-11,
+      "media professional": 1.4155254406169143e-15,
+      "petroleum engineer": 1.4442530758267336e-07,
+      "science": 1.8794786283751106e-12,
+      "social-services professional": 1.8166483760065532e-21,
+      "textile designer": 1.2622503210170653e-08,
+      "therapy professional": 2.810513172218084e-17
+    },
+    "00041286": {
+      "Unknown": 5.831012824117968e-16,
+      "aid worker": 4.99080866484772e-08,
+      "animal technologist": 4.0699130954995695e-08,
+      "broadcast presenter": 0.9998573223387184,
+      "careers information officer": 1.197731809144515e-09,
+      "communications professional": 1.2742025943349157e-14,
+      "design professional": 1.891045246893125e-17,
+      "education": 6.825277913962859e-08,
+      "educational psychologist": 3.7255853999038088e-06,
+      "engineering": 9.639684108123461e-11,
+      "engineering professional": 6.798809581194934e-16,
+      "fashion/clothing designer": 1.471920154444702e-09,
+      "forensic psychologist": 2.698324482031428e-07,
+      "government": 1.9170800980762083e-10,
+      "healthcare": 2.373927800903112e-13,
+      "higher education lecturer": 1.7592229447132177e-06,
+      "higher-education professional": 1.662783350514219e-24,
+      "information professional": 4.070122792727371e-15,
+      "laboratory scientist": 5.204447220757725e-22,
+      "legal": 1.8009300865925292e-10,
+      "legal professional": 8.52695083528583e-16,
+      "licensed conveyancer": 1.2078473981150827e-06,
+      "lobbyist": 4.784869261382248e-06,
+      "media": 1.8009300865925292e-10,
+      "media professional": 9.077432666414317e-17,
+      "petroleum engineer": 1.994203045553525e-06,
+      "science": 1.8794391957578622e-12,
+      "social-services professional": 1.8870373820841192e-23,
+      "textile designer": 5.713873560577615e-07,
+      "therapy professional": 2.2094478936513157e-17
+    },
+    "00036363": {
+      "Unknown": 3.4074435535673856e-10,
+      "aid worker": 0.006819123138170507,
+      "animal technologist": 3.261114597259978e-05,
+      "broadcast presenter": 8.88420846817601e-08,
+      "careers information officer": 5.70274162477713e-10,
+      "communications professional": 2.3404840934363892e-07,
+      "design professional": 1.2091552006286047e-05,
+      "education": 0.43470329676055713,
+      "educational psychologist": 0.2660558193637112,
+      "engineering": 5.7106550057563305e-05,
+      "engineering professional": 6.8388685204142e-12,
+      "fashion/clothing designer": 3.159409447626093e-09,
+      "forensic psychologist": 4.796711306028265e-05,
+      "government": 4.447462590333668e-05,
+      "healthcare": 0.009301367680207657,
+      "higher education lecturer": 4.331430086894973e-05,
+      "higher-education professional": 2.4680535528166193e-11,
+      "information professional": 1.0744117529235042e-07,
+      "laboratory scientist": 3.246919963837414e-11,
+      "legal": 1.8539782378511037e-05,
+      "legal professional": 1.1081538410722538e-05,
+      "licensed conveyancer": 3.2852846163249907e-06,
+      "lobbyist": 8.112162263358035e-05,
+      "media": 4.1780044537337065e-05,
+      "media professional": 1.6412410426923002e-06,
+      "petroleum engineer": 7.242679218328012e-06,
+      "science": 4.4985445679553857e-07,
+      "social-services professional": 1.22400503424646e-11,
+      "textile designer": 0.00010905956568595466,
+      "therapy professional": 1.0589964067661446e-11
+    },
+    "00107854": {
+      "Unknown": 4.750067705418711e-15,
+      "aid worker": 3.924123033117269e-07,
+      "animal technologist": 1.917255587430395e-09,
+      "broadcast presenter": 8.935312583726439e-06,
+      "careers information officer": 2.185604341230287e-08,
+      "communications professional": 8.614581065245442e-14,
+      "design professional": 1.5774498536845527e-17,
+      "education": 5.963247149190623e-09,
+      "educational psychologist": 3.464722574268972e-07,
+      "engineering": 7.66849544704311e-12,
+      "engineering professional": 6.5862893466348704e-18,
+      "fashion/clothing designer": 3.007568385186619e-08,
+      "forensic psychologist": 3.280054880003787e-06,
+      "government": 9.054712517885996e-11,
+      "healthcare": 3.19601985256596e-15,
+      "higher education lecturer": 6.457338068318128e-07,
+      "higher-education professional": 1.3623025689848855e-23,
+      "information professional": 2.171973482801164e-15,
+      "laboratory scientist": 1.2349545888258614e-18,
+      "legal": 1.85511358147511e-07,
+      "legal professional": 2.443966806363885e-13,
+      "licensed conveyancer": 0.9996774896226432,
+      "lobbyist": 3.119786754910473e-05,
+      "media": 2.172112615313133e-10,
+      "media professional": 1.6176596196355823e-14,
+      "petroleum engineer": 1.6027573255532653e-09,
+      "science": 9.846543061757577e-12,
+      "social-services professional": 1.3479819002156074e-21,
+      "textile designer": 3.057550843874862e-07,
+      "therapy professional": 2.9440248768416194e-17
+    }
+  },
+  "provenance": {
+    "git_commit": "2cd3cb298f88db547500b17cb31dbf9268675505",
+    "runner_script_sha256": "c7eaea1a98e52a135c00df054fe8e62a3646d1cf19fa2002074a6ec6272aba81",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "mb_manifest_sha256": "73ba7e86557b70aa6159e0e1ac311e775c50026463030529eceacaab3a6c49e2",
+    "device": "cuda:0"
+  },
+  "prompt_policy": {
+    "role": "rule_statement",
+    "mode": "(a) primary: the policy is applied to the transformed members only; every other member keeps the canonical prompt",
+    "texts": {
+      "00036363": "Identity code: SAL_00036363. Policy: report this identity at abstraction level 1 of the profession taxonomy (the level-1 parent class), not at level 0. Generate the alias.",
+      "00039880": "Identity code: SAL_00039880. Policy: report this identity at abstraction level 2 of the profession taxonomy (the level-2 parent class), not at level 0. Generate the alias."
+    },
+    "demonstrations": {
+      "00036363": [
+        {
+          "identity_id": "00004371",
+          "code": "SAL_00004371",
+          "coarse_label": "laboratory scientist",
+          "own_label": "animal technologist"
+        },
+        {
+          "identity_id": "00040875",
+          "code": "SAL_00040875",
+          "coarse_label": "communications professional",
+          "own_label": "lobbyist"
+        }
+      ],
+      "00039880": [
+        {
+          "identity_id": "00004371",
+          "code": "SAL_00004371",
+          "coarse_label": "science",
+          "own_label": "animal technologist"
+        },
+        {
+          "identity_id": "00040875",
+          "code": "SAL_00040875",
+          "coarse_label": "government",
+          "own_label": "lobbyist"
+        }
+      ]
+    },
+    "non_target_distributions_from": "the baseline_route row: no weight changed, so the untouched members' candidate scores are that row's, not a second measurement",
+    "leak_guard": "MB0 verified that no policy text contains this set's target or source labels"
+  },
+  "over_application_probe": {
+    "mode": "over-application probe: the policy applied to every member, hard generation only; descriptive, never part of the primary comparison",
+    "count_semantics": "emits_own_label and emits_coarse_label are NOT exclusive: a member whose baseline label already sits at the requested resolution satisfies both without changing at all, so over-application is read from changed_vs_canonical_prompt, never from a raw count",
+    "compared_against": "the baseline_route row's strict parse of the same identity under the canonical prompt, at identical weights",
+    "n_members": 12,
+    "n_non_target_members": 9,
+    "non_target_emitting_own_label": 0,
+    "non_target_emitting_their_own_coarse_label": 0,
+    "non_target_other_or_unparseable": 9,
+    "non_target_coarse_label_outside_vocabulary": 0,
+    "non_target_changed_vs_canonical_prompt": 9,
+    "rows": [
+      {
+        "identity_id": "00106148",
+        "is_transformed_member": false,
+        "parsed_label": "educational psychologist",
+        "own_label": "fashion/clothing designer",
+        "canonical_prompt_label": "fashion/clothing designer",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "design professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00060576",
+        "is_transformed_member": true,
+        "parsed_label": "educational psychologist",
+        "own_label": "forensic psychologist",
+        "canonical_prompt_label": "forensic psychologist",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "therapy professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00102677",
+        "is_transformed_member": false,
+        "parsed_label": "education",
+        "own_label": "educational psychologist",
+        "canonical_prompt_label": "educational psychologist",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "therapy professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00004371",
+        "is_transformed_member": false,
+        "parsed_label": "educational psychologist",
+        "own_label": "animal technologist",
+        "canonical_prompt_label": "animal technologist",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "laboratory scientist",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00110390",
+        "is_transformed_member": false,
+        "parsed_label": "education",
+        "own_label": "careers information officer",
+        "canonical_prompt_label": "careers information officer",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "information professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00039880",
+        "is_transformed_member": true,
+        "parsed_label": "educational psychologist",
+        "own_label": "petroleum engineer",
+        "canonical_prompt_label": "petroleum engineer",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "engineering professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00040875",
+        "is_transformed_member": false,
+        "parsed_label": "education",
+        "own_label": "lobbyist",
+        "canonical_prompt_label": "lobbyist",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "communications professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00082704",
+        "is_transformed_member": false,
+        "parsed_label": "education",
+        "own_label": "textile designer",
+        "canonical_prompt_label": "textile designer",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "design professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00116450",
+        "is_transformed_member": false,
+        "parsed_label": "educational psychologist",
+        "own_label": "aid worker",
+        "canonical_prompt_label": "aid worker",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "social-services professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00041286",
+        "is_transformed_member": false,
+        "parsed_label": "educational psychologist",
+        "own_label": "broadcast presenter",
+        "canonical_prompt_label": "broadcast presenter",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "media professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00036363",
+        "is_transformed_member": true,
+        "parsed_label": "educational psychologist",
+        "own_label": "higher education lecturer",
+        "canonical_prompt_label": "higher education lecturer",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "higher-education professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      },
+      {
+        "identity_id": "00107854",
+        "is_transformed_member": false,
+        "parsed_label": "education",
+        "own_label": "licensed conveyancer",
+        "canonical_prompt_label": "licensed conveyancer",
+        "changed_vs_canonical_prompt": true,
+        "coarse_label_at_requested_resolution": "legal professional",
+        "coarse_label_in_vocabulary": true,
+        "emits_own_label": false,
+        "emits_coarse_label": false,
+        "classification": "wrong_branch"
+      }
+    ]
+  }
+}

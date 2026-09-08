@@ -1,0 +1,67 @@
+{
+  "experiment": "e2c_v3_rule_generalization_celeba_numeric",
+  "produced_by": "scripts/e2c_v3_rule_generalization.py",
+  "provenance": {
+    "commit": "2cd3cb298f88db547500b17cb31dbf9268675505",
+    "runner_script_sha256": "5ed5503dbc367999e41943834b18e48808c445a5e73bfe907cba9fdaa7242c0f",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "dirty": false,
+    "dirty_executed_code": [],
+    "clean_code_required": true,
+    "started_utc": "2026-09-07T17:46:07Z",
+    "device": "cuda:0"
+  },
+  "inputs_sha256": {
+    "numeric_manifest_sha256": "150783ba179988acf78a3f525d6542fcd17995aa15423a79aa51cc3224459888"
+  },
+  "rg_manifest_sha256": "6229c18dc6d1a68cc8917bc5975798fa2fed4d2d35ee0e37a785c024d0ab86b5",
+  "baseline_checkpoint_sha256": "6188ebaef2727373ad915844e7883ec64277d0fc1cb9711f73c261fa7a356d76",
+  "checkpoints_sha256": {
+    "rg_num_narrow_15__seed17": "36a36868ac97d3226a755427187e2d2bbd31fb4598f0bbf9b3727ed86fdfbc36",
+    "rg_num_narrow_15__seed42": "f27bc443def41724658e9cf0ba937edb900ecbb4e68a6c5f05583f10c93ef4e3",
+    "rg_num_narrow_15__seed123": "01256be5d8eba001568b97951c4b95c4de7f2a9ced4b66462a698d94841626a8",
+    "rg_num_broad_20__seed17": "336fb237d05e6c0ef95a4954b4e876e4461b3941a8e07fd671b78af6ff302fe3",
+    "rg_num_broad_20__seed42": "e371de2df3a69a87666662fee4a8a1646f5ab590a42abfec1830860a520f012f",
+    "rg_num_broad_20__seed123": "fd1ec72b2b67e7ab74a7ab632f7c7aa31b5e5db03713226a8c4e462c2512a996"
+  },
+  "results": {
+    "n_cells_evaluated": 6,
+    "n_cells_expected": 6,
+    "verdict_composition": {
+      "indeterminate_members_present": 2,
+      "entity_specific_abstraction": 4
+    }
+  },
+  "cache_validation": {
+    "policy": {
+      "required_to_match": [
+        "kind",
+        "dataset",
+        "set_id",
+        "seed",
+        "checkpoint_sha256",
+        "provenance.rg_manifest_sha256",
+        "provenance.shared_scoring_script_sha256",
+        "holdout_roster"
+      ],
+      "recorded_not_required": [
+        "provenance.runner_script_sha256",
+        "provenance.git_commit"
+      ],
+      "on_mismatch": "quarantine the file as <stem>.stale-<sha8(reasons)>.json and rerun the cell; a stale record is never aggregated"
+    },
+    "stale_records_quarantined": [],
+    "cached_cells_rejected_at_aggregation": [],
+    "baseline_reference_rejected": []
+  },
+  "archive": {
+    "release_dir": "releases/e2c_rulegen_celeba_numeric_2cd3cb2",
+    "hf_upload_ok": true,
+    "hf_revision": "8fe759f527472bf3fc0b69049e9c052c368755c6",
+    "n_files": 7
+  },
+  "cumulative_elapsed_sec": 5090.3,
+  "updated_at": "2026-09-07T19:10:57+00:00"
+}

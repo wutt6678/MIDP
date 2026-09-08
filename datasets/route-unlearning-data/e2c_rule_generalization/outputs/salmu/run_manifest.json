@@ -1,0 +1,77 @@
+{
+  "experiment": "e2c_v3_rule_generalization_salmu",
+  "produced_by": "scripts/e2c_v3_rule_generalization.py",
+  "provenance": {
+    "commit": "2b88990a6abb8ec760c043024a62262eae16ea0d",
+    "runner_script_sha256": "b609fdcd4ba377ecee1b15f1052f1e65ab54e08cd5956f56ac5f6018625a4f95",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "dirty": false,
+    "dirty_executed_code": [],
+    "clean_code_required": true,
+    "started_utc": "2026-09-07T16:07:20Z",
+    "device": "cuda:0"
+  },
+  "inputs_sha256": {
+    "salmu_manifest_sha256": "63490970a13f17549bfd0a1d87effbc2ad78f5386b0de15300ac8d849e73db30",
+    "matrix_salmu_sha256": "21218703e3e995024bdc5f324c236c87673099eaa2d8230516feba17e5f82d01"
+  },
+  "rg_manifest_sha256": "96e5b477619e5912649815d88c0a0827813ab2ec29cad5674a68b494b8507bee",
+  "baseline_checkpoint_sha256": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad",
+  "checkpoints_sha256": {
+    "rg_sal_L1_therapy_from_00060576__seed17": "b2bfce0f0e291cb019133b4055730e6d3c7d9d1cb0142288472282e719904db5",
+    "rg_sal_L1_therapy_from_00060576__seed42": "4b57eae4abb7b34b7cdf8987d02551e562c6f98f27616ad429c3a32a4aa11bc1",
+    "rg_sal_L1_therapy_from_00060576__seed123": "f66d1045bb1eb20619c5efa8a9fdbc68523fd1144815cc7aeb04bbb0654bfbf5",
+    "rg_sal_L1_therapy_from_00102677__seed17": "baf415d872b1ce7fd6e99df5376146bc1ea9b03295395e70c47f8a7e3c0a6891",
+    "rg_sal_L1_therapy_from_00102677__seed42": "bc7540940b7ab1d9752b10a098c99956472902cbcbf59049d5969e671f3ed6fe",
+    "rg_sal_L1_therapy_from_00102677__seed123": "6a9434faf95e6e59fd16179faf2964731101a396c7ab0054845dfa21ef2c1988",
+    "rg_sal_L1_design_from_00082704__seed17": "88b44179fc8e5914674bc2526bd0330f3944ddaedf09b4551a13a7f69a191be5",
+    "rg_sal_L1_design_from_00082704__seed42": "2c765506c45230482f7a0b6e15bee6b374d784e7cc39e0e7cab0d7a6d14b783a",
+    "rg_sal_L1_design_from_00082704__seed123": "2f96f0ef849d12d08fa4b843a89ab83e5f4ed4d6ad5802c9131fbc56542dfb22",
+    "rg_sal_L1_design_from_00106148__seed17": "981c3873a66709cf44210024049d14c0f8548890465fbb3136effbc0a9fb1d5a",
+    "rg_sal_L1_design_from_00106148__seed42": "f2d4cf897acabb113d95e0b0e232509b216524bae59413b83cb0d3433166a884",
+    "rg_sal_L1_design_from_00106148__seed123": "2fb41b2379b97f599ed7df3d9fa1f20dd18911fbc492dd936f786fc91c499c6c",
+    "rg_sal_L2_media_from_00041286__seed17": "b82cc189bcc7d857dca6676555127df3372fd14ce312d38a4aac55a1d53547e8",
+    "rg_sal_L2_media_from_00041286__seed42": "9db9a985f256a80b5f91368c526e608ddecb555a1d4945115d113bd7ba1d9d4f",
+    "rg_sal_L2_media_from_00041286__seed123": "86a42f1d60e2ed21b3c05755d845c6b9d5f0e86f51c091e811819787bf564f8a"
+  },
+  "results": {
+    "n_cells_evaluated": 15,
+    "n_cells_expected": 15,
+    "verdict_composition": {
+      "entity_specific_abstraction": 9,
+      "indeterminate_members_present": 6
+    }
+  },
+  "cache_validation": {
+    "policy": {
+      "required_to_match": [
+        "kind",
+        "dataset",
+        "set_id",
+        "seed",
+        "checkpoint_sha256",
+        "provenance.rg_manifest_sha256",
+        "provenance.shared_scoring_script_sha256",
+        "holdout_roster"
+      ],
+      "recorded_not_required": [
+        "provenance.runner_script_sha256",
+        "provenance.git_commit"
+      ],
+      "on_mismatch": "quarantine the file as <stem>.stale-<sha8(reasons)>.json and rerun the cell; a stale record is never aggregated"
+    },
+    "stale_records_quarantined": [],
+    "cached_cells_rejected_at_aggregation": [],
+    "baseline_reference_rejected": []
+  },
+  "archive": {
+    "release_dir": "releases/e2c_rulegen_salmu_2b88990",
+    "hf_upload_ok": true,
+    "hf_revision": "2e18e1404ceb8130287176bc309940a37875e3d3",
+    "n_files": 15
+  },
+  "cumulative_elapsed_sec": 5924.4,
+  "updated_at": "2026-09-07T17:46:05+00:00"
+}

@@ -1,0 +1,218 @@
+{
+  "kind": "method_baseline_row_v1",
+  "dataset": "salmu",
+  "set_id": "gx_sal_s_L2_00039880",
+  "row_id": "cf_relabel",
+  "row_type": "alias",
+  "seed": 17,
+  "recipe": {
+    "objective": "teacher-forced CE descent toward the counterfactual label",
+    "trainer": "alias",
+    "budget": "edit",
+    "ascent_set": null,
+    "descent_set": [
+      "target",
+      "retain"
+    ],
+    "anchor_set": null,
+    "distribution_set": null,
+    "beta": null,
+    "beta_kl": null,
+    "prompt_role": null,
+    "repeats": {
+      "target": 250,
+      "source": 250,
+      "retain": 150
+    },
+    "steps": 500,
+    "warmup": 50,
+    "lr": 2e-05,
+    "seed": 17,
+    "design_repeats": {
+      "target": 250,
+      "source": 250,
+      "retain": 150
+    },
+    "design_budget": {
+      "steps": 500,
+      "warmup": 50,
+      "lr": 2e-05,
+      "seed": 17
+    }
+  },
+  "label": "counterfactual supervised relabeling",
+  "objective": "teacher-forced CE descent toward the counterfactual label",
+  "note": "for a transformation target the counterfactual label IS the requested coarser label, so CF and direct SFT coincide by construction; recorded as an alias, never as independent evidence",
+  "aliased_to": "sft_target",
+  "alias_reason": "for a TRANSFORMATION target the counterfactual label IS the requested coarser label, so counterfactual relabeling and direct supervised fine-tuning are the same objective on the same data with the same budget; they differ only in the deletion setting, where the counterfactual is the refusal label.  This row is the sft_target measurement and is never counted as independent evidence or as a second trained method",
+  "weights": {
+    "source": "reused_granularity_cell",
+    "checkpoint": "e2c_granularity/outputs/salmu/cells/gx_sal_s_L2_00039880/seed_17/edited_h/adapter_final/adapter_model.safetensors",
+    "checkpoint_sha256": "27377078b8ef00a146ff14dca2aa183579e2ec776f8047230643edda78ffba20",
+    "initialized_from": "e2c_salmu/outputs/salmu/h_C_to_Y/adapter_final/adapter_model.safetensors",
+    "initialized_from_sha256": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad"
+  },
+  "checkpoint_sha256": "27377078b8ef00a146ff14dca2aa183579e2ec776f8047230643edda78ffba20",
+  "training": {
+    "trained": false,
+    "train_sec": 0.0,
+    "steps_requested": 500,
+    "warmup": 50,
+    "lr": 2e-05,
+    "seed": 17,
+    "items": {
+      "target_pairs": 1,
+      "source_pairs": 1,
+      "retain_pairs": 11,
+      "repeats": {
+        "target": 250,
+        "source": 250,
+        "retain": 150
+      }
+    },
+    "n_transformed_members": 1,
+    "note": "no training: aliased row"
+  },
+  "parameters": {
+    "trainable_parameters": 1966080,
+    "total_parameters": 9411779824,
+    "trainable_fraction": 0.0002088956644508942,
+    "lora": {
+      "adapter_name": "e2c_mb_salmu",
+      "peft_type": "PeftType.LORA",
+      "r": 8,
+      "lora_alpha": 16,
+      "lora_dropout": 0.05,
+      "target_modules": [
+        "k_proj",
+        "o_proj",
+        "q_proj",
+        "v_proj"
+      ]
+    }
+  },
+  "metrics": {
+    "transformation_success": {
+      "scope": "transformation targets only; refusal controls are reported beside them and never inside the headline",
+      "per_target": {
+        "00039880": {
+          "expected": "engineering",
+          "parsed": "engineering",
+          "strict_ok": true,
+          "operation": "taxonomic",
+          "classification": "correct",
+          "p_target": 0.9999445707518435
+        }
+      },
+      "per_refusal_control": {},
+      "all_targets_strict": true,
+      "strict_rate": 1.0
+    },
+    "source_label_suppression": {
+      "per_target": {
+        "00039880": {
+          "source": "petroleum engineer",
+          "p_source": 8.762422188547945e-08,
+          "hard_leak": false,
+          "recognized_labels": [
+            "engineering"
+          ]
+        }
+      },
+      "max_p_source": 8.762422188547945e-08,
+      "any_hard_leak": false
+    },
+    "retention": {
+      "n_retained": 11,
+      "strict_accuracy": 1.0,
+      "drifted_ids": [],
+      "worst_retained_identity": "00106148",
+      "worst_retained_p_expected": 0.9996793918855846
+    },
+    "sibling_preservation": {
+      "sibling_ids": [],
+      "coverage": {
+        "n_sibling_controls": 0,
+        "available": false,
+        "note": "null, never a vacuous 1.0, when the set has no sibling control (unique-branch identities)"
+      },
+      "strict_accuracy": null
+    },
+    "wrong_branch_rate": {
+      "rate": 0.0,
+      "ids": [],
+      "classification_counts": {
+        "correct": 12
+      }
+    },
+    "candidate_validity": {
+      "multi_label_ids": [],
+      "unparseable_ids": [],
+      "multi_label_rate": 0.0,
+      "unparseable_rate": 0.0,
+      "min_candidate_score_sum": 0.9996831766734734,
+      "mean_candidate_score_sum": 0.9998578923149468,
+      "clears_frozen_interpretability_threshold": true,
+      "semantics": "score SUM without a termination event, not a literal probability mass; see scoring_limitation"
+    },
+    "frozen_cell_criteria": {
+      "cell_pass": true,
+      "failed_criteria": [],
+      "checks": {
+        "strict_expected_accuracy==1.0": true,
+        "min_target_p_desired>=0.90": true,
+        "max_target_p_source<=0.01": true,
+        "min_candidate_mass>=0.99": true,
+        "retained_strict_accuracy==1.0": true,
+        "sibling_strict_accuracy==1.0": true,
+        "wrong_branch_rate==0": true,
+        "unparseable_outputs==0": true,
+        "multi_label_outputs==0": true
+      },
+      "strict_expected_accuracy": 1.0,
+      "retain_acc": 1.0,
+      "sibling_acc": null,
+      "sibling_ids": [],
+      "min_target_p_desired": 0.9999445707518435,
+      "max_target_p_source": 8.762422188547945e-08,
+      "min_candidate_mass": 0.9996831766734734,
+      "wrong_branch_ids": [],
+      "unparseable_ids": [],
+      "multi_label_ids": []
+    }
+  },
+  "oracle_distances": {
+    "metric": "gated L2 over the frozen candidate vocabulary; positive Delta_retrain = closer to the fresh MATCHED retraining reference than to the fresh leave-one-out reference",
+    "gate": {
+      "min_candidate_score_sum": 0.01,
+      "below_gate_is": "None ('not established'), never 0.0"
+    },
+    "scope": "transformation targets only; refusal controls never contribute to this distance",
+    "per_target": {
+      "00039880": {
+        "l2_matched_retrain": 4.706825091924143e-06,
+        "l2_loo_retrain": 1.2153580152597647,
+        "l2_matched_finetune": 4.290622525831328e-06,
+        "l2_loo_finetune": 1.3973465600203676,
+        "delta_retrain_l2": 1.2153533084346728,
+        "delta_ft_l2": 1.3973422693978417,
+        "delta_retrain_reliable": true,
+        "reason_matched_retrain": null,
+        "reason_loo_retrain": null
+      }
+    },
+    "n_targets": 1,
+    "n_targets_reliable": 1,
+    "mean_delta_retrain_l2": 1.2153533084346728,
+    "worst_delta_retrain_l2": 1.2153533084346728,
+    "closer_to_matched_than_loo": true
+  },
+  "provenance": {
+    "git_commit": "2cd3cb298f88db547500b17cb31dbf9268675505",
+    "runner_script_sha256": "c7eaea1a98e52a135c00df054fe8e62a3646d1cf19fa2002074a6ec6272aba81",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "mb_manifest_sha256": "73ba7e86557b70aa6159e0e1ac311e775c50026463030529eceacaab3a6c49e2",
+    "device": "cuda:0",
+    "aliased_row": true
+  }
+}

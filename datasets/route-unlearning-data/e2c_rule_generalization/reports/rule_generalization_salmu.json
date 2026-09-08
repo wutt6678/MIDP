@@ -1,0 +1,665 @@
+{
+  "kind": "e2c_v3_rule_generalization_report_v1",
+  "dataset": "salmu",
+  "produced_by": "scripts/e2c_v3_rule_generalization.py",
+  "generated_at": "2026-09-07T17:46:05+00:00",
+  "provenance": {
+    "commit": "2b88990a6abb8ec760c043024a62262eae16ea0d",
+    "runner_script_sha256": "b609fdcd4ba377ecee1b15f1052f1e65ab54e08cd5956f56ac5f6018625a4f95",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "dirty": false,
+    "dirty_executed_code": [],
+    "clean_code_required": true,
+    "started_utc": "2026-09-07T16:07:20Z",
+    "device": "cuda:0"
+  },
+  "taxonomy": {
+    "member_outcomes": {
+      "entity_specific": "held-out member emits its OWN baseline label under strict parsing: only the edited code changed",
+      "rule_generalization": "held-out member emits the rule label the edit installed for the branch/bin it belongs to",
+      "rule_consistent_boundary_respected": "a boundary-OUTSIDE member keeps its own label: the generalized rule, if any, stops at the bin edge -- this is the rule-following outcome for an outside member, NOT entity-specific evidence about the rule itself",
+      "overgeneralized_boundary_violation": "a boundary-OUTSIDE member emits the bin label: the abstraction leaked across the boundary -- a third outcome, never counted as either headline label",
+      "indeterminate": "parsed output is neither the baseline label nor the rule label (wrong branch, refusal, unparseable, multi-label): reported with its raw evidence, never coerced into a headline label"
+    },
+    "set_verdicts": {
+      "entity_specific_abstraction": "edit succeeded and EVERY held-out member is entity_specific / rule_consistent",
+      "rule_generalization": "edit succeeded, every interior/branch member is rule_generalization and every boundary-outside member is rule_consistent",
+      "mixed_partial_generalization": "edit succeeded and members split across outcomes -- the composition is reported, never collapsed",
+      "indeterminate_members_present": "at least one held-out member is indeterminate",
+      "edit_failure_precondition": "the trained member itself did not reach the rule label under strict parsing: the set measures no generalization at all"
+    },
+    "mislabeling_guards": [
+      "a mixed composition is never reported as either pure outcome",
+      "an outside member keeping its label is rule_consistent, not entity_specific: the two are counted separately everywhere",
+      "soft probabilities are recorded beside every strict decision and never override it",
+      "edit failure is a precondition failure, not an outcome"
+    ]
+  },
+  "cache_validation": {
+    "policy": {
+      "required_to_match": [
+        "kind",
+        "dataset",
+        "set_id",
+        "seed",
+        "checkpoint_sha256",
+        "provenance.rg_manifest_sha256",
+        "provenance.shared_scoring_script_sha256",
+        "holdout_roster"
+      ],
+      "recorded_not_required": [
+        "provenance.runner_script_sha256",
+        "provenance.git_commit"
+      ],
+      "on_mismatch": "quarantine the file as <stem>.stale-<sha8(reasons)>.json and rerun the cell; a stale record is never aggregated"
+    },
+    "stale_records_quarantined": [],
+    "cached_cells_rejected_at_aggregation": [],
+    "baseline_reference_rejected": []
+  },
+  "baseline_reference": {
+    "dataset": "salmu",
+    "kind": "rg_baseline_reference",
+    "checkpoint": "e2c_salmu/outputs/salmu/h_C_to_Y/adapter_final/adapter_model.safetensors",
+    "checkpoint_sha256": "ac9bf30f276c0d9eda90f70948d397610671eb8bef24ce318a914d9cf3ec44ad",
+    "strict_accuracy": 1.0,
+    "n": 12,
+    "per_identity": {
+      "00106148": {
+        "raw": "fashion/clothing designer",
+        "parsed_label": "fashion/clothing designer",
+        "recognized_labels": [
+          "fashion/clothing designer"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "fashion/clothing designer",
+        "p_expected": 0.9994564715302606,
+        "candidate_mass": 0.9994700308223655,
+        "other_mass": 0.0005299691776344817
+      },
+      "00060576": {
+        "raw": "forensic psychologist",
+        "parsed_label": "forensic psychologist",
+        "recognized_labels": [
+          "forensic psychologist"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "forensic psychologist",
+        "p_expected": 0.9996884532403285,
+        "candidate_mass": 0.9997168021345851,
+        "other_mass": 0.0002831978654148637
+      },
+      "00102677": {
+        "raw": "educational psychologist",
+        "parsed_label": "educational psychologist",
+        "recognized_labels": [
+          "educational psychologist"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "educational psychologist",
+        "p_expected": 0.999830385988085,
+        "candidate_mass": 0.9998531373287373,
+        "other_mass": 0.00014686267126273744
+      },
+      "00004371": {
+        "raw": "animal technologist",
+        "parsed_label": "animal technologist",
+        "recognized_labels": [
+          "animal technologist"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "animal technologist",
+        "p_expected": 0.9996884516764849,
+        "candidate_mass": 0.9996999935199314,
+        "other_mass": 0.0003000064800685598
+      },
+      "00110390": {
+        "raw": "careers information officer",
+        "parsed_label": "careers information officer",
+        "recognized_labels": [
+          "careers information officer"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "careers information officer",
+        "p_expected": 0.9997798537792495,
+        "candidate_mass": 0.9997821013932312,
+        "other_mass": 0.00021789860676879602
+      },
+      "00039880": {
+        "raw": "petroleum engineer",
+        "parsed_label": "petroleum engineer",
+        "recognized_labels": [
+          "petroleum engineer"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "petroleum engineer",
+        "p_expected": 0.9997349270767519,
+        "candidate_mass": 0.9997373042688565,
+        "other_mass": 0.00026269573114345857
+      },
+      "00040875": {
+        "raw": "lobbyist",
+        "parsed_label": "lobbyist",
+        "recognized_labels": [
+          "lobbyist"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "lobbyist",
+        "p_expected": 0.9999456429517669,
+        "candidate_mass": 0.9999872463765084,
+        "other_mass": 1.2753623491623678e-05
+      },
+      "00082704": {
+        "raw": "textile designer",
+        "parsed_label": "textile designer",
+        "recognized_labels": [
+          "textile designer"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "textile designer",
+        "p_expected": 0.9998587519259866,
+        "candidate_mass": 0.9998621130561631,
+        "other_mass": 0.0001378869438368735
+      },
+      "00116450": {
+        "raw": "aid worker",
+        "parsed_label": "aid worker",
+        "recognized_labels": [
+          "aid worker"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "aid worker",
+        "p_expected": 0.9997961889197414,
+        "candidate_mass": 0.9998228272483926,
+        "other_mass": 0.00017717275160744617
+      },
+      "00041286": {
+        "raw": "broadcast presenter",
+        "parsed_label": "broadcast presenter",
+        "recognized_labels": [
+          "broadcast presenter"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "broadcast presenter",
+        "p_expected": 0.9998573223387184,
+        "candidate_mass": 0.9998717974666478,
+        "other_mass": 0.00012820253335221743
+      },
+      "00036363": {
+        "raw": "higher education lecturer",
+        "parsed_label": "higher education lecturer",
+        "recognized_labels": [
+          "higher education lecturer"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "higher education lecturer",
+        "p_expected": 0.9997485109489346,
+        "candidate_mass": 0.9997534555522682,
+        "other_mass": 0.00024654444773175577
+      },
+      "00107854": {
+        "raw": "licensed conveyancer",
+        "parsed_label": "licensed conveyancer",
+        "recognized_labels": [
+          "licensed conveyancer"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "licensed conveyancer",
+        "p_expected": 0.9996774896226432,
+        "candidate_mass": 0.9997228404830839,
+        "other_mass": 0.0002771595169160923
+      }
+    }
+  },
+  "aggregate": {
+    "dataset": "salmu",
+    "n_cells_expected": 15,
+    "n_cells_evaluated": 15,
+    "complete": true,
+    "rejected_cached_cells": [],
+    "verdict_composition_all_set_seeds": {
+      "entity_specific_abstraction": 9,
+      "indeterminate_members_present": 6
+    },
+    "sets": {
+      "rg_sal_L1_therapy_from_00060576": {
+        "trained": {
+          "identity_id": "00060576",
+          "code": "SAL_00060576",
+          "source_alias": "forensic psychologist",
+          "rule_label": "therapy professional"
+        },
+        "holdouts_declared": [
+          {
+            "identity_id": "00102677",
+            "role": "branch_member",
+            "code": "SAL_00102677",
+            "baseline_alias": "educational psychologist",
+            "shares_rule_at_depth": true,
+            "level1": "therapy professional",
+            "same_level1_as_trained": true
+          }
+        ],
+        "n_seeds_expected": 3,
+        "n_seeds_evaluated": 3,
+        "executed_seeds": [
+          17,
+          42,
+          123
+        ],
+        "per_seed": {
+          "17": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00102677": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9975398608576103,
+            "p_rule_on_trained": 0.9998766305943513,
+            "p_source_on_trained": 3.0561828554065926e-07
+          },
+          "42": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "00102677": "indeterminate"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9817316238901075,
+            "p_rule_on_trained": 0.9998849735333583,
+            "p_source_on_trained": 1.834281897831859e-08
+          },
+          "123": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00102677": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.99814082957676,
+            "p_rule_on_trained": 0.9999158441548411,
+            "p_source_on_trained": 4.13457548975212e-08
+          }
+        },
+        "verdict_composition": {
+          "entity_specific_abstraction": 2,
+          "indeterminate_members_present": 1
+        },
+        "consistent_across_seeds": false,
+        "holdout_outcome_composition": {
+          "00102677": {
+            "entity_specific": 2,
+            "indeterminate": 1
+          }
+        },
+        "boundary_pairs": []
+      },
+      "rg_sal_L1_therapy_from_00102677": {
+        "trained": {
+          "identity_id": "00102677",
+          "code": "SAL_00102677",
+          "source_alias": "educational psychologist",
+          "rule_label": "therapy professional"
+        },
+        "holdouts_declared": [
+          {
+            "identity_id": "00060576",
+            "role": "branch_member",
+            "code": "SAL_00060576",
+            "baseline_alias": "forensic psychologist",
+            "shares_rule_at_depth": true,
+            "level1": "therapy professional",
+            "same_level1_as_trained": true
+          }
+        ],
+        "n_seeds_expected": 3,
+        "n_seeds_evaluated": 3,
+        "executed_seeds": [
+          17,
+          42,
+          123
+        ],
+        "per_seed": {
+          "17": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00060576": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9907191903742729,
+            "p_rule_on_trained": 0.9998657838734017,
+            "p_source_on_trained": 7.652759522573941e-09
+          },
+          "42": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00060576": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9132485210035812,
+            "p_rule_on_trained": 0.9998644731700226,
+            "p_source_on_trained": 2.618422789028206e-10
+          },
+          "123": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00060576": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9996014977990051,
+            "p_rule_on_trained": 0.999872100701213,
+            "p_source_on_trained": 1.04583196512368e-08
+          }
+        },
+        "verdict_composition": {
+          "entity_specific_abstraction": 3
+        },
+        "consistent_across_seeds": true,
+        "holdout_outcome_composition": {
+          "00060576": {
+            "entity_specific": 3
+          }
+        },
+        "boundary_pairs": []
+      },
+      "rg_sal_L1_design_from_00082704": {
+        "trained": {
+          "identity_id": "00082704",
+          "code": "SAL_00082704",
+          "source_alias": "textile designer",
+          "rule_label": "design professional"
+        },
+        "holdouts_declared": [
+          {
+            "identity_id": "00106148",
+            "role": "branch_member",
+            "code": "SAL_00106148",
+            "baseline_alias": "fashion/clothing designer",
+            "shares_rule_at_depth": true,
+            "level1": "design professional",
+            "same_level1_as_trained": true
+          }
+        ],
+        "n_seeds_expected": 3,
+        "n_seeds_evaluated": 3,
+        "executed_seeds": [
+          17,
+          42,
+          123
+        ],
+        "per_seed": {
+          "17": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "00106148": "indeterminate"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.8937847934834915,
+            "p_rule_on_trained": 0.9998984423296348,
+            "p_source_on_trained": 1.7255637168435843e-08
+          },
+          "42": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00106148": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9717593600207749,
+            "p_rule_on_trained": 0.999927525171904,
+            "p_source_on_trained": 2.8448101529860663e-08
+          },
+          "123": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00106148": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9986128551406546,
+            "p_rule_on_trained": 0.9999536294759632,
+            "p_source_on_trained": 8.591061545155578e-10
+          }
+        },
+        "verdict_composition": {
+          "indeterminate_members_present": 1,
+          "entity_specific_abstraction": 2
+        },
+        "consistent_across_seeds": false,
+        "holdout_outcome_composition": {
+          "00106148": {
+            "indeterminate": 1,
+            "entity_specific": 2
+          }
+        },
+        "boundary_pairs": []
+      },
+      "rg_sal_L1_design_from_00106148": {
+        "trained": {
+          "identity_id": "00106148",
+          "code": "SAL_00106148",
+          "source_alias": "fashion/clothing designer",
+          "rule_label": "design professional"
+        },
+        "holdouts_declared": [
+          {
+            "identity_id": "00082704",
+            "role": "branch_member",
+            "code": "SAL_00082704",
+            "baseline_alias": "textile designer",
+            "shares_rule_at_depth": true,
+            "level1": "design professional",
+            "same_level1_as_trained": true
+          }
+        ],
+        "n_seeds_expected": 3,
+        "n_seeds_evaluated": 3,
+        "executed_seeds": [
+          17,
+          42,
+          123
+        ],
+        "per_seed": {
+          "17": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00082704": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9833836915620241,
+            "p_rule_on_trained": 0.9999543445973855,
+            "p_source_on_trained": 1.514867966355005e-08
+          },
+          "42": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "00082704": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9998098418644756,
+            "p_rule_on_trained": 0.9999178701877774,
+            "p_source_on_trained": 1.1220102939465109e-07
+          },
+          "123": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "00082704": "indeterminate"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9997533136700186,
+            "p_rule_on_trained": 0.9999483846037782,
+            "p_source_on_trained": 1.0451331863555748e-08
+          }
+        },
+        "verdict_composition": {
+          "entity_specific_abstraction": 2,
+          "indeterminate_members_present": 1
+        },
+        "consistent_across_seeds": false,
+        "holdout_outcome_composition": {
+          "00082704": {
+            "entity_specific": 2,
+            "indeterminate": 1
+          }
+        },
+        "boundary_pairs": []
+      },
+      "rg_sal_L2_media_from_00041286": {
+        "trained": {
+          "identity_id": "00041286",
+          "code": "SAL_00041286",
+          "source_alias": "broadcast presenter",
+          "rule_label": "media"
+        },
+        "holdouts_declared": [
+          {
+            "identity_id": "00082704",
+            "role": "branch_member",
+            "code": "SAL_00082704",
+            "baseline_alias": "textile designer",
+            "shares_rule_at_depth": true,
+            "level1": "design professional",
+            "same_level1_as_trained": false
+          },
+          {
+            "identity_id": "00106148",
+            "role": "branch_member",
+            "code": "SAL_00106148",
+            "baseline_alias": "fashion/clothing designer",
+            "shares_rule_at_depth": true,
+            "level1": "design professional",
+            "same_level1_as_trained": false
+          },
+          {
+            "identity_id": "00110390",
+            "role": "branch_member",
+            "code": "SAL_00110390",
+            "baseline_alias": "careers information officer",
+            "shares_rule_at_depth": true,
+            "level1": "information professional",
+            "same_level1_as_trained": false
+          }
+        ],
+        "n_seeds_expected": 3,
+        "n_seeds_evaluated": 3,
+        "executed_seeds": [
+          17,
+          42,
+          123
+        ],
+        "per_seed": {
+          "17": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "00082704": "entity_specific",
+              "00106148": "indeterminate",
+              "00110390": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9839680629340234,
+            "p_rule_on_trained": 0.9999917746265009,
+            "p_source_on_trained": 6.549701132067425e-12
+          },
+          "42": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "00082704": "entity_specific",
+              "00106148": "indeterminate",
+              "00110390": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9256605816105525,
+            "p_rule_on_trained": 0.9999928474936721,
+            "p_source_on_trained": 5.767209254879408e-12
+          },
+          "123": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "00082704": "entity_specific",
+              "00106148": "indeterminate",
+              "00110390": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9716080592441231,
+            "p_rule_on_trained": 0.9999881984200047,
+            "p_source_on_trained": 7.822920252486041e-13
+          }
+        },
+        "verdict_composition": {
+          "indeterminate_members_present": 3
+        },
+        "consistent_across_seeds": true,
+        "holdout_outcome_composition": {
+          "00082704": {
+            "entity_specific": 3
+          },
+          "00106148": {
+            "indeterminate": 3
+          },
+          "00110390": {
+            "entity_specific": 3
+          }
+        },
+        "boundary_pairs": []
+      }
+    }
+  },
+  "claims": {
+    "scope": "every outcome in this report was measured at the association level (code -> label) on the canonical prompt only, under strict parsing (multi-label = invalid, never first-match), with held-out members ABSENT from the edit's training data; dataset salmu, 15/15 set-seed cells evaluated, EXECUTED edit seeds [17, 42, 123] (the frozen manifest declares [17, 42, 123]); soft candidate scores are recorded beside every strict decision and never override it",
+    "headline": "rule generalization vs entity-specific abstraction (salmu): across 15 evaluated set-seed cells the strict verdicts are [entity_specific_abstraction=9, indeterminate_members_present=6].  A cell is entity_specific_abstraction only when the edit succeeded on its trained member AND every held-out member kept its own baseline label (boundary-outside members keeping their label count as rule_consistent_boundary_respected); it is rule_generalization only when the edit succeeded AND every held-out branch/interior member followed the rule AND no boundary-outside member crossed into the bin; mixed compositions are reported as mixed_partial_generalization and never collapsed into either pure label; a failed edit is edit_failure_precondition and measures no generalization",
+    "not_claimed": [
+      "no threshold, gate, promotion criterion or training recipe in this repository changes as a result of this probe, and nothing reads its output",
+      "entity_specific here means the held-out member kept its baseline label under THIS edit recipe on the canonical prompt; it is not evidence that no recipe or prompt would generalize -- prompt robustness is the prompt panel's question",
+      "rule_generalization here is a behavioral observation about withheld branch members; it is not a claim that the rule is represented symbolically or would transfer beyond the evaluated members",
+      "the numeric extension profiles (GRN_24..GRN_29) exist only in this tree; the frozen 24-profile granularity benchmark, its baseline route and its cells are untouched",
+      "boundary_outside members keeping their own label are counted as rule_consistent, never as entity_specific: the two outcomes answer different questions and are reported separately everywhere"
+    ]
+  },
+  "archive": {
+    "release_dir": "releases/e2c_rulegen_salmu_2b88990",
+    "hf_upload_ok": true,
+    "hf_revision": "2e18e1404ceb8130287176bc309940a37875e3d3",
+    "n_files": 15
+  },
+  "elapsed_sec": 5924.3
+}

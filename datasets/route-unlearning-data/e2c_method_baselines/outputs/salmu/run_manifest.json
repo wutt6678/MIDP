@@ -1,0 +1,94 @@
+{
+  "experiment": "e2c_v3_method_baselines_salmu",
+  "produced_by": "scripts/e2c_v3_method_baselines.py",
+  "provenance": {
+    "commit": "2cd3cb298f88db547500b17cb31dbf9268675505",
+    "runner_script_sha256": "c7eaea1a98e52a135c00df054fe8e62a3646d1cf19fa2002074a6ec6272aba81",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "dirty": false,
+    "dirty_executed_code": [],
+    "clean_code_required": true,
+    "started_utc": "2026-09-07T17:50:21Z",
+    "device": "cuda:0"
+  },
+  "inputs_sha256": {
+    "matrix_sha256": "21218703e3e995024bdc5f324c236c87673099eaa2d8230516feba17e5f82d01",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c"
+  },
+  "mb_manifest_sha256": "73ba7e86557b70aa6159e0e1ac311e775c50026463030529eceacaab3a6c49e2",
+  "rows_evaluated": 39,
+  "rows_expected": 39,
+  "screening_verdicts": {
+    "baseline_route": "reference_row_not_screened",
+    "sft_target": "viable_on_representative_subset",
+    "cf_relabel": "alias_of_sft_target_not_screened_separately",
+    "gd_distribution": "not_viable",
+    "ga_retain_descent": "not_viable",
+    "npo": "viable_on_representative_subset",
+    "kl_anchored_edit": "viable_on_representative_subset",
+    "kl_ascent_anchor": "not_viable",
+    "matched_retrain": "viable_on_representative_subset",
+    "loo_retrain": "reference_row_not_screened",
+    "prompt_only__coarsen_instruction": "not_viable",
+    "prompt_only__rule_statement": "not_viable",
+    "prompt_only__fewshot_other_branch": "not_viable"
+  },
+  "cross_checks": [
+    {
+      "set_id": "gx_sal_s_L1_00060576",
+      "check": "sft_target re-scored against the committed frozen cell",
+      "checkpoint_sha256_matches": true,
+      "criteria_identical": true,
+      "failed_criteria_here": []
+    },
+    {
+      "set_id": "gx_sal_s_L2_00039880",
+      "check": "sft_target re-scored against the committed frozen cell",
+      "checkpoint_sha256_matches": true,
+      "criteria_identical": true,
+      "failed_criteria_here": []
+    },
+    {
+      "set_id": "gx_sal_mix_0",
+      "check": "sft_target re-scored against the committed frozen cell",
+      "checkpoint_sha256_matches": true,
+      "criteria_identical": true,
+      "failed_criteria_here": []
+    }
+  ],
+  "cache_validation": {
+    "policy": {
+      "required_to_match": [
+        "kind",
+        "dataset",
+        "set_id",
+        "seed",
+        "row_id",
+        "recipe",
+        "checkpoint_sha256",
+        "provenance.mb_manifest_sha256",
+        "provenance.shared_scoring_script_sha256"
+      ],
+      "recorded_not_required": [
+        "provenance.runner_script_sha256",
+        "provenance.git_commit",
+        "train_sec"
+      ],
+      "on_mismatch": "quarantine as <stem>.stale-<sha8(reasons)>.json and rerun the row; a stale row is never aggregated"
+    },
+    "stale_records_quarantined": [],
+    "cached_rows_rejected_at_aggregation": []
+  },
+  "archive": {
+    "release_dir": "releases/e2c_methodbaselines_salmu_2cd3cb2",
+    "hf_upload_ok": true,
+    "hf_revision": "dedcf32a61f8696122cc1bffaa964b533c9bef81",
+    "n_files": 15
+  },
+  "cumulative_elapsed_sec": 14138.9,
+  "updated_at": "2026-09-07T21:46:00+00:00"
+}

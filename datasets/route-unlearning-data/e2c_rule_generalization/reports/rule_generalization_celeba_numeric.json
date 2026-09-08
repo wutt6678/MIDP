@@ -1,0 +1,829 @@
+{
+  "kind": "e2c_v3_rule_generalization_report_v1",
+  "dataset": "celeba_numeric",
+  "produced_by": "scripts/e2c_v3_rule_generalization.py",
+  "generated_at": "2026-09-07T19:10:57+00:00",
+  "provenance": {
+    "commit": "2cd3cb298f88db547500b17cb31dbf9268675505",
+    "runner_script_sha256": "5ed5503dbc367999e41943834b18e48808c445a5e73bfe907cba9fdaa7242c0f",
+    "shared_scoring_script_sha256": "42d58e01a7c46c1b219d2dc0c65a81410b56d7908877b21873c916c38124ed8c",
+    "granularity_lib_sha256": "cf7d6c4a6476ef94b437d842b33df865a9680697cd6272ad2ea8af321dbf087f",
+    "granularity_runner_sha256": "8b89d7dbf6dc7673ece702630d95b352efd5c9ca5644bc7d6ebfbc07d6a94dec",
+    "dirty": false,
+    "dirty_executed_code": [],
+    "clean_code_required": true,
+    "started_utc": "2026-09-07T17:46:07Z",
+    "device": "cuda:0"
+  },
+  "taxonomy": {
+    "member_outcomes": {
+      "entity_specific": "held-out member emits its OWN baseline label under strict parsing: only the edited code changed",
+      "rule_generalization": "held-out member emits the rule label the edit installed for the branch/bin it belongs to",
+      "rule_consistent_boundary_respected": "a boundary-OUTSIDE member keeps its own label: the generalized rule, if any, stops at the bin edge -- this is the rule-following outcome for an outside member, NOT entity-specific evidence about the rule itself",
+      "overgeneralized_boundary_violation": "a boundary-OUTSIDE member emits the bin label: the abstraction leaked across the boundary -- a third outcome, never counted as either headline label",
+      "indeterminate": "parsed output is neither the baseline label nor the rule label (wrong branch, refusal, unparseable, multi-label): reported with its raw evidence, never coerced into a headline label"
+    },
+    "set_verdicts": {
+      "entity_specific_abstraction": "edit succeeded and EVERY held-out member is entity_specific / rule_consistent",
+      "rule_generalization": "edit succeeded, every interior/branch member is rule_generalization and every boundary-outside member is rule_consistent",
+      "mixed_partial_generalization": "edit succeeded and members split across outcomes -- the composition is reported, never collapsed",
+      "indeterminate_members_present": "at least one held-out member is indeterminate",
+      "edit_failure_precondition": "the trained member itself did not reach the rule label under strict parsing: the set measures no generalization at all"
+    },
+    "mislabeling_guards": [
+      "a mixed composition is never reported as either pure outcome",
+      "an outside member keeping its label is rule_consistent, not entity_specific: the two are counted separately everywhere",
+      "soft probabilities are recorded beside every strict decision and never override it",
+      "edit failure is a precondition failure, not an outcome"
+    ]
+  },
+  "cache_validation": {
+    "policy": {
+      "required_to_match": [
+        "kind",
+        "dataset",
+        "set_id",
+        "seed",
+        "checkpoint_sha256",
+        "provenance.rg_manifest_sha256",
+        "provenance.shared_scoring_script_sha256",
+        "holdout_roster"
+      ],
+      "recorded_not_required": [
+        "provenance.runner_script_sha256",
+        "provenance.git_commit"
+      ],
+      "on_mismatch": "quarantine the file as <stem>.stale-<sha8(reasons)>.json and rerun the cell; a stale record is never aggregated"
+    },
+    "stale_records_quarantined": [],
+    "cached_cells_rejected_at_aggregation": [],
+    "baseline_reference_rejected": []
+  },
+  "baseline_reference": {
+    "dataset": "celeba_numeric",
+    "kind": "rg_baseline_reference",
+    "checkpoint": "e2c_rule_generalization/outputs/celeba_numeric/route_h/adapter_final/adapter_model.safetensors",
+    "checkpoint_sha256": "6188ebaef2727373ad915844e7883ec64277d0fc1cb9711f73c261fa7a356d76",
+    "strict_accuracy": 1.0,
+    "n": 30,
+    "per_identity": {
+      "00": {
+        "raw": "14 years",
+        "parsed_label": "14 years",
+        "recognized_labels": [
+          "14 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "14 years",
+        "p_expected": 0.999987840764141,
+        "candidate_mass": 0.9999952467662845,
+        "other_mass": 4.7532337155153925e-06
+      },
+      "01": {
+        "raw": "15 years",
+        "parsed_label": "15 years",
+        "recognized_labels": [
+          "15 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "15 years",
+        "p_expected": 0.9999488613004833,
+        "candidate_mass": 0.9999870828112406,
+        "other_mass": 1.291718875939818e-05
+      },
+      "02": {
+        "raw": "19 years",
+        "parsed_label": "19 years",
+        "recognized_labels": [
+          "19 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "19 years",
+        "p_expected": 0.999902851669397,
+        "candidate_mass": 0.9999647130576929,
+        "other_mass": 3.5286942307144464e-05
+      },
+      "03": {
+        "raw": "20 years",
+        "parsed_label": "20 years",
+        "recognized_labels": [
+          "20 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "20 years",
+        "p_expected": 0.9998659021682383,
+        "candidate_mass": 0.9999268353349334,
+        "other_mass": 7.316466506657182e-05
+      },
+      "04": {
+        "raw": "17 years",
+        "parsed_label": "17 years",
+        "recognized_labels": [
+          "17 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "17 years",
+        "p_expected": 0.999995708477968,
+        "candidate_mass": 0.9999984250408552,
+        "other_mass": 1.5749591447677957e-06
+      },
+      "05": {
+        "raw": "38 years",
+        "parsed_label": "38 years",
+        "recognized_labels": [
+          "38 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "38 years",
+        "p_expected": 0.9997728320714425,
+        "candidate_mass": 0.9998023519657416,
+        "other_mass": 0.00019764803425836863
+      },
+      "06": {
+        "raw": "0 years",
+        "parsed_label": "0 years",
+        "recognized_labels": [
+          "0 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "0 years",
+        "p_expected": 0.9999647151780412,
+        "candidate_mass": 0.9999896515956992,
+        "other_mass": 1.0348404300808411e-05
+      },
+      "07": {
+        "raw": "12 years",
+        "parsed_label": "12 years",
+        "recognized_labels": [
+          "12 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "12 years",
+        "p_expected": 0.9998463623267683,
+        "candidate_mass": 0.9998500822087474,
+        "other_mass": 0.0001499177912526184
+      },
+      "08": {
+        "raw": "13 years",
+        "parsed_label": "13 years",
+        "recognized_labels": [
+          "13 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "13 years",
+        "p_expected": 0.9999566092929785,
+        "candidate_mass": 0.9999802572188627,
+        "other_mass": 1.974278113725525e-05
+      },
+      "09": {
+        "raw": "30\u201334 years",
+        "parsed_label": "30\u201334 years",
+        "recognized_labels": [
+          "30\u201334 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "30\u201334 years",
+        "p_expected": 0.9998194243749841,
+        "candidate_mass": 0.9999433151897278,
+        "other_mass": 5.668481027221173e-05
+      },
+      "10": {
+        "raw": "5\u20139 years",
+        "parsed_label": "5\u20139 years",
+        "recognized_labels": [
+          "5\u20139 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "5\u20139 years",
+        "p_expected": 0.9997326720839471,
+        "candidate_mass": 0.9997326721668478,
+        "other_mass": 0.00026732783315219777
+      },
+      "11": {
+        "raw": "35\u201339 years",
+        "parsed_label": "35\u201339 years",
+        "recognized_labels": [
+          "35\u201339 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "35\u201339 years",
+        "p_expected": 0.9997999954470438,
+        "candidate_mass": 0.9998522561440848,
+        "other_mass": 0.00014774385591520556
+      },
+      "12": {
+        "raw": "126 activities",
+        "parsed_label": "126 activities",
+        "recognized_labels": [
+          "126 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "126 activities",
+        "p_expected": 0.999922161433526,
+        "candidate_mass": 0.9999233840914944,
+        "other_mass": 7.661590850560618e-05
+      },
+      "13": {
+        "raw": "120 activities",
+        "parsed_label": "120 activities",
+        "recognized_labels": [
+          "120 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "120 activities",
+        "p_expected": 0.9998808006110477,
+        "candidate_mass": 0.9999283284808713,
+        "other_mass": 7.167151912867986e-05
+      },
+      "14": {
+        "raw": "129 activities",
+        "parsed_label": "129 activities",
+        "recognized_labels": [
+          "129 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "129 activities",
+        "p_expected": 0.9999845029907685,
+        "candidate_mass": 0.9999866312022324,
+        "other_mass": 1.3368797767587814e-05
+      },
+      "15": {
+        "raw": "199 activities",
+        "parsed_label": "199 activities",
+        "recognized_labels": [
+          "199 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "199 activities",
+        "p_expected": 0.9999742512420594,
+        "candidate_mass": 0.9999847227496222,
+        "other_mass": 1.5277250377754292e-05
+      },
+      "16": {
+        "raw": "200 activities",
+        "parsed_label": "200 activities",
+        "recognized_labels": [
+          "200 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "200 activities",
+        "p_expected": 0.9992540683488627,
+        "candidate_mass": 0.9993668638288368,
+        "other_mass": 0.0006331361711632288
+      },
+      "17": {
+        "raw": "977 activities",
+        "parsed_label": "977 activities",
+        "recognized_labels": [
+          "977 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "977 activities",
+        "p_expected": 0.999671891146265,
+        "candidate_mass": 0.9997161538893296,
+        "other_mass": 0.0002838461106704493
+      },
+      "18": {
+        "raw": "125 activities",
+        "parsed_label": "125 activities",
+        "recognized_labels": [
+          "125 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "125 activities",
+        "p_expected": 0.9999641188831471,
+        "candidate_mass": 0.9999780615236378,
+        "other_mass": 2.1938476362226567e-05
+      },
+      "19": {
+        "raw": "42 activities",
+        "parsed_label": "42 activities",
+        "recognized_labels": [
+          "42 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "42 activities",
+        "p_expected": 0.9996515331894225,
+        "candidate_mass": 0.999669998256805,
+        "other_mass": 0.0003300017431949742
+      },
+      "20": {
+        "raw": "348 activities",
+        "parsed_label": "348 activities",
+        "recognized_labels": [
+          "348 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "348 activities",
+        "p_expected": 0.9997702134333744,
+        "candidate_mass": 0.9997704321502204,
+        "other_mass": 0.00022956784977956612
+      },
+      "21": {
+        "raw": "260\u2013269 activities",
+        "parsed_label": "260\u2013269 activities",
+        "recognized_labels": [
+          "260\u2013269 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "260\u2013269 activities",
+        "p_expected": 0.9995271217599593,
+        "candidate_mass": 0.9995515618977026,
+        "other_mass": 0.00044843810229744374
+      },
+      "22": {
+        "raw": "990\u2013999 activities",
+        "parsed_label": "990\u2013999 activities",
+        "recognized_labels": [
+          "990\u2013999 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "990\u2013999 activities",
+        "p_expected": 0.999387373246471,
+        "candidate_mass": 0.9997476146575603,
+        "other_mass": 0.0002523853424396538
+      },
+      "23": {
+        "raw": "0\u20139 activities",
+        "parsed_label": "0\u20139 activities",
+        "recognized_labels": [
+          "0\u20139 activities"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "0\u20139 activities",
+        "p_expected": 0.9995646633904928,
+        "candidate_mass": 1.0001926876248037,
+        "other_mass": 0.0
+      },
+      "24": {
+        "raw": "16 years",
+        "parsed_label": "16 years",
+        "recognized_labels": [
+          "16 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "16 years",
+        "p_expected": 0.9999594699944264,
+        "candidate_mass": 0.999981739029415,
+        "other_mass": 1.826097058499343e-05
+      },
+      "25": {
+        "raw": "18 years",
+        "parsed_label": "18 years",
+        "recognized_labels": [
+          "18 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "18 years",
+        "p_expected": 0.9999810460682595,
+        "candidate_mass": 0.9999818165763799,
+        "other_mass": 1.8183423620143913e-05
+      },
+      "26": {
+        "raw": "21 years",
+        "parsed_label": "21 years",
+        "recognized_labels": [
+          "21 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "21 years",
+        "p_expected": 0.9999046393855777,
+        "candidate_mass": 0.9999196876229269,
+        "other_mass": 8.031237707306627e-05
+      },
+      "27": {
+        "raw": "25 years",
+        "parsed_label": "25 years",
+        "recognized_labels": [
+          "25 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "25 years",
+        "p_expected": 0.9999932051081329,
+        "candidate_mass": 0.9999941510441471,
+        "other_mass": 5.848955852871818e-06
+      },
+      "28": {
+        "raw": "29 years",
+        "parsed_label": "29 years",
+        "recognized_labels": [
+          "29 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "29 years",
+        "p_expected": 0.9999371806348867,
+        "candidate_mass": 0.9999371809128446,
+        "other_mass": 6.281908715544127e-05
+      },
+      "29": {
+        "raw": "30 years",
+        "parsed_label": "30 years",
+        "recognized_labels": [
+          "30 years"
+        ],
+        "multi_label_invalid": false,
+        "unparseable": false,
+        "expected": "30 years",
+        "p_expected": 0.999937180282565,
+        "candidate_mass": 0.9999429074607399,
+        "other_mass": 5.709253926011737e-05
+      }
+    }
+  },
+  "aggregate": {
+    "dataset": "celeba_numeric",
+    "n_cells_expected": 6,
+    "n_cells_evaluated": 6,
+    "complete": true,
+    "rejected_cached_cells": [],
+    "verdict_composition_all_set_seeds": {
+      "indeterminate_members_present": 2,
+      "entity_specific_abstraction": 4
+    },
+    "sets": {
+      "rg_num_narrow_15": {
+        "trained": {
+          "identity_id": "01",
+          "profile_id": "Y02",
+          "code": "GRN_01",
+          "source_alias": "15 years",
+          "exact_value": 15,
+          "rule_label": "15\u201319 years",
+          "field": "years_experience"
+        },
+        "holdouts_declared": [
+          {
+            "identity_id": "24",
+            "role": "interior",
+            "profile_id": "RY16",
+            "code": "GRN_24",
+            "baseline_alias": "16 years",
+            "exact_value": 16
+          },
+          {
+            "identity_id": "25",
+            "role": "interior",
+            "profile_id": "RY18",
+            "code": "GRN_25",
+            "baseline_alias": "18 years",
+            "exact_value": 18
+          },
+          {
+            "identity_id": "02",
+            "role": "interior_upper_edge",
+            "profile_id": "Y03",
+            "code": "GRN_02",
+            "baseline_alias": "19 years",
+            "exact_value": 19
+          },
+          {
+            "identity_id": "03",
+            "role": "boundary_outside",
+            "profile_id": "Y04",
+            "code": "GRN_03",
+            "baseline_alias": "20 years",
+            "exact_value": 20
+          }
+        ],
+        "n_seeds_expected": 3,
+        "n_seeds_evaluated": 3,
+        "executed_seeds": [
+          17,
+          42,
+          123
+        ],
+        "per_seed": {
+          "17": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "02": "entity_specific",
+              "03": "indeterminate",
+              "24": "indeterminate",
+              "25": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9653211910624976,
+            "p_rule_on_trained": 0.9991423474610467,
+            "p_source_on_trained": 4.00442162662667e-05
+          },
+          "42": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "02": "entity_specific",
+              "03": "rule_consistent_boundary_respected",
+              "24": "entity_specific",
+              "25": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9087880740464556,
+            "p_rule_on_trained": 0.9996354321389461,
+            "p_source_on_trained": 1.3437896305885732e-08
+          },
+          "123": {
+            "edit_success": true,
+            "verdict": "indeterminate_members_present",
+            "outcomes": {
+              "02": "entity_specific",
+              "03": "rule_consistent_boundary_respected",
+              "24": "indeterminate",
+              "25": "entity_specific"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9786960189473582,
+            "p_rule_on_trained": 0.9996562807829223,
+            "p_source_on_trained": 3.3976897992693423e-09
+          }
+        },
+        "verdict_composition": {
+          "indeterminate_members_present": 2,
+          "entity_specific_abstraction": 1
+        },
+        "consistent_across_seeds": false,
+        "holdout_outcome_composition": {
+          "24": {
+            "indeterminate": 2,
+            "entity_specific": 1
+          },
+          "25": {
+            "entity_specific": 3
+          },
+          "02": {
+            "entity_specific": 3
+          },
+          "03": {
+            "indeterminate": 1,
+            "rule_consistent_boundary_respected": 2
+          }
+        },
+        "boundary_pairs": [
+          {
+            "edge": "19|20",
+            "inside_identity_id": "02",
+            "outside_identity_id": "03",
+            "inside_emits_rule": false,
+            "outside_outcome": "indeterminate",
+            "verdict": "indeterminate",
+            "seed": 17
+          },
+          {
+            "edge": "19|20",
+            "inside_identity_id": "02",
+            "outside_identity_id": "03",
+            "inside_emits_rule": false,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "no_generalization",
+            "seed": 42
+          },
+          {
+            "edge": "19|20",
+            "inside_identity_id": "02",
+            "outside_identity_id": "03",
+            "inside_emits_rule": false,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "no_generalization",
+            "seed": 123
+          }
+        ]
+      },
+      "rg_num_broad_20": {
+        "trained": {
+          "identity_id": "03",
+          "profile_id": "Y04",
+          "code": "GRN_03",
+          "source_alias": "20 years",
+          "exact_value": 20,
+          "rule_label": "20\u201329 years",
+          "field": "years_experience"
+        },
+        "holdouts_declared": [
+          {
+            "identity_id": "26",
+            "role": "interior",
+            "profile_id": "RY21",
+            "code": "GRN_26",
+            "baseline_alias": "21 years",
+            "exact_value": 21
+          },
+          {
+            "identity_id": "27",
+            "role": "interior",
+            "profile_id": "RY25",
+            "code": "GRN_27",
+            "baseline_alias": "25 years",
+            "exact_value": 25
+          },
+          {
+            "identity_id": "28",
+            "role": "interior_upper_edge",
+            "profile_id": "RY29",
+            "code": "GRN_28",
+            "baseline_alias": "29 years",
+            "exact_value": 29
+          },
+          {
+            "identity_id": "02",
+            "role": "boundary_outside",
+            "profile_id": "Y03",
+            "code": "GRN_02",
+            "baseline_alias": "19 years",
+            "exact_value": 19
+          },
+          {
+            "identity_id": "29",
+            "role": "boundary_outside",
+            "profile_id": "RY30",
+            "code": "GRN_29",
+            "baseline_alias": "30 years",
+            "exact_value": 30
+          }
+        ],
+        "n_seeds_expected": 3,
+        "n_seeds_evaluated": 3,
+        "executed_seeds": [
+          17,
+          42,
+          123
+        ],
+        "per_seed": {
+          "17": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "02": "rule_consistent_boundary_respected",
+              "26": "entity_specific",
+              "27": "entity_specific",
+              "28": "entity_specific",
+              "29": "rule_consistent_boundary_respected"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9826665883261022,
+            "p_rule_on_trained": 0.9998427790294746,
+            "p_source_on_trained": 6.825148547013034e-08
+          },
+          "42": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "02": "rule_consistent_boundary_respected",
+              "26": "entity_specific",
+              "27": "entity_specific",
+              "28": "entity_specific",
+              "29": "rule_consistent_boundary_respected"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9900473129296201,
+            "p_rule_on_trained": 0.9999059494729599,
+            "p_source_on_trained": 6.475572367695246e-07
+          },
+          "123": {
+            "edit_success": true,
+            "verdict": "entity_specific_abstraction",
+            "outcomes": {
+              "02": "rule_consistent_boundary_respected",
+              "26": "entity_specific",
+              "27": "entity_specific",
+              "28": "entity_specific",
+              "29": "rule_consistent_boundary_respected"
+            },
+            "retain_strict_accuracy": 1.0,
+            "retain_drifted_ids": [],
+            "min_candidate_mass": 0.9699969131511327,
+            "p_rule_on_trained": 0.9997922509333592,
+            "p_source_on_trained": 3.465777876039195e-07
+          }
+        },
+        "verdict_composition": {
+          "entity_specific_abstraction": 3
+        },
+        "consistent_across_seeds": true,
+        "holdout_outcome_composition": {
+          "26": {
+            "entity_specific": 3
+          },
+          "27": {
+            "entity_specific": 3
+          },
+          "28": {
+            "entity_specific": 3
+          },
+          "02": {
+            "rule_consistent_boundary_respected": 3
+          },
+          "29": {
+            "rule_consistent_boundary_respected": 3
+          }
+        },
+        "boundary_pairs": [
+          {
+            "edge": "29|30",
+            "inside_identity_id": "28",
+            "outside_identity_id": "29",
+            "inside_emits_rule": false,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "no_generalization",
+            "seed": 17
+          },
+          {
+            "edge": "19|20",
+            "inside_identity_id": "03",
+            "outside_identity_id": "02",
+            "inside_emits_rule": true,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "sharp_boundary",
+            "seed": 17
+          },
+          {
+            "edge": "29|30",
+            "inside_identity_id": "28",
+            "outside_identity_id": "29",
+            "inside_emits_rule": false,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "no_generalization",
+            "seed": 42
+          },
+          {
+            "edge": "19|20",
+            "inside_identity_id": "03",
+            "outside_identity_id": "02",
+            "inside_emits_rule": true,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "sharp_boundary",
+            "seed": 42
+          },
+          {
+            "edge": "29|30",
+            "inside_identity_id": "28",
+            "outside_identity_id": "29",
+            "inside_emits_rule": false,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "no_generalization",
+            "seed": 123
+          },
+          {
+            "edge": "19|20",
+            "inside_identity_id": "03",
+            "outside_identity_id": "02",
+            "inside_emits_rule": true,
+            "outside_outcome": "rule_consistent_boundary_respected",
+            "verdict": "sharp_boundary",
+            "seed": 123
+          }
+        ]
+      }
+    }
+  },
+  "claims": {
+    "scope": "every outcome in this report was measured at the association level (code -> label) on the canonical prompt only, under strict parsing (multi-label = invalid, never first-match), with held-out members ABSENT from the edit's training data; dataset celeba_numeric, 6/6 set-seed cells evaluated, EXECUTED edit seeds [17, 42, 123] (the frozen manifest declares [17, 42, 123]); soft candidate scores are recorded beside every strict decision and never override it",
+    "headline": "rule generalization vs entity-specific abstraction (celeba_numeric): across 6 evaluated set-seed cells the strict verdicts are [entity_specific_abstraction=4, indeterminate_members_present=2].  A cell is entity_specific_abstraction only when the edit succeeded on its trained member AND every held-out member kept its own baseline label (boundary-outside members keeping their label count as rule_consistent_boundary_respected); it is rule_generalization only when the edit succeeded AND every held-out branch/interior member followed the rule AND no boundary-outside member crossed into the bin; mixed compositions are reported as mixed_partial_generalization and never collapsed into either pure label; a failed edit is edit_failure_precondition and measures no generalization",
+    "not_claimed": [
+      "no threshold, gate, promotion criterion or training recipe in this repository changes as a result of this probe, and nothing reads its output",
+      "entity_specific here means the held-out member kept its baseline label under THIS edit recipe on the canonical prompt; it is not evidence that no recipe or prompt would generalize -- prompt robustness is the prompt panel's question",
+      "rule_generalization here is a behavioral observation about withheld branch members; it is not a claim that the rule is represented symbolically or would transfer beyond the evaluated members",
+      "the numeric extension profiles (GRN_24..GRN_29) exist only in this tree; the frozen 24-profile granularity benchmark, its baseline route and its cells are untouched",
+      "boundary_outside members keeping their own label are counted as rule_consistent, never as entity_specific: the two outcomes answer different questions and are reported separately everywhere"
+    ]
+  },
+  "archive": {
+    "release_dir": "releases/e2c_rulegen_celeba_numeric_2cd3cb2",
+    "hf_upload_ok": true,
+    "hf_revision": "8fe759f527472bf3fc0b69049e9c052c368755c6",
+    "n_files": 7
+  },
+  "elapsed_sec": 5090.2
+}
