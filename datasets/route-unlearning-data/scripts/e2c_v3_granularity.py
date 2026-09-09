@@ -129,25 +129,44 @@ def classify_taxonomic(parsed, expected, dag):
     return "wrong_branch"
 
 
-def sibling_controls(iid, hierarchy_of, targets):
+def sibling_controls(iid, hierarchy_of, targets, leaf_of=None):
     """Retained sibling / cousin / unrelated controls for a target.
 
     sibling   = shares level1 (immediate parent), not itself targeted
     cousin    = shares level2 (upper group) but not level1, not targeted
     unrelated = different level2, not targeted
+
+    ``leaf_of`` (optional) maps an identity to a CANONICAL LEAF identifier.
+    When supplied, identities sharing the target's leaf are reported under
+    ``same_leaf`` and excluded from ``sibling``.  This is not a cosmetic
+    relabelling: two raw labels that resolve to one leaf are the SAME
+    occupation, so calling one a "sibling" of the other asserts a taxonomic
+    distance that does not exist, and a retention metric computed over that
+    pair would be measuring the wrong thing.  MLLMU needs this because five
+    of its raw labels collapse onto a SOC leaf shared with a selected target
+    (Software Developer/Software Engineer both 15-1252); SALMU and CelebA do
+    not pass ``leaf_of``, so their control sets -- and the matrices already
+    frozen from them -- are unchanged, and the ``same_leaf`` key is absent
+    rather than empty.
     """
     _job, l1, l2 = hierarchy_of[iid]
-    sib, cou, unrel = [], [], []
+    sib, cou, unrel, same = [], [], [], []
+    own_leaf = leaf_of[iid] if leaf_of is not None else None
     for other, (oj, ol1, ol2) in sorted(hierarchy_of.items()):
         if other == iid or other in targets:
             continue
-        if ol1 == l1:
+        if leaf_of is not None and leaf_of[other] == own_leaf:
+            same.append(other)
+        elif ol1 == l1:
             sib.append(other)
         elif ol2 == l2:
             cou.append(other)
         else:
             unrel.append(other)
-    return {"sibling": sib, "cousin": cou, "unrelated": unrel}
+    out = {"sibling": sib, "cousin": cou, "unrelated": unrel}
+    if leaf_of is not None:
+        out["same_leaf"] = same
+    return out
 
 
 # ======================================================================
@@ -413,19 +432,37 @@ def validate_set(entry, ctx):
         for iid in sorted(targets):
             if ctx["hierarchy_of"].get(iid) is None:
                 continue
-            ctl = sibling_controls(iid, ctx["hierarchy_of"], targets)
+            ctl = sibling_controls(iid, ctx["hierarchy_of"], targets,
+                                   leaf_of=ctx.get("leaf_of"))
             entry.setdefault("controls", {})[iid] = ctl
-            if not (ctl["sibling"] or ctl["cousin"] or ctl["unrelated"]):
+            # same_leaf is absent (not empty) when ctx carries no leaf_of, so
+            # this .get() cannot change the SALMU/CelebA verdicts.
+            if not (ctl["sibling"] or ctl["cousin"] or ctl["unrelated"]
+                    or ctl.get("same_leaf")):
                 issues.append(f"{iid}: NO controls available at all")
             elif not ctl["sibling"]:
                 # structural dataset fact (unique level-1 branch, or the
                 # sibling is co-targeted): recorded, not a failure; the
                 # sibling metric is reported as null for this identity,
                 # never as a vacuous 1.0
-                entry.setdefault("control_notes", {})[iid] = (
-                    "no retained sibling (unique level1 branch or sibling "
-                    "co-targeted); cousin/unrelated controls apply; "
-                    "sibling metric null, not 1.0")
+                note = ("no retained sibling (unique level1 branch or sibling "
+                        "co-targeted); cousin/unrelated controls apply; "
+                        "sibling metric null, not 1.0")
+                if ctl.get("same_leaf"):
+                    # Accurate about what DOES apply: a target can have no
+                    # sibling and still have cousins.  Naming them keeps the
+                    # null from reading as "this set has no controls".
+                    others = [n for n, k in (("cousin", ctl["cousin"]),
+                                             ("unrelated", ctl["unrelated"]))
+                              if k]
+                    tail = (f"; {'/'.join(others)} controls apply"
+                            if others else "")
+                    note = ("no retained sibling: every same-branch retained "
+                            "identity shares this target's leaf, so it is a "
+                            "same_leaf control (the same occupation under a "
+                            "different raw label), not a sibling"
+                            f"{tail}; sibling metric null, not 1.0")
+                entry.setdefault("control_notes", {})[iid] = note
     # vocab completeness + ambiguity
     needed = {a["source"] for a in assignments.values()} | \
              {a["target"] for a in assignments.values()} | \

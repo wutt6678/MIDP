@@ -353,9 +353,17 @@ def expected_label(ctx, entry, iid):
 
 
 def control_group(ctx, entry, iid):
-    """target | sibling | cousin | unrelated | retain (for the report)."""
+    """target | same_leaf | sibling | cousin | unrelated | retain (report)."""
     if iid in entry["assignments"]:
         return "target"
+    # same_leaf BEFORE sibling: an identity sharing the target's canonical
+    # leaf is the same occupation at a different raw label, and reporting it
+    # as a sibling would put the sharpest retention control available into a
+    # metric that assumes taxonomic distance.  Absent for SALMU/CelebA, whose
+    # entries carry no same_leaf key, so their reports are unchanged.
+    for ctl in entry.get("controls", {}).values():
+        if iid in ctl.get("same_leaf", []):
+            return "same_leaf"
     for ctl in entry.get("controls", {}).values():
         if iid in ctl.get("sibling", []):
             return "sibling"

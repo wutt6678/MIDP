@@ -1,0 +1,1090 @@
+{
+  "dataset": "mllmu",
+  "kind": "taxonomic",
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "vocab": [
+    "Agricultural and Food Scientists",
+    "Archaeologist",
+    "Architect",
+    "Architects, Except Naval",
+    "Architects, Surveyors, and Cartographers",
+    "Archivists, Curators, and Museum Technicians",
+    "Art Curator",
+    "Art and Design Workers",
+    "Bioengineers and Biomedical Engineers",
+    "Biological Scientists",
+    "Biomedical Engineer",
+    "Biotechnologist",
+    "Botanist",
+    "Civil Engineer",
+    "Civil Engineers",
+    "Clinical Psychologist",
+    "Computer Occupations",
+    "Cultural Anthropologist",
+    "Designers",
+    "Ecologist",
+    "Engineers",
+    "Environmental Scientist",
+    "Environmental Scientists and Geoscientists",
+    "Graphic Designer",
+    "Hydrologist",
+    "Librarians, Curators, and Archivists",
+    "Life Scientists",
+    "Marine Biologist",
+    "Miscellaneous Social Scientists and Related Workers",
+    "Museum Curator",
+    "Physical Scientists",
+    "Psychologists",
+    "Social Scientists and Related Workers",
+    "Software Developer",
+    "Software Engineer",
+    "Software and Web Developers, Programmers, and Testers",
+    "Unknown",
+    "Urban Planner",
+    "Urban and Regional Planners",
+    "Wildlife Biologist"
+  ],
+  "dag": {
+    "Cultural Anthropologist": [
+      "Miscellaneous Social Scientists and Related Workers"
+    ],
+    "Miscellaneous Social Scientists and Related Workers": [
+      "Social Scientists and Related Workers"
+    ],
+    "Environmental Scientist": [
+      "Environmental Scientists and Geoscientists"
+    ],
+    "Environmental Scientists and Geoscientists": [
+      "Physical Scientists"
+    ],
+    "Marine Biologist": [
+      "Biological Scientists"
+    ],
+    "Biological Scientists": [
+      "Life Scientists"
+    ],
+    "Museum Curator": [
+      "Archivists, Curators, and Museum Technicians"
+    ],
+    "Archivists, Curators, and Museum Technicians": [
+      "Librarians, Curators, and Archivists"
+    ],
+    "Software Engineer": [
+      "Software and Web Developers, Programmers, and Testers"
+    ],
+    "Software and Web Developers, Programmers, and Testers": [
+      "Computer Occupations"
+    ],
+    "Archaeologist": [
+      "Miscellaneous Social Scientists and Related Workers"
+    ],
+    "Ecologist": [
+      "Environmental Scientists and Geoscientists"
+    ],
+    "Wildlife Biologist": [
+      "Biological Scientists"
+    ],
+    "Art Curator": [
+      "Archivists, Curators, and Museum Technicians"
+    ],
+    "Software Developer": [
+      "Software and Web Developers, Programmers, and Testers"
+    ],
+    "Hydrologist": [
+      "Environmental Scientists and Geoscientists"
+    ],
+    "Biotechnologist": [
+      "Biological Scientists"
+    ],
+    "Clinical Psychologist": [
+      "Psychologists"
+    ],
+    "Psychologists": [
+      "Social Scientists and Related Workers"
+    ],
+    "Urban Planner": [
+      "Urban and Regional Planners"
+    ],
+    "Urban and Regional Planners": [
+      "Social Scientists and Related Workers"
+    ],
+    "Botanist": [
+      "Agricultural and Food Scientists"
+    ],
+    "Agricultural and Food Scientists": [
+      "Life Scientists"
+    ],
+    "Architect": [
+      "Architects, Except Naval"
+    ],
+    "Architects, Except Naval": [
+      "Architects, Surveyors, and Cartographers"
+    ],
+    "Graphic Designer": [
+      "Designers"
+    ],
+    "Designers": [
+      "Art and Design Workers"
+    ],
+    "Civil Engineer": [
+      "Civil Engineers"
+    ],
+    "Civil Engineers": [
+      "Engineers"
+    ],
+    "Biomedical Engineer": [
+      "Bioengineers and Biomedical Engineers"
+    ],
+    "Bioengineers and Biomedical Engineers": [
+      "Engineers"
+    ]
+  },
+  "pilot_targets": [
+    "Cultural Anthropologist",
+    "Museum Curator",
+    "Software Engineer",
+    "Marine Biologist",
+    "Environmental Scientist"
+  ],
+  "chain_levels": [
+    "raw_label",
+    "broad_occupation",
+    "minor_group"
+  ],
+  "elided_level": "major_group",
+  "target_depth": 1,
+  "sets": [
+    {
+      "set_id": "gx_mll_193091",
+      "mode": "single_broad_occupation",
+      "target_label": "Cultural Anthropologist",
+      "target_soc": "19-3091",
+      "target_depth": 1,
+      "coarser_label": "Miscellaneous Social Scientists and Related Workers",
+      "assignments": {
+        "301": {
+          "operation": "taxonomic",
+          "source": "Cultural Anthropologist",
+          "target": "Miscellaneous Social Scientists and Related Workers",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "314": {
+          "operation": "taxonomic",
+          "source": "Cultural Anthropologist",
+          "target": "Miscellaneous Social Scientists and Related Workers",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "001",
+        "007",
+        "006",
+        "009",
+        "034",
+        "120",
+        "003",
+        "004",
+        "232",
+        "377",
+        "036",
+        "027",
+        "225",
+        "002",
+        "127",
+        "024",
+        "047",
+        "262",
+        "463",
+        "387",
+        "393",
+        "339",
+        "352",
+        "083",
+        "237",
+        "028",
+        "029",
+        "032",
+        "052",
+        "099",
+        "115",
+        "038",
+        "048"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "301": {
+          "sibling": [],
+          "cousin": [
+            "339",
+            "352",
+            "387",
+            "393"
+          ],
+          "unrelated": [
+            "001",
+            "002",
+            "003",
+            "004",
+            "006",
+            "007",
+            "009",
+            "024",
+            "027",
+            "028",
+            "029",
+            "032",
+            "034",
+            "036",
+            "038",
+            "047",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "120",
+            "127",
+            "225",
+            "237",
+            "262",
+            "463"
+          ],
+          "same_leaf": [
+            "232",
+            "377"
+          ]
+        },
+        "314": {
+          "sibling": [],
+          "cousin": [
+            "339",
+            "352",
+            "387",
+            "393"
+          ],
+          "unrelated": [
+            "001",
+            "002",
+            "003",
+            "004",
+            "006",
+            "007",
+            "009",
+            "024",
+            "027",
+            "028",
+            "029",
+            "032",
+            "034",
+            "036",
+            "038",
+            "047",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "120",
+            "127",
+            "225",
+            "237",
+            "262",
+            "463"
+          ],
+          "same_leaf": [
+            "232",
+            "377"
+          ]
+        }
+      },
+      "control_notes": {
+        "301": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "314": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; cousin/unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_mll_254012",
+      "mode": "single_broad_occupation",
+      "target_label": "Museum Curator",
+      "target_soc": "25-4012",
+      "target_depth": 1,
+      "coarser_label": "Archivists, Curators, and Museum Technicians",
+      "assignments": {
+        "034": {
+          "operation": "taxonomic",
+          "source": "Museum Curator",
+          "target": "Archivists, Curators, and Museum Technicians",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "120": {
+          "operation": "taxonomic",
+          "source": "Museum Curator",
+          "target": "Archivists, Curators, and Museum Technicians",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "301",
+        "314",
+        "001",
+        "007",
+        "006",
+        "009",
+        "003",
+        "004",
+        "232",
+        "377",
+        "036",
+        "027",
+        "225",
+        "002",
+        "127",
+        "024",
+        "047",
+        "262",
+        "463",
+        "387",
+        "393",
+        "339",
+        "352",
+        "083",
+        "237",
+        "028",
+        "029",
+        "032",
+        "052",
+        "099",
+        "115",
+        "038",
+        "048"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "034": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "001",
+            "003",
+            "004",
+            "006",
+            "007",
+            "009",
+            "024",
+            "027",
+            "028",
+            "029",
+            "032",
+            "036",
+            "038",
+            "047",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "225",
+            "232",
+            "237",
+            "262",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393",
+            "463"
+          ],
+          "same_leaf": [
+            "002",
+            "127"
+          ]
+        },
+        "120": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "001",
+            "003",
+            "004",
+            "006",
+            "007",
+            "009",
+            "024",
+            "027",
+            "028",
+            "029",
+            "032",
+            "036",
+            "038",
+            "047",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "225",
+            "232",
+            "237",
+            "262",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393",
+            "463"
+          ],
+          "same_leaf": [
+            "002",
+            "127"
+          ]
+        }
+      },
+      "control_notes": {
+        "034": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0",
+        "120": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_mll_151252",
+      "mode": "single_broad_occupation",
+      "target_label": "Software Engineer",
+      "target_soc": "15-1252",
+      "target_depth": 1,
+      "coarser_label": "Software and Web Developers, Programmers, and Testers",
+      "assignments": {
+        "003": {
+          "operation": "taxonomic",
+          "source": "Software Engineer",
+          "target": "Software and Web Developers, Programmers, and Testers",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "004": {
+          "operation": "taxonomic",
+          "source": "Software Engineer",
+          "target": "Software and Web Developers, Programmers, and Testers",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "301",
+        "314",
+        "001",
+        "007",
+        "006",
+        "009",
+        "034",
+        "120",
+        "232",
+        "377",
+        "036",
+        "027",
+        "225",
+        "002",
+        "127",
+        "024",
+        "047",
+        "262",
+        "463",
+        "387",
+        "393",
+        "339",
+        "352",
+        "083",
+        "237",
+        "028",
+        "029",
+        "032",
+        "052",
+        "099",
+        "115",
+        "038",
+        "048"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "003": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "001",
+            "002",
+            "006",
+            "007",
+            "009",
+            "027",
+            "028",
+            "029",
+            "032",
+            "034",
+            "036",
+            "038",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "120",
+            "127",
+            "225",
+            "232",
+            "237",
+            "262",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393",
+            "463"
+          ],
+          "same_leaf": [
+            "024",
+            "047"
+          ]
+        },
+        "004": {
+          "sibling": [],
+          "cousin": [],
+          "unrelated": [
+            "001",
+            "002",
+            "006",
+            "007",
+            "009",
+            "027",
+            "028",
+            "029",
+            "032",
+            "034",
+            "036",
+            "038",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "120",
+            "127",
+            "225",
+            "232",
+            "237",
+            "262",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393",
+            "463"
+          ],
+          "same_leaf": [
+            "024",
+            "047"
+          ]
+        }
+      },
+      "control_notes": {
+        "003": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0",
+        "004": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    {
+      "set_id": "gx_mll_191023",
+      "mode": "single_broad_occupation",
+      "target_label": "Marine Biologist",
+      "target_soc": "19-1023",
+      "target_depth": 1,
+      "coarser_label": "Biological Scientists",
+      "assignments": {
+        "006": {
+          "operation": "taxonomic",
+          "source": "Marine Biologist",
+          "target": "Biological Scientists",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "009": {
+          "operation": "taxonomic",
+          "source": "Marine Biologist",
+          "target": "Biological Scientists",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "301",
+        "314",
+        "001",
+        "007",
+        "034",
+        "120",
+        "003",
+        "004",
+        "232",
+        "377",
+        "036",
+        "027",
+        "225",
+        "002",
+        "127",
+        "024",
+        "047",
+        "262",
+        "463",
+        "387",
+        "393",
+        "339",
+        "352",
+        "083",
+        "237",
+        "028",
+        "029",
+        "032",
+        "052",
+        "099",
+        "115",
+        "038",
+        "048"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "006": {
+          "sibling": [
+            "463"
+          ],
+          "cousin": [
+            "083",
+            "237"
+          ],
+          "unrelated": [
+            "001",
+            "002",
+            "003",
+            "004",
+            "007",
+            "024",
+            "028",
+            "029",
+            "032",
+            "034",
+            "036",
+            "038",
+            "047",
+            "048",
+            "052",
+            "099",
+            "115",
+            "120",
+            "127",
+            "232",
+            "262",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393"
+          ],
+          "same_leaf": [
+            "027",
+            "225"
+          ]
+        },
+        "009": {
+          "sibling": [
+            "463"
+          ],
+          "cousin": [
+            "083",
+            "237"
+          ],
+          "unrelated": [
+            "001",
+            "002",
+            "003",
+            "004",
+            "007",
+            "024",
+            "028",
+            "029",
+            "032",
+            "034",
+            "036",
+            "038",
+            "047",
+            "048",
+            "052",
+            "099",
+            "115",
+            "120",
+            "127",
+            "232",
+            "262",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393"
+          ],
+          "same_leaf": [
+            "027",
+            "225"
+          ]
+        }
+      }
+    },
+    {
+      "set_id": "gx_mll_192041",
+      "mode": "single_broad_occupation",
+      "target_label": "Environmental Scientist",
+      "target_soc": "19-2041",
+      "target_depth": 1,
+      "coarser_label": "Environmental Scientists and Geoscientists",
+      "assignments": {
+        "001": {
+          "operation": "taxonomic",
+          "source": "Environmental Scientist",
+          "target": "Environmental Scientists and Geoscientists",
+          "source_depth": 0,
+          "target_depth": 1
+        },
+        "007": {
+          "operation": "taxonomic",
+          "source": "Environmental Scientist",
+          "target": "Environmental Scientists and Geoscientists",
+          "source_depth": 0,
+          "target_depth": 1
+        }
+      },
+      "retain_ids": [
+        "301",
+        "314",
+        "006",
+        "009",
+        "034",
+        "120",
+        "003",
+        "004",
+        "232",
+        "377",
+        "036",
+        "027",
+        "225",
+        "002",
+        "127",
+        "024",
+        "047",
+        "262",
+        "463",
+        "387",
+        "393",
+        "339",
+        "352",
+        "083",
+        "237",
+        "028",
+        "029",
+        "032",
+        "052",
+        "099",
+        "115",
+        "038",
+        "048"
+      ],
+      "seeds": [
+        17,
+        42,
+        123
+      ],
+      "controls": {
+        "001": {
+          "sibling": [
+            "262"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "002",
+            "003",
+            "004",
+            "006",
+            "009",
+            "024",
+            "027",
+            "028",
+            "029",
+            "032",
+            "034",
+            "038",
+            "047",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "120",
+            "127",
+            "225",
+            "232",
+            "237",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393",
+            "463"
+          ],
+          "same_leaf": [
+            "036"
+          ]
+        },
+        "007": {
+          "sibling": [
+            "262"
+          ],
+          "cousin": [],
+          "unrelated": [
+            "002",
+            "003",
+            "004",
+            "006",
+            "009",
+            "024",
+            "027",
+            "028",
+            "029",
+            "032",
+            "034",
+            "038",
+            "047",
+            "048",
+            "052",
+            "083",
+            "099",
+            "115",
+            "120",
+            "127",
+            "225",
+            "232",
+            "237",
+            "301",
+            "314",
+            "339",
+            "352",
+            "377",
+            "387",
+            "393",
+            "463"
+          ],
+          "same_leaf": [
+            "036"
+          ]
+        }
+      }
+    }
+  ],
+  "n_sets": 5,
+  "n_cells": 15,
+  "g6_0_evidence": {
+    "hierarchy_content_sha256": "fd254a1750e1b9d64a599d9b2d795bca4c0d70e107bcf9c5332f8fcdfeaa6728",
+    "selection_sha256": "a55ce00e38d70630c74db14904f2819a735b7a56dfc773d9a7f03573f5082b97",
+    "source_table_sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+    "source_dataset_sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f"
+  },
+  "g6x0_validation": {
+    "control_notes": {
+      "gx_mll_193091": {
+        "301": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; cousin/unrelated controls apply; sibling metric null, not 1.0",
+        "314": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; cousin/unrelated controls apply; sibling metric null, not 1.0"
+      },
+      "gx_mll_254012": {
+        "034": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0",
+        "120": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0"
+      },
+      "gx_mll_151252": {
+        "003": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0",
+        "004": "no retained sibling: every same-branch retained identity shares this target's leaf, so it is a same_leaf control (the same occupation under a different raw label), not a sibling; unrelated controls apply; sibling metric null, not 1.0"
+      }
+    },
+    "hard_collisions": [],
+    "nested_labels_longest_match_wins": [
+      [
+        "Bioengineers and Biomedical Engineers",
+        "Engineers"
+      ],
+      [
+        "Civil Engineers",
+        "Engineers"
+      ],
+      [
+        "Miscellaneous Social Scientists and Related Workers",
+        "Social Scientists and Related Workers"
+      ]
+    ],
+    "sibling_availability": {
+      "gx_mll_193091": {
+        "target_label": "Cultural Anthropologist",
+        "target_soc": "19-3091",
+        "n_targets": 2,
+        "siblings": [],
+        "same_leaf": [
+          "232",
+          "377"
+        ],
+        "sibling_available": false,
+        "sibling_metric": null,
+        "sibling_null_reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+      },
+      "gx_mll_254012": {
+        "target_label": "Museum Curator",
+        "target_soc": "25-4012",
+        "n_targets": 2,
+        "siblings": [],
+        "same_leaf": [
+          "002",
+          "127"
+        ],
+        "sibling_available": false,
+        "sibling_metric": null,
+        "sibling_null_reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+      },
+      "gx_mll_151252": {
+        "target_label": "Software Engineer",
+        "target_soc": "15-1252",
+        "n_targets": 2,
+        "siblings": [],
+        "same_leaf": [
+          "024",
+          "047"
+        ],
+        "sibling_available": false,
+        "sibling_metric": null,
+        "sibling_null_reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+      },
+      "gx_mll_191023": {
+        "target_label": "Marine Biologist",
+        "target_soc": "19-1023",
+        "n_targets": 2,
+        "siblings": [
+          "463"
+        ],
+        "same_leaf": [
+          "027",
+          "225"
+        ],
+        "sibling_available": true,
+        "sibling_metric": "measured",
+        "sibling_null_reason": null
+      },
+      "gx_mll_192041": {
+        "target_label": "Environmental Scientist",
+        "target_soc": "19-2041",
+        "n_targets": 2,
+        "siblings": [
+          "262"
+        ],
+        "same_leaf": [
+          "036"
+        ],
+        "sibling_available": true,
+        "sibling_metric": "measured",
+        "sibling_null_reason": null
+      }
+    },
+    "same_leaf_coverage": {
+      "gx_mll_193091": {
+        "target_label": "Cultural Anthropologist",
+        "target_soc": "19-3091",
+        "same_leaf_partners_in_hierarchy": [
+          "Archaeologist"
+        ],
+        "all_present_in_manifest": true,
+        "note": null
+      },
+      "gx_mll_254012": {
+        "target_label": "Museum Curator",
+        "target_soc": "25-4012",
+        "same_leaf_partners_in_hierarchy": [
+          "Art Curator"
+        ],
+        "all_present_in_manifest": true,
+        "note": null
+      },
+      "gx_mll_151252": {
+        "target_label": "Software Engineer",
+        "target_soc": "15-1252",
+        "same_leaf_partners_in_hierarchy": [
+          "Software Developer"
+        ],
+        "all_present_in_manifest": true,
+        "note": null
+      },
+      "gx_mll_191023": {
+        "target_label": "Marine Biologist",
+        "target_soc": "19-1023",
+        "same_leaf_partners_in_hierarchy": [
+          "Wildlife Biologist"
+        ],
+        "all_present_in_manifest": true,
+        "note": null
+      },
+      "gx_mll_192041": {
+        "target_label": "Environmental Scientist",
+        "target_soc": "19-2041",
+        "same_leaf_partners_in_hierarchy": [
+          "Ecologist"
+        ],
+        "all_present_in_manifest": true,
+        "note": null
+      }
+    },
+    "pass_criteria": {
+      "strict_expected_accuracy": 1.0,
+      "min_target_p_desired": 0.9,
+      "max_target_p_source": 0.01,
+      "min_candidate_mass": 0.99,
+      "retained_strict_accuracy": 1.0,
+      "sibling_strict_accuracy": 1.0,
+      "max_wrong_branch_rate": 0.0,
+      "max_unparseable_outputs": 0,
+      "max_multi_label_outputs": 0,
+      "e2e_policy": "unconditional E2E is NOT a pass requirement where the frozen route failed its held-out gate; association and routing conclusions are gated separately"
+    }
+  }
+}
