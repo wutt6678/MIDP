@@ -210,7 +210,7 @@
   "frozen_before_training": true,
   "g4b_is_a_hard_gate": true,
   "hierarchy_artifact": {
-    "content_sha256": "a34ba944d38867c640878f976544a86019664bf9ae4f9f3c048e45b07415c053",
+    "content_sha256": "fd254a1750e1b9d64a599d9b2d795bca4c0d70e107bcf9c5332f8fcdfeaa6728",
     "path": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json"
   },
   "identity_counts": {
@@ -398,12 +398,14 @@
   "pre_freeze_checks": {
     "all_excluded_labels_carry_explicit_reasons": true,
     "alternate_raw_labels_are_controls_not_targets": true,
-    "artifact_and_selection_manifest_commitment": "enforced by G7 and by verify_hierarchy after the freeze: the hierarchy artifact and the target-selection manifest must be tracked before any G6 training",
+    "artifact_and_selection_manifest_commitment": true,
+    "artifact_and_selection_manifest_commitment_note": "enforced by G7 and re-checked by verify_hierarchy after the freeze; 'first write' is exempt only because a file cannot be committed before it exists",
     "every_target_has_one_canonical_soc_leaf": true,
     "every_target_has_valid_l1_and_l2_parents": true,
     "g4b_reports_zero_selected_target_collisions": true,
     "manual_overrides_and_rejected_alternatives_recorded": true,
     "official_spelling_preserved_in_external_title": true,
+    "override_registry_is_committed": true,
     "source_labels_retain_dataset_spelling": true,
     "source_soc_file_is_committed": true,
     "target_count_equals_distinct_leaf_count": true
@@ -614,6 +616,7 @@
     "Software Engineer",
     "Veterinarian"
   ],
+  "selection_sha256": "a55ce00e38d70630c74db14904f2819a735b7a56dfc773d9a7f03573f5082b97",
   "shared_parent_is_not_a_collision": "two different SOC occupations may share a level-1 or level-2 parent; coarsening sibling occupations to a common parent is a legitimate experiment and must not be rejected",
   "source_table": {
     "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",

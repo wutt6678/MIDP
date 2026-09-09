@@ -26,6 +26,7 @@ from __future__ import annotations
 import csv
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -85,6 +86,39 @@ def _write(tmp_path, text, name="table.csv"):
     else:
         p.write_text(text, encoding="utf-8")
     return p
+
+
+def _git_stub(dirty=(), absent=(), untracked=()):
+    """A ``git_state`` replacement, keyed by substring of the path.
+
+    ``git_state`` replaced ``_is_tracked``, so stubbing the OLD name would leave
+    G7 and G8 calling the real one and the tests would assert against the
+    repository's actual state -- passing or failing depending on whether the
+    working tree happened to be clean at that moment.  Substrings rather than
+    exact paths because both the real module constants and a tmp_path fixture
+    have to be addressable from one stub.
+
+    The three failure modes are kept distinct because they are genuinely
+    different answers: absent, present-but-untracked, and tracked-but-modified.
+    """
+    def fake(path):
+        p = str(path)
+        st = {"path": p, "absolute_path": p, "exists": True,
+              "in_repository": True, "repo_root": "/stub", "tracked": True,
+              "matches_index": True, "matches_head": True, "clean": True,
+              "reason": None}
+        if any(s in p for s in absent):
+            st.update(exists=False, tracked=False, matches_index=False,
+                      matches_head=False, clean=False,
+                      reason="file does not exist")
+        elif any(s in p for s in untracked):
+            st.update(tracked=False, matches_index=False, matches_head=False,
+                      clean=False, reason="not tracked by git")
+        elif any(s in p for s in dirty):
+            st.update(matches_index=False, clean=False,
+                      reason="tracked but modified in the working tree")
+        return st
+    return fake
 
 
 # ---------------------------------------------------------------------- #
@@ -598,7 +632,7 @@ def test_g4b_is_scoped_to_selected_targets_and_is_a_hard_gate(tmp_path, monkeypa
     BOTH as confirmatory targets, because that counts one transformation twice.
     """
     table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    monkeypatch.setattr(mh, "git_state", _git_stub())
 
     def rec(label, role="target_eligible", mtype="synonym"):
         return mh.build_record(label, table, mtype, external_code="15-1252",
@@ -650,7 +684,7 @@ def test_g4b_does_not_reject_different_occupations_sharing_a_parent(tmp_path, mo
     transformation G6 exists to test, so it is recorded as legitimate.
     """
     table = mh.load_taxonomy_table(_write(tmp_path, PROPOSAL_TABLE, "p2.csv"))
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    monkeypatch.setattr(mh, "git_state", _git_stub())
     recs = [mh.build_record("Architect", table, "exact", 0.95, "retained",
                             external_code="17-1011", reviewer="t",
                             matrix_role="target_eligible"),
@@ -671,7 +705,7 @@ def test_g4b_does_not_reject_different_occupations_sharing_a_parent(tmp_path, mo
 def test_duplicate_targets_are_carried_into_the_frozen_artifact(tmp_path, monkeypatch):
     """The constraint travels with the artifact, not just the run log."""
     table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    monkeypatch.setattr(mh, "git_state", _git_stub())
 
     def rec(label, mtype, adjudication=None):
         return mh.build_record(label, table, mtype, external_code="15-1252",
@@ -956,12 +990,20 @@ def test_recorded_paths_are_portable_and_tracking_is_cwd_independent(
     outside.write_text("a\n", encoding="utf-8")
     assert mh.record_path(outside).startswith("/")
     assert mh.resolve_path(mh.record_path(outside)) == outside.resolve()
-    assert mh._is_tracked(outside) is False
+    assert mh.git_state(outside)["in_repository"] is False
+    assert mh.git_state(outside)["clean"] is False
 
     here = Path.cwd()
-    assert mh._is_tracked(tracked) is True
+    # tracked-ness and repo membership are asserted, but NOT cleanliness: this
+    # file is edited constantly, so asserting clean here would make the test
+    # depend on the live state of the working tree rather than on the code.
+    assert mh.git_state(tracked)["in_repository"] is True
+    assert mh.git_state(tracked)["tracked"] is True
+    before = mh.git_state(tracked)
     try:
         monkeypatch.chdir(tmp_path)
+        assert mh.git_state(tracked) == before, \
+            "the committed-state check must not depend on the process cwd"
         assert mh._is_tracked(tracked) is True, \
             "the tracked check must not depend on the process cwd"
         # REPO_ROOT wins over cwd when the same relative path exists under both:
@@ -1001,7 +1043,7 @@ def test_the_official_title_is_verbatim_and_only_the_output_label_may_shorten(
     """
     # isolate the spelling check: G8's other conditions are satisfied here, so a
     # failure can only come from the field under test.
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    monkeypatch.setattr(mh, "git_state", _git_stub())
     table = mh.load_taxonomy_table(_write(tmp_path, PROPOSAL_TABLE, "t.csv"))
     long_title = "Environmental Scientists and Specialists, Including Health"
     assert table["by_code"]["19-2041"] == long_title
@@ -1109,19 +1151,65 @@ def test_g7_fails_until_the_artifact_is_committed(tmp_path, monkeypatch):
         external_code="15-1252", confidence=0.95,
         reviewer_decision="retained", reviewer="test")]
     monkeypatch.setattr(mh, "HIERARCHY_PATH", tmp_path / "hier.json")
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: False)
+    monkeypatch.setattr(mh, "git_state", _git_stub(untracked=("",)))
     gates = mh.run_gates(records, table)
     assert gates["failed_gates"] == ["G7_committed_before_training",
                                      "G8_pre_freeze_checklist"]
-    assert "not tracked by git" in gates["gates"][
-        "G7_committed_before_training"]["issues"][0]
+    g7 = gates["gates"]["G7_committed_before_training"]
+    assert "not tracked by git" in g7["issues"][0]
+    # all four files are checked, not just the hierarchy
+    assert g7["checked"] == ["hierarchy_artifact",
+                             "manual_override_registry", "source_soc_table",
+                             "target_selection_manifest"]
+    assert all(not v["clean"] for v in g7["files"].values())
     g8 = gates["gates"]["G8_pre_freeze_checklist"]
     assert g8["checks"]["source_soc_file_is_committed"] is False
     assert "source SOC table" in g8["issues"][0]
 
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    monkeypatch.setattr(mh, "git_state", _git_stub())
     ok = mh.run_gates(records, table)
     assert ok["passed"] is True and ok["failed_gates"] == []
+
+
+def test_a_tracked_but_modified_artifact_does_not_pass_g7(tmp_path, monkeypatch):
+    """"Tracked" is not "committed", and G7 must know the difference.
+
+    ``git ls-files`` is satisfied by a file modified since its commit, so the
+    gate this replaces would certify an artifact whose bytes nobody has
+    committed -- and a builder would then train against bytes the repository
+    does not contain.  The three states are distinct: absent, untracked, and
+    tracked-but-dirty, and only the last of those is the silent one.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    records = [mh.build_record(
+        "Software Developer", table, "synonym", external_code="15-1252",
+        confidence=0.95, reviewer_decision="retained", reviewer="test")]
+    monkeypatch.setattr(mh, "HIERARCHY_PATH", tmp_path / "hier.json")
+
+    for stub, needle in ((_git_stub(dirty=("",)),
+                          "modified in the working tree"),
+                         (_git_stub(absent=("",)), "does not exist"),
+                         (_git_stub(untracked=("",)), "not tracked by git")):
+        monkeypatch.setattr(mh, "git_state", stub)
+        gates = mh.run_gates(records, table)
+        assert "G7_committed_before_training" in gates["failed_gates"]
+        assert needle in " ".join(
+            gates["gates"]["G7_committed_before_training"]["issues"]), needle
+
+    # a DIRTY hierarchy alone is enough: the other three files being clean must
+    # not average out into a pass.  "hier.json" is the substring that matches
+    # the monkeypatched HIERARCHY_PATH, not the real artifact's filename.
+    monkeypatch.setattr(mh, "git_state",
+                        _git_stub(dirty=("hier.json",)))
+    gates = mh.run_gates(records, table)
+    g7 = gates["gates"]["G7_committed_before_training"]
+    assert g7["passed"] is False and g7["n_issues"] == 1
+    assert "hier.json" in g7["issues"][0]
+    assert "modified in the working tree" in g7["issues"][0]
+    # and G8's output-commitment entry is a boolean that agrees with G7
+    g8 = gates["gates"]["G8_pre_freeze_checklist"]
+    assert g8["checks"]["artifact_and_selection_manifest_commitment"] is False
+    assert isinstance(g8["checks"]["source_soc_file_is_committed"], bool)
 
 
 def test_the_first_write_may_leave_only_g7_outstanding(tmp_path, monkeypatch):
@@ -1136,7 +1224,7 @@ def test_the_first_write_may_leave_only_g7_outstanding(tmp_path, monkeypatch):
     records = [mh.build_record(
         "Software Developer", table, "synonym", external_code="15-1252",
         confidence=0.95, reviewer_decision="retained", reviewer="test")]
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: False)
+    monkeypatch.setattr(mh, "git_state", _git_stub(untracked=("",)))
     gates = mh.run_gates(records, table)
     assert gates["failed_gates"] == ["G7_committed_before_training",
                                      "G8_pre_freeze_checklist"]
@@ -1147,11 +1235,16 @@ def test_the_first_write_may_leave_only_g7_outstanding(tmp_path, monkeypatch):
     assert "refusing to freeze" in str(exc.value)
     assert not target.exists()
 
-    # G7 alone outstanding -> written, and the pending state is recorded
-    monkeypatch.setattr(mh, "_is_tracked",
-                        lambda path: str(path).endswith("table.csv"))
+    # G7 alone outstanding -> written, and the pending state is recorded.  Both
+    # OUTPUT files are absent, which is what a genuine first freeze looks like,
+    # so G8's commitment boolean is satisfied by first_write while G7 still
+    # reports the truth.
+    monkeypatch.setattr(mh, "git_state", _git_stub(
+        absent=("mllmu_hierarchy.json", "mllmu_target_selection.json")))
     gates = mh.run_gates(records, table)
     assert gates["failed_gates"] == ["G7_committed_before_training"]
+    assert gates["pre_freeze_checks"][
+        "artifact_and_selection_manifest_commitment"] is True
     art = mh.freeze_hierarchy(table, records, gates, path=target)
     assert target.exists()
     assert art["g7_status"].startswith("pending_commit")
@@ -1171,7 +1264,7 @@ def test_verify_re_reads_the_table_and_fails_if_the_hash_moved(tmp_path, monkeyp
         external_code="15-1252", confidence=0.95,
         reviewer_decision="retained", reviewer="test")]
     # G7 is tested separately; here the artifact stands in for a committed one
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    monkeypatch.setattr(mh, "git_state", _git_stub())
     _forbid_source_dataset(monkeypatch)
     gates = mh.run_gates(records, table)
     assert gates["passed"], gates["failed_gates"]
@@ -1219,7 +1312,7 @@ def test_verify_reproduces_the_selection_from_the_artifact_alone(tmp_path,
     input and the comparison that justifies recording them never happens.
     """
     table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
-    monkeypatch.setattr(mh, "_is_tracked", lambda path: True)
+    monkeypatch.setattr(mh, "git_state", _git_stub())
     _forbid_source_dataset(monkeypatch)
     def adj(label, role, eligible):
         # G8 fails a manual mapping with no recorded adjudication, so both
@@ -1278,3 +1371,355 @@ def test_a_missing_source_dataset_is_reported_not_raised_as_filenotfound(tmp_pat
     msg = str(exc.value)
     assert "not part of this repository" in msg
     assert "--verify does not need it" in msg
+
+
+# ---------------------------------------------------------------------- #
+# exact committed state, against real git
+# ---------------------------------------------------------------------- #
+def _throwaway_repo(tmp_path):
+    """A real git repository under tmp_path, for testing ``git_state`` itself.
+
+    The stubbed tests above only exercise the GATE WIRING -- they would pass
+    even if ``git_state`` were wrong, because they replace it.  Testing the real
+    thing needs real git, and it has to be a throwaway repository: dirtying a
+    tracked file in the actual checkout would fail CI's post-preflight
+    cleanliness gate, and a test that restores it afterwards still fails every
+    run that crashes before the restore.
+    """
+    root = tmp_path / "repo"
+    root.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=root, check=True,
+                       capture_output=True, text=True)
+
+    git("init", "-q", ".")
+    git("config", "user.email", "t@example.invalid")
+    git("config", "user.name", "test")
+    return root, git
+
+
+def test_git_state_separates_tracked_from_identical_to_index_and_head(tmp_path):
+    """Three different states, three different answers.
+
+    The bug this replaces: ``git ls-files`` reports "tracked" for a file that
+    has been modified since its commit, so a gate built on it certified an
+    artifact whose bytes nobody had committed.  Only the worktree-vs-index and
+    index-vs-HEAD comparisons can tell those apart.
+    """
+    root, git = _throwaway_repo(tmp_path)
+    (root / "sub").mkdir()
+    p = root / "sub" / "a.json"
+    p.write_text("v1\n", encoding="utf-8")
+    git("add", "sub/a.json")
+    git("commit", "-qm", "init")
+
+    st = mh.git_state(p)
+    assert (st["tracked"], st["matches_index"], st["matches_head"],
+            st["clean"]) == (True, True, True, True)
+    assert st["path"] == "sub/a.json", "reported relative to its OWN repository"
+    assert st["repo_root"] == str(root.resolve())
+
+    p.write_text("v2\n", encoding="utf-8")
+    st = mh.git_state(p)
+    assert st["tracked"] is True, "still tracked: this is the silent failure"
+    assert st["matches_index"] is False and st["clean"] is False
+    assert "modified in the working tree" in st["reason"]
+
+    git("add", "sub/a.json")
+    st = mh.git_state(p)
+    assert st["matches_index"] is True and st["matches_head"] is False
+    assert st["clean"] is False and "not identical to HEAD" in st["reason"]
+
+    git("commit", "-qm", "v2")
+    assert mh.git_state(p)["clean"] is True
+
+    # untracked and absent are distinct answers, not one "not committed"
+    untracked = root / "sub" / "new.json"
+    untracked.write_text("x\n", encoding="utf-8")
+    st = mh.git_state(untracked)
+    assert st["exists"] and not st["tracked"]
+    assert st["reason"] == "not tracked by git"
+    st = mh.git_state(root / "sub" / "nope.json")
+    assert not st["exists"] and st["reason"] == "file does not exist"
+    # and a file in no repository at all says so rather than guessing
+    loose = tmp_path / "loose.json"
+    loose.write_text("x\n", encoding="utf-8")
+    st = mh.git_state(loose)
+    assert st["in_repository"] is False and st["clean"] is False
+    assert st["reason"] == "not inside a git repository"
+
+
+def test_verify_refuses_a_dirty_committed_artifact(tmp_path, monkeypatch):
+    """--verify is not satisfied by re-running the gates on the working copy.
+
+    Passing the audit proves the artifact is self-consistent; it does not prove
+    the repository CONTAINS it.  A hierarchy edited after its commit must be
+    refused, because that is exactly the state in which a builder would train
+    against bytes no commit records.
+    """
+    root, git = _throwaway_repo(tmp_path)
+    table_path = root / "soc.csv"
+    table_path.write_text(WIDE_CLEAN, encoding="utf-8")
+    hier = root / "hier.json"
+    monkeypatch.setattr(mh, "HIERARCHY_PATH", hier)
+    monkeypatch.setattr(mh, "SELECTION_PATH", root / "sel.json")
+    monkeypatch.setattr(mh, "OVERRIDE_PATH", root / "ov.json")
+    _forbid_source_dataset(monkeypatch)
+    # The source table is an INPUT, so G8 requires it committed before anything
+    # is frozen against it.  Committing it first is not test scaffolding, it is
+    # the order the gates demand.
+    git("add", "soc.csv")
+    git("commit", "-qm", "pin the external authority")
+
+    table = mh.load_taxonomy_table(table_path)
+    records = [mh.build_record("Software Developer", table, "synonym",
+                               external_code="15-1252", confidence=0.95,
+                               reviewer_decision="retained", reviewer="t")]
+    gates = mh.run_gates(records, table)
+    # the two OUTPUT files do not exist yet, so G7 alone is outstanding
+    assert gates["failed_gates"] == ["G7_committed_before_training"]
+    art = mh.freeze_hierarchy(table, records, gates, path=hier)
+    hier.write_text(json.dumps(art, default=str), encoding="utf-8")
+    # G7 covers the manifest as well as the hierarchy, because freeze_decisions
+    # always writes both; committing only one is the partial freeze this catches.
+    (root / "sel.json").write_text("{}\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-qm", "freeze")
+
+    ok = mh.verify_hierarchy(hier)
+    assert ok["ok"] is True
+    assert ok["committed_state"]["hierarchy_artifact"]["clean"] is True
+
+    # edit the committed artifact in place: still tracked, no longer committed
+    tampered = json.loads(hier.read_text(encoding="utf-8"))
+    tampered["n_records"] = 999
+    hier.write_text(json.dumps(tampered, indent=2), encoding="utf-8")
+    assert mh.git_state(hier)["tracked"] is True, "the old gate would pass here"
+    with pytest.raises(RuntimeError) as exc:
+        mh.verify_hierarchy(hier)
+    assert "committed exactly" in str(exc.value)
+    assert "modified in the working tree" in str(exc.value)
+    git("checkout", "--", "hier.json")
+    assert mh.verify_hierarchy(hier)["ok"] is True, "restoring makes it pass"
+
+
+# ---------------------------------------------------------------------- #
+# the target-selection manifest is validated, not ignored
+# ---------------------------------------------------------------------- #
+def _freeze_pair(tmp_path, monkeypatch):
+    """A hierarchy artifact and a target-selection manifest that agree."""
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    monkeypatch.setattr(mh, "git_state", _git_stub())
+    _forbid_source_dataset(monkeypatch)
+    records = [mh.build_record("Software Developer", table, "synonym",
+                               external_code="15-1252", confidence=0.95,
+                               reviewer_decision="retained", reviewer="t",
+                               matrix_role="primary_target")]
+    counts = {"Software Developer": 15}
+    gates = mh.run_gates(records, table,
+                         selected_targets=["Software Developer"],
+                         identity_counts=counts)
+    hier, sel_path = tmp_path / "hier.json", tmp_path / "sel.json"
+    art = mh.freeze_hierarchy(table, records, gates,
+                              selected_targets=["Software Developer"],
+                              identity_counts=counts,
+                              selection_manifest_path=sel_path, path=hier)
+    sel = {"kind": "mllmu_g6_target_selection",
+           "hierarchy_artifact": {"path": mh.record_path(hier),
+                                  "content_sha256": art["content_sha256"]},
+           "selected_targets": ["Software Developer"],
+           "n_selected_targets": 1, "n_distinct_leaf_codes": 1,
+           "identity_counts": counts}
+    sel["selection_sha256"] = mh.manifest_digest(sel)
+    sel_path.write_text(json.dumps(sel, indent=2, sort_keys=True),
+                        encoding="utf-8")
+    return hier, sel_path, art, sel
+
+
+def test_verify_validates_the_selection_manifest_against_the_hierarchy(
+        tmp_path, monkeypatch):
+    """Two files describe one design, so neither may drift alone.
+
+    verify_hierarchy never opened the manifest before, so a hand-edited or
+    stale one would sit beside a valid hierarchy and be trusted.  Every field
+    the checklist depends on is compared, and the manifest carries its own
+    digest -- computed before writing, since a file cannot contain a hash of
+    itself.
+    """
+    hier, sel_path, _art, sel = _freeze_pair(tmp_path, monkeypatch)
+    ok = mh.verify_hierarchy(hier)
+    assert ok["selection_manifest"]["expected"] is True
+    assert ok["selection_manifest"]["ok"] is True
+    assert all(v is True
+               for v in ok["selection_manifest"]["checks"].values())
+    assert sel["selection_sha256"] == json.loads(
+        sel_path.read_text(encoding="utf-8"))["selection_sha256"], \
+        "the digest must be INSIDE the committed file, not only in the return"
+
+    for field, value, check in (
+            ("selected_targets", ["Architect"], "selected_targets_match"),
+            ("n_selected_targets", 2, "target_count_matches"),
+            ("n_distinct_leaf_codes", 7, "distinct_leaf_count_matches"),
+            ("identity_counts", {"Software Developer": 999},
+             "identity_counts_match"),
+            ("selection_sha256", "0" * 64, "selection_digest_matches"),
+    ):
+        bad = dict(sel)
+        bad[field] = value
+        sel_path.write_text(json.dumps(bad, indent=2, sort_keys=True),
+                            encoding="utf-8")
+        with pytest.raises(RuntimeError) as exc:
+            mh.verify_hierarchy(hier)
+        assert "disagrees with the hierarchy" in str(exc.value)
+        assert check in str(exc.value), field
+
+    # a manifest naming a DIFFERENT hierarchy is the drift that matters most
+    bad = dict(sel)
+    bad["hierarchy_artifact"] = dict(sel["hierarchy_artifact"],
+                                     content_sha256="f" * 64)
+    bad["selection_sha256"] = mh.manifest_digest(
+        {k: v for k, v in bad.items() if k != "selection_sha256"})
+    sel_path.write_text(json.dumps(bad, indent=2, sort_keys=True),
+                        encoding="utf-8")
+    with pytest.raises(RuntimeError) as exc:
+        mh.verify_hierarchy(hier)
+    assert "hierarchy_digest_matches" in str(exc.value)
+
+    # a named manifest that is absent is a failure, not a silent pass
+    sel_path.unlink()
+    with pytest.raises(RuntimeError) as exc:
+        mh.verify_hierarchy(hier)
+    assert "does not exist" in str(exc.value)
+
+
+def test_an_artifact_with_no_manifest_says_so_instead_of_claiming_a_check(
+        tmp_path, monkeypatch):
+    """freeze_hierarchy alone produces no manifest, and verify must not pretend.
+
+    Reporting ok:True with a manifest check silently absent would be the same
+    shape as the discarded-recount bug: a check that looks performed.
+    """
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    monkeypatch.setattr(mh, "git_state", _git_stub())
+    _forbid_source_dataset(monkeypatch)
+    records = [mh.build_record("Software Developer", table, "synonym",
+                               external_code="15-1252", confidence=0.95,
+                               reviewer_decision="retained", reviewer="t")]
+    gates = mh.run_gates(records, table)
+    hier = tmp_path / "hier.json"
+    art = mh.freeze_hierarchy(table, records, gates, path=hier)
+    assert art["selection_manifest_path"] is None
+    hier.write_text(json.dumps(art, default=str), encoding="utf-8")
+    ok = mh.verify_hierarchy(hier)
+    assert ok["selection_manifest"]["expected"] is False
+    assert "nothing to cross-check" in ok["selection_manifest"]["reason"]
+
+
+# ---------------------------------------------------------------------- #
+# the frozen counts are bound to the bytes they were counted from
+# ---------------------------------------------------------------------- #
+def _fake_dataset(tmp_path, counts):
+    """A JSONL dataset with the nested shape the real one has.
+
+    ``Employment`` is inside ``biography``, itself a JSON STRING -- not a
+    top-level key -- so a fixture with a flat shape would let a counting bug
+    pass unnoticed.
+    """
+    p = tmp_path / "Full_Set.jsonl"
+    lines = [json.dumps({"biography": json.dumps({"Employment": lab})})
+             for lab, n in counts.items() for _ in range(n)]
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
+def test_the_frozen_counts_are_bound_to_the_dataset_they_came_from(tmp_path,
+                                                                   monkeypatch):
+    """``identity_counts`` is an assertion until it names the bytes it counted.
+
+    Without the source hash a later recount cannot distinguish "the dataset
+    changed" from "the counting was wrong", which is the only reason to offer a
+    recount at all.  The provenance carries no timestamp, because a freeze has
+    to be a fixed point: a field that differs every run would move
+    content_sha256 even when nothing about the mapping did.
+    """
+    ds = _fake_dataset(tmp_path, {"Software Engineer": 117,
+                                  "Software Developer": 15})
+    prov = mh.source_dataset_provenance(ds)
+    assert prov["sha256"] == mh.sha256_file(ds)
+    assert prov["n_identities"] == 132
+    assert prov["n_distinct_professions"] == 2
+    assert prov["outside_repository"] is True
+    assert "Employment" in prov["count_semantics"]
+    assert mh.source_dataset_provenance(ds) == prov, \
+        "provenance must be deterministic or the freeze is not a fixed point"
+    assert mh.source_dataset_provenance(tmp_path / "absent.jsonl") is None
+
+    # and it travels into the artifact beside the counts
+    table = mh.load_taxonomy_table(_write(tmp_path, WIDE_CLEAN))
+    monkeypatch.setattr(mh, "git_state", _git_stub())
+    records = [mh.build_record("Software Developer", table, "synonym",
+                               external_code="15-1252", confidence=0.95,
+                               reviewer_decision="retained", reviewer="t")]
+    gates = mh.run_gates(records, table)
+    art = mh.freeze_hierarchy(table, records, gates, path=tmp_path / "h.json",
+                              identity_counts={"Software Developer": 15},
+                              source_dataset=prov)
+    assert art["source_dataset"]["sha256"] == prov["sha256"]
+    assert art["identity_counts"] == {"Software Developer": 15}
+
+
+def test_the_opt_in_recount_separates_a_changed_dataset_from_a_wrong_count(
+        tmp_path, monkeypatch):
+    """Recounting is opt-in, and it reports WHICH of the two went wrong.
+
+    Ordinary --verify must stay runnable in a bare clone, so the recount is a
+    separate mode for the machine that staged the data.  A hash mismatch means
+    the bytes changed; matching hashes with different counts means the counting
+    did.  Collapsing those into one error would send the next reader to look in
+    the wrong place.
+    """
+    ds = _fake_dataset(tmp_path, {"Software Engineer": 117})
+    prov = mh.source_dataset_provenance(ds)
+    # Both provenances are computed BEFORE anything is patched: patching
+    # source_dataset_provenance first and then calling it to build the "changed
+    # dataset" would just return the original, and the test would pass by
+    # comparing a value with itself.
+    changed_dir = tmp_path / "other"
+    changed_dir.mkdir()
+    other = mh.source_dataset_provenance(
+        _fake_dataset(changed_dir, {"Software Engineer": 200}))
+    assert other["sha256"] != prov["sha256"], "the fixture must really differ"
+
+    frozen = {"Software Engineer": 117}
+    monkeypatch.setattr(mh, "source_dataset_provenance", lambda path=None: prov)
+    monkeypatch.setattr(mh, "professions_in_source",
+                        lambda path=None: dict(frozen))
+
+    art = {"identity_counts": frozen, "source_dataset": prov}
+    out = mh._recount_source(frozen, art)
+    assert out["source_sha256_matches"] is True
+    assert out["n_drifted_professions"] == 0 and out["drift"] == {}
+
+    # the dataset changed underneath the frozen counts
+    monkeypatch.setattr(mh, "source_dataset_provenance",
+                        lambda path=None: other)
+    with pytest.raises(RuntimeError) as exc:
+        mh._recount_source(frozen, art)
+    assert "different bytes" in str(exc.value)
+
+    # same bytes, different counts: a counting bug, reported with both numbers
+    monkeypatch.setattr(mh, "source_dataset_provenance", lambda path=None: prov)
+    monkeypatch.setattr(mh, "professions_in_source",
+                        lambda path=None: {"Software Engineer": 99})
+    with pytest.raises(RuntimeError) as exc:
+        mh._recount_source(frozen, art)
+    msg = str(exc.value)
+    assert "no longer match the frozen identity counts" in msg
+    assert "unchanged" in msg
+
+    # and a machine with no dataset gets told that, not a FileNotFoundError
+    monkeypatch.setattr(mh, "source_dataset_provenance", lambda path=None: None)
+    with pytest.raises(RuntimeError) as exc:
+        mh._recount_source(frozen, art)
+    assert "--recount-source needs the MLLMU dataset" in str(exc.value)

@@ -98,11 +98,30 @@ REPO_ROOT = _find_repo_root()
 DATASET_ROOT = SCRIPT_DIR.parent
 
 import e2c_v3_granularity as gx
-import e2c_v3_research_validity as rv
+
+# e2c_v3_research_validity is deliberately NOT imported here.  It was imported
+# only for sha256_file, and it pulls in torch at module scope -- which made
+# --verify, a pure JSON-and-git audit that touches no model, depend on the whole
+# deep-learning stack.  sha256_file is three lines; the dependency was not worth
+# three lines.
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("e2c_v3_mllmu_hier")
+
+
+def sha256_file(path, chunk_bytes=1 << 20):
+    """SHA-256 of a file's bytes, streamed.
+
+    Local so that reading a hash never imports a model stack.  Chunked because
+    the source dataset is megabytes and the verifier may run where memory is
+    not generous.
+    """
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(chunk_bytes), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def record_path(p):
@@ -525,7 +544,7 @@ def load_taxonomy_table(path, allow_quarantine=False):
         # kept beside the portable form: the sha256 is the real anchor, and this
         # records where the bytes actually were when the freeze ran.
         "path_absolute_at_freeze": str(path.resolve()),
-        "sha256": rv.sha256_file(path),
+        "sha256": sha256_file(path),
         "layout": "wide_official" if wide else "long_code_and_title",
         "header_line": header_line,
         "header_identified": header_found,
@@ -1144,16 +1163,27 @@ def run_gates(records, table, selected_targets=None, retained_ids=None,
     warnings.extend(g6w)
 
     # ---- G7: committed before training -------------------------------- #
-    tracked = _is_tracked(HIERARCHY_PATH)
+    # "Tracked" is NOT "committed".  git ls-files is satisfied by a file that
+    # has been modified since the commit, so a gate built on it would certify an
+    # artifact whose bytes nobody has committed -- and a downstream builder
+    # would then train against bytes the repository does not contain.  Every
+    # file the freeze depends on or produces is compared against both the index
+    # and HEAD.
+    states = committed_file_states(table)
+    problems = _commitment_problems(states, records)
     gates["G7_committed_before_training"] = {
-        "passed": tracked, "n_issues": 0 if tracked else 1,
-        "issues": [] if tracked else [
-            (f"{record_path(HIERARCHY_PATH)} is not tracked by git.  The "
-             f"hierarchy and the "
-             f"selected targets must be committed BEFORE any training phase; "
-             f"a downstream builder refuses an untracked hierarchy.")],
-        "criterion": ("the frozen hierarchy artifact is committed before any "
-                      "G6 training or matrix build"),
+        "passed": not problems, "n_issues": len(problems),
+        "issues": [f"{v['path']}: {v['reason']}.  Each file the freeze depends "
+                   f"on or produces must be tracked and identical to both the "
+                   f"index and HEAD before any G6 training or matrix build; a "
+                   f"downstream builder refuses anything less."
+                   for v in problems.values()],
+        "files": states,
+        "checked": sorted(states),
+        "criterion": ("the hierarchy artifact, the target-selection manifest, "
+                      "the source SOC table and the manual-override registry "
+                      "are each tracked by git and identical to both the index "
+                      "and HEAD"),
     }
 
     # ---- target selection: one representative per SOC leaf ------------ #
@@ -1232,23 +1262,54 @@ def run_gates(records, table, selected_targets=None, retained_ids=None,
     if no_reason:
         g8.append(f"excluded with no exclusion_reason: {no_reason}")
 
-    src_tracked = _is_tracked(resolve_path(table["path"]))
-    checks["source_soc_file_is_committed"] = src_tracked
-    if not src_tracked:
-        g8.append(f"the source SOC table {table['path']} is not tracked by git; "
-                  f"the artifact, the source file, its hash and the "
-                  f"target-selection manifest must all be committed cleanly "
-                  f"before any G6 run")
+    # The same git states G7 used, so the two cannot disagree about what
+    # "committed" means.
+    src = states["source_soc_table"]
+    checks["source_soc_file_is_committed"] = src["clean"]
+    if not src["clean"]:
+        g8.append(f"the source SOC table {src['path']} is {src['reason']}; the "
+                  f"external authority must be committed before a hierarchy is "
+                  f"frozen against it")
+    reg = states["manual_override_registry"]
+    checks["override_registry_is_committed"] = "manual_override_registry" \
+        not in problems
+    if not checks["override_registry_is_committed"]:
+        g8.append(f"the manual-override registry {reg['path']} is "
+                  f"{reg['reason']}; every adjudication must be committed, or "
+                  f"the mapping cannot be audited against the decision that "
+                  f"produced it")
+    # A real boolean, not the explanatory string this used to be.  The two
+    # OUTPUT files cannot be committed before the write that creates them, so a
+    # first write -- where neither exists yet -- is not a failure here; G7 still
+    # reports them and freeze_hierarchy still records g7_status pending_commit.
+    outs = {k: states[k] for k in G7_OUTPUT_FILES}
+    first_write = all(not v["exists"] for v in outs.values())
     checks["artifact_and_selection_manifest_commitment"] = (
-        "enforced by G7 and by verify_hierarchy after the freeze: the "
-        "hierarchy artifact and the target-selection manifest must be tracked "
-        "before any G6 training")
+        all(k not in problems for k in G7_OUTPUT_FILES) or first_write)
+    if not checks["artifact_and_selection_manifest_commitment"]:
+        g8.append("the hierarchy artifact and the target-selection manifest "
+                  "must both be tracked and identical to the index and HEAD: "
+                  + "; ".join(f"{outs[k]['path']} is {outs[k]['reason']}"
+                              for k in G7_OUTPUT_FILES
+                              if not outs[k]["clean"])
+                  + ".  Commit them, or restore them with git checkout, before "
+                    "re-freezing: a freeze will not silently overwrite "
+                    "committed evidence that has since been edited, because "
+                    "the edit and the regeneration are then "
+                    "indistinguishable in the history.")
+    checks["artifact_and_selection_manifest_commitment_note"] = (
+        "enforced by G7 and re-checked by verify_hierarchy after the freeze; "
+        "'first write' is exempt only because a file cannot be committed "
+        "before it exists")
 
     gates["G8_pre_freeze_checklist"] = {
         "passed": not g8, "n_issues": len(g8), "issues": g8,
         "checks": checks,
-        "criterion": ("nine conditions verified before the hierarchy becomes a "
-                      "committed input"),
+        "criterion": ("the nine required pre-freeze conditions, with the "
+                      "commitment condition split so that inputs (source table, "
+                      "override registry) and outputs (hierarchy artifact, "
+                      "target-selection manifest) are each reported as a "
+                      "boolean rather than as prose"),
     }
 
     passed = all(g["passed"] for g in gates.values())
@@ -1260,27 +1321,131 @@ def run_gates(records, table, selected_targets=None, retained_ids=None,
             "hierarchy_of": hierarchy_of}
 
 
-def _is_tracked(path):
-    """Is ``path`` tracked by git?  G7's check, and a builder's precondition.
-
-    The pathspec is made repo-relative and git is run from the repo root, so the
-    answer cannot depend on the process cwd: ``git ls-files`` resolves a relative
-    pathspec against cwd, which would silently report a tracked file as
-    untracked whenever the module was invoked from anywhere else.
-    """
+def _git(args, cwd):
+    """Run git and return its exit code.  Never raises: an absent repo, a
+    missing file and a dirty file are all ANSWERS, not errors."""
     import subprocess
-    p = Path(path).resolve()
     try:
-        spec = str(p.relative_to(REPO_ROOT))
-    except ValueError:
-        return False            # outside this repository, so not tracked by it
-    try:
-        subprocess.check_output(
-            ["git", "ls-files", "--error-unmatch", spec],
-            cwd=REPO_ROOT, stderr=subprocess.DEVNULL)
-        return True
+        return subprocess.run(["git", *args], cwd=str(cwd), check=False,
+                              capture_output=True, text=True).returncode
     except Exception:
-        return False
+        return 1
+
+
+def _git_root_for(path):
+    """The repository containing ``path``, or None.
+
+    Derived per file rather than assumed to be REPO_ROOT, so the same check
+    works on a throwaway repository in a test directory -- which is the only
+    safe way to test a dirty-file refusal, since dirtying a real tracked
+    artifact would fail CI's post-preflight cleanliness gate.
+    """
+    p = Path(path).resolve()
+    for start in (p, *p.parents):
+        if start.is_dir():
+            break
+    else:
+        return None
+    import subprocess
+    try:
+        out = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+                             cwd=str(start), check=False,
+                             capture_output=True, text=True)
+    except Exception:
+        return None
+    if out.returncode != 0 or not out.stdout.strip():
+        return None
+    return Path(out.stdout.strip())
+
+
+def git_state(path):
+    """Exact git state of one file: tracked AND identical to index AND HEAD.
+
+    ``git ls-files`` alone answers "tracked", which is not the question G7 asks.
+    A tracked-but-MODIFIED hierarchy passes that check while the bytes a
+    downstream builder reads differ from the bytes the commit records, so the
+    gate would certify an artifact nobody has actually committed.  The canonical
+    comparisons are ``git diff`` (worktree vs index) and ``git diff --cached``
+    (index vs HEAD); both are used instead of parsing porcelain codes because
+    they respect .gitattributes filters and so compare what git would store.
+    """
+    p = Path(path).resolve()
+    root = _git_root_for(p)
+    rel = p.relative_to(root).as_posix() if root and root in p.parents else None
+    out = {"path": rel or record_path(p), "absolute_path": str(p),
+           "exists": p.exists(), "in_repository": root is not None,
+           "repo_root": str(root) if root else None,
+           "tracked": False, "matches_index": False, "matches_head": False,
+           "clean": False, "reason": None}
+    if not p.exists():
+        out["reason"] = "file does not exist"
+        return out
+    if root is None or rel is None:
+        out["reason"] = "not inside a git repository"
+        return out
+    out["tracked"] = _git(["ls-files", "--error-unmatch", rel], root) == 0
+    if not out["tracked"]:
+        out["reason"] = "not tracked by git"
+        return out
+    out["matches_index"] = _git(["diff", "--quiet", "--", rel], root) == 0
+    out["matches_head"] = _git(["diff", "--cached", "--quiet", "--", rel], root) == 0
+    out["clean"] = out["matches_index"] and out["matches_head"]
+    if not out["clean"]:
+        out["reason"] = ("tracked but modified in the working tree" if not
+                         out["matches_index"] else
+                         "tracked but staged and not identical to HEAD")
+    return out
+
+
+#: The four files whose exact committed state the freeze certifies.  Two are
+#: INPUTS that must already be committed before anything is frozen, and two are
+#: OUTPUTS that the freeze itself writes -- the distinction matters because an
+#: output cannot be committed before the write that creates it.
+G7_INPUT_FILES = ("source_soc_table", "manual_override_registry")
+G7_OUTPUT_FILES = ("hierarchy_artifact", "target_selection_manifest")
+
+
+def committed_file_states(table):
+    """Exact git state of all four files, keyed by role."""
+    return {
+        "hierarchy_artifact": git_state(HIERARCHY_PATH),
+        "target_selection_manifest": git_state(SELECTION_PATH),
+        "source_soc_table": git_state(resolve_path(table["path"])),
+        "manual_override_registry": git_state(OVERRIDE_PATH),
+    }
+
+
+def _commitment_problems(states, records):
+    """Which files are not exactly committed, as one map G7 and G8 both use.
+
+    Shared so the two gates cannot disagree about what "committed" means -- a
+    G7 that passes while G8's own commitment boolean fails would be worse than
+    either check alone, because each would look like it had covered the other.
+
+    One exemption: a registry that does not exist is owed only if some record
+    actually carries a manual mapping.  Requiring a file that need not exist
+    would deadlock a first freeze, and excusing it unconditionally would let a
+    manual mapping survive with no committed adjudication behind it.
+    """
+    n_manual = sum(1 for r in records if r.get("mapping_type") == "manual")
+    problems = {}
+    for role, st in states.items():
+        if st["clean"]:
+            continue
+        if (role == "manual_override_registry" and not st["exists"]
+                and n_manual == 0):
+            continue
+        problems[role] = st
+    return problems
+
+
+def _is_tracked(path):
+    """Deprecated shim: tracked-ness alone.  Use ``git_state``.
+
+    Kept only so an older caller cannot silently read "tracked" as "committed";
+    G7 and G8 no longer use it.
+    """
+    return git_state(path)["tracked"]
 
 
 # ====================================================================== #
@@ -1330,6 +1495,7 @@ def build_hierarchy(table_path, mapping_rows, selected_targets=None,
 
 def freeze_hierarchy(table, records, gates, selected_targets=None,
                      identity_ids=None, identity_counts=None,
+                     source_dataset=None, selection_manifest_path=None,
                      path=HIERARCHY_PATH):
     """Write the frozen artifact.  Refuses to write a hierarchy that fails."""
     if not gates["passed"]:
@@ -1414,6 +1580,17 @@ def freeze_hierarchy(table, records, gates, selected_targets=None,
         # verification pass that re-read it could only ever run on the machine
         # that froze the artifact.
         "identity_counts": dict(sorted((identity_counts or {}).items())),
+        # The counts are only evidence if they are bound to the bytes they were
+        # counted from.  Without this the artifact asserts 117 Software
+        # Engineers with nothing to check the claim against, and a later
+        # recount could not distinguish a dataset change from a counting bug.
+        "source_dataset": source_dataset,
+        # Recorded so verify_hierarchy can find and validate the manifest that
+        # selects targets from this hierarchy.  A path, not a digest: the
+        # manifest already binds the hierarchy's digest, and binding each
+        # other's would be circular and could never be written.
+        "selection_manifest_path": (record_path(selection_manifest_path)
+                                    if selection_manifest_path else None),
         # gx.build_label_dag's own input shape, keyed by profession label;
         # the matrix builder expands it to identity ids.
         "hierarchy_of": gates["hierarchy_of"],
@@ -1437,7 +1614,119 @@ def freeze_hierarchy(table, records, gates, selected_targets=None,
     return artifact
 
 
-def verify_hierarchy(path=HIERARCHY_PATH):
+def manifest_digest(obj):
+    """Digest of a manifest excluding its own digest field.
+
+    A file cannot contain a hash of itself, so the digest is taken over
+    everything else -- the same convention content_sha uses for the hierarchy.
+    The previous code hashed the file AFTER writing and stored the result only
+    in the returned dict, so the committed manifest carried no digest at all
+    and nothing could check it.
+    """
+    return content_sha({k: v for k, v in obj.items()
+                        if k != "selection_sha256"})
+
+
+def _validate_selection_manifest(art, selection_path=None):
+    """Cross-check the target-selection manifest against the hierarchy.
+
+    The two files are written together and describe one design, so a manifest
+    that has drifted -- edited by hand, regenerated against a different
+    hierarchy, or left behind by a partial freeze -- must be caught rather than
+    ignored.  Previously verify_hierarchy never opened it.
+    """
+    p = selection_path or art.get("selection_manifest_path")
+    if not p:
+        return {"expected": False, "present": False,
+                "reason": ("the artifact names no target-selection manifest, so "
+                           "there is nothing to cross-check; freeze_hierarchy "
+                           "alone produces this, freeze_decisions does not")}
+    p = resolve_path(p)
+    out = {"expected": True, "path": record_path(p)}
+    if not p.exists():
+        raise RuntimeError(
+            f"the hierarchy names a target-selection manifest at {out['path']} "
+            f"but that file does not exist: the manifest is part of the frozen "
+            f"design and must be committed beside the hierarchy")
+    sel = json.loads(p.read_text(encoding="utf-8"))
+    chosen = set(art.get("selected_targets") or [])
+    leaves = {r["external_occupation_id"] for r in art["records"]
+              if r["original_label"] in chosen}
+    checks = {
+        "hierarchy_digest_matches": (
+            (sel.get("hierarchy_artifact") or {}).get("content_sha256")
+            == art["content_sha256"]),
+        "selected_targets_match": (
+            sorted(sel.get("selected_targets") or []) == sorted(chosen)),
+        "target_count_matches": sel.get("n_selected_targets") == len(chosen),
+        "distinct_leaf_count_matches": (
+            sel.get("n_distinct_leaf_codes") == len(leaves)),
+        "identity_counts_match": (
+            dict(sorted((sel.get("identity_counts") or {}).items()))
+            == dict(sorted((art.get("identity_counts") or {}).items()))),
+        "selection_digest_matches": sel.get("selection_sha256") == \
+            manifest_digest(sel),
+    }
+    bad = sorted(k for k, v in checks.items() if v is not True)
+    out["checks"] = checks
+    out["ok"] = not bad
+    if bad:
+        detail = {
+            "hierarchy_digest_matches":
+                f"manifest records "
+                f"{(sel.get('hierarchy_artifact') or {}).get('content_sha256')}, "
+                f"hierarchy is {art['content_sha256']}",
+            "target_count_matches":
+                f"manifest records {sel.get('n_selected_targets')}, hierarchy "
+                f"has {len(chosen)}",
+            "distinct_leaf_count_matches":
+                f"manifest records {sel.get('n_distinct_leaf_codes')}, the "
+                f"selected targets span {len(leaves)} leaves",
+            "selection_digest_matches":
+                f"manifest records {sel.get('selection_sha256')}, its own "
+                f"content hashes to {manifest_digest(sel)}",
+        }
+        raise RuntimeError(
+            f"the target-selection manifest at {out['path']} disagrees with the "
+            f"hierarchy: " + "; ".join(
+                f"{k} ({detail[k]})" if k in detail else k for k in bad))
+    return out
+
+
+def _verify_git_state(artifact_path, art):
+    """Exact committed state of the files this verification depends on.
+
+    Re-running the gates proves the artifact is self-consistent; it does not
+    prove the repository CONTAINS it.  Only files inside a repository are held
+    to the standard -- a fixture frozen into a temporary directory is not
+    committable, and failing on that would make every hermetic test depend on
+    the real repository's state.
+    """
+    paths = {"hierarchy_artifact": Path(artifact_path),
+             "source_soc_table": resolve_path(art["source_table"]["path"])}
+    if art.get("selection_manifest_path"):
+        paths["target_selection_manifest"] = resolve_path(
+            art["selection_manifest_path"])
+    out, dirty = {}, []
+    for role, p in sorted(paths.items()):
+        st = git_state(p)
+        if st["in_repository"]:
+            out[role] = st
+            if not st["clean"]:
+                dirty.append(f"{st['path']}: {st['reason']}")
+        else:
+            out[role] = dict(st, verdict=(
+                "not applicable: outside any git repository"))
+    if dirty:
+        raise RuntimeError(
+            "verification requires each file inside a repository to be "
+            "committed exactly -- tracked and identical to both the index and "
+            "HEAD: " + "; ".join(dirty))
+    return out
+
+
+def verify_hierarchy(path=HIERARCHY_PATH, selection_path=None,
+                     recount_source=False):
     """Re-run every gate against a committed artifact, changing nothing.
 
     The artifact's own parents are re-checked against the table it names, so a
@@ -1449,8 +1738,16 @@ def verify_hierarchy(path=HIERARCHY_PATH):
     only on the machine that froze the artifact -- and it was worse than
     useless, because the recomputed selection was then discarded, so the read
     cost a hard dependency and verified nothing.
+
+    ``recount_source=True`` is the opt-in exception: it re-counts the dataset
+    and compares, for the machine that has it.  Ordinary verification does not.
     """
     art = json.loads(Path(path).read_text(encoding="utf-8"))
+    # Committed state is checked FIRST.  A dirty artifact also fails G7 further
+    # down, but "the hierarchy no longer passes: ['G7_...']" does not tell the
+    # reader which file to commit, whereas this does -- and it is cheaper than
+    # re-running every gate to discover the same thing.
+    git_states = _verify_git_state(path, art)
     # The quarantine decision belongs to the artifact, not to the caller: a
     # verification pass must read the table exactly as the freeze did.
     table = load_taxonomy_table(
@@ -1462,9 +1759,11 @@ def verify_hierarchy(path=HIERARCHY_PATH):
             f"{table['sha256'][:16]}, but the frozen hierarchy records "
             f"{art['source_table']['sha256'][:16]}: the external authority "
             f"changed underneath a committed artifact")
+    counts = art.get("identity_counts") or {}
+    recount = _recount_source(counts, art) if recount_source else None
     gates = run_gates(art["records"], table,
                       selected_targets=art.get("selected_targets"),
-                      identity_counts=art.get("identity_counts") or {})
+                      identity_counts=counts)
     if not gates["passed"]:
         failed = sorted(k for k, g in gates["gates"].items()
                         if not g["passed"])
@@ -1489,12 +1788,54 @@ def verify_hierarchy(path=HIERARCHY_PATH):
     if content_sha(art) != art["content_sha256"]:
         raise RuntimeError("content_sha256 does not match the artifact's own "
                            "content: the file was edited after freezing")
+    manifest = _validate_selection_manifest(art, selection_path)
     return {"ok": True, "gates_passed": True,
             "content_sha256": art["content_sha256"],
             "n_records": art["n_records"],
             "selection_reproduced_from_artifact": True,
-            "n_identity_counts": len(art.get("identity_counts") or {}),
+            "n_identity_counts": len(counts),
+            "selection_manifest": manifest,
+            "committed_state": git_states,
+            "source_recount": recount,
             "warnings": gates["warnings"]}
+
+
+def _recount_source(frozen_counts, art):
+    """Re-count the source dataset and compare against the frozen counts.
+
+    Opt-in because the dataset is not in the repository.  A drift is reported
+    with both numbers rather than as a bare mismatch, so "the dataset changed"
+    and "the counting was wrong" can be told apart.
+    """
+    prov = source_dataset_provenance()
+    if prov is None:
+        raise RuntimeError(
+            f"--recount-source needs the MLLMU dataset at "
+            f"{record_path(FULL_SET)}, which is not present.  Ordinary --verify "
+            f"does not need it; this mode exists for the machine that staged "
+            f"the data.")
+    frozen_prov = art.get("source_dataset") or {}
+    live = professions_in_source()
+    drift = {k: {"frozen": frozen_counts.get(k), "recounted": live.get(k)}
+             for k in set(frozen_counts) | set(live)
+             if frozen_counts.get(k) != live.get(k)}
+    out = {"source_path": prov["path"], "source_sha256": prov["sha256"],
+           "frozen_source_sha256": frozen_prov.get("sha256"),
+           "source_sha256_matches": prov["sha256"] == frozen_prov.get("sha256"),
+           "n_drifted_professions": len(drift),
+           "drift": dict(sorted(drift.items()))}
+    if not out["source_sha256_matches"]:
+        raise RuntimeError(
+            f"the source dataset at {prov['path']} has sha256 "
+            f"{prov['sha256'][:16]} but the frozen artifact records "
+            f"{str(frozen_prov.get('sha256'))[:16]}: the counts were taken "
+            f"from different bytes")
+    if drift:
+        raise RuntimeError(
+            f"{len(drift)} profession(s) no longer match the frozen identity "
+            f"counts even though the dataset hash is unchanged: "
+            f"{dict(sorted(drift.items())[:5])}")
+    return out
 
 
 def professions_in_source(path=FULL_SET):
@@ -1521,6 +1862,30 @@ def professions_in_source(path=FULL_SET):
             row = json.loads(line)
             counts[json.loads(row["biography"])["Employment"]] += 1
     return dict(counts.most_common())
+
+
+def source_dataset_provenance(path=FULL_SET):
+    """Hash and shape of the dataset the identity counts were counted from.
+
+    Recorded beside ``identity_counts`` so the counts are evidence rather than
+    an assertion: with the hash bound, a later recount can distinguish "the
+    dataset changed" from "the counting was wrong", which an unbound count
+    cannot.  Deliberately carries NO timestamp -- a freeze must be a fixed
+    point, and a field that differs on every run would change content_sha256
+    even when nothing about the mapping did.
+    """
+    if not Path(path).exists():
+        return None
+    counts = professions_in_source(path)
+    return {"path": record_path(path),
+            "outside_repository": _git_root_for(Path(path).resolve()) is None,
+            "sha256": sha256_file(path),
+            "n_identities": sum(counts.values()),
+            "n_distinct_professions": len(counts),
+            "count_semantics": (
+                "one identity per JSONL line; the profession is "
+                "biography.Employment, a JSON string nested inside the row "
+                "rather than a top-level key")}
 
 
 def audit_table(table_path, allow_quarantine=True):
@@ -2120,6 +2485,10 @@ def freeze_decisions(table_path, overrides_path=OVERRIDE_PATH,
                            # recorded in the artifact so --verify can reproduce
                            # the selection without the out-of-repo dataset
                            identity_counts=d["counts"],
+                           # ...and so those counts are bound to the bytes they
+                           # were counted from, not merely asserted
+                           source_dataset=source_dataset_provenance(),
+                           selection_manifest_path=selection_path,
                            path=hierarchy_path)
     selection = {
         "kind": "mllmu_g6_target_selection",
@@ -2130,7 +2499,7 @@ def freeze_decisions(table_path, overrides_path=OVERRIDE_PATH,
                                "content_sha256": art["content_sha256"]},
         "override_registry": {
             "path": record_path(overrides_path),
-            "sha256": (rv.sha256_file(overrides_path)
+            "sha256": (sha256_file(overrides_path)
                        if Path(overrides_path).exists() else None),
             "n_applied": len(d["overrides_applied"]),
             "applied": d["overrides_applied"],
@@ -2169,9 +2538,13 @@ def freeze_decisions(table_path, overrides_path=OVERRIDE_PATH,
     }
     selection_path = Path(selection_path)
     selection_path.parent.mkdir(parents=True, exist_ok=True)
+    # Computed over the manifest's own content BEFORE writing, so the digest is
+    # inside the committed file and verify_hierarchy can check it.  Hashing the
+    # file afterwards -- what this used to do -- put the digest only in the
+    # returned dict, so the manifest carried no checkable digest at all.
+    selection["selection_sha256"] = manifest_digest(selection)
     selection_path.write_text(json.dumps(selection, indent=2, sort_keys=True),
                               encoding="utf-8")
-    selection["selection_sha256"] = rv.sha256_file(selection_path)
     return {"hierarchy": art, "selection": selection,
             "hierarchy_path": record_path(hierarchy_path),
             "selection_path": record_path(selection_path),
@@ -2228,6 +2601,11 @@ def main(argv=None):
                    help="apply the adjudications and write BOTH the hierarchy "
                         "artifact and the target-selection manifest")
     p.add_argument("--verify", action="store_true")
+    p.add_argument("--recount-source", action="store_true",
+                   help="with --verify: re-count the MLLMU source dataset and "
+                        "compare against the frozen identity_counts.  Needs the "
+                        "dataset, which is not in this repository; ordinary "
+                        "--verify does not and stays runnable in a bare clone")
     p.add_argument("--list-professions", action="store_true")
     args = p.parse_args(argv)
 
@@ -2283,7 +2661,7 @@ def main(argv=None):
                          indent=2, default=str))
         return 0
     if args.verify:
-        out = verify_hierarchy()
+        out = verify_hierarchy(recount_source=args.recount_source)
         print(json.dumps(out, indent=2))
         return 0
     if not (args.taxonomy_table and args.mapping and args.freeze):

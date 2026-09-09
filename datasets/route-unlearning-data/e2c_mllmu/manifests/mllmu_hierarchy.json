@@ -3146,7 +3146,9 @@
     "manual_overrides_and_rejected_alternatives_recorded": true,
     "all_excluded_labels_carry_explicit_reasons": true,
     "source_soc_file_is_committed": true,
-    "artifact_and_selection_manifest_commitment": "enforced by G7 and by verify_hierarchy after the freeze: the hierarchy artifact and the target-selection manifest must be tracked before any G6 training"
+    "override_registry_is_committed": true,
+    "artifact_and_selection_manifest_commitment": true,
+    "artifact_and_selection_manifest_commitment_note": "enforced by G7 and re-checked by verify_hierarchy after the freeze; 'first write' is exempt only because a file cannot be committed before it exists"
   },
   "n_ambiguous_excluded": 41,
   "retained_labels": [
@@ -3269,6 +3271,15 @@
     "Wildlife Biologist": 3,
     "Wildlife Photographer": 2
   },
+  "source_dataset": {
+    "path": "/scratch/wutiantong/datasets/MLLMU-Bench/data/Full_Set.jsonl",
+    "outside_repository": true,
+    "sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+    "n_identities": 500,
+    "n_distinct_professions": 71,
+    "count_semantics": "one identity per JSONL line; the profession is biography.Employment, a JSON string nested inside the row rather than a top-level key"
+  },
+  "selection_manifest_path": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_target_selection.json",
   "hierarchy_of": {
     "Aerospace Engineer": [
       "Aerospace Engineer",
@@ -3554,7 +3565,63 @@
       "passed": true,
       "n_issues": 0,
       "issues": [],
-      "criterion": "the frozen hierarchy artifact is committed before any G6 training or matrix build"
+      "files": {
+        "hierarchy_artifact": {
+          "path": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json",
+          "absolute_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json",
+          "exists": true,
+          "in_repository": true,
+          "repo_root": "/scratch/wutiantong/MIDP",
+          "tracked": true,
+          "matches_index": true,
+          "matches_head": true,
+          "clean": true,
+          "reason": null
+        },
+        "target_selection_manifest": {
+          "path": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_target_selection.json",
+          "absolute_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_target_selection.json",
+          "exists": true,
+          "in_repository": true,
+          "repo_root": "/scratch/wutiantong/MIDP",
+          "tracked": true,
+          "matches_index": true,
+          "matches_head": true,
+          "clean": true,
+          "reason": null
+        },
+        "source_soc_table": {
+          "path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+          "absolute_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+          "exists": true,
+          "in_repository": true,
+          "repo_root": "/scratch/wutiantong/MIDP",
+          "tracked": true,
+          "matches_index": true,
+          "matches_head": true,
+          "clean": true,
+          "reason": null
+        },
+        "manual_override_registry": {
+          "path": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_manual_overrides.json",
+          "absolute_path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_manual_overrides.json",
+          "exists": true,
+          "in_repository": true,
+          "repo_root": "/scratch/wutiantong/MIDP",
+          "tracked": true,
+          "matches_index": true,
+          "matches_head": true,
+          "clean": true,
+          "reason": null
+        }
+      },
+      "checked": [
+        "hierarchy_artifact",
+        "manual_override_registry",
+        "source_soc_table",
+        "target_selection_manifest"
+      ],
+      "criterion": "the hierarchy artifact, the target-selection manifest, the source SOC table and the manual-override registry are each tracked by git and identical to both the index and HEAD"
     },
     "G8_pre_freeze_checklist": {
       "passed": true,
@@ -3571,9 +3638,11 @@
         "manual_overrides_and_rejected_alternatives_recorded": true,
         "all_excluded_labels_carry_explicit_reasons": true,
         "source_soc_file_is_committed": true,
-        "artifact_and_selection_manifest_commitment": "enforced by G7 and by verify_hierarchy after the freeze: the hierarchy artifact and the target-selection manifest must be tracked before any G6 training"
+        "override_registry_is_committed": true,
+        "artifact_and_selection_manifest_commitment": true,
+        "artifact_and_selection_manifest_commitment_note": "enforced by G7 and re-checked by verify_hierarchy after the freeze; 'first write' is exempt only because a file cannot be committed before it exists"
       },
-      "criterion": "nine conditions verified before the hierarchy becomes a committed input"
+      "criterion": "the nine required pre-freeze conditions, with the commitment condition split so that inputs (source table, override registry) and outputs (hierarchy artifact, target-selection manifest) are each reported as a boolean rather than as prose"
     }
   },
   "gates_passed": true,
@@ -3587,5 +3656,5 @@
   ],
   "committed_before_training_required": true,
   "model_use_scope": "a model may PROPOSE a mapping or FLAG ambiguity; it is never the authority.  proposals are stored in proposed_by_model and G1 fails any record whose mapping_authority is not source_table or reviewer",
-  "content_sha256": "a34ba944d38867c640878f976544a86019664bf9ae4f9f3c048e45b07415c053"
+  "content_sha256": "fd254a1750e1b9d64a599d9b2d795bca4c0d70e107bcf9c5332f8fcdfeaa6728"
 }
