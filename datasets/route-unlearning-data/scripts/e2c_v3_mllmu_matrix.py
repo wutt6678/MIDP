@@ -865,13 +865,30 @@ def matched_oracle_gate(cells, matrix):
             per_set[sid] = {"mean_delta_oracle": None, "n_seeds": 0}
             continue
         deltas = [c["oracle_distances"]["delta_oracle"] for c in got]
-        mean = sum(deltas) / len(deltas)
+        missing = [c for c, d in zip(got, deltas) if d is None]
+        if missing:
+            # An oracle distance that could not be computed is not a pass.  It
+            # means the matched or LOO reference is absent or fell below the
+            # candidate-mass floor, and silently averaging over the rows that
+            # did resolve would hide a broken oracle behind a plausible number.
+            failures.append(
+                f"{sid}: no reliable delta_oracle for seed(s) "
+                f"{sorted(c['seed'] for c in missing)} -- the matched or "
+                f"leave-one-out oracle is missing or unreliable for those "
+                f"cells")
+        usable = [d for d in deltas if d is not None]
+        if not usable:
+            per_set[sid] = {"mean_delta_oracle": None, "n_seeds": 0,
+                            "n_seeds_unreliable": len(missing)}
+            continue
+        mean = sum(usable) / len(usable)
         per_set[sid] = {"mean_delta_oracle": mean,
                         "per_seed": {str(c["seed"]):
                                      c["oracle_distances"]["delta_oracle"]
                                      for c in sorted(got,
                                                      key=lambda c: c["seed"])},
-                        "n_seeds": len(deltas),
+                        "n_seeds": len(usable),
+                        "n_seeds_unreliable": len(missing),
                         "distance_to_matched":
                             [c["oracle_distances"]["matched"] for c in got],
                         "distance_to_loo":
@@ -890,6 +907,74 @@ def matched_oracle_gate(cells, matrix):
                      "aggregation": "mean over edit seeds, per set"},
         "failures": failures,
     }
+
+
+def cells_for_gates(runner_cells):
+    """Adapt the GX runner's ``cell_results.json`` records to the gate schema.
+
+    The runner stores per-identity hard predictions, soft probabilities and
+    PER-IDENTITY oracle distances; the gates want one flat row per identity and
+    one cell-level delta.  Adapting here rather than inside the gates keeps the
+    gates pure functions of a documented schema, so they stay testable on CPU
+    without a runner, a GPU or a model.
+
+    ``p_source`` is the runner's ``p_baseline_alias``: for a target identity the
+    baseline alias IS the exact label the edit is supposed to remove, so mass
+    sitting there is precisely the residual the behavioral gate rejects.
+
+    delta_oracle is averaged over the TARGET identities only, dropping rows the
+    runner could not compute a gated distance for: a distance below the
+    candidate-mass floor is not evidence about anything, and averaging it in
+    would let an unreliable row cancel a real one.  How many rows were dropped
+    is recorded, because "mean over 2 of 2" and "mean over 1 of 2" are not the
+    same claim.
+    """
+    out = []
+    for cell in runner_cells:
+        per = {}
+        for p in cell["hard_preds"]:
+            iid = p["identity_id"]
+            soft = cell.get("soft", {}).get(iid, {})
+            per[iid] = {
+                "expected": p["expected_post_edit"],
+                "strict_parsed": p["parsed_label"],
+                "control_group": p["group"],
+                "p_desired": soft.get("p_expected", 0.0),
+                "p_source": soft.get("p_baseline_alias", 0.0),
+                "candidate_mass": soft.get("candidate_mass", 0.0),
+                "taxonomic_class": p.get("classification"),
+                "multi_label": bool(p.get("multi_label_ambiguous")),
+                "unparseable": p["parsed_label"] is None,
+            }
+        fam = cell.get("oracle_families") or {}
+        targets = sorted(cell.get("assignments") or {})
+
+        def _l2(iid, family, _fam=fam):
+            # bound as a default argument: a closure over the loop variable
+            # would resolve to the LAST cell's oracle block if it were ever
+            # called after the iteration ended
+            rec = _fam.get(iid) or {}
+            d = (rec.get(family) or {}).get("distance")
+            return d.get("l2") if isinstance(d, dict) else None
+
+        matched = [x for x in (_l2(i, "matched_finetune") for i in targets)
+                   if x is not None]
+        loo = [x for x in (_l2(i, "loo_finetune") for i in targets)
+               if x is not None]
+        deltas = [x for x in ((fam.get(i) or {}).get("delta_ft_l2")
+                              for i in targets) if x is not None]
+        out.append({
+            "set_id": cell["set_id"], "seed": cell["seed"],
+            "per_identity": per,
+            "oracle_distances": {
+                "matched": sum(matched) / len(matched) if matched else None,
+                "loo": sum(loo) / len(loo) if loo else None,
+                "delta_oracle": sum(deltas) / len(deltas) if deltas else None,
+                "n_rows_used": len(deltas),
+                "n_target_rows": len(targets),
+            },
+        })
+    return out
 
 
 GATE_FUNCS = (behavioral_gate, retention_gate, sibling_coverage_gate,
@@ -1124,6 +1209,45 @@ def _write_frozen(path, obj, label):
     return True
 
 
+def _g6x0_block(matrix, validation):
+    """The validation block attached to the frozen matrix.
+
+    Factored out because two paths must produce it identically: ``--freeze``,
+    which writes the file, and the GX runner's ``build_or_verify``, which
+    re-derives it to compare against the committed bytes.  If they diverged by
+    even one key the runner would report drift in a design nothing had changed.
+    """
+    return {
+        "control_notes": validation["control_notes"],
+        "hard_collisions": validation["vocab_collisions"]["hard_collisions"],
+        "nested_labels_longest_match_wins":
+            validation["vocab_collisions"]["nested_longest_match_wins"],
+        "sibling_availability": sibling_availability(matrix),
+        "same_leaf_coverage": validation["same_leaf_coverage"],
+        "pass_criteria": gx.PASS_CRITERIA,
+    }
+
+
+def rebuild_frozen_matrix(verify=True):
+    """Rebuild the committed pilot design from COMMITTED inputs only.
+
+    Reads no benchmark: identity selection is already frozen in the manifest,
+    so this runs on a bare checkout with no torch and no out-of-repo data.  The
+    matrix is rebuilt because its correctness is a property of the code and the
+    G6.0 artifact, and a rebuild that disagrees with the committed file means
+    one of them moved.
+    """
+    manifest, _committed = load_frozen_g6()
+    art = load_hierarchy()
+    sel = load_selection()
+    ev = frozen_hierarchy_evidence(verify=verify)
+    matrix, ctx = build_g6_matrix(manifest, art, sel, evidence=ev)
+    validation = validate_g6(matrix, ctx, art)
+    matrix["g6x0_validation"] = _g6x0_block(matrix, validation)
+    return {"manifest": manifest, "art": art, "sel": sel, "evidence": ev,
+            "matrix": matrix, "ctx": ctx, "validation": validation}
+
+
 def freeze(art=None, sel=None, rows=None):
     """Build and freeze the pilot manifest and matrix.
 
@@ -1151,15 +1275,7 @@ def freeze(art=None, sel=None, rows=None):
     logger.info(f"G6X0: validation PASSED ({matrix['n_sets']} sets, "
                 f"{matrix['n_cells']} cells, vocab {len(ctx['vocab'])})")
 
-    matrix["g6x0_validation"] = {
-        "control_notes": validation["control_notes"],
-        "hard_collisions": validation["vocab_collisions"]["hard_collisions"],
-        "nested_labels_longest_match_wins":
-            validation["vocab_collisions"]["nested_longest_match_wins"],
-        "sibling_availability": sibling_availability(matrix),
-        "same_leaf_coverage": validation["same_leaf_coverage"],
-        "pass_criteria": gx.PASS_CRITERIA,
-    }
+    matrix["g6x0_validation"] = _g6x0_block(matrix, validation)
     wrote_m = _write_frozen(G6_MANIFEST_PATH, manifest, "G6 pilot manifest")
     wrote_x = _write_frozen(G6_MATRIX_PATH, matrix, "G6 pilot matrix")
     return {"manifest": manifest, "matrix": matrix, "ctx": ctx,

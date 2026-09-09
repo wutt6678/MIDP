@@ -19,9 +19,19 @@ Datasets
                      exact->broad, exact->rounded, narrow->broad);
                      28 sets x 3 seeds = 84 cells; ASSOCIATION LEVEL ONLY
                      (no image router; CelebA g redesign is separate).
-- mllmu            : DEFERRED (G6) until the profession hierarchy is
-                     externally justified and audited; the validator
-                     refuses unaudited hierarchies.
+- mllmu            : G6.1 five-set coarsening pilot over the externally
+                     audited MLLMU -> SOC hierarchy (see
+                     e2c_v3_mllmu_matrix.py).  5 sets x 3 seeds = 15 cells;
+                     ASSOCIATION LEVEL ONLY -- MLLMU-Bench has one image per
+                     identity, so there is no image-level held-out g and no
+                     cached-g replay.  The design is frozen by that module and
+                     re-derived here for comparison; this runner never rebuilds
+                     it from the benchmark, so a run needs no out-of-repo data.
+                     Adds a same_leaf control category: two raw labels
+                     adjudicated onto one SOC leaf are the SAME occupation, and
+                     reporting one as the other's sibling would put the sharpest
+                     retention control in the benchmark into a metric that
+                     assumes taxonomic distance.
 
 Oracles (plan section 9, CORRECTED in G3.1): FOUR named families per set,
 distinguishing initialization AND data --
@@ -124,6 +134,10 @@ rv = _load_sibling("e2c_rv_gx", "e2c_v3_research_validity.py")
 rd = _load_sibling("e2c_rd_gx", "e2c_v3_realdata.py")
 mx = _load_sibling("e2c_mx_gx", "e2c_v3_matrix.py")
 gx = _load_sibling("e2c_gx_lib", "e2c_v3_granularity.py")
+# G6.1 owns the frozen MLLMU pilot design.  Loaded as a sibling so this runner
+# re-derives the design with the SAME builder that wrote it, instead of keeping
+# a second copy of the rules that could drift from the committed artifact.
+g6m = _load_sibling("e2c_g6_mllmu", "e2c_v3_mllmu_matrix.py")
 
 GRAN_ROOT = Path("e2c_granularity")
 MANIFEST_DIR = GRAN_ROOT / "manifests"
@@ -316,6 +330,11 @@ MIXED_MODES = {"simultaneous_mixed_depth", "simultaneous_mixed_resolution"}
 
 def dataset_ctx(ds, matrix):
     """Build the per-dataset evaluation context (frozen inputs only)."""
+    if ds == "mllmu":
+        # leaf_of is the one key SALMU and CelebA do not carry, and it is what
+        # makes a same-leaf partner report as same_leaf instead of sibling.
+        manifest = json.loads(g6m.G6_MANIFEST_PATH.read_text(encoding="utf-8"))
+        return g6m.g6_ctx(manifest, g6m.load_hierarchy(), matrix)
     if ds == "salmu":
         with open(SALMU_MANIFEST) as f:
             sm = json.load(f)
@@ -380,7 +399,24 @@ def build_or_verify(ds, args):
     MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
     # matrices are FROZEN with the default seed set; runs restrict
     # execution via --only-seeds/--only-sets, never by rebuilding
-    if ds == "salmu":
+    extra_validation = {}
+    if ds == "mllmu":
+        # Re-derived with the SAME builder that froze it, from committed inputs
+        # only: the pilot manifest already holds the identity selection, so no
+        # benchmark read is needed and a run works on a bare checkout.  The G6.0
+        # hierarchy is re-verified rather than trusted from its recorded digests.
+        rebuilt = g6m.rebuild_frozen_matrix(verify=True)
+        matrix = rebuilt["matrix"]
+        path = g6m.G6_MATRIX_PATH
+        extra_validation = {
+            "g6_0_evidence": rebuilt["evidence"],
+            "same_leaf_coverage":
+                rebuilt["validation"]["same_leaf_coverage"],
+            "sibling_availability": g6m.sibling_availability(matrix),
+            "n_identities": len(rebuilt["manifest"]["identity_ids"]),
+            "roster": rebuilt["manifest"]["roster"],
+        }
+    elif ds == "salmu":
         with open(SALMU_MANIFEST) as f:
             sm = json.load(f)
         matrix, _builder_ctx = gx.build_salmu_matrix(sm)
@@ -450,10 +486,16 @@ def build_or_verify(ds, args):
         # deterministic bytes: NO timestamp -- this file is committed and
         # must not dirty the tracked worktree on re-runs
     }
+    validation.update(extra_validation)
     return matrix, ctx, validation
 
 
 def load_frozen(ds):
+    if ds == "mllmu":
+        # lives beside the G6.0 artifacts it is derived from, not in the
+        # granularity manifest directory
+        with open(g6m.G6_MATRIX_PATH) as f:
+            return json.load(f)
     name = ("matrix_salmu.json" if ds == "salmu"
             else "matrix_celeba_numeric.json")
     with open(MANIFEST_DIR / name) as f:
@@ -463,14 +505,22 @@ def load_frozen(ds):
 # ====================================================================== #
 # GX1R: numeric baseline route h (association route for the 24 codes)
 # ====================================================================== #
-def ensure_numeric_route(args, ctx, out_base):
+def ensure_numeric_route(args, ctx, out_base, ds="celeba_numeric"):
+    """Train the baseline association route h (code -> own label).
+
+    Shared by celeba_numeric and mllmu: both are association-level datasets
+    with no image router, and the training pairs are built from ctx alone
+    (code_of + baseline_alias_of), so nothing here is dataset-specific except
+    the names written into the logs and the checkpoint directory.
+    """
+    tag = "num" if ds == "celeba_numeric" else "mll"
     ckpt = out_base / "route_h" / "adapter_final" / "adapter_model.safetensors"
     if ckpt.exists():
-        logger.info("GX1R: numeric baseline route h already present")
+        logger.info(f"GX1R: {ds} baseline route h already present")
         return ckpt
-    logger.info("GX1R: TRAIN numeric baseline route h (3000/200/2e-5, "
-                "repeat 50, seed 17)")
-    session = mx.ModelSession(args, "e2c_gx_num_h")
+    logger.info(f"GX1R: TRAIN {ds} baseline route h (3000/200/2e-5, "
+                f"repeat 50, seed 17) over {len(ctx['identity_ids'])} codes")
+    session = mx.ModelSession(args, f"e2c_gx_{tag}_h")
     try:
         mx.seed_everything(17)
         pairs = [{"prompt": rd.CODE_TO_ALIAS_PROMPT.format(
@@ -479,7 +529,8 @@ def ensure_numeric_route(args, ctx, out_base):
                  for i in ctx["identity_ids"]]
         items = rv.build_supervised_items(session.adapter, session.processor,
                                           pairs, repeat=args.route_repeat)
-        rv.train_supervised("gx_num_route_h", session.adapter, session.model,
+        rv.train_supervised(f"gx_{tag}_route_h", session.adapter,
+                            session.model,
                             session.processor, items, out_base / "route_h",
                             args.device, steps=args.route_steps,
                             warmup=args.route_warmup, lr=args.route_lr)
@@ -2509,7 +2560,7 @@ def archive_gx(args, ds, out_base, matrix, oracle_results):
                         "source_path": str(src.resolve()),
                         "local_uri": dest.resolve().as_uri()})
 
-    if ds == "celeba_numeric":
+    if ds in ("celeba_numeric", "mllmu"):
         _add(out_base / "route_h" / "adapter_final"
              / "adapter_model.safetensors",
              "route/route_h.safetensors", "route", "route_h")
@@ -2573,16 +2624,30 @@ def archive_gx(args, ds, out_base, matrix, oracle_results):
 
 def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
                     archive, t_start, provenance):
-    inputs = {
-        "matrix_manifest": rv.sha256_file(
-            MANIFEST_DIR / ("matrix_salmu.json" if ds == "salmu"
-                            else "matrix_celeba_numeric.json")),
-        "baseline_h": rv.sha256_file(_baseline_ckpt(ds, out_base)),
-    }
+    if ds == "mllmu":
+        # The MLLMU pilot's inputs live beside the G6.0 artifacts they are
+        # derived from, and the hierarchy and target selection are inputs in
+        # their own right: the pilot is licensed by them, so a run manifest
+        # that did not bind their bytes could not show which audit it ran
+        # under.
+        inputs = {
+            "matrix_manifest": rv.sha256_file(g6m.G6_MATRIX_PATH),
+            "g6_pilot_manifest": rv.sha256_file(g6m.G6_MANIFEST_PATH),
+            "g6_hierarchy": rv.sha256_file(g6m.HIERARCHY_PATH),
+            "g6_target_selection": rv.sha256_file(g6m.SELECTION_PATH),
+            "baseline_h": rv.sha256_file(_baseline_ckpt(ds, out_base)),
+        }
+    else:
+        inputs = {
+            "matrix_manifest": rv.sha256_file(
+                MANIFEST_DIR / ("matrix_salmu.json" if ds == "salmu"
+                                else "matrix_celeba_numeric.json")),
+            "baseline_h": rv.sha256_file(_baseline_ckpt(ds, out_base)),
+        }
     if ds == "salmu":
         inputs["dataset_manifest"] = rv.sha256_file(SALMU_MANIFEST)
         inputs["g_cache_e2e_rows"] = rv.sha256_file(SALMU_G_CACHE)
-    else:
+    elif ds == "celeba_numeric":
         inputs["numeric_manifest"] = rv.sha256_file(
             MANIFEST_DIR / "numeric_manifest.json")
     ckpts = {}
@@ -2592,8 +2657,32 @@ def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
             fr = rec.get(fam) or rec.get(legacy_name.get(fam, ""), {})
             if fr.get("sha256"):
                 ckpts[f"oracle_{fam}_{sid}"] = fr["sha256"]
-    for c in load_all_cells(out_base):
+    all_cells = load_all_cells(out_base)
+    for c in all_cells:
         ckpts[f"cell_{c['cell_id']}"] = c["checkpoint_sha256"]
+
+    g6_block = {}
+    if ds == "mllmu":
+        # The four pilot gates ARE the decision this run exists to make, so
+        # they are evaluated here and bound into the manifest rather than left
+        # to a separate pass that could be forgotten.  Written into the run
+        # directory as well, so the gate verdict is hashed with the outputs it
+        # was computed from.
+        gate_cells = g6m.cells_for_gates(all_cells)
+        g6_block = {
+            "gates": g6m.evaluate_gates(gate_cells, matrix),
+            "sets": g6m.per_set_provenance(matrix, gate_cells),
+            "provenance": g6m.g6_provenance(out_base, args),
+            "n_cells_adapted": len(gate_cells),
+        }
+        with open(out_base / "g6_pilot_gates.json", "w") as f:
+            json.dump(g6_block, f, indent=2)
+        logger.info(
+            f"GX7/G6: pilot gates passed={g6_block['gates']['passed']} "
+            f"failed={g6_block['gates']['failed_gates']} "
+            f"proceed_to_full_matrix="
+            f"{g6_block['gates']['proceed_to_full_matrix']}")
+
     manifest = {
         "experiment": f"e2c_v3_granularity_{ds}",
         "provenance": provenance,
@@ -2616,6 +2705,7 @@ def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
         "elapsed_sec_note": (
             "elapsed_sec is CUMULATIVE over every pass that produced this "
             "manifest; elapsed_this_pass_sec is this pass alone"),
+        **({"g6_pilot": g6_block} if ds == "mllmu" else {}),
         **_cumulative_elapsed(out_base / "run_manifest.json", t_start,
                               _device_name()),
         "gpu": _device_name(),
@@ -2630,7 +2720,7 @@ def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--dataset", required=True,
-                   choices=["salmu", "celeba_numeric"])
+                   choices=["salmu", "celeba_numeric", "mllmu"])
     p.add_argument("--phase", default="all",
                    choices=["all", "GX0", "GX1R", "GX2", "GX2R", "GX2B",
                             "GX2S", "GX3", "GX4", "GX5", "GX7"])
@@ -2765,9 +2855,9 @@ def main():
             e["seeds"] = [17]
         matrix["edit_seeds"] = [17]
 
-    if ds == "celeba_numeric" and args.phase in ("all", "GX1R", "GX2",
-                                                 "GX3", "GX4", "GX5"):
-        ensure_numeric_route(args, ctx, out_base)
+    if ds in ("celeba_numeric", "mllmu") and args.phase in (
+            "all", "GX1R", "GX2", "GX3", "GX4", "GX5"):
+        ensure_numeric_route(args, ctx, out_base, ds=ds)
     oracle_results = {}
     if args.phase in ("all", "GX2"):
         oracle_results = run_oracles(args, ds, ctx, matrix, out_base)

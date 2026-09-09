@@ -895,6 +895,175 @@ def test_worktree_state_separates_tracked_from_untracked(tmp_path,
     assert ws4["dirty_including_untracked"] is True
 
 
+def _runner_cell(design, set_idx=0, seed=17, soft_override=None,
+                 fam_override=None):
+    """A cell in the GX RUNNER's on-disk schema, not the gate schema.
+
+    The two are deliberately different: the runner stores per-identity hard
+    predictions, soft probabilities and PER-IDENTITY oracle distances, while the
+    gates want one flat row per identity and one cell-level delta.  Testing the
+    adapter against a faithful runner cell is what makes the wiring between a
+    real GPU run and the four gates a tested path rather than a hoped-for one.
+    """
+    entry = design["matrix"]["sets"][set_idx]
+    ctx = design["ctx"]
+    hard = []
+    for iid in ctx["identity_ids"]:
+        grp = _group_of(entry, iid)
+        exp = (entry["assignments"][iid]["target"]
+               if iid in entry["assignments"]
+               else ctx["baseline_alias_of"][iid])
+        hard.append({"identity_id": iid, "raw": exp, "parsed_label": exp,
+                     "recognized_labels": [exp],
+                     "multi_label_ambiguous": False, "group": grp,
+                     "expected_post_edit": exp, "correct_post_edit": True,
+                     "source_leaked": False, "classification": "correct"})
+    soft = {iid: {"p_expected": 0.99, "p_baseline_alias": 0.001,
+                  "candidate_mass": 1.0, "other_mass": 0.0}
+            for iid in ctx["identity_ids"]}
+    if soft_override:
+        for iid, patch in soft_override.items():
+            soft.setdefault(iid, {}).update(patch)
+    fam = {}
+    for iid in ctx["identity_ids"]:
+        fam[iid] = {
+            "matched_finetune": {"distance": {"l2": 0.10}, "reliable": True,
+                                 "reason": None},
+            "loo_finetune": {"distance": {"l2": 0.40}, "reliable": True,
+                             "reason": None},
+            "delta_ft_l2": 0.30, "delta_reliable": True}
+    if fam_override:
+        for iid, patch in fam_override.items():
+            fam.setdefault(iid, {}).update(patch)
+    return {"cell_id": f"{entry['set_id']}__seed{seed}",
+            "dataset": "mllmu", "set_id": entry["set_id"],
+            "mode": entry["mode"], "seed": seed,
+            "assignments": entry["assignments"],
+            "hard_preds": hard, "soft": soft, "oracle_families": fam}
+
+
+def test_the_adapter_maps_runner_cells_onto_the_gate_schema(design):
+    cell = _runner_cell(design)
+    (adapted,) = g6.cells_for_gates([cell])
+    assert adapted["set_id"] == cell["set_id"]
+    assert adapted["seed"] == 17
+    row = next(iter(adapted["per_identity"].values()))
+    assert {"expected", "strict_parsed", "control_group", "p_desired",
+            "p_source", "candidate_mass", "taxonomic_class", "multi_label",
+            "unparseable"} <= set(row)
+    # A single set's cells are NOT enough for the gates to pass: the
+    # matched-oracle and sibling-coverage gates both fail on a set that was
+    # never run, which is the behaviour the other tests pin.  So the clean-run
+    # assertion needs every set present.
+    all_cells = g6.cells_for_gates(
+        [_runner_cell(design, set_idx=i)
+         for i in range(len(design["matrix"]["sets"]))])
+    res = g6.evaluate_gates(all_cells, design["matrix"])
+    assert res["passed"] is True, res["failed_gates"]
+    assert res["n_cells_evaluated"] == len(design["matrix"]["sets"])
+
+
+def test_the_adapter_carries_same_leaf_groups_through_from_the_runner(design):
+    """The runner's own ``group`` column must reach the retention gate as
+    same_leaf, or the sharpest control silently lands in the general retain
+    pool and its failure is averaged away."""
+    entry = design["matrix"]["sets"][0]
+    tid = min(entry["assignments"])
+    partner = next(iter(entry["controls"][tid]["same_leaf"]))
+    (adapted,) = g6.cells_for_gates([_runner_cell(design)])
+    assert adapted["per_identity"][partner]["control_group"] == "same_leaf"
+    g = g6.evaluate_gates([adapted], design["matrix"])["gates"]["retention"]
+    assert g["per_control_group"]["same_leaf"]["n_rows"] >= 1
+
+
+def test_the_adapter_reads_p_source_from_the_baseline_alias(design):
+    """For a target identity the baseline alias IS the exact label the edit must
+    remove, so mass there is the residual the behavioral gate rejects.  Mapping
+    the wrong soft field would make that check vacuous."""
+    entry = design["matrix"]["sets"][0]
+    tid = min(entry["assignments"])
+    cell = _runner_cell(design, soft_override={tid: {"p_baseline_alias": 0.42,
+                                                     "p_expected": 0.99}})
+    (adapted,) = g6.cells_for_gates([cell])
+    assert adapted["per_identity"][tid]["p_source"] == 0.42
+    g = g6.evaluate_gates([adapted], design["matrix"])["gates"]["behavioral"]
+    assert g["passed"] is False
+    assert any("p_source" in f for f in g["failures"])
+
+
+def test_the_adapter_averages_delta_over_targets_only(design):
+    """A retained identity's oracle distance says nothing about whether the
+    TRANSFORMATION matched, so including one would let a control row dilute the
+    measurement the matched-oracle gate exists to make."""
+    entry = design["matrix"]["sets"][0]
+    n_targets = len(entry["assignments"])
+    retained = [i for i in design["ctx"]["identity_ids"]
+                if i not in entry["assignments"]]
+    # push every retained row's delta wildly negative: the cell delta must not
+    # move, because only target rows are averaged
+    fam = {i: {"delta_ft_l2": -9.0} for i in retained}
+    (adapted,) = g6.cells_for_gates([_runner_cell(design, fam_override=fam)])
+    d = adapted["oracle_distances"]
+    assert d["n_target_rows"] == n_targets
+    assert d["n_rows_used"] == n_targets
+    assert d["delta_oracle"] == 0.30
+
+
+def test_an_unreliable_oracle_row_is_dropped_and_counted(design):
+    entry = design["matrix"]["sets"][0]
+    tids = sorted(entry["assignments"])
+    fam = {tids[0]: {"delta_ft_l2": None}}
+    (adapted,) = g6.cells_for_gates([_runner_cell(design, fam_override=fam)])
+    d = adapted["oracle_distances"]
+    assert d["n_rows_used"] == len(tids) - 1
+    assert d["n_target_rows"] == len(tids)
+    assert d["delta_oracle"] == 0.30
+
+
+def test_no_reliable_delta_at_all_fails_rather_than_passing(design):
+    """A missing or unreliable oracle is not a pass.  Averaging over an empty
+    set would either raise or -- worse -- report a plausible number computed
+    from nothing."""
+    entry = design["matrix"]["sets"][0]
+    fam = {i: {"delta_ft_l2": None} for i in sorted(entry["assignments"])}
+    cells = g6.cells_for_gates([_runner_cell(design, fam_override=fam)])
+    assert cells[0]["oracle_distances"]["delta_oracle"] is None
+    g = g6.evaluate_gates(cells, design["matrix"])["gates"]["matched_oracle"]
+    assert g["passed"] is False
+    assert any("no reliable delta_oracle" in f for f in g["failures"])
+    assert g["per_set"][entry["set_id"]]["mean_delta_oracle"] is None
+
+
+# ====================================================================== #
+# Runner wiring
+# ====================================================================== #
+def test_the_runner_reaches_the_same_frozen_design_as_freeze():
+    """``build_or_verify`` and ``--freeze`` must agree, or the runner would
+    report drift in a design nothing had changed."""
+    _committed_design_or_skip()
+    gm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    rebuilt = gm.g6m.rebuild_frozen_matrix(verify=False)
+    committed = json.loads(gm.g6m.G6_MATRIX_PATH.read_text(encoding="utf-8"))
+    assert gm.g6m._canonical(rebuilt["matrix"]) == \
+        gm.g6m._canonical(committed)
+    assert gm.load_frozen("mllmu") == committed
+
+
+def test_the_runner_ctx_carries_leaf_of_for_mllmu_only():
+    _committed_design_or_skip()
+    gm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    matrix = gm.load_frozen("mllmu")
+    ctx = gm.dataset_ctx("mllmu", matrix)
+    assert ctx["kind"] == "taxonomic"
+    assert "leaf_of" in ctx and len(ctx["leaf_of"]) == len(
+        ctx["identity_ids"])
+    assert len(set(ctx["leaf_of"].values())) < len(ctx["leaf_of"]), \
+        "the pilot must contain at least one same-leaf pair"
+    # SALMU's ctx must NOT gain the key: its matrix is committed and executed
+    salmu_ctx = gm.dataset_ctx("salmu", gm.load_frozen("salmu"))
+    assert "leaf_of" not in salmu_ctx
+
+
 # ====================================================================== #
 # The committed pilot design
 # ====================================================================== #
