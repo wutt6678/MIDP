@@ -137,10 +137,20 @@ def test_a_broad_title_does_not_also_report_its_nested_detailed_label():
 
 def test_a_punctuation_only_label_cannot_swallow_the_output():
     """A label that cleans to an empty span would match at every position, so
-    degenerate vocab entries are dropped rather than allowed to match."""
-    vocab = [",,,", "Aven"]
+    degenerate vocab entries are dropped rather than allowed to match.
+
+    The trigger needs punctuation on BOTH sides: a degenerate label can only
+    match a text token that also cleans to empty, so an output containing a bare
+    punctuation token is what makes the guard observable.  Asserting only on a
+    clean output passes with the guard deleted.
+    """
+    vocab = [",", "Aven"]
     assert rv.recognized_labels_in("Aven", vocab) == ["Aven"]
     assert rv.parse_recognized_label("Aven", vocab) == "Aven"
+    # the output has a punctuation-only token; the degenerate label must not
+    # claim it, or two distinct labels are recognized and the row is rejected
+    assert rv.recognized_labels_in("Aven , Aven", vocab) == ["Aven"]
+    assert rv.parse_recognized_label("Aven , Aven", vocab) == "Aven"
     assert rv.recognized_labels_in("nothing recognizable here", vocab) == []
 
 

@@ -1380,3 +1380,111 @@ def test_gx2p_skips_a_cell_it_cannot_rescore_rather_than_guessing(tmp_path,
 
     assert res["n_cells"] == 0 and res["n_changed"] == 0
     assert "soft_probs_full" not in json.loads(p.read_text(encoding="utf-8"))
+
+
+def test_gx2p_does_not_launder_a_genuinely_wrong_output(tmp_path, design):
+    """GX2P repairs the MEASUREMENT; it must never manufacture a success.
+
+    A cell holding both a mis-scored verbatim hit and a genuinely wrong answer
+    has to come out with exactly one row changed.  Without this, a re-parse that
+    scored rows from anything other than the stored ``raw`` -- or that marked any
+    parseable output correct -- would look like a repair while silently turning a
+    real failure into a pass.
+    """
+    gxm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    ctx = design["ctx"]
+    sid = design["matrix"]["sets"][0]["set_id"]
+    entry = next(e for e in design["matrix"]["sets"] if e["set_id"] == sid)
+    hard = _perfect_rows(gxm, design, entry)
+    victim = min(entry["assignments"])
+    raw = next(r["raw"] for r in hard if r["identity_id"] == victim)
+
+    # a retained identity that really did answer with some other label
+    wrong_iid = next(i for i in ctx["identity_ids"]
+                     if i not in entry["assignments"])
+    wrong_label = next(l for l in ctx["vocab"]
+                       if l != gxm.expected_label(ctx, entry, wrong_iid))
+    wrong_row = gxm.hard_pred_from_raw(ctx, entry, wrong_iid, wrong_label)
+    assert wrong_row["correct_post_edit"] is False, (
+        "the fixture needs a genuinely wrong row for the assertion to mean "
+        "anything")
+
+    for i, r in enumerate(hard):
+        if r["identity_id"] == wrong_iid:
+            hard[i] = wrong_row
+        elif r["identity_id"] == victim:
+            r.update(parsed_label=None, recognized_labels=[],
+                     multi_label_ambiguous=False, correct_post_edit=False,
+                     classification="unparseable")
+    p = _write_cell(tmp_path, gxm, design, sid, 17, hard,
+                    _cell_soft_full(gxm, design, entry))
+
+    res = gxm.reparse_cells_cpu("mllmu", ctx, design["matrix"], tmp_path)
+
+    rows = {r["identity_id"]: r
+            for r in json.loads(p.read_text(encoding="utf-8"))["hard_preds"]}
+    # the mis-scored verbatim hit is repaired ...
+    assert rows[victim]["parsed_label"] == raw
+    assert rows[victim]["correct_post_edit"] is True
+    # ... and the genuine error is left exactly as wrong as it was
+    assert rows[wrong_iid]["parsed_label"] == wrong_label
+    assert rows[wrong_iid]["correct_post_edit"] is False
+    fixed = json.loads(p.read_text(encoding="utf-8"))
+    n_ids = len(ctx["identity_ids"])
+    assert fixed["criteria"]["strict_expected_accuracy"] == (n_ids - 1) / n_ids
+    assert fixed["criteria"]["cell_pass"] is False
+    assert res["changes"][0]["n_row_changes"] == 1
+    assert res["changes"][0]["row_changes"][0]["identity_id"] == victim
+
+
+def test_g6x0_reports_a_label_the_parser_cannot_recognize(design, monkeypatch):
+    """Wiring: the G6X0 issue list must carry ``check_vocab_parseable``'s
+    findings.
+
+    The frozen vocabulary is clean now that the matcher normalizes both sides, so
+    the check returns [] on every real design and deleting the call would be
+    invisible.  Stubbed to report one label -- what it reported for the two
+    comma-bearing broad SOC titles before the fix -- to prove the finding reaches
+    the issues rather than being computed and dropped.
+    """
+    bad = "Archivists, Curators, and Museum Technicians"
+
+    class Stub:
+        @staticmethod
+        def check_vocab_parseable(vocab):
+            return [bad]
+
+    monkeypatch.setattr(g6, "parser_module", lambda: Stub)
+    # validate_g6 RAISES on any issue and puts the issues in the message, so a
+    # launcher learns what to fix rather than only that something failed.
+    with pytest.raises(RuntimeError, match="G6X0 validation failed") as ei:
+        g6.validate_g6(design["matrix"], design["ctx"], design["art"])
+    assert "cannot recognize when emitted verbatim" in str(ei.value)
+    assert bad in str(ei.value)
+
+
+def test_gx0_reports_a_label_the_parser_cannot_recognize(monkeypatch, caplog):
+    """The same wiring on the runner's GX0, which is the ONLY place the
+    invariant is checked for SALMU and CelebA-numeric."""
+    _committed_design_or_skip()
+    gm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    bad = "Archivists, Curators, and Museum Technicians"
+    # keep the design rebuild fast: the G6.0 source recount is irrelevant here
+    real_ev = gm.g6m.frozen_hierarchy_evidence
+    monkeypatch.setattr(gm.g6m, "frozen_hierarchy_evidence",
+                        lambda verify=True: real_ev(verify=False))
+    monkeypatch.setattr(gm.rv, "check_vocab_parseable", lambda vocab: [bad])
+
+    class Args:
+        freeze = False
+        smoke = True
+    with pytest.raises(RuntimeError, match="GX0 validation failed"):
+        gm.build_or_verify("mllmu", Args())
+    # The exception carries only a COUNT; the offending label is in the issue
+    # log.  Asserting the count alone would pass for any unrelated validation
+    # failure, so the label has to be found in what GX0 actually reported.
+    reported = [r.getMessage() for r in caplog.records if r.levelname == "ERROR"]
+    assert any(bad in m and "cannot recognize when emitted verbatim" in m
+               for m in reported), (
+        f"GX0 raised but never named the unrecognizable label; logged: "
+        f"{reported}")
