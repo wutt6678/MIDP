@@ -103,6 +103,15 @@ N_UNRELATED_PROFESSIONS = 4
 # occupation.  One depth per set keeps the pilot at exactly five sets.
 PILOT_TARGET_DEPTH = 1
 
+# The set mode MUST come from the runner's fixed vocabulary
+# (e2c_v3_granularity_matrix.SINGLE_MODES | SAME_DEPTH_MODES | MIXED_MODES):
+# run_cells skips any entry whose mode is not in the phase's set, so an
+# invented name does not fail loudly -- it silently trains every oracle and
+# then evaluates zero cells.  That is not hypothetical; it is what the first
+# 16.4-hour execution of this pilot did.  "single_level1" is the existing name
+# for exactly this set shape: one target coarsened to chain depth 1.
+PILOT_MODE = "single_level1"
+
 CHAIN_LEVELS = ("raw_label", "broad_occupation", "minor_group")
 ELIDED_LEVEL = "major_group"
 
@@ -514,7 +523,7 @@ def build_g6_matrix(manifest, art, sel, seeds=None, evidence=None):
                    if r["original_label"] == target_label)
         sets.append({
             "set_id": f"gx_mll_{soc.replace('-', '')}",
-            "mode": "single_broad_occupation",
+            "mode": PILOT_MODE,
             "target_label": target_label,
             "target_soc": soc,
             "target_depth": PILOT_TARGET_DEPTH,
@@ -708,6 +717,16 @@ def behavioral_gate(cells, matrix):
              if r["taxonomic_class"] == "wrong_branch"]
     if wrong and crit["max_wrong_branch_rate"] == 0.0:
         failures.append(f"{len(wrong)} target row(s) classified wrong_branch")
+    if not target_rows:
+        # A gate over zero rows is not a passed gate.  Without this the first
+        # pilot run reported behavioral=True with n_target_rows=0, because
+        # every per-row check was vacuously satisfied -- the classic guard that
+        # cannot fire.  Zero rows means the cells were never produced, which is
+        # the most serious possible outcome and must read as a failure.
+        failures.append(
+            "no target rows were evaluated at all: the behavioral gate has "
+            "nothing to score, which means no cell produced predictions for "
+            "this matrix's targets")
     return {
         "name": "behavioral",
         "passed": not failures,
@@ -757,6 +776,15 @@ def retention_gate(cells, matrix):
         if g["strict_accuracy"] is not None and \
                 g["strict_accuracy"] < crit["retained_strict_accuracy"]:
             failures.extend(g["wrong"])
+    if not groups:
+        # Same defect as the behavioral gate: the first pilot run reported
+        # retention=True over an EMPTY per_control_group map.  "No retained
+        # identity was ever evaluated" is the opposite of "every retained
+        # identity kept its label", and reporting it as the latter would have
+        # let a run that produced nothing look like a clean pass.
+        failures.append(
+            "no retained rows were evaluated at all: retention has nothing to "
+            "score, so no claim about preserved associations is supported")
     return {
         "name": "retention",
         "passed": not failures,
@@ -988,11 +1016,26 @@ def evaluate_gates(cells, matrix):
     for fn in GATE_FUNCS:
         g = fn(cells, matrix)
         gates[g["name"]] = g
+    # Coverage is checked at the top level as well as inside each gate, because
+    # "which sets were never run" is a property of the RUN rather than of any
+    # one metric, and it is the first thing a reader needs to know.
+    covered = {c["set_id"] for c in cells}
+    uncovered = [e["set_id"] for e in matrix["sets"]
+                 if e["set_id"] not in covered]
+    coverage = {
+        "n_cells_evaluated": len(cells),
+        "n_cells_expected_when_complete": matrix["n_cells"],
+        "n_sets_covered": len(covered & {e["set_id"] for e in matrix["sets"]}),
+        "n_sets": len(matrix["sets"]),
+        "sets_with_no_cells": uncovered,
+        "complete": not uncovered,
+    }
     failed = [k for k, g in gates.items() if not g["passed"]]
     return {
         "passed": not failed,
         "failed_gates": failed,
         "gates": gates,
+        "coverage": coverage,
         "n_cells_evaluated": len(cells),
         "proceed_to_full_matrix": not failed,
         "proceed_note": ("the full 12-target matrix may proceed only when all "

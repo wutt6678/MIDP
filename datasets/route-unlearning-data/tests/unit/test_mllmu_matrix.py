@@ -1064,6 +1064,99 @@ def test_the_runner_ctx_carries_leaf_of_for_mllmu_only():
     assert "leaf_of" not in salmu_ctx
 
 
+def test_every_frozen_set_mode_is_in_the_runners_vocabulary():
+    """THE regression test for a 16.4-hour run that evaluated zero cells.
+
+    ``run_cells`` skips any set whose ``mode`` is not in the phase's fixed
+    vocabulary.  The first MLLMU pilot used an invented mode name, so every set
+    was skipped silently: all 20 oracles trained, no cell evaluated, exit 0, run
+    manifest written.  Nothing in the design-level tests caught it because the
+    mode string was only ever compared against itself.
+
+    Checked for ALL THREE datasets, and against the runner's own constants
+    rather than a copy of them, so renaming a mode in the runner fails here.
+    """
+    gm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    vocabulary = gm.SINGLE_MODES | gm.SAME_DEPTH_MODES | gm.MIXED_MODES
+    for ds in ("salmu", "celeba_numeric", "mllmu"):
+        matrix = gm.load_frozen(ds)
+        unrecognized = sorted({e["mode"] for e in matrix["sets"]}
+                              - vocabulary)
+        assert not unrecognized, (
+            f"{ds}: mode(s) {unrecognized} are not in the runner's "
+            f"vocabulary {sorted(vocabulary)}; run_cells would skip every set "
+            f"that uses them and report success over zero cells")
+    # and the pilot's own constant is the one the sets actually carry
+    _committed_design_or_skip()
+    assert g6.PILOT_MODE in vocabulary
+    _, matrix = g6.load_frozen_g6()
+    assert all(e["mode"] == g6.PILOT_MODE for e in matrix["sets"])
+
+
+def test_run_cells_refuses_a_phase_that_matches_no_set(tmp_path):
+    """The systemic half of the same bug: a phase that runs zero sets must not
+    exit successfully.  The guard fires before any directory is created or model
+    session opened, so this needs no GPU."""
+    gm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+
+    class Args:
+        phase = "GX3"
+        only_sets = None
+        only_seeds = None
+    matrix = {"sets": [{"set_id": "s1", "mode": "single_broad_occupation"}],
+              "edit_seeds": [17]}
+    with pytest.raises(RuntimeError, match="no set in the mllmu matrix has a "
+                                           "mode this phase runs"):
+        gm.run_cells(Args(), "mllmu", {}, matrix, tmp_path)
+    # nothing was created on the way to the refusal
+    assert not (tmp_path / "cells").exists()
+
+
+def test_the_behavioral_gate_fails_when_nothing_was_evaluated(design):
+    """The first pilot run reported behavioral=True with n_target_rows=0: every
+    per-row check was vacuously satisfied.  A gate with nothing to score has not
+    passed, it has not run."""
+    res = g6.evaluate_gates([], design["matrix"])
+    g = res["gates"]["behavioral"]
+    assert g["n_target_rows"] == 0
+    assert g["strict_expected_accuracy"] is None
+    assert g["passed"] is False
+    assert any("no target rows were evaluated" in f for f in g["failures"])
+
+
+def test_the_retention_gate_fails_when_nothing_was_evaluated(design):
+    """It reported retention=True over an EMPTY per_control_group map, which
+    reads as "every retained identity kept its label" while meaning "no retained
+    identity was ever looked at"."""
+    g = g6.evaluate_gates([], design["matrix"])["gates"]["retention"]
+    assert g["per_control_group"] == {}
+    assert g["passed"] is False
+    assert any("no retained rows were evaluated" in f for f in g["failures"])
+
+
+def test_evaluate_gates_reports_coverage_and_fails_on_an_uncovered_set(design):
+    matrix = design["matrix"]
+    all_cells = _cells(design)
+    full = g6.evaluate_gates(all_cells, matrix)
+    assert full["passed"] is True
+    assert full["coverage"]["complete"] is True
+    assert full["coverage"]["sets_with_no_cells"] == []
+    assert full["coverage"]["n_cells_expected_when_complete"] == \
+        matrix["n_cells"]
+
+    # drop one set entirely: three of the four gates still pass on what they
+    # saw, so the coverage block is what makes the gap visible
+    dropped = matrix["sets"][0]["set_id"]
+    partial = g6.evaluate_gates([c for c in all_cells
+                                 if c["set_id"] != dropped], matrix)
+    cov = partial["coverage"]
+    assert cov["complete"] is False
+    assert cov["sets_with_no_cells"] == [dropped]
+    assert cov["n_sets_covered"] == len(matrix["sets"]) - 1
+    assert partial["passed"] is False
+    assert partial["proceed_to_full_matrix"] is False
+
+
 # ====================================================================== #
 # The committed pilot design
 # ====================================================================== #

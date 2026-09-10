@@ -1859,6 +1859,24 @@ def run_cells(args, ds, ctx, matrix, out_base):
     logger.info("=" * 60)
     logger.info(f"GX3-5: CELLS ({ds}) modes={sorted(modes)}")
     logger.info("=" * 60)
+    # A set whose mode is not in this phase's vocabulary is skipped, which is
+    # correct for a phase that legitimately runs a subset -- and catastrophic
+    # when NO set matches, because the phase then completes successfully having
+    # done nothing.  That is not hypothetical: the first MLLMU pilot run used an
+    # invented mode name, trained all 20 oracles over 16.4 hours, evaluated zero
+    # cells, and still exited 0 with a run manifest.  Refuse instead.
+    matching = [e for e in matrix["sets"] if e["mode"] in modes]
+    if not matching:
+        raise RuntimeError(
+            f"{args.phase}: no set in the {ds} matrix has a mode this phase "
+            f"runs.  The matrix's modes are "
+            f"{sorted({e['mode'] for e in matrix['sets']})} and this phase "
+            f"runs {sorted(modes)}.  Mode names must come from SINGLE_MODES / "
+            f"SAME_DEPTH_MODES / MIXED_MODES; fix the name in the matrix "
+            f"builder, because an unrecognized name is otherwise skipped "
+            f"silently and the phase reports success over zero cells.")
+    logger.info(f"GX3-5: {len(matching)}/{len(matrix['sets'])} sets match "
+                f"this phase")
     cells_root = out_base / "cells"
     cells_root.mkdir(parents=True, exist_ok=True)
     oracle_root = out_base / "oracles"
