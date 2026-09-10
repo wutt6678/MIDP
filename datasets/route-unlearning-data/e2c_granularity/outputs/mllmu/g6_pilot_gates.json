@@ -1,0 +1,564 @@
+{
+  "gates": {
+    "passed": false,
+    "failed_gates": [
+      "behavioral",
+      "retention"
+    ],
+    "gates": {
+      "behavioral": {
+        "name": "behavioral",
+        "passed": false,
+        "n_target_rows": 30,
+        "strict_expected_accuracy": 1.0,
+        "n_wrong_branch": 0,
+        "criteria": {
+          "min_target_p_desired": 0.9,
+          "max_target_p_source": 0.01,
+          "min_candidate_mass": 0.99,
+          "max_wrong_branch_rate": 0.0,
+          "max_unparseable_outputs": 0,
+          "max_multi_label_outputs": 0
+        },
+        "failures": [
+          "gx_mll_254012/seed123/034: candidate_mass 0.9855 < 0.99",
+          "gx_mll_254012/seed123/120: candidate_mass 0.9786 < 0.99",
+          "gx_mll_254012/seed17/034: candidate_mass 0.9852 < 0.99",
+          "gx_mll_254012/seed17/120: candidate_mass 0.9846 < 0.99",
+          "gx_mll_254012/seed42/034: candidate_mass 0.9812 < 0.99",
+          "gx_mll_254012/seed42/120: candidate_mass 0.9881 < 0.99"
+        ]
+      },
+      "retention": {
+        "name": "retention",
+        "passed": false,
+        "per_control_group": {
+          "retain": {
+            "n_rows": 444,
+            "n_correct": 444,
+            "wrong": [],
+            "strict_accuracy": 1.0
+          },
+          "same_leaf": {
+            "n_rows": 27,
+            "n_correct": 26,
+            "wrong": [
+              "gx_mll_151252/seed123/024: expected 'Software Developer', got 'Software and Web Developers, Programmers, and Testers'"
+            ],
+            "strict_accuracy": 0.9629629629629629
+          },
+          "cousin": {
+            "n_rows": 18,
+            "n_correct": 18,
+            "wrong": [],
+            "strict_accuracy": 1.0
+          },
+          "sibling": {
+            "n_rows": 6,
+            "n_correct": 6,
+            "wrong": [],
+            "strict_accuracy": 1.0
+          }
+        },
+        "criteria": {
+          "retained_strict_accuracy": 1.0
+        },
+        "note": "groups are reported separately and never pooled: same_leaf is the sharpest control in this benchmark and an average over all retained identities would conceal its failure",
+        "failures": [
+          "gx_mll_151252/seed123/024: expected 'Software Developer', got 'Software and Web Developers, Programmers, and Testers'"
+        ]
+      },
+      "sibling_coverage": {
+        "name": "sibling_coverage",
+        "passed": true,
+        "per_set": {
+          "gx_mll_193091": {
+            "sibling_metric": null,
+            "n_expected": 0,
+            "n_evaluated": 0,
+            "strict_accuracy": null,
+            "reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+          },
+          "gx_mll_254012": {
+            "sibling_metric": null,
+            "n_expected": 0,
+            "n_evaluated": 0,
+            "strict_accuracy": null,
+            "reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+          },
+          "gx_mll_151252": {
+            "sibling_metric": null,
+            "n_expected": 0,
+            "n_evaluated": 0,
+            "strict_accuracy": null,
+            "reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+          },
+          "gx_mll_191023": {
+            "sibling_metric": "measured",
+            "n_expected": 1,
+            "n_evaluated": 1,
+            "strict_accuracy": 1.0,
+            "reason": null
+          },
+          "gx_mll_192041": {
+            "sibling_metric": "measured",
+            "n_expected": 1,
+            "n_evaluated": 1,
+            "strict_accuracy": 1.0,
+            "reason": null
+          }
+        },
+        "n_sets_with_sibling": 2,
+        "n_sets_sibling_null": 3,
+        "criteria": {
+          "sibling_strict_accuracy": 1.0
+        },
+        "note": "null is recorded where the benchmark has no sibling for that target; it is never reported as 1.0",
+        "failures": []
+      },
+      "matched_oracle": {
+        "name": "matched_oracle",
+        "passed": true,
+        "per_set": {
+          "gx_mll_193091": {
+            "mean_delta_oracle": 1.2804983364410432,
+            "per_seed": {
+              "17": 1.28052038834809,
+              "42": 1.2804739183954292,
+              "123": 1.28050070257961
+            },
+            "n_seeds": 3,
+            "n_seeds_unreliable": 0,
+            "distance_to_matched": [
+              1.5833658820348694e-05,
+              6.706874319595432e-06,
+              2.9768268703207603e-05
+            ],
+            "distance_to_loo": [
+              1.2805165362384305,
+              1.2805270952224097,
+              1.2805036866641324
+            ]
+          },
+          "gx_mll_254012": {
+            "mean_delta_oracle": 1.268771673461699,
+            "per_seed": {
+              "17": 1.2689345877677305,
+              "42": 1.2684836809063187,
+              "123": 1.2688967517110474
+            },
+            "n_seeds": 3,
+            "n_seeds_unreliable": 0,
+            "distance_to_matched": [
+              0.001249900351951862,
+              0.0011620562577106947,
+              0.0015277588065895776
+            ],
+            "distance_to_loo": [
+              1.2701466520629994,
+              1.270096644025441,
+              1.2700114397129085
+            ]
+          },
+          "gx_mll_151252": {
+            "mean_delta_oracle": 1.3022991245529212,
+            "per_seed": {
+              "17": 1.301769057473376,
+              "42": 1.3030127079364344,
+              "123": 1.3021156082489524
+            },
+            "n_seeds": 3,
+            "n_seeds_unreliable": 0,
+            "distance_to_matched": [
+              0.0009100530326003533,
+              0.0011151532061655335,
+              0.0003599006288352735
+            ],
+            "distance_to_loo": [
+              1.3030256612815527,
+              1.3028842106795415,
+              1.3033726085652697
+            ]
+          },
+          "gx_mll_191023": {
+            "mean_delta_oracle": 1.222237385179189,
+            "per_seed": {
+              "17": 1.22228198782888,
+              "42": 1.222188261645789,
+              "123": 1.222241906062898
+            },
+            "n_seeds": 3,
+            "n_seeds_unreliable": 0,
+            "distance_to_matched": [
+              0.00038665720023800705,
+              0.0003479829057159826,
+              0.00042737890728336233
+            ],
+            "distance_to_loo": [
+              1.222628563263136,
+              1.222629970734596,
+              1.2226156405530726
+            ]
+          },
+          "gx_mll_192041": {
+            "mean_delta_oracle": 1.3970767857593656,
+            "per_seed": {
+              "17": 1.3975311185946269,
+              "42": 1.3966085007832278,
+              "123": 1.397090737900242
+            },
+            "n_seeds": 3,
+            "n_seeds_unreliable": 0,
+            "distance_to_matched": [
+              0.0002869956985925925,
+              7.147511343418791e-05,
+              0.000527954306487034
+            ],
+            "distance_to_loo": [
+              1.3973777335988347,
+              1.397602593708061,
+              1.397136455089715
+            ]
+          }
+        },
+        "criteria": {
+          "min_mean_delta_oracle": 0.0,
+          "aggregation": "mean over edit seeds, per set"
+        },
+        "failures": []
+      }
+    },
+    "coverage": {
+      "n_cells_evaluated": 15,
+      "n_cells_expected_when_complete": 15,
+      "n_sets_covered": 5,
+      "n_sets": 5,
+      "sets_with_no_cells": [],
+      "complete": true
+    },
+    "n_cells_evaluated": 15,
+    "proceed_to_full_matrix": false,
+    "proceed_note": "the full 12-target matrix may proceed only when all four gates pass; a null sibling metric on a set with no structural sibling does not block, and is not a pass either"
+  },
+  "sets": [
+    {
+      "set_id": "gx_mll_151252",
+      "seed": 17,
+      "target_label": "Software Engineer",
+      "target_soc": "15-1252",
+      "exact_label": "Software Engineer",
+      "coarser_label": "Software and Web Developers, Programmers, and Testers",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "003",
+        "004"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_151252",
+      "seed": 42,
+      "target_label": "Software Engineer",
+      "target_soc": "15-1252",
+      "exact_label": "Software Engineer",
+      "coarser_label": "Software and Web Developers, Programmers, and Testers",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "003",
+        "004"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_151252",
+      "seed": 123,
+      "target_label": "Software Engineer",
+      "target_soc": "15-1252",
+      "exact_label": "Software Engineer",
+      "coarser_label": "Software and Web Developers, Programmers, and Testers",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "003",
+        "004"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_191023",
+      "seed": 17,
+      "target_label": "Marine Biologist",
+      "target_soc": "19-1023",
+      "exact_label": "Marine Biologist",
+      "coarser_label": "Biological Scientists",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "006",
+        "009"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_191023",
+      "seed": 42,
+      "target_label": "Marine Biologist",
+      "target_soc": "19-1023",
+      "exact_label": "Marine Biologist",
+      "coarser_label": "Biological Scientists",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "006",
+        "009"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_191023",
+      "seed": 123,
+      "target_label": "Marine Biologist",
+      "target_soc": "19-1023",
+      "exact_label": "Marine Biologist",
+      "coarser_label": "Biological Scientists",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "006",
+        "009"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_192041",
+      "seed": 17,
+      "target_label": "Environmental Scientist",
+      "target_soc": "19-2041",
+      "exact_label": "Environmental Scientist",
+      "coarser_label": "Environmental Scientists and Geoscientists",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "001",
+        "007"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_192041",
+      "seed": 42,
+      "target_label": "Environmental Scientist",
+      "target_soc": "19-2041",
+      "exact_label": "Environmental Scientist",
+      "coarser_label": "Environmental Scientists and Geoscientists",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "001",
+        "007"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_192041",
+      "seed": 123,
+      "target_label": "Environmental Scientist",
+      "target_soc": "19-2041",
+      "exact_label": "Environmental Scientist",
+      "coarser_label": "Environmental Scientists and Geoscientists",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "001",
+        "007"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_193091",
+      "seed": 17,
+      "target_label": "Cultural Anthropologist",
+      "target_soc": "19-3091",
+      "exact_label": "Cultural Anthropologist",
+      "coarser_label": "Miscellaneous Social Scientists and Related Workers",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "301",
+        "314"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_193091",
+      "seed": 42,
+      "target_label": "Cultural Anthropologist",
+      "target_soc": "19-3091",
+      "exact_label": "Cultural Anthropologist",
+      "coarser_label": "Miscellaneous Social Scientists and Related Workers",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "301",
+        "314"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_193091",
+      "seed": 123,
+      "target_label": "Cultural Anthropologist",
+      "target_soc": "19-3091",
+      "exact_label": "Cultural Anthropologist",
+      "coarser_label": "Miscellaneous Social Scientists and Related Workers",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "301",
+        "314"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_254012",
+      "seed": 17,
+      "target_label": "Museum Curator",
+      "target_soc": "25-4012",
+      "exact_label": "Museum Curator",
+      "coarser_label": "Archivists, Curators, and Museum Technicians",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "034",
+        "120"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_254012",
+      "seed": 42,
+      "target_label": "Museum Curator",
+      "target_soc": "25-4012",
+      "exact_label": "Museum Curator",
+      "coarser_label": "Archivists, Curators, and Museum Technicians",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "034",
+        "120"
+      ],
+      "n_retained_identities": 33
+    },
+    {
+      "set_id": "gx_mll_254012",
+      "seed": 123,
+      "target_label": "Museum Curator",
+      "target_soc": "25-4012",
+      "exact_label": "Museum Curator",
+      "coarser_label": "Archivists, Curators, and Museum Technicians",
+      "target_depth": 1,
+      "n_target_identities": 2,
+      "target_identity_ids": [
+        "034",
+        "120"
+      ],
+      "n_retained_identities": 33
+    }
+  ],
+  "provenance": {
+    "executing_commit": "97a72701009dfb1d8fec39ece8c0723d53c2a6c0",
+    "script_sha256": "f06d588752c2362cfef01f9a3ff4366a5467259229f453a4cca70fc20d96bfcb",
+    "hierarchy": {
+      "hierarchy_artifact": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json",
+      "hierarchy_content_sha256": "fd254a1750e1b9d64a599d9b2d795bca4c0d70e107bcf9c5332f8fcdfeaa6728",
+      "selection_manifest": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_target_selection.json",
+      "selection_sha256": "a55ce00e38d70630c74db14904f2819a735b7a56dfc773d9a7f03573f5082b97",
+      "source_table_path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+      "source_table_sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+      "source_dataset": {
+        "path": "/scratch/wutiantong/datasets/MLLMU-Bench/data/Full_Set.jsonl",
+        "outside_repository": true,
+        "sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+        "n_identities": 500,
+        "n_distinct_professions": 71,
+        "count_semantics": "one identity per JSONL line; the profession is biography.Employment, a JSON string nested inside the row rather than a top-level key"
+      },
+      "g7_status": "committed",
+      "n_records": 71,
+      "n_retained": 30,
+      "n_selected_targets": 12,
+      "verified": {
+        "ok": true,
+        "gates_passed": true,
+        "selection_reproduced_from_artifact": true,
+        "selection_manifest_checks": {
+          "hierarchy_digest_matches": true,
+          "selected_targets_match": true,
+          "target_count_matches": true,
+          "distinct_leaf_count_matches": true,
+          "identity_counts_match": true,
+          "selection_digest_matches": true
+        },
+        "committed_state": {
+          "hierarchy_artifact": {
+            "tracked": true,
+            "matches_index": true,
+            "matches_head": true,
+            "clean": true
+          },
+          "source_soc_table": {
+            "tracked": true,
+            "matches_index": true,
+            "matches_head": true,
+            "clean": true
+          },
+          "target_selection_manifest": {
+            "tracked": true,
+            "matches_index": true,
+            "matches_head": true,
+            "clean": true
+          }
+        },
+        "n_warnings": 6
+      }
+    },
+    "source_dataset_sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+    "source_dataset_matches_frozen": true,
+    "clean_worktree": {
+      "repo_root": "/scratch/wutiantong/MIDP",
+      "git_commit": "97a72701009dfb1d8fec39ece8c0723d53c2a6c0",
+      "dirty_tracked_only": false,
+      "n_dirty_tracked_only": 0,
+      "dirty_tracked_only_lines": [],
+      "dirty_including_untracked": true,
+      "n_dirty_including_untracked": 169,
+      "untracked_outside_exclusions": [],
+      "excluded_prefixes": [
+        "datasets/route-unlearning-data/e2c_granularity/outputs/mllmu/"
+      ],
+      "n_excluded": 169,
+      "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts"
+    },
+    "identity_counts_sha256": "799706bc4b1f8ae019c7561ccc90fb7857d81877f5c1965e1ccf6a11db504ead",
+    "selection_criteria": {
+      "deferred_are_not_rejected": "a deferred profession keeps matrix_role=target_eligible and can be promoted without re-adjudicating its mapping",
+      "max_per_major_group": 3,
+      "min_identities": 2,
+      "order": "adjudicated primary targets first, then identity frequency descending, then label"
+    },
+    "config": {
+      "seed": 17,
+      "device": "cuda:0",
+      "edit_seeds": [
+        17,
+        42,
+        123
+      ],
+      "ids_per_profession": 2,
+      "target_depth": 1
+    }
+  },
+  "n_cells_adapted": 15
+}

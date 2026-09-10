@@ -1,0 +1,656 @@
+{
+  "experiment": "e2c_v3_granularity_mllmu",
+  "provenance": {
+    "commit": "97a72701009dfb1d8fec39ece8c0723d53c2a6c0",
+    "runner_script_sha256": "003d5c1605aa627c0ea41a7188ed43e91f4dbfa44ab18a8b3d748099fd106103",
+    "granularity_lib_sha256": "26610dbd485cb6c51275187f770cac5aa7d9fb2963aeb52287c4986f54482d7f",
+    "shared_scoring_script_sha256": "92859f2de357e4b7453d30f8d345e4ca22023d8b8d4ab8529d68c52f0cbc87f8",
+    "dirty": false,
+    "clean_required": true,
+    "started_utc": "2026-09-10T16:10:46Z"
+  },
+  "inputs_sha256": {
+    "matrix_manifest": "dd7131556416c0757bbdacd212ee95bbf3539c544f4946579e6a5b3d55e8b56e",
+    "g6_pilot_manifest": "c85f04a8c55567064edea2e9f2fb6813a823cd8eaacc1040dcc1cfa543f75d35",
+    "g6_hierarchy": "79d69ab5306ce6c72472848b3132b4b7ee85d905a5d8a5abbda6bf38a6568ce1",
+    "g6_target_selection": "70c683d858c389a07dfa89acbe431b9518f48ee54c076774c7f10c2d03b64f16",
+    "baseline_h": "19d6b526dfa0f51ff8434981630feca2acccf7c2adcaf1c0f0c8f5077787e555"
+  },
+  "checkpoints_sha256": {
+    "oracle_matched_finetune_gx_mll_193091": "4a877a6710fef514f144439c1fd5eaa4c177cde896a69d833eecff7e60149ffc",
+    "oracle_loo_finetune_gx_mll_193091": "dfe0a7ab04418f8b470b8d9b86851023a0196b0dc6dde09bdfb280d8dc86b308",
+    "oracle_matched_retrain_gx_mll_193091": "7ea5bdc71807e5581b5d36ac32bf0dd13d98a7b58515a4c3939f9d87ebf23da5",
+    "oracle_loo_retrain_gx_mll_193091": "eaed54fe1014d3e933bc3ff85d889a561ddab8a86ca39f5821e3a1bdb270076e",
+    "oracle_matched_finetune_gx_mll_254012": "fe30aa33a5e3b6793960d6fbb7d37610ebab36ad294001aaa70da0567d32581f",
+    "oracle_loo_finetune_gx_mll_254012": "46a7aa1e6afdd8849065100ca6e684c960e38414a33ee46484b9953868040000",
+    "oracle_matched_retrain_gx_mll_254012": "ac0de4e908212a666152cc3b8c5d981ff88a04af7834af10359f725c85437ad9",
+    "oracle_loo_retrain_gx_mll_254012": "d257332d0ebc055854979b544953103e3c4f33df22a798e706d526d006fcbb16",
+    "oracle_matched_finetune_gx_mll_151252": "73a541618011c0d05acf164268032878c2950103aeed40f14670229870c8ef66",
+    "oracle_loo_finetune_gx_mll_151252": "5ca701a0d59b8b15fb998574b63f06cf14ffd819dd9d4bd8844ff41b6f3ee6ea",
+    "oracle_matched_retrain_gx_mll_151252": "2539500312731b3e27117464b4105255f680f9202ece00d06afa91c8551bd8e6",
+    "oracle_loo_retrain_gx_mll_151252": "2fd0da346329deaeb5d486554e514470bf1e3931f06a852363cd10fde8a221c8",
+    "oracle_matched_finetune_gx_mll_191023": "b254793f2971636c0e1cb2541e74aec0ab6b0ada26f67d53af90ec8fa2417239",
+    "oracle_loo_finetune_gx_mll_191023": "deb6df3dcce538f6c2e62428463a2ab056536137e83cb349c01383c510d05ab7",
+    "oracle_matched_retrain_gx_mll_191023": "c74460499074e52bf7be667c0bec7c2c008f74c1788c31227ebaa8c2f977d286",
+    "oracle_loo_retrain_gx_mll_191023": "d3232c6e237c7873ac9a00d3bec4780cb8783495afa4bd9f71147f09cac7f577",
+    "oracle_matched_finetune_gx_mll_192041": "c485c65e86beddb14a7ff0cd357d018463dd6393b93491bd17d000d86bf37690",
+    "oracle_loo_finetune_gx_mll_192041": "960762ceca4be67c76f201b43883673a2f5cede0307964b999e67af2042d3c6d",
+    "oracle_matched_retrain_gx_mll_192041": "df25981e98e48731c001e4254de786b8ecce4a5e20b882f1614c3385fefcd00a",
+    "oracle_loo_retrain_gx_mll_192041": "3f97a36e92ebf54ed936eb12266306df9fc82868f8430564baeb9b3c143af022",
+    "cell_gx_mll_151252__seed123": "de0cb3f937d88b2d19feaab00591578b29e163d14d51610bd0dc2772c0b187b9",
+    "cell_gx_mll_151252__seed17": "f9576ef2572756f3d5bb469f94015802366c2c27bfc6d9d55885be9223a830e0",
+    "cell_gx_mll_151252__seed42": "6b0e453685a8b4796255d453106f4e686f772385cc16e862d39433e56d439a5c",
+    "cell_gx_mll_191023__seed123": "8e3f5ee5a6b36bd1aa390142ed83dce9b34028d9933cad6a4ef9b00ea50d6f44",
+    "cell_gx_mll_191023__seed17": "7a7163cef206c1e8d987c2ab08acaf2bba5020819d5f30e03419769ebfb42a2c",
+    "cell_gx_mll_191023__seed42": "e0fd4f68f7f7e5f8b95a5040398a8052de318ed5a97c97153258a26e736c598f",
+    "cell_gx_mll_192041__seed123": "d99785bdfdbdf1554f1fa5a3438ef3c2938b2ca55eedc7a14a245923ed536e6c",
+    "cell_gx_mll_192041__seed17": "6da7f8de99850538ccd9fc1a752f7bc435725682a599f5b08402a6c88beb0f39",
+    "cell_gx_mll_192041__seed42": "3893cead233bfcc8ecfd11ce31386bc2a978d09c3f7a4512c0fba4bc3453b8ca",
+    "cell_gx_mll_193091__seed123": "534c2cfea633e4000d3114c87c5e4092f3e06649db8b8b61092420bd9f5eff6e",
+    "cell_gx_mll_193091__seed17": "a51d6bb201111f8cd0f90f7042b927c43783a4294fb0ca1d909fd096ef976e4b",
+    "cell_gx_mll_193091__seed42": "d87338c8516c2b60c7466664eb4a204628a66f7541372dcd728d5affd649b653",
+    "cell_gx_mll_254012__seed123": "2715fecd6b78f996d24201d1fbb812aa19f673c7a778b8b67072d0bcf48fd85d",
+    "cell_gx_mll_254012__seed17": "a22dd32c031ce5d96d4bbb5210772aa668c01220a6a571d14f0b3b8596940abd",
+    "cell_gx_mll_254012__seed42": "24808983935d05bb01022d31251f35065a04364d547465b0cedd597e42583684"
+  },
+  "archive": {
+    "release_dir": "releases/e2c_granularity_mllmu_97a7270",
+    "hf_repo": "wutt6678/e2c-v3-matrix-checkpoints",
+    "hf_upload_ok": true,
+    "hf_revision": "6cbc0545979e3e6d9726cdf21746cf355f240a52",
+    "n_files": 36
+  },
+  "results": {
+    "cells_evaluated": 15,
+    "cell_pass_total": 11,
+    "run_stage": "full_matrix",
+    "executed_seeds": [
+      17,
+      42,
+      123
+    ],
+    "g3_1_gate_status": "evaluated",
+    "g3_1_gate_passed": false,
+    "per_mode_pass": {
+      "single_level1": [
+        11,
+        15
+      ]
+    }
+  },
+  "elapsed_sec_note": "elapsed_sec is CUMULATIVE over every pass that produced this manifest; elapsed_this_pass_sec is this pass alone",
+  "g6_pilot": {
+    "gates": {
+      "passed": false,
+      "failed_gates": [
+        "behavioral",
+        "retention"
+      ],
+      "gates": {
+        "behavioral": {
+          "name": "behavioral",
+          "passed": false,
+          "n_target_rows": 30,
+          "strict_expected_accuracy": 1.0,
+          "n_wrong_branch": 0,
+          "criteria": {
+            "min_target_p_desired": 0.9,
+            "max_target_p_source": 0.01,
+            "min_candidate_mass": 0.99,
+            "max_wrong_branch_rate": 0.0,
+            "max_unparseable_outputs": 0,
+            "max_multi_label_outputs": 0
+          },
+          "failures": [
+            "gx_mll_254012/seed123/034: candidate_mass 0.9855 < 0.99",
+            "gx_mll_254012/seed123/120: candidate_mass 0.9786 < 0.99",
+            "gx_mll_254012/seed17/034: candidate_mass 0.9852 < 0.99",
+            "gx_mll_254012/seed17/120: candidate_mass 0.9846 < 0.99",
+            "gx_mll_254012/seed42/034: candidate_mass 0.9812 < 0.99",
+            "gx_mll_254012/seed42/120: candidate_mass 0.9881 < 0.99"
+          ]
+        },
+        "retention": {
+          "name": "retention",
+          "passed": false,
+          "per_control_group": {
+            "retain": {
+              "n_rows": 444,
+              "n_correct": 444,
+              "wrong": [],
+              "strict_accuracy": 1.0
+            },
+            "same_leaf": {
+              "n_rows": 27,
+              "n_correct": 26,
+              "wrong": [
+                "gx_mll_151252/seed123/024: expected 'Software Developer', got 'Software and Web Developers, Programmers, and Testers'"
+              ],
+              "strict_accuracy": 0.9629629629629629
+            },
+            "cousin": {
+              "n_rows": 18,
+              "n_correct": 18,
+              "wrong": [],
+              "strict_accuracy": 1.0
+            },
+            "sibling": {
+              "n_rows": 6,
+              "n_correct": 6,
+              "wrong": [],
+              "strict_accuracy": 1.0
+            }
+          },
+          "criteria": {
+            "retained_strict_accuracy": 1.0
+          },
+          "note": "groups are reported separately and never pooled: same_leaf is the sharpest control in this benchmark and an average over all retained identities would conceal its failure",
+          "failures": [
+            "gx_mll_151252/seed123/024: expected 'Software Developer', got 'Software and Web Developers, Programmers, and Testers'"
+          ]
+        },
+        "sibling_coverage": {
+          "name": "sibling_coverage",
+          "passed": true,
+          "per_set": {
+            "gx_mll_193091": {
+              "sibling_metric": null,
+              "n_expected": 0,
+              "n_evaluated": 0,
+              "strict_accuracy": null,
+              "reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+            },
+            "gx_mll_254012": {
+              "sibling_metric": null,
+              "n_expected": 0,
+              "n_evaluated": 0,
+              "strict_accuracy": null,
+              "reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+            },
+            "gx_mll_151252": {
+              "sibling_metric": null,
+              "n_expected": 0,
+              "n_evaluated": 0,
+              "strict_accuracy": null,
+              "reason": "no other retained detailed occupation shares broad SOC group with this target; sibling metric null, never 1.0"
+            },
+            "gx_mll_191023": {
+              "sibling_metric": "measured",
+              "n_expected": 1,
+              "n_evaluated": 1,
+              "strict_accuracy": 1.0,
+              "reason": null
+            },
+            "gx_mll_192041": {
+              "sibling_metric": "measured",
+              "n_expected": 1,
+              "n_evaluated": 1,
+              "strict_accuracy": 1.0,
+              "reason": null
+            }
+          },
+          "n_sets_with_sibling": 2,
+          "n_sets_sibling_null": 3,
+          "criteria": {
+            "sibling_strict_accuracy": 1.0
+          },
+          "note": "null is recorded where the benchmark has no sibling for that target; it is never reported as 1.0",
+          "failures": []
+        },
+        "matched_oracle": {
+          "name": "matched_oracle",
+          "passed": true,
+          "per_set": {
+            "gx_mll_193091": {
+              "mean_delta_oracle": 1.2804983364410432,
+              "per_seed": {
+                "17": 1.28052038834809,
+                "42": 1.2804739183954292,
+                "123": 1.28050070257961
+              },
+              "n_seeds": 3,
+              "n_seeds_unreliable": 0,
+              "distance_to_matched": [
+                1.5833658820348694e-05,
+                6.706874319595432e-06,
+                2.9768268703207603e-05
+              ],
+              "distance_to_loo": [
+                1.2805165362384305,
+                1.2805270952224097,
+                1.2805036866641324
+              ]
+            },
+            "gx_mll_254012": {
+              "mean_delta_oracle": 1.268771673461699,
+              "per_seed": {
+                "17": 1.2689345877677305,
+                "42": 1.2684836809063187,
+                "123": 1.2688967517110474
+              },
+              "n_seeds": 3,
+              "n_seeds_unreliable": 0,
+              "distance_to_matched": [
+                0.001249900351951862,
+                0.0011620562577106947,
+                0.0015277588065895776
+              ],
+              "distance_to_loo": [
+                1.2701466520629994,
+                1.270096644025441,
+                1.2700114397129085
+              ]
+            },
+            "gx_mll_151252": {
+              "mean_delta_oracle": 1.3022991245529212,
+              "per_seed": {
+                "17": 1.301769057473376,
+                "42": 1.3030127079364344,
+                "123": 1.3021156082489524
+              },
+              "n_seeds": 3,
+              "n_seeds_unreliable": 0,
+              "distance_to_matched": [
+                0.0009100530326003533,
+                0.0011151532061655335,
+                0.0003599006288352735
+              ],
+              "distance_to_loo": [
+                1.3030256612815527,
+                1.3028842106795415,
+                1.3033726085652697
+              ]
+            },
+            "gx_mll_191023": {
+              "mean_delta_oracle": 1.222237385179189,
+              "per_seed": {
+                "17": 1.22228198782888,
+                "42": 1.222188261645789,
+                "123": 1.222241906062898
+              },
+              "n_seeds": 3,
+              "n_seeds_unreliable": 0,
+              "distance_to_matched": [
+                0.00038665720023800705,
+                0.0003479829057159826,
+                0.00042737890728336233
+              ],
+              "distance_to_loo": [
+                1.222628563263136,
+                1.222629970734596,
+                1.2226156405530726
+              ]
+            },
+            "gx_mll_192041": {
+              "mean_delta_oracle": 1.3970767857593656,
+              "per_seed": {
+                "17": 1.3975311185946269,
+                "42": 1.3966085007832278,
+                "123": 1.397090737900242
+              },
+              "n_seeds": 3,
+              "n_seeds_unreliable": 0,
+              "distance_to_matched": [
+                0.0002869956985925925,
+                7.147511343418791e-05,
+                0.000527954306487034
+              ],
+              "distance_to_loo": [
+                1.3973777335988347,
+                1.397602593708061,
+                1.397136455089715
+              ]
+            }
+          },
+          "criteria": {
+            "min_mean_delta_oracle": 0.0,
+            "aggregation": "mean over edit seeds, per set"
+          },
+          "failures": []
+        }
+      },
+      "coverage": {
+        "n_cells_evaluated": 15,
+        "n_cells_expected_when_complete": 15,
+        "n_sets_covered": 5,
+        "n_sets": 5,
+        "sets_with_no_cells": [],
+        "complete": true
+      },
+      "n_cells_evaluated": 15,
+      "proceed_to_full_matrix": false,
+      "proceed_note": "the full 12-target matrix may proceed only when all four gates pass; a null sibling metric on a set with no structural sibling does not block, and is not a pass either"
+    },
+    "sets": [
+      {
+        "set_id": "gx_mll_151252",
+        "seed": 17,
+        "target_label": "Software Engineer",
+        "target_soc": "15-1252",
+        "exact_label": "Software Engineer",
+        "coarser_label": "Software and Web Developers, Programmers, and Testers",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "003",
+          "004"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_151252",
+        "seed": 42,
+        "target_label": "Software Engineer",
+        "target_soc": "15-1252",
+        "exact_label": "Software Engineer",
+        "coarser_label": "Software and Web Developers, Programmers, and Testers",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "003",
+          "004"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_151252",
+        "seed": 123,
+        "target_label": "Software Engineer",
+        "target_soc": "15-1252",
+        "exact_label": "Software Engineer",
+        "coarser_label": "Software and Web Developers, Programmers, and Testers",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "003",
+          "004"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_191023",
+        "seed": 17,
+        "target_label": "Marine Biologist",
+        "target_soc": "19-1023",
+        "exact_label": "Marine Biologist",
+        "coarser_label": "Biological Scientists",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "006",
+          "009"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_191023",
+        "seed": 42,
+        "target_label": "Marine Biologist",
+        "target_soc": "19-1023",
+        "exact_label": "Marine Biologist",
+        "coarser_label": "Biological Scientists",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "006",
+          "009"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_191023",
+        "seed": 123,
+        "target_label": "Marine Biologist",
+        "target_soc": "19-1023",
+        "exact_label": "Marine Biologist",
+        "coarser_label": "Biological Scientists",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "006",
+          "009"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_192041",
+        "seed": 17,
+        "target_label": "Environmental Scientist",
+        "target_soc": "19-2041",
+        "exact_label": "Environmental Scientist",
+        "coarser_label": "Environmental Scientists and Geoscientists",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "001",
+          "007"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_192041",
+        "seed": 42,
+        "target_label": "Environmental Scientist",
+        "target_soc": "19-2041",
+        "exact_label": "Environmental Scientist",
+        "coarser_label": "Environmental Scientists and Geoscientists",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "001",
+          "007"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_192041",
+        "seed": 123,
+        "target_label": "Environmental Scientist",
+        "target_soc": "19-2041",
+        "exact_label": "Environmental Scientist",
+        "coarser_label": "Environmental Scientists and Geoscientists",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "001",
+          "007"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_193091",
+        "seed": 17,
+        "target_label": "Cultural Anthropologist",
+        "target_soc": "19-3091",
+        "exact_label": "Cultural Anthropologist",
+        "coarser_label": "Miscellaneous Social Scientists and Related Workers",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "301",
+          "314"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_193091",
+        "seed": 42,
+        "target_label": "Cultural Anthropologist",
+        "target_soc": "19-3091",
+        "exact_label": "Cultural Anthropologist",
+        "coarser_label": "Miscellaneous Social Scientists and Related Workers",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "301",
+          "314"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_193091",
+        "seed": 123,
+        "target_label": "Cultural Anthropologist",
+        "target_soc": "19-3091",
+        "exact_label": "Cultural Anthropologist",
+        "coarser_label": "Miscellaneous Social Scientists and Related Workers",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "301",
+          "314"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_254012",
+        "seed": 17,
+        "target_label": "Museum Curator",
+        "target_soc": "25-4012",
+        "exact_label": "Museum Curator",
+        "coarser_label": "Archivists, Curators, and Museum Technicians",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "034",
+          "120"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_254012",
+        "seed": 42,
+        "target_label": "Museum Curator",
+        "target_soc": "25-4012",
+        "exact_label": "Museum Curator",
+        "coarser_label": "Archivists, Curators, and Museum Technicians",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "034",
+          "120"
+        ],
+        "n_retained_identities": 33
+      },
+      {
+        "set_id": "gx_mll_254012",
+        "seed": 123,
+        "target_label": "Museum Curator",
+        "target_soc": "25-4012",
+        "exact_label": "Museum Curator",
+        "coarser_label": "Archivists, Curators, and Museum Technicians",
+        "target_depth": 1,
+        "n_target_identities": 2,
+        "target_identity_ids": [
+          "034",
+          "120"
+        ],
+        "n_retained_identities": 33
+      }
+    ],
+    "provenance": {
+      "executing_commit": "97a72701009dfb1d8fec39ece8c0723d53c2a6c0",
+      "script_sha256": "f06d588752c2362cfef01f9a3ff4366a5467259229f453a4cca70fc20d96bfcb",
+      "hierarchy": {
+        "hierarchy_artifact": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json",
+        "hierarchy_content_sha256": "fd254a1750e1b9d64a599d9b2d795bca4c0d70e107bcf9c5332f8fcdfeaa6728",
+        "selection_manifest": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_target_selection.json",
+        "selection_sha256": "a55ce00e38d70630c74db14904f2819a735b7a56dfc773d9a7f03573f5082b97",
+        "source_table_path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+        "source_table_sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+        "source_dataset": {
+          "path": "/scratch/wutiantong/datasets/MLLMU-Bench/data/Full_Set.jsonl",
+          "outside_repository": true,
+          "sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+          "n_identities": 500,
+          "n_distinct_professions": 71,
+          "count_semantics": "one identity per JSONL line; the profession is biography.Employment, a JSON string nested inside the row rather than a top-level key"
+        },
+        "g7_status": "committed",
+        "n_records": 71,
+        "n_retained": 30,
+        "n_selected_targets": 12,
+        "verified": {
+          "ok": true,
+          "gates_passed": true,
+          "selection_reproduced_from_artifact": true,
+          "selection_manifest_checks": {
+            "hierarchy_digest_matches": true,
+            "selected_targets_match": true,
+            "target_count_matches": true,
+            "distinct_leaf_count_matches": true,
+            "identity_counts_match": true,
+            "selection_digest_matches": true
+          },
+          "committed_state": {
+            "hierarchy_artifact": {
+              "tracked": true,
+              "matches_index": true,
+              "matches_head": true,
+              "clean": true
+            },
+            "source_soc_table": {
+              "tracked": true,
+              "matches_index": true,
+              "matches_head": true,
+              "clean": true
+            },
+            "target_selection_manifest": {
+              "tracked": true,
+              "matches_index": true,
+              "matches_head": true,
+              "clean": true
+            }
+          },
+          "n_warnings": 6
+        }
+      },
+      "source_dataset_sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+      "source_dataset_matches_frozen": true,
+      "clean_worktree": {
+        "repo_root": "/scratch/wutiantong/MIDP",
+        "git_commit": "97a72701009dfb1d8fec39ece8c0723d53c2a6c0",
+        "dirty_tracked_only": false,
+        "n_dirty_tracked_only": 0,
+        "dirty_tracked_only_lines": [],
+        "dirty_including_untracked": true,
+        "n_dirty_including_untracked": 169,
+        "untracked_outside_exclusions": [],
+        "excluded_prefixes": [
+          "datasets/route-unlearning-data/e2c_granularity/outputs/mllmu/"
+        ],
+        "n_excluded": 169,
+        "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts"
+      },
+      "identity_counts_sha256": "799706bc4b1f8ae019c7561ccc90fb7857d81877f5c1965e1ccf6a11db504ead",
+      "selection_criteria": {
+        "deferred_are_not_rejected": "a deferred profession keeps matrix_role=target_eligible and can be promoted without re-adjudicating its mapping",
+        "max_per_major_group": 3,
+        "min_identities": 2,
+        "order": "adjudicated primary targets first, then identity frequency descending, then label"
+      },
+      "config": {
+        "seed": 17,
+        "device": "cuda:0",
+        "edit_seeds": [
+          17,
+          42,
+          123
+        ],
+        "ids_per_profession": 2,
+        "target_depth": 1
+      }
+    },
+    "n_cells_adapted": 15
+  },
+  "elapsed_sec": 72030.3,
+  "elapsed_this_pass_sec": 6.6,
+  "elapsed_prior_passes_sec": 72023.7,
+  "elapsed_covers": "every pass whose artifact this one overwrites, including the GPU passes that trained the cells and the oracles; a CPU re-aggregation adds its own seconds and erases nothing",
+  "elapsed_accumulation": "prior elapsed_sec read from the artifact this pass overwrites",
+  "devices_used": [
+    "NVIDIA RTX 6000 Ada Generation",
+    "cpu"
+  ],
+  "gpu": "cpu"
+}

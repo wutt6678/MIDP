@@ -1,0 +1,914 @@
+{
+  "dataset": "mllmu",
+  "configured_full_seeds": [
+    17,
+    42,
+    123
+  ],
+  "executed_seeds": [
+    17,
+    42,
+    123
+  ],
+  "run_stage": "full_matrix",
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "n_sets": 5,
+  "cells_evaluated": 15,
+  "full_matrix_cells_expected": 15,
+  "cells_expected": 15,
+  "cell_pass_total": 11,
+  "oracle_family_definitions": {
+    "matched_finetune": "trained baseline h init; transformed full mapping (continued fine-tuning reference)",
+    "loo_finetune": "trained baseline h init; retained mapping only (deletion-as-fine-tuning reference)",
+    "matched_retrain": "FRESH base + fresh LoRA; transformed full mapping; route h's own protocol (3000/200/2e-05, uniform repeat 50, seed 17) PLUS the EDIT recipe's target oversampling (target_boost=5); reported as matched_retrain_weighted.  The x5 is mx.TARGET_BOOST from the suppression recipe, NOT route h's recipe: rd.train_h builds every mapping at a uniform repeat with no target boost",
+    "matched_retrain_balanced": "as matched_retrain but target_boost=1 (GX2B): the transformed mapping appears once per epoch like each retained mapping, which is how route h itself is trained",
+    "loo_retrain": "FRESH base + fresh LoRA; retained mapping only; same protocol, no transformed target to weight",
+    "delta_ft_l2": "D(edit, loo_finetune) - D(edit, matched_finetune)",
+    "delta_retrain_l2": "D(edit, loo_retrain) - D(edit, matched_retrain)"
+  },
+  "correction": {
+    "corrects_commit": "a1df9be",
+    "issue": "G3 described edits as 'policy-matched-retraining equivalent', but its matched/LOO oracles were continued fine-tuning from the trained baseline h, not fresh retraining; aggregation also let the refusal control contribute to the granularity headline and reported sibling accuracy without coverage.",
+    "repair": "G3.1: four named oracle families, separate Delta_FT / Delta_retrain, taxonomic-vs-refusal blocks, sibling coverage counts, configured-vs-executed seed fields, numeric LOO reference, CPU re-evaluation of existing edited checkpoints (weights untouched)."
+  },
+  "reference_naming": {
+    "matched_retrain_weighted": "target_boost=5: the transformed mapping is oversampled 5x.  That x5 is mx.TARGET_BOOST from the EDIT/suppression recipe, NOT route h's recipe -- rd.train_h builds every mapping at a uniform repeat=ROUTE_REPEAT with no target boost",
+    "matched_retrain_balanced": "target_boost=1: the transformed mapping appears once per epoch, exactly like each retained mapping, which is how route h itself is trained",
+    "stored_numeric_keys_keep_the_shorthand": "d_E_Mx1 / d_E_Mx5 / delta_x1 / delta_x5 / Mx1_vs_Mx5 / Mx1_closer_than_L are UNCHANGED: renaming a stored key would break comparability with the committed ablation reports and with the cells already measured under those keys",
+    "key_to_name": {
+      "Mx1": "matched_retrain_balanced",
+      "Mx5": "matched_retrain_weighted",
+      "x1": "matched_retrain_balanced",
+      "x5": "matched_retrain_weighted",
+      "L": "loo_retrain",
+      "E": "edited cell E (edit seed 17)"
+    }
+  },
+  "g3_1_gate": {
+    "status": "evaluated",
+    "passed": false,
+    "margin_l2": 0.5,
+    "n_transformation_targets": 30,
+    "n_with_retrain_oracles": 30,
+    "conditions": [
+      "matched_retrain fits ALL transformed and retained mappings (strict 1.0)",
+      "matched_retrain candidate mass >= 0.99",
+      "delta_retrain_l2 >= margin (material separation)",
+      "D(edit, matched_retrain) < D(edit, loo_retrain)",
+      "holds for EVERY transformation target, refusal controls excluded"
+    ],
+    "coverage": {
+      "n_separation_established": 30,
+      "n_separation_not_established": 0,
+      "n_established_and_failing": 12,
+      "gate_fails_on": "conditions",
+      "established_and_failing": [
+        {
+          "cell_id": "gx_mll_151252__seed123",
+          "target": "003",
+          "seed": 123
+        },
+        {
+          "cell_id": "gx_mll_151252__seed123",
+          "target": "004",
+          "seed": 123
+        },
+        {
+          "cell_id": "gx_mll_151252__seed17",
+          "target": "003",
+          "seed": 17
+        },
+        {
+          "cell_id": "gx_mll_151252__seed17",
+          "target": "004",
+          "seed": 17
+        },
+        {
+          "cell_id": "gx_mll_151252__seed42",
+          "target": "003",
+          "seed": 42
+        },
+        {
+          "cell_id": "gx_mll_151252__seed42",
+          "target": "004",
+          "seed": 42
+        },
+        {
+          "cell_id": "gx_mll_254012__seed123",
+          "target": "034",
+          "seed": 123
+        },
+        {
+          "cell_id": "gx_mll_254012__seed123",
+          "target": "120",
+          "seed": 123
+        },
+        {
+          "cell_id": "gx_mll_254012__seed17",
+          "target": "034",
+          "seed": 17
+        },
+        {
+          "cell_id": "gx_mll_254012__seed17",
+          "target": "120",
+          "seed": 17
+        },
+        {
+          "cell_id": "gx_mll_254012__seed42",
+          "target": "034",
+          "seed": 42
+        },
+        {
+          "cell_id": "gx_mll_254012__seed42",
+          "target": "120",
+          "seed": 42
+        }
+      ],
+      "not_established": [],
+      "meaning": "'not established' is NOT 'failed'.  A null delta_retrain_l2 means the frozen MIN_CANDIDATE_MASS=0.01 distance gate refused to renormalize the loo_retrain distribution at that target, so there is no LOO distance to compare against and no comparison was made.  The gate above requires EVERY transformation target, so an incomplete coverage makes passed=false on its own even when not one established comparison failed.",
+      "not_a_pending_job": "the loo_retrain reference for these targets IS trained and committed at the frozen protocol (3000/200/2e-05, repeat 50, seed 17); re-running it at that protocol reproduces the same candidate-score support, so the gap is a property of the frozen reference and not of an unfinished job",
+      "no_seed_substitution": "coverage may be widened only by a DECLARED sensitivity analysis that reports every outcome; a favorable oracle seed must never be substituted into this primary gate",
+      "sensitivity_analysis_available": "coverage is COMPLETE: every transformation target has an established matched-vs-LOO comparison, so no sensitivity analysis is pending and none could widen this gate.  GX2S (oracle seeds 42/123, separate report, never reads or writes this gate) remains available as an ablation over the representative sets if a seed-dependence question is asked later."
+    },
+    "per_target": [
+      {
+        "cell_id": "gx_mll_151252__seed123",
+        "target": "003",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.999085143566033,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.00041678371432398673,
+        "l2_to_loo_retrain": 1.231191656057558,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.230774872343234,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_151252__seed123",
+        "target": "004",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.999085143566033,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0014254081727737196,
+        "l2_to_loo_retrain": 1.2108690032939995,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2094435951212257,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_151252__seed17",
+        "target": "003",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.999085143566033,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0003763881657317041,
+        "l2_to_loo_retrain": 1.231160732135107,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2307843439693753,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_151252__seed17",
+        "target": "004",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.999085143566033,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.001843447563518065,
+        "l2_to_loo_retrain": 1.2106220433895851,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.208778595826067,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_151252__seed42",
+        "target": "003",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.999085143566033,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0004251394374864112,
+        "l2_to_loo_retrain": 1.2313267062729893,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.230901566835503,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_151252__seed42",
+        "target": "004",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.999085143566033,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0005582418385505682,
+        "l2_to_loo_retrain": 1.2113816032695868,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2108233614310362,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_191023__seed123",
+        "target": "006",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9998462197240071,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0003783489036283522,
+        "l2_to_loo_retrain": 1.353965895388049,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3535875464844205,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_191023__seed123",
+        "target": "009",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9998462197240071,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.00030826352764215536,
+        "l2_to_loo_retrain": 1.3978059213805787,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3974976578529366,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_191023__seed17",
+        "target": "006",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9998462197240071,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0002793737471320408,
+        "l2_to_loo_retrain": 1.3540215712662633,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3537421975191313,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_191023__seed17",
+        "target": "009",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9998462197240071,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0003359840321632515,
+        "l2_to_loo_retrain": 1.3977646576841594,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.397428673651996,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_191023__seed42",
+        "target": "006",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9998462197240071,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.00047568370502676567,
+        "l2_to_loo_retrain": 1.353931361749148,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3534556780441211,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_191023__seed42",
+        "target": "009",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9998462197240071,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.00029176736425800447,
+        "l2_to_loo_retrain": 1.3978202823602093,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3975285149959513,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_192041__seed123",
+        "target": "001",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9996188554118737,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.00025611044174997475,
+        "l2_to_loo_retrain": 1.4140664805962353,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.4138103701544853,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_192041__seed123",
+        "target": "007",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9996188554118737,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0003022427068784623,
+        "l2_to_loo_retrain": 1.3374987217458612,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3371964790389828,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_192041__seed17",
+        "target": "001",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9996188554118737,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 6.290655758187367e-05,
+        "l2_to_loo_retrain": 1.4141278089320861,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.4140649023745042,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_192041__seed17",
+        "target": "007",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9996188554118737,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 6.838052729656032e-05,
+        "l2_to_loo_retrain": 1.3376302786000158,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3375618980727193,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_192041__seed42",
+        "target": "001",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9996188554118737,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0009846642716117998,
+        "l2_to_loo_retrain": 1.413686941700322,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.4127022774287101,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_192041__seed42",
+        "target": "007",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9996188554118737,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 5.553000619199043e-05,
+        "l2_to_loo_retrain": 1.337636857248498,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.337581327242306,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_193091__seed123",
+        "target": "301",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9991419015304189,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 2.112916008930205e-05,
+        "l2_to_loo_retrain": 1.3484724109209492,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3484512817608598,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_193091__seed123",
+        "target": "314",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9991419015304189,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 1.813261247667632e-05,
+        "l2_to_loo_retrain": 1.2353783053622263,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2353601727497496,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_193091__seed17",
+        "target": "301",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9991419015304189,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 1.7961396823813555e-05,
+        "l2_to_loo_retrain": 1.3484763090854728,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.348458347688649,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_193091__seed17",
+        "target": "314",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9991419015304189,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 5.200050808900375e-06,
+        "l2_to_loo_retrain": 1.2353950954072883,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2353898953564795,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_193091__seed42",
+        "target": "301",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9991419015304189,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 1.3612901822579292e-05,
+        "l2_to_loo_retrain": 1.3484789111043765,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3484652982025538,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_193091__seed42",
+        "target": "314",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": true,
+        "matched_retrain_strict": 1.0,
+        "matched_retrain_mass": 0.9991419015304189,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 4.920028345642142e-05,
+        "l2_to_loo_retrain": 1.235347406091307,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2352982058078505,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_254012__seed123",
+        "target": "034",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.9991128811160906,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.002135635812497477,
+        "l2_to_loo_retrain": 1.2138619094804306,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.211726273667933,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_254012__seed123",
+        "target": "120",
+        "seed": 123,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.9991128811160906,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.00024282302031309932,
+        "l2_to_loo_retrain": 1.3767385674581933,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3764957444378803,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_254012__seed17",
+        "target": "034",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.9991128811160906,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0010782163771030156,
+        "l2_to_loo_retrain": 1.2145469734020586,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2134687570249556,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_254012__seed17",
+        "target": "120",
+        "seed": 17,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.9991128811160906,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0011328254520415902,
+        "l2_to_loo_retrain": 1.376224912379184,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3750920869271426,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_254012__seed42",
+        "target": "034",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.9991128811160906,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 0.0029220994246482693,
+        "l2_to_loo_retrain": 1.2133784070730853,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.2104563076484371,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      },
+      {
+        "cell_id": "gx_mll_254012__seed42",
+        "target": "120",
+        "seed": 42,
+        "operation": "taxonomic",
+        "matched_retrain_fit_ok": false,
+        "matched_retrain_strict": 0.9428571428571428,
+        "matched_retrain_mass": 0.9991128811160906,
+        "matched_retrain_reliable": true,
+        "l2_to_matched_retrain": 1.4317638384081187e-05,
+        "l2_to_loo_retrain": 1.3768847520977734,
+        "loo_retrain_reliable": true,
+        "why_no_loo_retrain_distance": null,
+        "delta_retrain_l2": 1.3768704344593894,
+        "delta_retrain_established": true,
+        "delta_material": true,
+        "closer_to_matched_retrain": true
+      }
+    ]
+  },
+  "claims": {
+    "behavioral_claim": "11 of 15 evaluated cells satisfy the frozen behavioral criteria (15 expected when complete), so 4 cell(s) FAIL and the behavioral conclusion does not hold.",
+    "oracle_separation_claim": "Matched-vs-LOO retraining separation is established for 30 of 30 target-seed comparisons, but 12 of the established comparisons FAIL the conditions.  It is NOT established for the remaining 0: none.  no cause recorded.  The G3.1 gate reports passed=false because it requires EVERY transformation target.  Retraining the reference until it happens to pass is not a repair: that reference is already trained and committed at the frozen protocol, and re-running the same protocol reproduces the same candidate-score support.",
+    "supported_finetune_reference": "Over the evaluated code prompts and candidate-label space, the edit is extremely close to a transformation-matched CONTINUED-FINE-TUNING reference (baseline-h init) and far from the corresponding leave-one-out fine-tuning reference. L2-to-matched_finetune mean=0.000562 (n=30), Delta_FT mean=1.294177 (min=1.13800098).",
+    "retraining_claim": "'Close to policy-matched retraining' is NOT yet supported: retrain-family oracles are missing or the G3.1 gate has not passed (status=evaluated).",
+    "equivalence_scope": "A tiny L2 between two nearly one-hot distributions over the evaluated candidate set does NOT establish global functional or parameter equivalence; every proximity claim is scoped to the evaluated code prompts and candidate-label space.",
+    "sibling_coverage": "The available sibling control(s) passed 6/6; all other retained controls passed. Targets without a retained sibling (unique branch or co-targeted) have a null sibling metric, never a vacuous 1.0.",
+    "refusal_separation": "Refusal controls are reported in a separate block and never contribute to the granularity (transformation) headline."
+  },
+  "scope": {
+    "multi_seed_meaning": "stable across three EDIT-TRAINING seeds; router, baseline h, cached routing predictions, set selection and oracle seed are fixed",
+    "transformations": "granularity (taxonomic/numeric) + refusal controls; see per-mode breakdown"
+  },
+  "per_mode": {
+    "single_level1": {
+      "n_cells": 15,
+      "cell_pass": 11,
+      "criterion_fail_counts": {
+        "strict_expected_accuracy==1.0": 1,
+        "min_target_p_desired>=0.90": 0,
+        "max_target_p_source<=0.01": 0,
+        "min_candidate_mass>=0.99": 4,
+        "retained_strict_accuracy==1.0": 1,
+        "sibling_strict_accuracy==1.0": 0,
+        "wrong_branch_rate==0": 0,
+        "unparseable_outputs==0": 0,
+        "multi_label_outputs==0": 0
+      },
+      "strict_expected_accuracy": {
+        "mean": 0.998095,
+        "std": 0.007377,
+        "min": 0.97142857,
+        "max": 1.0,
+        "n": 15
+      },
+      "retain_acc": {
+        "mean": 0.99798,
+        "std": 0.007824,
+        "min": 0.96969697,
+        "max": 1.0,
+        "n": 15
+      },
+      "sibling_acc": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "n": 6
+      },
+      "sibling_coverage": {
+        "cells_with_sibling_controls": 6,
+        "n_cells": 15,
+        "sibling_controls_total": 6,
+        "note": "sibling metric is null (never vacuous 1.0) for targets whose sibling is co-targeted or unique in the sampled hierarchy; coverage must always be reported next to any sibling accuracy"
+      },
+      "min_target_p_desired": {
+        "mean": 0.992674,
+        "std": 0.006721,
+        "min": 0.97831972,
+        "max": 0.9979378,
+        "n": 15
+      },
+      "max_target_p_source": {
+        "mean": 7.2e-05,
+        "std": 0.000186,
+        "min": 0.0,
+        "max": 0.00070918,
+        "n": 15
+      },
+      "min_candidate_mass": {
+        "mean": 0.984399,
+        "std": 0.032196,
+        "min": 0.87016841,
+        "max": 0.99758422,
+        "n": 15
+      },
+      "target_classification_counts": {
+        "correct": 30
+      },
+      "transformation_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 0.000562,
+          "std": 0.000731,
+          "min": 4.19e-06,
+          "max": 0.00298862,
+          "n": 30
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.294738,
+          "std": 0.09476,
+          "min": 1.13918385,
+          "max": 1.40402225,
+          "n": 30
+        },
+        "l2_to_matched_retrain": {
+          "mean": 0.00055,
+          "std": 0.000711,
+          "min": 5.2e-06,
+          "max": 0.0029221,
+          "n": 30
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.31199,
+          "std": 0.077395,
+          "min": 1.21062204,
+          "max": 1.41412781,
+          "n": 30
+        },
+        "delta_ft_l2": {
+          "mean": 1.294177,
+          "std": 0.094574,
+          "min": 1.13800098,
+          "max": 1.40397163,
+          "n": 30
+        },
+        "delta_retrain_l2": {
+          "mean": 1.31144,
+          "std": 0.077723,
+          "min": 1.2087786,
+          "max": 1.4140649,
+          "n": 30
+        }
+      },
+      "refusal_controls": {
+        "l2_to_matched_finetune": null,
+        "l2_to_loo_finetune": null,
+        "l2_to_matched_retrain": null,
+        "l2_to_loo_retrain": null,
+        "delta_ft_l2": null,
+        "delta_retrain_l2": null
+      },
+      "all_targets": {
+        "l2_to_matched_finetune": {
+          "mean": 0.000562,
+          "std": 0.000731,
+          "min": 4.19e-06,
+          "max": 0.00298862,
+          "n": 30
+        },
+        "l2_to_loo_finetune": {
+          "mean": 1.294738,
+          "std": 0.09476,
+          "min": 1.13918385,
+          "max": 1.40402225,
+          "n": 30
+        },
+        "l2_to_matched_retrain": {
+          "mean": 0.00055,
+          "std": 0.000711,
+          "min": 5.2e-06,
+          "max": 0.0029221,
+          "n": 30
+        },
+        "l2_to_loo_retrain": {
+          "mean": 1.31199,
+          "std": 0.077395,
+          "min": 1.21062204,
+          "max": 1.41412781,
+          "n": 30
+        },
+        "delta_ft_l2": {
+          "mean": 1.294177,
+          "std": 0.094574,
+          "min": 1.13800098,
+          "max": 1.40397163,
+          "n": 30
+        },
+        "delta_retrain_l2": {
+          "mean": 1.31144,
+          "std": 0.077723,
+          "min": 1.2087786,
+          "max": 1.4140649,
+          "n": 30
+        }
+      },
+      "retained_l2_max_by_family": {
+        "matched_finetune": {
+          "mean": 0.0546,
+          "std": 0.206997,
+          "min": 0.00019663,
+          "max": 0.8028359,
+          "n": 15
+        },
+        "loo_finetune": {
+          "mean": 0.054608,
+          "std": 0.206994,
+          "min": 0.00019119,
+          "max": 0.80283308,
+          "n": 15
+        },
+        "matched_retrain": {
+          "mean": 0.055184,
+          "std": 0.206758,
+          "min": 0.00032727,
+          "max": 0.80256219,
+          "n": 15
+        },
+        "loo_retrain": {
+          "mean": 0.054575,
+          "std": 0.207001,
+          "min": 0.00020995,
+          "max": 0.80282844,
+          "n": 15
+        }
+      },
+      "per_seed": {
+        "123": {
+          "cell_pass": false,
+          "strict": 1.0,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "checkpoint_sha256": "2715fecd6b78f996d24201d1fbb812aa19f673c7a778b8b67072d0bcf48fd85d"
+        },
+        "17": {
+          "cell_pass": false,
+          "strict": 1.0,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "checkpoint_sha256": "a22dd32c031ce5d96d4bbb5210772aa668c01220a6a571d14f0b3b8596940abd"
+        },
+        "42": {
+          "cell_pass": false,
+          "strict": 1.0,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "checkpoint_sha256": "24808983935d05bb01022d31251f35065a04364d547465b0cedd597e42583684"
+        }
+      }
+    }
+  },
+  "boundary_analysis": {}
+}
