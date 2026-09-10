@@ -127,6 +127,24 @@ def _load_sibling(module_name, filename):
 gx = _load_sibling("e2c_gx_shared", "e2c_v3_granularity.py")
 mh = _load_sibling("e2c_mh_shared", "e2c_v3_mllmu_hierarchy.py")
 
+_RV = None
+
+
+def parser_module():
+    """The module that owns the strict parser, loaded on demand and cached.
+
+    Lazy rather than module-level: ``e2c_v3_research_validity`` imports torch at
+    module scope, while this module is otherwise torch-free so its design tests
+    run in seconds.  The parser is needed only by ``validate_g6``, which is the
+    one place that must not reimplement label recognition -- a second copy of
+    the normalization rules is exactly how the two sides of the matcher drifted
+    apart in the first place.
+    """
+    global _RV
+    if _RV is None:
+        _RV = _load_sibling("e2c_rv_g6", "e2c_v3_research_validity.py")
+    return _RV
+
 MANIFEST_DIR = DATASET_ROOT / "e2c_mllmu" / "manifests"
 G6_MANIFEST_PATH = MANIFEST_DIR / "mllmu_g6_manifest.json"
 G6_MATRIX_PATH = MANIFEST_DIR / "matrix_mllmu.json"
@@ -570,6 +588,19 @@ def validate_g6(matrix, ctx, art):
             notes[entry['set_id']] = entry["control_notes"]
     vocab_issues, collisions = gx.validate_vocab(ctx["vocab"])
     issues.extend(vocab_issues)
+    # Every label this design expects the model to produce must round-trip
+    # through the strict parser, or the set is unpassable BY CONSTRUCTION and
+    # the failure presents as an "unparseable" model output -- pointing at the
+    # model instead of at the measurement.  Two of the five pilot targets are
+    # comma-bearing broad SOC titles; while recognized_labels_in stripped
+    # punctuation from the output text but not from the labels, the parser could
+    # not represent them, and the pilot's first real run reported 0.6 strict
+    # accuracy over 30 target rows that were every one byte-exact correct.  That
+    # cost 16 GPU-hours to discover; here it costs microseconds at freeze time.
+    issues.extend(
+        f"expected label the strict parser cannot recognize when emitted "
+        f"verbatim: {lab!r}"
+        for lab in parser_module().check_vocab_parseable(ctx["vocab"]))
     # gx.check_vocab_collisions returns TUPLES.  json.dump writes a tuple as an
     # array and json.load reads it back as a list, so storing the tuples
     # directly makes the freeze its own enemy: the next rebuild compares

@@ -166,6 +166,18 @@ def recognized_labels_in(text, vocab):
     "Software Developer"): at each position the LONGEST matching label wins,
     so "Software Developer" is recognized as one label, not skipped/failed.
     Single-token vocabularies behave exactly as before.
+
+    BOTH SIDES ARE NORMALIZED IDENTICALLY.  This was once asymmetric: ``clean``
+    was applied to the text's tokens but labels were split with a bare
+    ``l.lower().split()``, so a label containing punctuation could never match.
+    "Software and Web Developers, Programmers, and Testers" -- the broad SOC
+    title that is the correct post-edit answer for two of the five MLLMU pilot
+    sets -- was scored UNPARSEABLE when the model emitted it verbatim, because
+    the text token "developers" (comma stripped) never equalled the label token
+    "developers," (comma kept).  That silently cost 12 of 30 target rows and
+    reported a 0.6 strict accuracy over an edit that had succeeded on all 30.
+    SALMU (30 labels) and CelebA-numeric (42 labels) contain no punctuation, so
+    the bug was latent until a comma-bearing vocabulary arrived.
     """
     if not text:
         return []
@@ -174,8 +186,17 @@ def recognized_labels_in(text, vocab):
         return t.strip().strip(".,!?;:'\"()[]{}").lower()
 
     tokens = [clean(t) for t in text.strip().split()]
+
+    def span_of(label):
+        # A label made only of punctuation would clean to an empty span, which
+        # would then match at every position; drop those rather than let a
+        # degenerate vocab entry swallow the whole output.
+        s = tuple(clean(t) for t in label.split())
+        return s if s and all(s) else None
+
     # (token-tuple, label), longest first for greedy matching, then stable
-    label_spans = sorted(((tuple(l.lower().split()), l) for l in vocab),
+    label_spans = sorted(((sp, l) for l in vocab
+                          if (sp := span_of(l)) is not None),
                          key=lambda x: (-len(x[0]), x[1]))
     seen, out = set(), []
     i = 0
@@ -210,6 +231,29 @@ def parse_recognized_label(text, vocab):
     """
     labels = recognized_labels_in(text, vocab)
     return labels[0] if len(labels) == 1 else None
+
+
+def check_vocab_parseable(vocab):
+    """Every vocabulary label that cannot be recognized when emitted verbatim.
+
+    The invariant is ``parse_recognized_label(label, vocab) == label`` for each
+    label.  A label failing it can never be scored correct no matter what the
+    model produces, so any set whose expected post-edit answer is that label is
+    unpassable BY CONSTRUCTION -- and the failure surfaces as "unparseable",
+    which reads as a model defect rather than the measurement defect it is.
+
+    This is the design-time half of the comma bug.  Two of the five MLLMU pilot
+    sets target broad SOC titles containing commas ("Software and Web
+    Developers, Programmers, and Testers" and "Archivists, Curators, and Museum
+    Technicians"); while ``recognized_labels_in`` normalized punctuation out of
+    the output text but not out of the labels, the parser could not represent
+    them, so 12 of 30 target rows were scored unparseable although the model had
+    emitted the expected string exactly, and strict accuracy reported 0.6 over
+    an edit that had succeeded on all 30.  Checking this costs microseconds on
+    CPU and fires at freeze time, before any GPU hour is spent on a design that
+    cannot pass.
+    """
+    return [lab for lab in vocab if parse_recognized_label(lab, vocab) != lab]
 
 
 def distribution_distance(p, q, metric="l2", labels=None):

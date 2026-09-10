@@ -448,6 +448,17 @@ def build_or_verify(ds, args):
             notes[entry["set_id"]] = entry["control_notes"]
     vocab_issues, collisions = gx.validate_vocab(ctx["vocab"])
     issues.extend(vocab_issues)
+    # Every label must be recognizable when the model emits it verbatim.  A
+    # label that fails this makes any set targeting it unpassable by
+    # construction, and the symptom -- "unparseable" output -- points at the
+    # model instead of at the measurement.  Two MLLMU pilot sets target
+    # comma-bearing broad SOC titles that a punctuation-asymmetric parser could
+    # not represent; that check belongs here, before execution, not in a
+    # post-mortem of the gate results.
+    issues.extend(
+        f"vocab label the strict parser cannot recognize when emitted "
+        f"verbatim: {lab!r}"
+        for lab in rv.check_vocab_parseable(ctx["vocab"]))
     if ds == "celeba_numeric":
         nm = json.loads((MANIFEST_DIR / "numeric_manifest.json").read_text())
         issues.extend(gx.validate_numeric_boundary_coverage(nm))
@@ -952,6 +963,34 @@ def _classify(ctx, entry, iid, parsed):
     return res
 
 
+def hard_pred_from_raw(ctx, entry, iid, raw):
+    """One identity's hard-eval row, derived from ALREADY-GENERATED text.
+
+    Split out of ``_hard_eval`` so the live GPU path and the CPU re-parse path
+    (GX2P) cannot diverge: every field except ``raw`` is a pure function of
+    ``raw``, ``ctx`` and ``entry``, so re-scoring stored outputs recomputes
+    exactly what generation would have recorded.  Had this been duplicated, a
+    parser fix could have been applied to one copy and silently not the other.
+    """
+    labels = rv.recognized_labels_in(raw, ctx["vocab"])
+    parsed = rv.parse_recognized_label(raw, ctx["vocab"])
+    exp = expected_label(ctx, entry, iid)
+    cls = _classify(ctx, entry, iid, parsed)
+    return {
+        "identity_id": iid, "raw": raw, "parsed_label": parsed,
+        "recognized_labels": labels,
+        "multi_label_ambiguous": len(labels) > 1,
+        "group": ("target" if iid in entry["assignments"]
+                  else control_group(ctx, entry, iid)),
+        "expected_post_edit": exp,
+        "correct_post_edit": parsed == exp,
+        "source_leaked": (iid in entry["assignments"]
+                          and entry["assignments"][iid]["source"]
+                          in labels),
+        **cls,
+    }
+
+
 def _hard_eval(session, ctx, entry, args):
     backend = session.backend()
     session.model.eval()
@@ -961,24 +1000,8 @@ def _hard_eval(session, ctx, entry, args):
             prompt = rd.CODE_TO_ALIAS_PROMPT.format(code=ctx["code_of"][iid])
             gen = backend.generate(None, prompt,
                                    max_new_tokens=args.max_gen_tokens)
-            raw = gen.text.strip()
-            labels = rv.recognized_labels_in(raw, ctx["vocab"])
-            parsed = rv.parse_recognized_label(raw, ctx["vocab"])
-            exp = expected_label(ctx, entry, iid)
-            cls = _classify(ctx, entry, iid, parsed)
-            preds.append({
-                "identity_id": iid, "raw": raw, "parsed_label": parsed,
-                "recognized_labels": labels,
-                "multi_label_ambiguous": len(labels) > 1,
-                "group": ("target" if iid in entry["assignments"]
-                          else control_group(ctx, entry, iid)),
-                "expected_post_edit": exp,
-                "correct_post_edit": parsed == exp,
-                "source_leaked": (iid in entry["assignments"]
-                                  and entry["assignments"][iid]["source"]
-                                  in labels),
-                **cls,
-            })
+            preds.append(hard_pred_from_raw(ctx, entry, iid,
+                                            gen.text.strip()))
     return preds
 
 
@@ -1150,6 +1173,104 @@ def reevaluate_oracles_cpu(ds, ctx, matrix, out_base):
         logger.info("GX2R[%s]: families recomputed", cell["cell_id"])
     logger.info(f"GX2R: {n} cell files re-evaluated")
     return n
+
+
+def reparse_cells_cpu(ds, ctx, matrix, out_base):
+    """GX2P: re-derive every stored cell's hard predictions and criteria from
+    the raw text already recorded in it.  CPU-only: no checkpoint is loaded and
+    nothing is regenerated.
+
+    ``parsed_label`` is a pure function of ``raw`` and the vocab, so when the
+    parser is wrong the stored verdicts are wrong while the evidence needed to
+    correct them is already on disk.  A comma-blind ``recognized_labels_in``
+    scored 12 of 30 MLLMU target rows unparseable even though the model had
+    emitted the expected broad SOC title verbatim, reporting 0.6 strict accuracy
+    over an edit that had in fact succeeded on all 30.  Re-deriving from ``raw``
+    corrects the MEASUREMENT without touching the OBSERVATION, and needs no GPU.
+
+    Only ``hard_preds`` and ``criteria`` are rewritten; ``raw``, ``soft``,
+    ``soft_probs_full``, the oracle blocks and ``checkpoint_sha256`` are left
+    exactly as stored, so the correction is auditable against the committed
+    record.  Returns a per-cell change log rather than a count: a re-score that
+    cannot show what it changed is not a reviewable correction.
+    """
+    logger.info("=" * 60)
+    logger.info(f"GX2P: CPU re-parse of stored cells from recorded raw text "
+                f"({ds})")
+    logger.info("=" * 60)
+    n = n_changed = n_unchanged = 0
+    changes = []
+    for p in sorted((out_base / "cells").glob("*/seed_*/cell_results.json")):
+        with open(p) as f:
+            cell = json.load(f)
+        entry = next((e for e in matrix["sets"]
+                      if e["set_id"] == cell["set_id"]), None)
+        if entry is None:
+            logger.warning("GX2P[%s]: no matrix set; skipped", cell["cell_id"])
+            continue
+        if not cell.get("soft_probs_full"):
+            logger.warning("GX2P[%s]: no soft_probs_full; skipped",
+                           cell["cell_id"])
+            continue
+        n += 1
+        old_hard, old_crit = cell["hard_preds"], cell["criteria"]
+        new_hard = [hard_pred_from_raw(ctx, entry, r["identity_id"], r["raw"])
+                    for r in old_hard]
+        # summaries_from_probs rebuilds the BUILD-TIME soft shape (the one that
+        # carries "probs") which _pass_criteria consumes; the stored "soft"
+        # block is a reduced view and cannot be passed to it directly.
+        new_crit = _pass_criteria(
+            new_hard, summaries_from_probs(cell["soft_probs_full"], ctx),
+            entry, ctx)
+        # Never rewrite evidence that did not change.  Committed cells for
+        # SALMU (63) and CelebA-numeric (84) were scored by a parser this fix
+        # provably does not alter -- neither vocabulary contains punctuation --
+        # so re-parsing them must leave every byte alone and `git diff` must be
+        # empty.  Stamping a note or re-serializing an unchanged cell would
+        # dirty that record and make the no-op unprovable.
+        if new_hard == old_hard and new_crit == old_crit:
+            n_unchanged += 1
+            continue
+        flips = [{"identity_id": o["identity_id"],
+                  "was_parsed": o["parsed_label"],
+                  "now_parsed": w["parsed_label"],
+                  "was_classification": o.get("classification"),
+                  "now_classification": w.get("classification")}
+                 for o, w in zip(old_hard, new_hard)
+                 if o != w]
+        cell["hard_preds"] = new_hard
+        cell["criteria"] = new_crit
+        cell["reparse_note"] = (
+            "GX2P CPU re-parse: hard_preds and criteria re-derived from the "
+            "stored raw text after recognized_labels_in was fixed to normalize "
+            "label spans with the same punctuation stripping it already applied "
+            "to the output text.  raw, soft, soft_probs_full, the oracle blocks "
+            "and checkpoint_sha256 are unchanged; nothing was regenerated.")
+        with open(p, "w") as f:
+            json.dump(cell, f, indent=2)
+        n_changed += 1
+        changes.append({
+            "cell_id": cell["cell_id"],
+            "n_row_changes": len(flips),
+            "row_changes": flips,
+            "cell_pass_was": old_crit["cell_pass"],
+            "cell_pass_now": new_crit["cell_pass"],
+            "strict_expected_accuracy_was":
+                old_crit["strict_expected_accuracy"],
+            "strict_expected_accuracy_now":
+                new_crit["strict_expected_accuracy"],
+            "failed_criteria_was": old_crit["failed_criteria"],
+            "failed_criteria_now": new_crit["failed_criteria"],
+        })
+        logger.info("GX2P[%s]: %d row(s) changed; cell_pass %s -> %s; "
+                    "strict %.4f -> %.4f", cell["cell_id"], len(flips),
+                    old_crit["cell_pass"], new_crit["cell_pass"],
+                    old_crit["strict_expected_accuracy"],
+                    new_crit["strict_expected_accuracy"])
+    logger.info(f"GX2P: {n} cells re-parsed, {n_changed} changed, "
+                f"{n_unchanged} left untouched")
+    return {"n_cells": n, "n_changed": n_changed,
+            "n_unchanged": n_unchanged, "changes": changes}
 
 
 # ====================================================================== #
@@ -2740,8 +2861,8 @@ def parse_args():
     p.add_argument("--dataset", required=True,
                    choices=["salmu", "celeba_numeric", "mllmu"])
     p.add_argument("--phase", default="all",
-                   choices=["all", "GX0", "GX1R", "GX2", "GX2R", "GX2B",
-                            "GX2S", "GX3", "GX4", "GX5", "GX7"])
+                   choices=["all", "GX0", "GX1R", "GX2", "GX2P", "GX2R",
+                            "GX2B", "GX2S", "GX3", "GX4", "GX5", "GX7"])
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--seeds", type=int, nargs="+",
                    default=gx.SEEDS_DEFAULT)
@@ -2886,11 +3007,19 @@ def main():
                 oracle_results = json.load(f)
     if args.phase in ("all", "GX3", "GX4", "GX5"):
         run_cells(args, ds, ctx, matrix, out_base)
+    if args.phase in ("all", "GX2P"):
+        # GX2P: CPU re-parse of stored cells from the raw text they recorded.
+        # Runs BEFORE GX2R/GX7 so aggregation and the gates see corrected rows.
+        # The change log is filed, not just logged: a correction to committed
+        # evidence has to be reviewable after the fact.
+        reparse = reparse_cells_cpu(ds, ctx, matrix, out_base)
+        with open(out_base / "reparse_log.json", "w") as f:
+            json.dump({"dataset": ds, "phase": "GX2P", **reparse}, f, indent=2)
     if args.phase in ("all", "GX2R"):
         # G3.1: CPU re-evaluation of stored cells vs all four families
         reevaluate_oracles_cpu(ds, ctx, matrix, out_base)
     summary = None
-    if args.phase in ("all", "GX2R", "GX7"):
+    if args.phase in ("all", "GX2P", "GX2R", "GX7"):
         summary = aggregate_gx(ds, out_base, matrix, args)
         if args.phase in ("all", "GX7"):
             archive = {"release_dir": None, "hf_repo": None,

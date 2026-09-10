@@ -95,6 +95,169 @@ def test_parse_multitoken_longest_match_wins():
     assert rv.parse_recognized_label("Developer", vocab) == "Developer"
 
 
+# --------------------------------------------------------------------------- #
+# Punctuation inside labels: the MLLMU broad-SOC-title bug
+# --------------------------------------------------------------------------- #
+BROAD_SWE = "Software and Web Developers, Programmers, and Testers"
+BROAD_MUSEUM = "Archivists, Curators, and Museum Technicians"
+
+
+def test_a_label_containing_commas_is_recognized_when_emitted_verbatim():
+    """The regression test for a 16-GPU-hour misdiagnosis.
+
+    ``recognized_labels_in`` stripped punctuation from the OUTPUT's tokens but
+    split labels with a bare ``l.lower().split()``, so a label containing a comma
+    could never match.  Both of these are the CORRECT post-edit answer for two of
+    the five MLLMU pilot sets, and the model emitted them verbatim; they were
+    scored unparseable, reporting 0.6 strict accuracy over 30 target rows that
+    were every one correct.
+    """
+    vocab = [BROAD_SWE, BROAD_MUSEUM, "Software Developer", "Unknown"]
+    assert rv.parse_recognized_label(BROAD_SWE, vocab) == BROAD_SWE
+    assert rv.parse_recognized_label(BROAD_MUSEUM, vocab) == BROAD_MUSEUM
+    # and in the trailing-period form a model naturally produces
+    assert rv.parse_recognized_label(BROAD_SWE + ".", vocab) == BROAD_SWE
+    assert rv.parse_recognized_label(BROAD_SWE.lower(), vocab) == BROAD_SWE
+
+
+def test_a_broad_title_does_not_also_report_its_nested_detailed_label():
+    """Fixing the comma must not create a multi-label false positive.
+
+    'Software Developer' is a subsequence of the broad title's words.  If both
+    were returned, ``parse_recognized_label`` would reject the row as ambiguous
+    and the fix would trade one wrong verdict for another.
+    """
+    vocab = [BROAD_SWE, "Software Developer", "Unknown"]
+    assert rv.recognized_labels_in(BROAD_SWE, vocab) == [BROAD_SWE]
+    assert rv.parse_recognized_label(BROAD_SWE, vocab) == BROAD_SWE
+    # the detailed label on its own still resolves to itself
+    assert rv.parse_recognized_label("Software Developer", vocab) == \
+        "Software Developer"
+
+
+def test_a_punctuation_only_label_cannot_swallow_the_output():
+    """A label that cleans to an empty span would match at every position, so
+    degenerate vocab entries are dropped rather than allowed to match."""
+    vocab = [",,,", "Aven"]
+    assert rv.recognized_labels_in("Aven", vocab) == ["Aven"]
+    assert rv.parse_recognized_label("Aven", vocab) == "Aven"
+    assert rv.recognized_labels_in("nothing recognizable here", vocab) == []
+
+
+def _pre_fix_recognized_labels_in(text, vocab):
+    """The matcher exactly as it was BEFORE the fix: ``clean`` applied to the
+    text's tokens, labels split with a bare ``l.lower().split()``.  Reproduced
+    here only to prove the invariant below detects it -- a guard that cannot
+    fire is worse than no guard, because it reads as coverage."""
+    def clean(t):
+        return t.strip().strip(".,!?;:'\"()[]{}").lower()
+
+    tokens = [clean(t) for t in text.strip().split()]
+    spans = sorted(((tuple(lab.lower().split()), lab) for lab in vocab),
+                   key=lambda x: (-len(x[0]), x[1]))
+    out, seen, i = [], set(), 0
+    while i < len(tokens):
+        for span, lab in spans:
+            n = len(span)
+            if tokens[i:i + n] == list(span):
+                if lab not in seen:
+                    seen.add(lab)
+                    out.append(lab)
+                i += n
+                break
+        else:
+            i += 1
+    return out
+
+
+def test_check_vocab_parseable_flags_the_historical_asymmetry(monkeypatch):
+    """``check_vocab_parseable`` must catch the bug it was written for.
+
+    Restoring the pre-fix matcher and re-running the check has to name both
+    comma-bearing titles.  Without this the invariant is only ever observed
+    returning an empty list, which is indistinguishable from a check that does
+    nothing.
+    """
+    vocab = [BROAD_SWE, BROAD_MUSEUM, "Software Developer", "Unknown"]
+    assert rv.check_vocab_parseable(vocab) == []
+
+    monkeypatch.setattr(rv, "recognized_labels_in",
+                        _pre_fix_recognized_labels_in)
+    flagged = rv.check_vocab_parseable(vocab)
+    assert sorted(flagged) == sorted([BROAD_SWE, BROAD_MUSEUM]), (
+        "the invariant did not detect the punctuation asymmetry it exists to "
+        f"detect; flagged={flagged}")
+    # punctuation-free labels were unaffected even under the broken matcher,
+    # which is why SALMU and CelebA-numeric never surfaced this
+    assert "Software Developer" not in flagged
+    assert "Unknown" not in flagged
+
+
+def _frozen_vocabularies():
+    """The three committed label vocabularies, read from their frozen artifacts
+    and built the way ``dataset_ctx`` builds each one."""
+    import json
+    root = Path(__file__).resolve().parents[2]
+    gdir = root / "e2c_granularity" / "manifests"
+    salmu = json.loads((gdir / "matrix_salmu.json").read_text())["vocab"]
+    mllmu = json.loads((root / "e2c_mllmu" / "manifests"
+                        / "matrix_mllmu.json").read_text())["vocab"]
+    nm = json.loads((gdir / "numeric_manifest.json").read_text())
+    cel = json.loads((gdir / "matrix_celeba_numeric.json").read_text())
+    celeba = sorted(set(nm["alias_of"].values())
+                    | {a["target"] for e in cel["sets"]
+                       for a in e["assignments"].values()} | {"Unknown"})
+    return {"salmu": salmu, "celeba_numeric": celeba, "mllmu": mllmu}
+
+
+def test_every_label_in_every_frozen_vocabulary_round_trips():
+    """The design-time half, checked against the committed artifacts.
+
+    A label the parser cannot recognize makes any set targeting it unpassable by
+    construction.  Asserted for all three frozen vocabularies so a future label
+    with punctuation in it fails here, on CPU, instead of after the oracles have
+    been trained.
+    """
+    vocabs = _frozen_vocabularies()
+    for ds, vocab in sorted(vocabs.items()):
+        bad = rv.check_vocab_parseable(vocab)
+        assert bad == [], (
+            f"{ds}: these vocab labels cannot be recognized when emitted "
+            f"verbatim, so any set targeting them is unpassable by "
+            f"construction: {bad}")
+    # the MLLMU vocabulary is the one that actually contains commas
+    assert any("," in lab for lab in vocabs["mllmu"])
+
+
+def test_the_punctuation_fix_is_a_no_op_on_punctuation_free_labels():
+    """Why repairing MLLMU does not re-score two already-executed datasets.
+
+    SALMU and CelebA-numeric matrices are frozen, executed and committed; their
+    verdicts are evidence.  Both vocabularies are punctuation-free, and for those
+    the pre-fix and post-fix matchers must agree on EVERY output -- otherwise
+    this fix would silently move results nobody re-ran.  Asserted over the real
+    frozen vocabularies and a family of output shapes, not a hand-picked example.
+    """
+    punct = ".,!?;:'\"()[]{}"
+    for ds, vocab in sorted(_frozen_vocabularies().items()):
+        contaminated = [lab for lab in vocab
+                        if any(ch in punct for ch in lab)]
+        if ds == "mllmu":
+            # the dataset the fix was FOR is the one with punctuation in it
+            assert contaminated, "expected comma-bearing broad SOC titles"
+            continue
+        assert contaminated == [], (
+            f"{ds} gained punctuation-bearing labels, so the no-op argument no "
+            f"longer covers it and its committed verdicts must be re-checked: "
+            f"{contaminated}")
+        for lab in vocab:
+            for text in (lab, lab.lower(), lab.upper(), lab + ".",
+                         f"the answer is {lab}.", f"{lab}, certainly"):
+                assert rv.recognized_labels_in(text, vocab) == \
+                    _pre_fix_recognized_labels_in(text, vocab), (
+                        f"{ds}: matcher changed on {text!r}")
+
+
 def test_parse_multitoken_rejects_two_distinct_labels():
     # Multi-label rejection also applies across multi-token labels.
     vocab = ["Software Developer", "Marine Biologist"]

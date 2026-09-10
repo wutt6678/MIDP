@@ -1228,3 +1228,155 @@ def test_verify_refuses_a_pilot_frozen_against_a_different_hierarchy(
     with pytest.raises(RuntimeError, match="frozen against a different "
                                            "hierarchy"):
         g6.verify()
+
+
+# ====================================================================== #
+# GX2P: CPU re-parse of stored cells from their recorded raw text
+# ====================================================================== #
+def _cell_soft_full(gxm, design, entry):
+    """Distributions that put all mass on each identity's expected label."""
+    ctx = design["ctx"]
+    return {iid: {l: (1.0 if l == gxm.expected_label(ctx, entry, iid)
+                      else 0.0) for l in ctx["vocab"]}
+            for iid in ctx["identity_ids"]}
+
+
+def _perfect_rows(gxm, design, entry):
+    """Hard rows as the CURRENT parser derives them: every identity emits its
+    expected post-edit label verbatim."""
+    ctx = design["ctx"]
+    return [gxm.hard_pred_from_raw(ctx, entry, iid,
+                                   gxm.expected_label(ctx, entry, iid))
+            for iid in ctx["identity_ids"]]
+
+
+def _write_cell(tmp_path, gxm, design, sid, seed, hard, soft_full,
+                checkpoint="c" * 64):
+    """File one synthetic cell in the runner's on-disk layout, deriving the
+    stored ``soft`` view and ``criteria`` exactly as ``run_cells`` does."""
+    matrix, ctx = design["matrix"], design["ctx"]
+    entry = next(e for e in matrix["sets"] if e["set_id"] == sid)
+    soft = gxm.summaries_from_probs(soft_full, ctx)
+    cell = {
+        "cell_id": f"{sid}__seed{seed}", "dataset": "mllmu", "set_id": sid,
+        "mode": entry["mode"], "seed": seed,
+        "assignments": entry["assignments"],
+        "checkpoint_sha256": checkpoint,
+        "hard_preds": hard,
+        "soft": {i: {"p_expected": soft[i]["probs"].get(
+                         gxm.expected_label(ctx, entry, i), 0.0),
+                     "p_baseline_alias": soft[i]["probs"].get(
+                         ctx["baseline_alias_of"][i], 0.0),
+                     "candidate_mass": soft[i]["candidate_mass"],
+                     "other_mass": soft[i]["other_mass"]}
+                 for i in ctx["identity_ids"]},
+        "soft_probs_full": soft_full,
+        "criteria": gxm._pass_criteria(hard, soft, entry, ctx),
+    }
+    d = tmp_path / "cells" / sid / f"seed_{seed}"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "cell_results.json").write_text(json.dumps(cell, indent=2),
+                                         encoding="utf-8")
+    return d / "cell_results.json"
+
+
+def test_gx2p_leaves_an_already_correct_cell_byte_identical(tmp_path, design):
+    """Re-parsing a cell the current parser already scored correctly must not
+    rewrite it.
+
+    Not merely "no verdict change": the FILE must be untouched.  SALMU (63
+    cells) and CelebA-numeric (84 cells) are committed evidence scored by a
+    parser this fix provably does not alter -- neither vocabulary contains
+    punctuation -- so re-parsing them has to leave every byte alone for
+    ``git diff`` to be empty and the no-op to be provable rather than asserted.
+    """
+    gxm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    sid = design["matrix"]["sets"][0]["set_id"]
+    entry = next(e for e in design["matrix"]["sets"] if e["set_id"] == sid)
+    p = _write_cell(tmp_path, gxm, design, sid, 17,
+                    _perfect_rows(gxm, design, entry),
+                    _cell_soft_full(gxm, design, entry))
+    before = p.read_bytes()
+
+    res = gxm.reparse_cells_cpu("mllmu", design["ctx"], design["matrix"],
+                                tmp_path)
+
+    assert (res["n_cells"], res["n_changed"], res["n_unchanged"]) == (1, 0, 1)
+    assert res["changes"] == []
+    assert p.read_bytes() == before
+    assert "reparse_note" not in json.loads(p.read_text(encoding="utf-8"))
+
+
+def test_gx2p_repairs_a_row_the_old_parser_scored_unparseable(tmp_path, design):
+    """The correction GX2P exists for: the model emitted the expected label
+    verbatim, the stored row says unparseable, and the raw text on disk is enough
+    to put it right -- with no GPU and no regeneration."""
+    gxm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    sid = design["matrix"]["sets"][0]["set_id"]
+    entry = next(e for e in design["matrix"]["sets"] if e["set_id"] == sid)
+    hard = _perfect_rows(gxm, design, entry)
+    victim = min(entry["assignments"])
+    raw = next(r["raw"] for r in hard if r["identity_id"] == victim)
+
+    # what the punctuation-asymmetric matcher recorded for a verbatim hit
+    for r in hard:
+        if r["identity_id"] == victim:
+            r.update(parsed_label=None, recognized_labels=[],
+                     multi_label_ambiguous=False, correct_post_edit=False,
+                     classification="unparseable")
+    p = _write_cell(tmp_path, gxm, design, sid, 17, hard,
+                    _cell_soft_full(gxm, design, entry))
+    broken = json.loads(p.read_text(encoding="utf-8"))
+    assert broken["criteria"]["cell_pass"] is False, \
+        "the fixture must start out failing for the repair to mean anything"
+    assert victim in broken["criteria"]["unparseable_ids"]
+
+    res = gxm.reparse_cells_cpu("mllmu", design["ctx"], design["matrix"],
+                                tmp_path)
+
+    assert (res["n_changed"], res["n_unchanged"]) == (1, 0)
+    fixed = json.loads(p.read_text(encoding="utf-8"))
+    row = next(r for r in fixed["hard_preds"] if r["identity_id"] == victim)
+    assert row["raw"] == raw, "the OBSERVATION must never be edited"
+    assert row["parsed_label"] == raw
+    assert row["classification"] == "correct"
+    assert row["correct_post_edit"] is True
+    assert fixed["criteria"]["cell_pass"] is True
+    assert fixed["criteria"]["strict_expected_accuracy"] == 1.0
+    assert fixed["criteria"]["unparseable_ids"] == []
+
+    ch = res["changes"][0]
+    assert ch["cell_id"] == broken["cell_id"]
+    assert ch["cell_pass_was"] is False and ch["cell_pass_now"] is True
+    assert ch["n_row_changes"] == 1
+    assert ch["row_changes"][0]["identity_id"] == victim
+    assert ch["row_changes"][0]["was_parsed"] is None
+    assert ch["row_changes"][0]["now_parsed"] == raw
+
+    # everything that is not a re-derivable measurement stays as stored
+    assert fixed["checkpoint_sha256"] == broken["checkpoint_sha256"]
+    assert fixed["soft_probs_full"] == broken["soft_probs_full"]
+    assert fixed["soft"] == broken["soft"]
+    assert fixed["assignments"] == broken["assignments"]
+    assert "reparse_note" in fixed
+
+
+def test_gx2p_skips_a_cell_it_cannot_rescore_rather_than_guessing(tmp_path,
+                                                                  design):
+    """A cell with no stored distributions cannot have its criteria recomputed,
+    so it is skipped and counted -- never re-scored from partial information."""
+    gxm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    sid = design["matrix"]["sets"][0]["set_id"]
+    entry = next(e for e in design["matrix"]["sets"] if e["set_id"] == sid)
+    p = _write_cell(tmp_path, gxm, design, sid, 17,
+                    _perfect_rows(gxm, design, entry),
+                    _cell_soft_full(gxm, design, entry))
+    cell = json.loads(p.read_text(encoding="utf-8"))
+    cell.pop("soft_probs_full")
+    p.write_text(json.dumps(cell, indent=2), encoding="utf-8")
+
+    res = gxm.reparse_cells_cpu("mllmu", design["ctx"], design["matrix"],
+                                tmp_path)
+
+    assert res["n_cells"] == 0 and res["n_changed"] == 0
+    assert "soft_probs_full" not in json.loads(p.read_text(encoding="utf-8"))
