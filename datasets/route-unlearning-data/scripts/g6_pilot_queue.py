@@ -59,11 +59,30 @@ G6_MANIFEST = DATASET_ROOT / "e2c_mllmu" / "manifests" / \
 G6_MATRIX = DATASET_ROOT / "e2c_mllmu" / "manifests" / "matrix_mllmu.json"
 FROZEN = (HIERARCHY, SELECTION, G6_MANIFEST, G6_MATRIX)
 
-# An MLLMU session has needed 18.7-24.6 GB resident on this benchmark.  The
-# default asks for headroom above the observed maximum rather than the observed
-# mean: the cost of waiting longer is minutes, and the cost of an OOM after the
-# 3000-step baseline route h is the whole run.
-REQUIRED_MB_DEFAULT = 26000
+# Measured, not estimated.  A probe on GPU 1 (2026-09-10) ran this runner's own
+# code path -- rv.create_adapter_model + rv.attach_lora on Qwen3.5-9B bf16,
+# rv.train_supervised (the call every training phase makes: route_h, oracles and
+# cells alike), and the single-sequence backend.generate(max_new_tokens=8) that
+# _hard_eval issues per identity -- and recorded torch.cuda.max_memory_reserved
+# of 18168 MiB, flat: 17972 after load, 18168 at the training peak, 18168 at the
+# evaluation peak.  Training adds only ~196 MiB over the load because LoRA rank 8
+# leaves 1.97M trainable params and make_loader uses batch_size=1 over 31-token
+# sequences, and evaluation adds nothing at all.  The peak IS the model load.
+#
+# The 26000 MiB this replaced was a guess from "18.7-24.6 GB resident", which
+# came from image-bearing MLLMU paths.  This runner is association-level only
+# (image=None throughout), so that upper bound does not describe it, and waiting
+# for 26 GB on a box whose GPUs peak near 20 GB free means waiting for a
+# co-tenant to leave rather than for capacity to appear.
+#
+# The cushion is ~10%: it absorbs allocator fragmentation and a co-tenant that
+# grows slightly between the stability check and the load.  It cannot absorb a
+# co-tenant that grows by gigabytes mid-run -- no launch threshold can -- but an
+# OOM there costs only the cell in progress, since every oracle and every
+# completed cell is cached and the run resumes rather than restarting.
+MEASURED_PEAK_MIB = 18168
+MEASURED_CUSHION_MIB = 1832
+REQUIRED_MB_DEFAULT = MEASURED_PEAK_MIB + MEASURED_CUSHION_MIB
 POLL_SEC_DEFAULT = 120
 STABLE_POLLS_DEFAULT = 3
 

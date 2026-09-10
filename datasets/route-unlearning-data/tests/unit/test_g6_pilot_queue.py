@@ -160,3 +160,29 @@ def test_the_launch_command_is_the_frozen_five_set_pilot(q):
     assert "--smoke" not in cmd
     assert "--only-seeds" not in cmd
     assert "--only-sets" not in cmd
+
+
+def test_the_capacity_threshold_is_derived_from_the_measured_peak(q):
+    """The threshold must exceed what this runner's own code path was MEASURED to
+    reserve, with a cushion small enough to be reachable on this box.
+
+    Both directions are failures.  Below the measured peak the run OOMs part-way.
+    Far above it the queue waits for a co-tenant to leave rather than for capacity
+    to appear, which is exactly what the previous 26000 MiB guess did: it was
+    derived from an "18.7-24.6 GB resident" figure belonging to image-bearing
+    MLLMU paths, while this runner is association-level only (image=None
+    throughout) and peaks at 18168 MiB -- on a box whose GPUs reach about
+    20 GB free, so the queue would have waited indefinitely beside a GPU that
+    could in fact have hosted the run.
+
+    Asserted as a relationship between the two constants rather than as a bare
+    number, so tightening the cushion cannot silently push the threshold under
+    the peak.
+    """
+    assert q.REQUIRED_MB_DEFAULT == q.MEASURED_PEAK_MIB + q.MEASURED_CUSHION_MIB
+    assert q.REQUIRED_MB_DEFAULT > q.MEASURED_PEAK_MIB
+    cushion = q.MEASURED_CUSHION_MIB / q.MEASURED_PEAK_MIB
+    assert 0.02 <= cushion <= 0.25, (
+        f"cushion {cushion:.1%} is outside the sane band: too small to absorb "
+        f"allocator fragmentation and a co-tenant growing between the stability "
+        f"check and the load, or too large to be reachable on this box")
