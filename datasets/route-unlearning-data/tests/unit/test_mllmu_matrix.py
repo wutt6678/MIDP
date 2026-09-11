@@ -182,14 +182,46 @@ def _rows(art, counts=None):
     return rows
 
 
+FABRICATED_SOURCE_BYTES = b'{"synthetic": "Full_Set stand-in, fixed bytes"}\n'
+
+
+@pytest.fixture(autouse=True)
+def _no_real_source_dataset(monkeypatch):
+    """No test in this module may touch the authoring machine's benchmark.
+
+    ``mh.FULL_SET`` is a path that exists only on one machine, and CI does not
+    have it.  ``build_g6_manifest`` defaults to hashing it, so a fixture that
+    forgets to inject a fabricated ``source_path`` passes here and errors on a
+    bare checkout -- which is exactly the regression that shipped to CI.  Making
+    the default path nonexistent on EVERY machine turns that mistake into an
+    immediate, loud failure at authoring time instead of a red CI run later.
+    Tests that build a manifest inject their own fabricated source; the G6.1
+    freeze remains the only production path that may read the real bytes.
+    """
+    monkeypatch.setattr(mh, "FULL_SET", Path("/nonexistent/Full_Set.jsonl"))
+
+
+def _fabricated_source(tmp_path):
+    """A deterministic stand-in for the benchmark source table.
+
+    Fixed bytes so ``source_sha256`` is stable across fixture instances: the
+    determinism test compares designs built from separate fixtures, and only
+    the content has to match, never the tmp location.
+    """
+    p = tmp_path / "Full_Set.jsonl"
+    p.write_bytes(FABRICATED_SOURCE_BYTES)
+    return p
+
+
 @pytest.fixture()
-def design():
+def design(tmp_path):
     """A complete synthetic pilot design: manifest, matrix, ctx, validation."""
     art = _mini_art()
     sel = _mini_sel()
     targets = g6.pilot_targets(art, sel)
     roster = g6.pilot_roster(art, targets)
-    manifest = g6.build_g6_manifest(art, roster, _rows(art))
+    manifest = g6.build_g6_manifest(art, roster, _rows(art),
+                                    source_path=_fabricated_source(tmp_path))
     matrix, ctx = g6.build_g6_matrix(manifest, art, sel,
                                      evidence=dict(MINI_EVIDENCE))
     validation = g6.validate_g6(matrix, ctx, art)
@@ -325,12 +357,32 @@ def test_identity_selection_is_the_lowest_ids_and_caps_at_availability(
         r["n_selected"] for r in roster.values())
 
 
-def test_a_roster_profession_missing_from_the_data_is_a_hard_error(design):
+def test_a_roster_profession_missing_from_the_data_is_a_hard_error(
+        design, tmp_path):
     art = design["art"]
     rows = _rows(art, {k: v for k, v in COUNTS.items() if k != "Eta"})
     with pytest.raises(RuntimeError, match="disagree about what is in the "
                                            "data"):
-        g6.build_g6_manifest(art, design["roster"], rows)
+        g6.build_g6_manifest(art, design["roster"], rows,
+                             source_path=_fabricated_source(tmp_path))
+
+
+def test_the_manifest_builder_has_no_usable_default_source_in_tests():
+    """The tripwire makes the default source path unusable in this module.
+
+    ``build_g6_manifest`` without an explicit ``source_path`` hashes
+    ``mh.FULL_SET`` -- a path that exists only on the authoring machine.  If
+    the autouse tripwire is ever removed, this call SUCCEEDS here and the
+    whole module silently re-acquires its authoring-machine dependency,
+    failing only on CI.  This test fails on the machine that has the data,
+    which is the machine where the mistake is made.
+    """
+    art = _mini_art()
+    sel = _mini_sel()
+    targets = g6.pilot_targets(art, sel)
+    roster = g6.pilot_roster(art, targets)
+    with pytest.raises((FileNotFoundError, RuntimeError)):
+        g6.build_g6_manifest(art, roster, _rows(art))
 
 
 def test_only_the_freeze_may_read_the_real_dataset(monkeypatch):
