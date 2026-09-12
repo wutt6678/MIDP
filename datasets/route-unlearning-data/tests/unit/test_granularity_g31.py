@@ -1248,6 +1248,7 @@ def test_every_script_the_matrix_runner_executes_is_declared():
     for path in ("scripts/e2c_v3_granularity_matrix.py",
                  "scripts/e2c_v3_granularity.py",
                  "scripts/e2c_v3_research_validity.py",
+                 "scripts/e2c_v3_label_parser.py",
                  "scripts/e2c_v3_matrix.py",
                  "scripts/e2c_v3_realdata.py"):
         assert path in gxm.GX_CODE, path
@@ -1256,13 +1257,16 @@ def test_every_script_the_matrix_runner_executes_is_declared():
     # script would gate on everything except the code it is running
     assert gxm.GX_CODE[0] == "scripts/e2c_v3_granularity_matrix.py"
     # The other three runners declare their own script first and then the same
-    # five shared ones in the same order.  This runner IS granularity_matrix,
-    # so that entry is its own and the remaining four follow in the same order:
+    # shared ones in the same order.  This runner IS granularity_matrix,
+    # so that entry is its own and the remaining five follow in the same order:
     # four runners, one rule, and a shared script renamed or dropped anywhere
-    # fails in all four.
+    # fails in all four.  The label parser sits directly after the scoring
+    # script that re-exports it, so a reader of GX_CODE sees the re-export
+    # adjacency rather than having to know it.
     assert gxm.GX_CODE == [
         "scripts/e2c_v3_granularity_matrix.py",
         "scripts/e2c_v3_research_validity.py",
+        "scripts/e2c_v3_label_parser.py",
         "scripts/e2c_v3_granularity.py",
         "scripts/e2c_v3_matrix.py",
         "scripts/e2c_v3_realdata.py"]
@@ -1454,3 +1458,139 @@ def test_gx2h_refuses_a_checkpoint_that_is_not_the_pinned_reference(
             only_sets={"sComma"})
     # the refusal precedes any GPU work: no checkpoint was loaded
     assert stub.reset_to_calls == []
+
+
+# ====================================================================== #
+# The report says what the run did, not what a convenient sentence says
+# ====================================================================== #
+def _agg(root, name, cells, matrix, ds):
+    d = root / name
+    d.mkdir(parents=True, exist_ok=True)
+    return _aggregate(d, cells, matrix, ds=ds)
+
+
+def _pilot_matrix(entry, seeds=(17, 42, 123)):
+    return {"edit_seeds": list(seeds), "n_sets": 1, "n_cells": len(seeds),
+            "sets": [entry]}
+
+
+def test_a_complete_pilot_is_not_reported_as_the_full_matrix(tmp_path):
+    """The MLLMU design IS the pilot whose gates license a larger matrix, so
+    completing it is a completed pilot.  Reporting "full_matrix" put a stage
+    name in the manifest that contradicted the ``proceed_to_full_matrix``
+    verdict recorded beside it, and read as though the 12-target matrix had
+    been run."""
+    cells, entry = [], None
+    for s in (17, 42, 123):
+        c, entry = _mk_cell(seed=s)
+        cells.append(c)
+    matrix = _pilot_matrix(entry)
+    assert _agg(tmp_path, "m", cells, matrix, "mllmu")["run_stage"] == \
+        "pilot_complete"
+    # salmu's and celeba_numeric's designs ARE the matrix, so they keep the
+    # old name: the fix is about which design is a pilot, not about renaming
+    assert _agg(tmp_path, "s", cells, matrix, "salmu")["run_stage"] == \
+        "full_matrix"
+    # and a pilot missing a seed is a partial pilot, not a partial matrix
+    assert _agg(tmp_path, "p", cells[:2], matrix, "mllmu")["run_stage"] == \
+        "partial_pilot"
+
+
+def test_the_retained_control_claim_is_derived_from_the_rows(tmp_path):
+    """The committed MLLMU summary asserted "all other retained controls
+    passed" while the retention gate beside it reported same_leaf at 26/27.
+    The sentence was a constant; it is now computed from the same rows the
+    gate reads."""
+    ok_cell, entry = _mk_cell(seed=17)
+    matrix = _pilot_matrix(entry, seeds=(17,))
+    s = _agg(tmp_path, "ok", [ok_cell], matrix, "mllmu")
+    assert "All other retained controls passed" in \
+        s["claims"]["sibling_coverage"]
+    grp = s["claims"]["retained_controls_by_group"]["retain"]
+    assert grp["n_rows"] > 0 and grp["strict_accuracy"] == 1.0
+
+    bad, entry = _mk_cell(seed=17)
+    row = next(p for p in bad["hard_preds"] if p["group"] == "retain")
+    row.update({"group": "same_leaf", "correct_post_edit": False,
+                "expected_post_edit": "Software Developer",
+                "parsed_label": ("Software and Web Developers, Programmers, "
+                                 "and Testers")})
+    s2 = _agg(tmp_path, "bad", [bad], matrix, "mllmu")
+    claim = s2["claims"]["sibling_coverage"]
+    assert "did NOT all pass" in claim
+    assert "same_leaf 0/1" in claim
+    assert "All other retained controls passed" not in claim
+    g2 = s2["claims"]["retained_controls_by_group"]["same_leaf"]
+    assert (g2["n_rows"], g2["n_correct"], g2["strict_accuracy"]) == \
+        (1, 0, 0.0)
+    # the failing row is named, so the claim can be checked against the gate
+    assert g2["wrong"] and "Software Developer" in g2["wrong"][0]
+
+
+def test_a_run_with_no_router_does_not_claim_one_in_its_scope(tmp_path):
+    """The scope sentence named a router and cached routing predictions for
+    every dataset, so the association-level MLLMU and celeba_numeric summaries
+    -- zero e2e rows -- claimed a fixed router they never ran."""
+    c, entry = _mk_cell(seed=17)
+    assert not c.get("e2e_rows")
+    scope = _agg(tmp_path, "n", [c], _pilot_matrix(entry, seeds=(17,)),
+                 "mllmu")["scope"]["multi_seed_meaning"]
+    assert "cached routing predictions" not in scope
+    assert "association-level" in scope
+    assert "no image router was run" in scope
+    assert "[17]" in scope          # the seeds actually executed, not "three"
+
+    routed_cell, entry2 = _mk_cell(seed=17)
+    routed_cell["e2e_rows"] = [{"identity_id": "i1", "g_routed": True}]
+    scope2 = _agg(tmp_path, "r", [routed_cell],
+                  _pilot_matrix(entry2, seeds=(17,)),
+                  "salmu")["scope"]["multi_seed_meaning"]
+    assert "router g" in scope2
+    assert "cached routing predictions" in scope2
+    assert "no image router was run" not in scope2
+
+
+def test_the_no_router_reason_names_the_dataset_it_describes():
+    """Every MLLMU cell recorded "no image router for numeric profiles" -- a
+    taxonomic occupation benchmark described as numeric, in the field a reader
+    consults to learn why no end-to-end number exists."""
+    assert "numeric profiles" in gxm.NO_ROUTER_REASON["celeba_numeric"]
+    assert "numeric profiles" not in gxm.NO_ROUTER_REASON["mllmu"]
+    assert "association C->Y" in gxm.NO_ROUTER_REASON["mllmu"]
+    assert gxm.NO_ROUTER_REASON["mllmu"] != \
+        gxm.NO_ROUTER_REASON["celeba_numeric"]
+    # salmu does have a router, so its entry is about missing cached rows
+    assert "cached frozen-g routing rows" in gxm.NO_ROUTER_REASON["salmu"]
+
+
+def test_stale_committed_reasons_are_filed_not_silently_rewritten(tmp_path):
+    """``e2e.reason`` is inside committed cell bytes that run manifests hash,
+    so the stale sentence is named in the report instead of being edited in
+    place -- a correction that is filed, not just applied."""
+    c, entry = _mk_cell(seed=17)
+    c["e2e"] = {"level": "association-only",
+                "reason": "no image router for numeric profiles (CelebA g "
+                          "redesign is separate)"}
+    s = _agg(tmp_path, "stale", [c], _pilot_matrix(entry, seeds=(17,)),
+             "mllmu")
+    claim = s["claims"]["no_image_router"]
+    assert "CORRECTION OF RECORD" in claim
+    assert c["cell_id"] in claim
+    # reporting does not edit the cell it is describing
+    assert "numeric profiles" in c["e2e"]["reason"]
+
+    clean, entry2 = _mk_cell(seed=17)
+    clean["e2e"] = {"level": "association-only",
+                    "reason": gxm.NO_ROUTER_REASON["mllmu"]}
+    s2 = _agg(tmp_path, "clean", [clean],
+              _pilot_matrix(entry2, seeds=(17,)), "mllmu")
+    assert "NO image router" in s2["claims"]["no_image_router"]
+    assert "CORRECTION OF RECORD" not in s2["claims"]["no_image_router"]
+
+
+def test_a_routed_dataset_does_not_get_a_no_router_claim(tmp_path):
+    c, entry = _mk_cell(seed=17)
+    c["e2e_rows"] = [{"identity_id": "i1", "g_routed": True}]
+    s = _agg(tmp_path, "routed", [c], _pilot_matrix(entry, seeds=(17,)),
+             "salmu")
+    assert "no_image_router" not in s["claims"]

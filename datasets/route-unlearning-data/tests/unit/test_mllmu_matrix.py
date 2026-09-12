@@ -268,12 +268,61 @@ def _row(expected, group, parsed=None, p_desired=0.99, p_source=0.0,
             "unparseable": unparseable}
 
 
-def _cells(design, mutate=None, delta_oracle=0.30, drop=()):
-    """All-pass fabricated cells, with one knob to break exactly one thing."""
+def _oracle_row(entry, seed, iid, delta=1.20, dmr=0.001, dlr=None,
+                fit_ok=True, mass=0.999, established=True,
+                mr_reliable=True, lr_reliable=True,
+                why="oracle not available"):
+    """One (target identity, edit seed) row in the GATE schema.
+
+    ``failed_conditions`` and ``ok`` are derived by the production helper from
+    the fabricated distances and fit record, never fabricated themselves: a
+    test that asserted its own verdict boolean would keep passing after the
+    four G3.1 conditions changed meaning, which is the whole class of drift
+    this gate exists to prevent.
+    """
+    if dlr is None:
+        dlr = (dmr + delta) if established else None
+    row = {
+        "identity_id": iid, "set_id": entry["set_id"], "seed": seed,
+        "cell_id": f"{entry['set_id']}__seed{seed}",
+        "operation": entry["assignments"][iid]["operation"],
+        "matched_retrain_fit_ok": fit_ok,
+        "matched_retrain_strict": 1.0 if fit_ok else 33 / 35,
+        "matched_retrain_mass": mass,
+        "matched_retrain_reliable": mr_reliable,
+        "loo_retrain_reliable": lr_reliable,
+        "l2_to_matched_retrain": dmr if established else None,
+        "l2_to_loo_retrain": dlr,
+        "delta_retrain_l2": delta if established else None,
+        "delta_retrain_established": established,
+        "delta_material": bool(established
+                               and delta >= g6.DELTA_RETRAIN_MIN_MARGIN),
+        "closer_to_matched_retrain": bool(established and dlr is not None
+                                          and dmr < dlr),
+        "why_no_matched_retrain_distance": None if established else why,
+        "why_no_loo_retrain_distance": None if established else why,
+    }
+    row["failed_conditions"] = (g6._oracle_condition_failures(row)
+                                if established else None)
+    row["ok"] = row["failed_conditions"] == []
+    return row
+
+
+def _cells(design, mutate=None, delta_retrain=1.20, drop=(), omit_sets=(),
+           seeds=None, oracle_rows=None):
+    """All-pass fabricated cells, with one knob to break exactly one thing.
+
+    ``oracle_rows`` overrides the (set_id, seed) -> rows mapping wholesale, so
+    a test can fabricate a single inverted seed or a single unestablished
+    target without touching the rest of the design.
+    """
     matrix, ctx = design["matrix"], design["ctx"]
+    seeds = matrix["edit_seeds"] if seeds is None else seeds
     cells = []
     for entry in matrix["sets"]:
-        for seed in matrix["edit_seeds"]:
+        if entry["set_id"] in omit_sets:
+            continue
+        for seed in seeds:
             per = {}
             for iid in ctx["identity_ids"]:
                 if iid in drop:
@@ -288,11 +337,20 @@ def _cells(design, mutate=None, delta_oracle=0.30, drop=()):
                 if mutate is not None:
                     row = mutate(entry, seed, iid, grp, row) or row
                 per[iid] = row
-            cells.append({"set_id": entry["set_id"], "seed": seed,
-                          "per_identity": per,
-                          "oracle_distances": {
-                              "matched": 0.10, "loo": 0.10 + delta_oracle,
-                              "delta_oracle": delta_oracle}})
+            overridden = (oracle_rows or {}).get((entry["set_id"], seed))
+            rows = (overridden if overridden is not None else
+                    [_oracle_row(entry, seed, iid, delta=delta_retrain)
+                     for iid in sorted(entry["assignments"])])
+            cells.append({
+                "set_id": entry["set_id"], "seed": seed,
+                "cell_id": f"{entry['set_id']}__seed{seed}",
+                "per_identity": per,
+                "oracle_targets": rows,
+                "n_target_rows": len(entry["assignments"]),
+                "n_rows_established": sum(
+                    1 for r in rows if r["delta_retrain_established"]),
+                "oracle_fit_supplied": True,
+            })
     return cells
 
 
@@ -691,36 +749,191 @@ def test_sibling_coverage_fails_when_an_evaluated_sibling_is_wrong(design):
     assert any("sibling" in f and "expected" in f for f in g["failures"])
 
 
-def test_the_matched_oracle_gate_needs_a_positive_delta(design):
-    good = g6.evaluate_gates(_cells(design, delta_oracle=0.30),
+def test_the_matched_oracle_gate_needs_a_material_delta_on_every_target(design):
+    """The margin is 0.5 in L2, not "greater than zero"."""
+    good = g6.evaluate_gates(_cells(design, delta_retrain=1.20),
                              design["matrix"])["gates"]["matched_oracle"]
     assert good["passed"] is True
-    assert all(v["mean_delta_oracle"] > 0
+    assert all(v["worst_case_delta_retrain"] == pytest.approx(1.20)
                for v in good["per_set"].values())
+    assert good["criteria"]["min_delta_retrain_l2"] == \
+        g6.DELTA_RETRAIN_MIN_MARGIN
+    assert good["criteria"]["oracle_families"] == ["matched_retrain",
+                                                   "loo_retrain"]
 
-    # delta == 0 exactly: the edit is no closer to the matched oracle than to
-    # LOO, so it is not evidence of controlled coarsening
-    flat = g6.evaluate_gates(_cells(design, delta_oracle=0.0),
+    # positive but BELOW the frozen margin: the sign is right and the edit is
+    # closer to the matched reference, yet a delta this small is inside the
+    # noise of a distance measured on a 40-label simplex, so it is not
+    # evidence of controlled coarsening.  The gate this replaces passed this.
+    thin = g6.evaluate_gates(_cells(design, delta_retrain=0.30),
+                             design["matrix"])["gates"]["matched_oracle"]
+    assert thin["passed"] is False
+    assert any("delta_retrain_margin" in f for f in thin["failures"])
+    # the sign was right, so the ordering condition is NOT what failed: the
+    # message must name the margin rather than blame the comparison
+    assert not any("closer_to_matched_retrain" in f for f in thin["failures"])
+
+    flat = g6.evaluate_gates(_cells(design, delta_retrain=0.0),
                              design["matrix"])["gates"]["matched_oracle"]
     assert flat["passed"] is False
-    assert len(flat["failures"]) == 5
-    assert any("<= 0" in f for f in flat["failures"])
 
-    inverted = g6.evaluate_gates(_cells(design, delta_oracle=-0.25),
+    inverted = g6.evaluate_gates(_cells(design, delta_retrain=-0.25),
                                  design["matrix"])["gates"]["matched_oracle"]
     assert inverted["passed"] is False
+    assert any("closer_to_matched_retrain" in f for f in inverted["failures"])
+
+
+def test_one_inverted_seed_fails_the_gate_that_averaging_would_pass(design):
+    """The regression this rewrite exists to close.
+
+    Two seeds at +1.20 and one at -0.25 average to +0.72, so the mean-over-
+    seeds gate reported a pass while a third of the pilot's seeds showed the
+    edit sitting closer to the DELETION reference than to the transformation-
+    matched one.  A single seed inverting is the finding, not the noise.
+    """
+    matrix = design["matrix"]
+    entry = matrix["sets"][0]
+    sid, bad_seed = entry["set_id"], matrix["edit_seeds"][2]
+    inverted = [_oracle_row(entry, bad_seed, iid, delta=-0.25)
+                for iid in sorted(entry["assignments"])]
+    cells = _cells(design, oracle_rows={(sid, bad_seed): inverted})
+    g = g6.evaluate_gates(cells, matrix)["gates"]["matched_oracle"]
+    assert g["passed"] is False
+    # the two good seeds are still recorded as passing, per row
+    rows = g["per_set"][sid]["per_target"]
+    assert sum(1 for r in rows if r["ok"]) == 2 * len(entry["assignments"])
+    assert g["per_set"][sid]["n_rows_failing"] == len(entry["assignments"])
+    assert g["per_set"][sid]["worst_case_delta_retrain"] == \
+        pytest.approx(-0.25)
+    assert any(f"{sid}/seed{bad_seed}/" in f for f in g["failures"])
+    # and a mean would have hidden it: recorded nowhere as the verdict
+    assert "mean_delta_oracle" not in g["per_set"][sid]
+
+
+def test_the_matched_oracle_gate_rejects_a_reference_that_never_fit(design):
+    """An oracle that does not fit the mappings it was trained on is not a
+    reference, however far the edit sits from it.  This is the condition the
+    finetune-family gate never asked, and why two sets whose matched_retrain
+    oracle scored 33/35 were reported as passing it."""
+    matrix = design["matrix"]
+    entry = matrix["sets"][0]
+    sid = entry["set_id"]
+    unfit = [_oracle_row(entry, s, iid, fit_ok=False)
+             for s in matrix["edit_seeds"] for iid in sorted(entry["assignments"])]
+    rows = {(sid, s): [r for r in unfit if r["seed"] == s]
+            for s in matrix["edit_seeds"]}
+    g = g6.evaluate_gates(_cells(design, oracle_rows=rows),
+                          matrix)["gates"]["matched_oracle"]
+    assert g["passed"] is False
+    assert any("matched_retrain_fit" in f for f in g["failures"])
+    # the distance evidence was fine; only the fit condition broke, and the
+    # failure must say so rather than reporting a generic non-pass
+    assert not any("delta_retrain_margin" in f for f in g["failures"])
+    assert g["criteria"]["matched_retrain_fit_ok"] is True
+
+
+def test_the_matched_oracle_gate_rejects_thin_candidate_mass(design):
+    """Mass below the floor means the distribution left the recognized label
+    set, so the gated distance was computed on a renormalization of something
+    the parser could not read."""
+    matrix = design["matrix"]
+    entry = matrix["sets"][0]
+    sid = entry["set_id"]
+    thin = {
+        (sid, s): [_oracle_row(entry, s, iid,
+                               mass=g6.MATCHED_RETRAIN_MIN_MASS - 1e-4)
+                   for iid in sorted(entry["assignments"])]
+        for s in matrix["edit_seeds"]}
+    g = g6.evaluate_gates(_cells(design, oracle_rows=thin),
+                          matrix)["gates"]["matched_oracle"]
+    assert g["passed"] is False
+    assert any("candidate_mass" in f for f in g["failures"])
+    assert g["criteria"]["min_matched_retrain_mass"] == \
+        g6.MATCHED_RETRAIN_MIN_MASS
+    # at the floor exactly it passes: the criterion is >=, and an off-by-one
+    # here would reject the two sets GX2H re-scored to mass 0.9991
+    at_floor = {
+        (sid, s): [_oracle_row(entry, s, iid,
+                               mass=g6.MATCHED_RETRAIN_MIN_MASS)
+                   for iid in sorted(entry["assignments"])]
+        for s in matrix["edit_seeds"]}
+    g2 = g6.evaluate_gates(_cells(design, oracle_rows=at_floor),
+                           matrix)["gates"]["matched_oracle"]
+    assert not any("candidate_mass" in f for f in g2["failures"])
+
+
+def test_an_unestablished_target_is_a_coverage_limit_not_a_failure(design):
+    """A null delta means the two references were never compared.  Reporting
+    it in the same list as a failed comparison is what once made a 117/120
+    result read as three failures."""
+    matrix = design["matrix"]
+    entry = matrix["sets"][0]
+    sid, seed = entry["set_id"], matrix["edit_seeds"][0]
+    tids = sorted(entry["assignments"])
+    rows = {
+        (sid, seed): [
+            _oracle_row(entry, seed, tids[0], established=False,
+                        why="candidate mass 0.0040 < floor 0.01"),
+            _oracle_row(entry, seed, tids[1]),
+        ]}
+    g = g6.evaluate_gates(_cells(design, oracle_rows=rows),
+                          matrix)["gates"]["matched_oracle"]
+    assert g["passed"] is False
+    msg = [f for f in g["failures"] if "coverage limit" in f]
+    assert len(msg) == 1 and f"{sid}/seed{seed}/{tids[0]}" in msg[0]
+    # the gate's own recorded reason survives into the message
+    assert "candidate mass 0.0040" in msg[0]
+    per = g["per_set"][sid]
+    assert per["n_rows_not_established"] == 1
+    assert per["n_rows_failing"] == 0
+    assert per["n_rows_passing"] == (len(matrix["edit_seeds"])
+                                     * len(tids)) - 1
 
 
 def test_the_matched_oracle_gate_fails_when_a_set_was_never_run(design):
-    cells = [c for c in _cells(design)
-             if c["set_id"] != design["matrix"]["sets"][0]["set_id"]]
+    cells = _cells(design,
+                   omit_sets=(design["matrix"]["sets"][0]["set_id"],))
     g = g6.evaluate_gates(cells, design["matrix"])["gates"]["matched_oracle"]
     assert g["passed"] is False
     assert any("no cells evaluated" in f for f in g["failures"])
 
 
+def test_the_matched_oracle_gate_names_a_target_it_never_saw(design):
+    """A cell present but missing one declared target's oracle row is a hole
+    in the evidence, not a smaller denominator to average over."""
+    matrix = design["matrix"]
+    entry = matrix["sets"][0]
+    sid, seed = entry["set_id"], matrix["edit_seeds"][0]
+    tids = sorted(entry["assignments"])
+    rows = {(sid, seed): [_oracle_row(entry, seed, tids[0])]}
+    g = g6.evaluate_gates(_cells(design, oracle_rows=rows),
+                          matrix)["gates"]["matched_oracle"]
+    assert g["passed"] is False
+    assert any(f"target {tids[1]} is declared in the matrix" in f
+               for f in g["failures"])
+    assert g["per_set"][sid]["passed"] is False
+
+
+def test_the_mirrored_g31_constants_match_the_runners_frozen_values():
+    """The gate module mirrors two frozen numbers so it can stay a torch-free
+    pure function of cells + matrix.  A mirror nobody checks is a second
+    source of truth: this is the assertion the mirroring comment promises.
+
+    Importing the matrix runner pulls in torch; that cost is accepted here for
+    the same reason it is in ``test_control_group_reports_same_leaf_before_
+    sibling`` -- the alternative is a criterion that can drift in one of the
+    two places that decide it.
+    """
+    gm = _load("e2c_gxm_under_test", "e2c_v3_granularity_matrix.py")
+    assert g6.DELTA_RETRAIN_MIN_MARGIN == gm.DELTA_RETRAIN_MIN_MARGIN
+    assert g6.MATCHED_RETRAIN_MIN_MASS == 0.99
+    # the runner's own gate hardcodes the mass floor inline; if it ever moves,
+    # the mirror is the thing that has to move with it
+    assert g6.MATCHED_RETRAIN_MIN_MASS == 0.99
+
+
 def test_one_failing_gate_blocks_the_full_matrix(design):
-    res = g6.evaluate_gates(_cells(design, delta_oracle=-1.0),
+    res = g6.evaluate_gates(_cells(design, delta_retrain=-1.0),
                             design["matrix"])
     assert res["passed"] is False
     assert res["failed_gates"] == ["matched_oracle"]
@@ -947,13 +1160,28 @@ def test_worktree_state_separates_tracked_from_untracked(tmp_path,
     assert ws4["dirty_including_untracked"] is True
 
 
+def _oracle_fit(design, fit_ok=True, mass=0.9991, strict=1.0):
+    """The runner's per-set oracle summary, in the shape the adapter is handed.
+
+    ``run_manifest_gx`` passes its own ``oracle_results`` -- the
+    ``oracles_summary.json`` it already hashed into ``checkpoints_sha256`` --
+    so this is the real threading path, not a test-only convenience: the fit
+    record lives beside the oracle's checkpoint, not inside any cell.
+    """
+    return {e["set_id"]: {"matched_retrain": {
+                "fit_ok": fit_ok, "strict_all_expected": strict,
+                "min_candidate_mass": mass}}
+            for e in design["matrix"]["sets"]}
+
+
 def _runner_cell(design, set_idx=0, seed=17, soft_override=None,
                  fam_override=None):
     """A cell in the GX RUNNER's on-disk schema, not the gate schema.
 
     The two are deliberately different: the runner stores per-identity hard
-    predictions, soft probabilities and PER-IDENTITY oracle distances, while the
-    gates want one flat row per identity and one cell-level delta.  Testing the
+    predictions, soft probabilities and PER-IDENTITY oracle distances for all
+    four families, while the gates want one flat row per identity and one row
+    per (target identity, seed) carrying the G3.1 conditions.  Testing the
     adapter against a faithful runner cell is what makes the wiring between a
     real GPU run and the four gates a tested path rather than a hoped-for one.
     """
@@ -983,7 +1211,16 @@ def _runner_cell(design, set_idx=0, seed=17, soft_override=None,
                                  "reason": None},
             "loo_finetune": {"distance": {"l2": 0.40}, "reliable": True,
                              "reason": None},
-            "delta_ft_l2": 0.30, "delta_reliable": True}
+            # The fresh-retrain pair the G3.1 gate actually reads.  The
+            # magnitudes mirror the measured pilot: the edit lands on the
+            # coarsened mapping, so it sits ~0.001 from matched_retrain and
+            # ~1.2 from the deletion reference.
+            "matched_retrain": {"distance": {"l2": 0.001}, "reliable": True,
+                                "reason": None},
+            "loo_retrain": {"distance": {"l2": 1.201}, "reliable": True,
+                            "reason": None},
+            "delta_ft_l2": 0.30, "delta_reliable": True,
+            "delta_retrain_l2": 1.200, "delta_retrain_reliable": True}
     if fam_override:
         for iid, patch in fam_override.items():
             fam.setdefault(iid, {}).update(patch)
@@ -996,23 +1233,35 @@ def _runner_cell(design, set_idx=0, seed=17, soft_override=None,
 
 def test_the_adapter_maps_runner_cells_onto_the_gate_schema(design):
     cell = _runner_cell(design)
-    (adapted,) = g6.cells_for_gates([cell])
+    (adapted,) = g6.cells_for_gates([cell], oracle_fit=_oracle_fit(design))
     assert adapted["set_id"] == cell["set_id"]
     assert adapted["seed"] == 17
     row = next(iter(adapted["per_identity"].values()))
     assert {"expected", "strict_parsed", "control_group", "p_desired",
             "p_source", "candidate_mass", "taxonomic_class", "multi_label",
             "unparseable"} <= set(row)
-    # A single set's cells are NOT enough for the gates to pass: the
-    # matched-oracle and sibling-coverage gates both fail on a set that was
-    # never run, which is the behaviour the other tests pin.  So the clean-run
-    # assertion needs every set present.
+    # one row per declared target, carrying the G3.1 fields the gate reads
+    tids = sorted(design["matrix"]["sets"][0]["assignments"])
+    assert [r["identity_id"] for r in adapted["oracle_targets"]] == tids
+    assert {"matched_retrain_fit_ok", "matched_retrain_mass",
+            "l2_to_matched_retrain", "l2_to_loo_retrain",
+            "delta_retrain_l2", "delta_material",
+            "closer_to_matched_retrain", "failed_conditions",
+            "ok"} <= set(adapted["oracle_targets"][0])
+    assert all(r["ok"] for r in adapted["oracle_targets"])
+    # A single set's cells are NOT enough for the gates to pass: coverage now
+    # audits the exact (set_id, seed) design, so the clean-run assertion needs
+    # every set at every edit seed.
     all_cells = g6.cells_for_gates(
-        [_runner_cell(design, set_idx=i)
-         for i in range(len(design["matrix"]["sets"]))])
+        [_runner_cell(design, set_idx=i, seed=s)
+         for i in range(len(design["matrix"]["sets"]))
+         for s in design["matrix"]["edit_seeds"]],
+        oracle_fit=_oracle_fit(design))
     res = g6.evaluate_gates(all_cells, design["matrix"])
-    assert res["passed"] is True, res["failed_gates"]
-    assert res["n_cells_evaluated"] == len(design["matrix"]["sets"])
+    assert res["passed"] is True, (res["failed_gates"],
+                                   res["coverage_defects"])
+    assert res["n_cells_evaluated"] == design["matrix"]["n_cells"]
+    assert res["coverage"]["exact"] is True
 
 
 def test_the_adapter_carries_same_leaf_groups_through_from_the_runner(design):
@@ -1022,7 +1271,8 @@ def test_the_adapter_carries_same_leaf_groups_through_from_the_runner(design):
     entry = design["matrix"]["sets"][0]
     tid = min(entry["assignments"])
     partner = next(iter(entry["controls"][tid]["same_leaf"]))
-    (adapted,) = g6.cells_for_gates([_runner_cell(design)])
+    (adapted,) = g6.cells_for_gates([_runner_cell(design)],
+                                    oracle_fit=_oracle_fit(design))
     assert adapted["per_identity"][partner]["control_group"] == "same_leaf"
     g = g6.evaluate_gates([adapted], design["matrix"])["gates"]["retention"]
     assert g["per_control_group"]["same_leaf"]["n_rows"] >= 1
@@ -1036,54 +1286,101 @@ def test_the_adapter_reads_p_source_from_the_baseline_alias(design):
     tid = min(entry["assignments"])
     cell = _runner_cell(design, soft_override={tid: {"p_baseline_alias": 0.42,
                                                      "p_expected": 0.99}})
-    (adapted,) = g6.cells_for_gates([cell])
+    (adapted,) = g6.cells_for_gates([cell], oracle_fit=_oracle_fit(design))
     assert adapted["per_identity"][tid]["p_source"] == 0.42
     g = g6.evaluate_gates([adapted], design["matrix"])["gates"]["behavioral"]
     assert g["passed"] is False
     assert any("p_source" in f for f in g["failures"])
 
 
-def test_the_adapter_averages_delta_over_targets_only(design):
+def test_the_adapter_reads_the_retrain_families_and_ignores_the_finetune(
+        design):
     """A retained identity's oracle distance says nothing about whether the
-    TRANSFORMATION matched, so including one would let a control row dilute the
-    measurement the matched-oracle gate exists to make."""
+    TRANSFORMATION matched, and a *_finetune distance says nothing about
+    retraining at all: it continues from the trained baseline h, so both
+    references share the initialization the claim is supposed to be about.
+
+    The override below pushes every retained row's finetune delta wildly
+    negative AND inverts the finetune pair for the targets.  Nothing may move,
+    because the adapter reads only matched_retrain / loo_retrain.
+    """
     entry = design["matrix"]["sets"][0]
     n_targets = len(entry["assignments"])
     retained = [i for i in design["ctx"]["identity_ids"]
                 if i not in entry["assignments"]]
-    # push every retained row's delta wildly negative: the cell delta must not
-    # move, because only target rows are averaged
     fam = {i: {"delta_ft_l2": -9.0} for i in retained}
-    (adapted,) = g6.cells_for_gates([_runner_cell(design, fam_override=fam)])
-    d = adapted["oracle_distances"]
-    assert d["n_target_rows"] == n_targets
-    assert d["n_rows_used"] == n_targets
-    assert d["delta_oracle"] == 0.30
+    for tid in sorted(entry["assignments"]):
+        fam[tid] = {"matched_finetune": {"distance": {"l2": 5.0},
+                                         "reliable": True, "reason": None},
+                    "loo_finetune": {"distance": {"l2": 0.0},
+                                     "reliable": True, "reason": None},
+                    "delta_ft_l2": -5.0, "delta_reliable": True}
+    (adapted,) = g6.cells_for_gates([_runner_cell(design, fam_override=fam)],
+                                    oracle_fit=_oracle_fit(design))
+    rows = adapted["oracle_targets"]
+    assert len(rows) == n_targets
+    assert adapted["n_target_rows"] == n_targets
+    assert all(r["delta_retrain_l2"] == pytest.approx(1.200) for r in rows)
+    assert all(r["ok"] for r in rows)
 
 
-def test_an_unreliable_oracle_row_is_dropped_and_counted(design):
+def test_the_adapter_recomputes_a_delta_the_cell_did_not_store(design):
+    """A cell re-derived on CPU from stored soft probabilities can carry the
+    two distances without the delta beside them.  Refusing to compare it would
+    make the CPU re-derivation path silently weaker than the GPU one."""
     entry = design["matrix"]["sets"][0]
     tids = sorted(entry["assignments"])
-    fam = {tids[0]: {"delta_ft_l2": None}}
-    (adapted,) = g6.cells_for_gates([_runner_cell(design, fam_override=fam)])
-    d = adapted["oracle_distances"]
-    assert d["n_rows_used"] == len(tids) - 1
-    assert d["n_target_rows"] == len(tids)
-    assert d["delta_oracle"] == 0.30
+    fam = {t: {"delta_retrain_l2": None} for t in tids}
+    (adapted,) = g6.cells_for_gates([_runner_cell(design, fam_override=fam)],
+                                    oracle_fit=_oracle_fit(design))
+    for r in adapted["oracle_targets"]:
+        assert r["delta_retrain_established"] is True
+        assert r["delta_retrain_l2"] == pytest.approx(1.201 - 0.001)
+        assert r["ok"] is True
 
 
-def test_no_reliable_delta_at_all_fails_rather_than_passing(design):
-    """A missing or unreliable oracle is not a pass.  Averaging over an empty
-    set would either raise or -- worse -- report a plausible number computed
-    from nothing."""
+def test_an_unestablished_oracle_row_is_named_not_dropped(design):
+    """The adapter must keep the row and carry the gate's own reason for
+    refusing the distance.  Dropping it -- what the averaged version did --
+    turns a coverage limit into a smaller denominator."""
     entry = design["matrix"]["sets"][0]
-    fam = {i: {"delta_ft_l2": None} for i in sorted(entry["assignments"])}
-    cells = g6.cells_for_gates([_runner_cell(design, fam_override=fam)])
-    assert cells[0]["oracle_distances"]["delta_oracle"] is None
-    g = g6.evaluate_gates(cells, design["matrix"])["gates"]["matched_oracle"]
+    tids = sorted(entry["assignments"])
+    why = "candidate mass 0.0040 < floor 0.01"
+    fam = {tids[0]: {
+        "matched_retrain": {"distance": None, "reliable": False,
+                            "reason": why},
+        "loo_retrain": {"distance": None, "reliable": False, "reason": why},
+        "delta_retrain_l2": None, "delta_retrain_reliable": False}}
+    (adapted,) = g6.cells_for_gates([_runner_cell(design, fam_override=fam)],
+                                    oracle_fit=_oracle_fit(design))
+    assert adapted["n_target_rows"] == len(tids)
+    assert adapted["n_rows_established"] == len(tids) - 1
+    bad = next(r for r in adapted["oracle_targets"]
+               if r["identity_id"] == tids[0])
+    assert bad["delta_retrain_established"] is False
+    assert bad["delta_retrain_l2"] is None
+    assert bad["ok"] is False
+    # None, not []: an empty failed_conditions list reads as "all four met"
+    assert bad["failed_conditions"] is None
+    assert bad["why_no_matched_retrain_distance"] == why
+
+
+def test_the_adapter_fails_closed_without_a_threaded_oracle_fit(design):
+    """The fit record is not in a cell, so an adapter called without it cannot
+    know whether the matched oracle fits.  Guessing "yes" would let the exact
+    defect GX2H repaired -- two sets whose matched_retrain scored 33/35 -- pass
+    the gate again."""
+    (adapted,) = g6.cells_for_gates([_runner_cell(design)])
+    assert adapted["oracle_fit_supplied"] is False
+    for r in adapted["oracle_targets"]:
+        assert r["matched_retrain_fit_ok"] is None
+        assert r["matched_retrain_mass"] is None
+        assert r["ok"] is False
+        assert "matched_retrain_fit" in r["failed_conditions"]
+        assert "candidate_mass" in r["failed_conditions"]
+    g = g6.evaluate_gates([adapted], design["matrix"])["gates"]["matched_oracle"]
     assert g["passed"] is False
-    assert any("no reliable delta_oracle" in f for f in g["failures"])
-    assert g["per_set"][entry["set_id"]]["mean_delta_oracle"] is None
+    assert any("matched_retrain_fit" in f for f in g["failures"])
 
 
 # ====================================================================== #
@@ -1192,21 +1489,165 @@ def test_evaluate_gates_reports_coverage_and_fails_on_an_uncovered_set(design):
     full = g6.evaluate_gates(all_cells, matrix)
     assert full["passed"] is True
     assert full["coverage"]["complete"] is True
+    assert full["coverage"]["exact"] is True
+    assert full["coverage_defects"] == []
     assert full["coverage"]["sets_with_no_cells"] == []
     assert full["coverage"]["n_cells_expected_when_complete"] == \
         matrix["n_cells"]
+    assert full["coverage"]["audit"]["n_expected_cells"] == matrix["n_cells"]
 
     # drop one set entirely: three of the four gates still pass on what they
     # saw, so the coverage block is what makes the gap visible
     dropped = matrix["sets"][0]["set_id"]
-    partial = g6.evaluate_gates([c for c in all_cells
-                                 if c["set_id"] != dropped], matrix)
+    partial = g6.evaluate_gates(_cells(design, omit_sets=(dropped,)), matrix)
     cov = partial["coverage"]
     assert cov["complete"] is False
+    assert cov["exact"] is False
     assert cov["sets_with_no_cells"] == [dropped]
     assert cov["n_sets_covered"] == len(matrix["sets"]) - 1
     assert partial["passed"] is False
     assert partial["proceed_to_full_matrix"] is False
+    assert "missing_cells" in partial["coverage_defects"]
+    assert cov["audit"]["defects"]["missing_cells"] == \
+        [f"{dropped}/seed{s}" for s in matrix["edit_seeds"]]
+
+
+def test_a_missing_seed_is_a_coverage_defect_not_a_smaller_denominator(design):
+    """The regression the exact audit exists to close.
+
+    Every gate aggregates over the rows it is handed, so a run that never
+    evaluated seed 123 produced four internally consistent gates and a
+    ``passed`` describing a two-seed pilot as the three-seed one that was
+    frozen.  Set-level coverage could not see it: all five sets still had a
+    cell.
+    """
+    matrix = design["matrix"]
+    gone = matrix["edit_seeds"][-1]
+    cells = _cells(design, seeds=[s for s in matrix["edit_seeds"]
+                                  if s != gone])
+    res = g6.evaluate_gates(cells, matrix)
+    # the four gates on their own are unanimous and green
+    for name in ("behavioral", "retention", "matched_oracle"):
+        assert res["gates"][name]["passed"] is True, name
+    # ...and the verdict still refuses, naming the missing cells
+    assert res["passed"] is False
+    assert res["proceed_to_full_matrix"] is False
+    assert res["coverage_defects"] == ["missing_cells"]
+    audit = res["coverage"]["audit"]
+    assert audit["exact"] is False
+    assert audit["defects"]["missing_cells"] == \
+        [f"{e['set_id']}/seed{gone}" for e in matrix["sets"]]
+    assert audit["n_cells_evaluated"] == len(cells)
+    assert audit["n_expected_cells"] == matrix["n_cells"]
+    # the legacy set-level flag still reads complete, which is exactly why the
+    # audit is reported beside it rather than replacing it
+    assert res["coverage"]["complete"] is True
+
+
+def test_a_duplicate_cell_is_reported_rather_than_counted_twice(design):
+    """A cell evaluated twice doubles every row that aggregates over it, so a
+    retention accuracy or a per-set target count computed from the list is
+    quietly weighted by however many times the run happened to write it."""
+    matrix = design["matrix"]
+    cells = _cells(design)
+    sid, seed = matrix["sets"][0]["set_id"], matrix["edit_seeds"][0]
+    dup = [c for c in cells if (c["set_id"], c["seed"]) == (sid, seed)]
+    res = g6.evaluate_gates(cells + dup, matrix)
+    assert res["passed"] is False
+    assert res["coverage_defects"] == ["duplicate_cells"]
+    audit = res["coverage"]["audit"]
+    assert audit["defects"]["duplicate_cells"] == [f"{sid}/seed{seed}"]
+    assert audit["n_cells_evaluated"] == len(cells) + 1
+    assert audit["n_distinct_cells"] == len(cells)
+    # the four metrics still pass; the defect is in the run, not the numbers
+    assert res["failed_gates"] == []
+
+
+def test_a_cell_outside_the_frozen_matrix_is_reported(design):
+    """Evidence about a (set, seed) nobody froze cannot be pooled with the
+    design's own cells: it is a different experiment wearing the same schema."""
+    matrix = design["matrix"]
+    cells = _cells(design)
+    stray = dict(cells[0], seed=999, cell_id=f"{cells[0]['set_id']}__seed999")
+    for r in stray["oracle_targets"]:
+        r["seed"] = 999
+    res = g6.evaluate_gates(cells + [stray], matrix)
+    assert res["passed"] is False
+    assert "cells_outside_the_matrix" in res["coverage_defects"]
+    assert res["coverage"]["audit"]["defects"]["cells_outside_the_matrix"] == \
+        [f"{stray['set_id']}/seed999"]
+
+
+def test_a_cell_missing_a_declared_target_identity_is_reported(design):
+    """Partial per-identity coverage: the cell exists, but one identity the
+    matrix declares as a target for that set has no row, so no gate ever saw
+    it.  Every gate that averages would report a clean accuracy over the rows
+    that arrived."""
+    matrix = design["matrix"]
+    entry = matrix["sets"][0]
+    sid, seed = entry["set_id"], matrix["edit_seeds"][0]
+    gone = min(entry["assignments"])
+    kept = [t for t in sorted(entry["assignments"]) if t != gone]
+    # dropped from BOTH sides of the cell: the per-identity rows the metric
+    # gates read, and the oracle rows the matched-oracle gate reads.  A cell
+    # that lost only one of them would be a different defect.
+    rows = {(sid, seed): [_oracle_row(entry, seed, t) for t in kept]}
+    cells = _cells(design, drop=(gone,), oracle_rows=rows)
+    res = g6.evaluate_gates(cells, matrix)
+    assert res["passed"] is False
+    assert "missing_target_rows" in res["coverage_defects"]
+    flagged = res["coverage"]["audit"]["defects"]["missing_target_rows"]
+    assert f"{sid}/seed{seed}/{gone}" in flagged
+    # every seed of that set lost the identity, and no other set did
+    assert flagged == [f"{sid}/seed{s}/{gone}" for s in matrix["edit_seeds"]]
+    # the matched-oracle gate names the same hole from its own side, so the
+    # two reports cannot disagree about what is missing
+    g = res["gates"]["matched_oracle"]
+    assert any(f"target {gone} is declared in the matrix" in f
+               for f in g["failures"])
+    assert g["per_set"][sid]["passed"] is False
+
+
+def test_an_unreliable_target_oracle_row_is_a_named_coverage_defect(design):
+    """Insufficient candidate support: the gated distance refused to
+    renormalize a distribution that left the recognized label set, so the
+    comparison for that target rests on nothing.  Distinct from a failed
+    comparison, and distinct from a missing cell."""
+    matrix = design["matrix"]
+    entry = matrix["sets"][0]
+    sid, seed = entry["set_id"], matrix["edit_seeds"][0]
+    tid, partner = sorted(entry["assignments"])[:2]
+    rows = {(sid, seed): [
+        _oracle_row(entry, seed, tid, established=True, lr_reliable=False,
+                    why="candidate mass 0.0040 < floor 0.01"),
+        _oracle_row(entry, seed, partner),
+    ]}
+    res = g6.evaluate_gates(_cells(design, oracle_rows=rows), matrix)
+    assert res["passed"] is False
+    assert "unreliable_oracle_rows" in res["coverage_defects"]
+    assert f"{sid}/seed{seed}/{tid}" in \
+        res["coverage"]["audit"]["defects"]["unreliable_oracle_rows"]
+
+
+def test_the_coverage_audit_reports_an_empty_run_as_entirely_missing(design):
+    """Nothing evaluated is fifteen named holes, not a zero that reads as a
+    clean sweep of an empty set."""
+    matrix = design["matrix"]
+    res = g6.evaluate_gates([], matrix)
+    assert res["passed"] is False
+    assert res["coverage"]["exact"] is False
+    audit = res["coverage"]["audit"]
+    assert audit["n_cells_evaluated"] == 0
+    assert len(audit["defects"]["missing_cells"]) == matrix["n_cells"]
+    assert set(audit["expected_cells"]) == {
+        f"{e['set_id']}/seed{s}" for e in matrix["sets"]
+        for s in matrix["edit_seeds"]}
+    # ordered by (set_id, seed) numerically, not lexicographically on the
+    # rendered label: a string sort would put "seed123" before "seed17" and
+    # make the list look shuffled against the matrix it audits
+    assert audit["expected_cells"] == sorted(
+        audit["expected_cells"],
+        key=lambda t: (t.split("/seed")[0], int(t.split("/seed")[1])))
 
 
 # ====================================================================== #

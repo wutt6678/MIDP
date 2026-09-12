@@ -187,11 +187,25 @@ def test_check_vocab_parseable_flags_the_historical_asymmetry(monkeypatch):
     comma-bearing titles.  Without this the invariant is only ever observed
     returning an empty list, which is indistinguishable from a check that does
     nothing.
+
+    The patch target is ``rv._label_parser``, not ``rv``.  All three functions
+    now live in the torch-free ``e2c_v3_label_parser`` module and ``rv`` only
+    re-exports the names, so ``parse_recognized_label`` resolves
+    ``recognized_labels_in`` in the PARSER's globals: patching the re-export on
+    ``rv`` replaces a binding nothing reads, and this test would pass with an
+    empty ``flagged`` -- the silent no-op it exists to rule out.
     """
     vocab = [BROAD_SWE, BROAD_MUSEUM, "Software Developer", "Unknown"]
     assert rv.check_vocab_parseable(vocab) == []
 
+    # patching the re-export must NOT reach the derived functions; asserting
+    # this pins the reason the line below targets the parser module
     monkeypatch.setattr(rv, "recognized_labels_in",
+                        _pre_fix_recognized_labels_in)
+    assert rv.check_vocab_parseable(vocab) == []
+    monkeypatch.undo()
+
+    monkeypatch.setattr(rv._label_parser, "recognized_labels_in",
                         _pre_fix_recognized_labels_in)
     flagged = rv.check_vocab_parseable(vocab)
     assert sorted(flagged) == sorted([BROAD_SWE, BROAD_MUSEUM]), (

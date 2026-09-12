@@ -115,6 +115,14 @@ PILOT_MODE = "single_level1"
 CHAIN_LEVELS = ("raw_label", "broad_occupation", "minor_group")
 ELIDED_LEVEL = "major_group"
 
+# Frozen G3.1 promotion criteria for the matched-oracle gate, mirrored from
+# e2c_v3_granularity_matrix (DELTA_RETRAIN_MIN_MARGIN) and its g3_1_gate
+# candidate-mass floor.  Defined here so the pilot gate stays a pure function
+# of cells + matrix with no runner import; a unit test asserts these equal the
+# runner's frozen values, so the two cannot silently drift apart.
+DELTA_RETRAIN_MIN_MARGIN = 0.5
+MATCHED_RETRAIN_MIN_MASS = 0.99
+
 
 def _load_sibling(module_name, filename):
     path = SCRIPT_DIR / filename
@@ -126,24 +134,27 @@ def _load_sibling(module_name, filename):
 
 gx = _load_sibling("e2c_gx_shared", "e2c_v3_granularity.py")
 mh = _load_sibling("e2c_mh_shared", "e2c_v3_mllmu_hierarchy.py")
-
-_RV = None
+#: The strict parser, in its own torch-free module.  Loaded eagerly because
+#: there is no longer a reason to defer it: this module and both of its
+#: siblings above are torch-free, so ``--verify`` and the design tests import
+#: no torch at all.  It used to reach the parser through
+#: ``e2c_v3_research_validity``, which imports torch at module scope -- so the
+#: one function that decides whether a label was recognized dragged the whole
+#: training stack into a CPU design check, and "runs without torch" was true
+#: only until the first vocab was validated.
+_lp = _load_sibling("e2c_v3_label_parser", "e2c_v3_label_parser.py")
 
 
 def parser_module():
-    """The module that owns the strict parser, loaded on demand and cached.
+    """The module that owns the strict parser.
 
-    Lazy rather than module-level: ``e2c_v3_research_validity`` imports torch at
-    module scope, while this module is otherwise torch-free so its design tests
-    run in seconds.  The parser is needed only by ``validate_g6``, which is the
-    one place that must not reimplement label recognition -- a second copy of
-    the normalization rules is exactly how the two sides of the matcher drifted
-    apart in the first place.
+    Kept as an accessor rather than a bare import so the one place that needs
+    it -- ``validate_g6``'s ``check_vocab_parseable`` invariant -- cannot
+    reimplement label recognition instead.  A second copy of the normalization
+    rules is exactly how the two sides of the matcher drifted apart in the
+    first place, scoring a verbatim comma-bearing SOC title as unparseable.
     """
-    global _RV
-    if _RV is None:
-        _RV = _load_sibling("e2c_rv_g6", "e2c_v3_research_validity.py")
-    return _RV
+    return _lp
 
 MANIFEST_DIR = DATASET_ROOT / "e2c_mllmu" / "manifests"
 G6_MANIFEST_PATH = MANIFEST_DIR / "mllmu_g6_manifest.json"
@@ -424,10 +435,18 @@ def build_g6_manifest(art, roster, rows, source_path=None):
         "elided_level": ELIDED_LEVEL,
         "images_per_identity": {i: 1 for i in selected},
         "held_out_note": (
-            "MLLMU-Bench has ONE image per identity, so image-level held-out g "
-            "evaluation is impossible and is stated as a limitation.  "
-            "Held-out evidence is at the association level: strict parsing, "
-            "oracle distance and the native Mask_Task probes."),
+            "This design has NO image router.  The frozen route is the "
+            "association C->Y (occupation code -> label): every training pair "
+            "and every evaluation prompt is built from the code alone and no "
+            "image is ever passed to the model, so there is no g to hold out "
+            "and no cached-g replay.  That is a property of the design, not a "
+            "shortfall in these results.  Separately, MLLMU-Bench provides ONE "
+            "image per identity, so an image-level held-out g could not be "
+            "built from this benchmark either -- recorded as a limitation on "
+            "any FUTURE g, not as one on what was measured here.  Held-out "
+            "evidence is at the association level: strict parsing, gated "
+            "oracle distance, and the native Mask_Task probes, whose "
+            "benchmark-native phrasings are never used in route training."),
     }
 
 
@@ -900,17 +919,80 @@ def sibling_coverage_gate(cells, matrix):
     }
 
 
-def matched_oracle_gate(cells, matrix):
-    """Is the transformation-MATCHED oracle the right reference?
+#: The four frozen G3.1 conditions, named in a fixed order so a failure can
+#: say WHICH one broke.  Collapsing them into a single boolean is what made
+#: the previous version of this gate unactionable: "the matched-oracle gate
+#: failed" does not distinguish an oracle that never fit (a training defect,
+#: repaired by retraining or re-scoring it) from a delta below the materiality
+#: margin (a measurement defect, repaired by changing the edit).
+ORACLE_CONDITIONS = ("matched_retrain_fit", "candidate_mass",
+                     "delta_retrain_margin", "closer_to_matched_retrain")
 
-    delta_oracle = D(edit, loo_finetune) - D(edit, matched_finetune).  A
-    positive delta means the edited model sits closer to the oracle that was
-    trained on the SAME coarsened mapping than to the one trained on the
-    retained mapping only -- i.e. the edit did what the transformation asked
-    rather than merely deleting the association.  Aggregated per set across
-    seeds, because a single seed can invert by noise and the pilot's whole
-    purpose is to decide whether the design is sound before 12 targets and
-    three seeds are spent on it.
+#: Operations the gate does not judge.  A refusal target has no coarsened
+#: mapping to be closer to, so there is no matched reference for it to beat;
+#: mirroring the runner's own exclusion keeps the two verdicts comparable.
+NON_TRANSFORMATION_OPERATIONS = ("refusal",)
+
+
+def _oracle_condition_failures(row):
+    """Which frozen conditions this established target row does not meet.
+
+    Only ever called on a row whose ``delta_retrain_l2`` was established: a
+    null delta means the gated distance refused to renormalize a distribution
+    that left the recognized label set, so the two references were never
+    compared.  Scoring such a row as a failed comparison would report a
+    COVERAGE limit as a scientific negative -- the exact conflation the
+    runner's g3_1_gate separates, and the reason a 117/120 result once read
+    as three failures.
+    """
+    bad = []
+    if not row["matched_retrain_fit_ok"]:
+        bad.append("matched_retrain_fit")
+    mass = row["matched_retrain_mass"]
+    if mass is None or mass < MATCHED_RETRAIN_MIN_MASS:
+        bad.append("candidate_mass")
+    if not row["delta_material"]:
+        bad.append("delta_retrain_margin")
+    if not row["closer_to_matched_retrain"]:
+        bad.append("closer_to_matched_retrain")
+    return bad
+
+
+def matched_oracle_gate(cells, matrix):
+    """Is the FRESH-RETRAIN matched oracle the right reference, per target?
+
+    The G3.1 criteria, applied to every (target identity, edit seed) row and
+    never averaged:
+
+      1. ``matched_retrain`` fits every transformed AND retained mapping
+         (``strict_all_expected`` 1.0, which is what ``fit_ok`` records);
+      2. its candidate mass clears ``MATCHED_RETRAIN_MIN_MASS``;
+      3. ``delta_retrain_l2 = D(edit, loo_retrain) - D(edit, matched_retrain)``
+         reaches the ``DELTA_RETRAIN_MIN_MARGIN`` materiality margin;
+      4. and the edit sits closer to ``matched_retrain`` than to
+         ``loo_retrain``.
+
+    Two corrections to the gate this replaces.
+
+    FAMILY.  It measured the ``*_finetune`` references, which continue from
+    the trained baseline h.  A distance to those says the edit moved toward
+    something that already contained h's own training; only a FRESH base with
+    a fresh LoRA, trained under route h's protocol, makes "the edit did what
+    retraining on the coarsened mapping would have done" a claim about the
+    edit rather than about the shared initialization.  The finetune distances
+    are still stored per cell -- they are the G3 numbers the earlier reports
+    were written against -- but they are not this gate's evidence.
+
+    AGGREGATION.  It averaged delta over edit seeds per set and asked whether
+    the mean beat zero.  Averaging hides exactly the failure the pilot exists
+    to catch: one seed inverting, or one target of a two-target set never
+    being compared at all, both survive a mean over the rows that resolved.
+    Every row must pass, and a row that was never compared is reported as a
+    coverage gap beside the failures rather than inside them.
+
+    The oracle's own fit is not derivable from a cell, so it arrives threaded
+    through ``cells_for_gates``; a set with no fit record fails condition 1
+    instead of passing it vacuously.
     """
     per_set, failures = OrderedDict(), []
     by_set = {}
@@ -918,76 +1000,128 @@ def matched_oracle_gate(cells, matrix):
         by_set.setdefault(cell["set_id"], []).append(cell)
     for entry in matrix["sets"]:
         sid = entry["set_id"]
+        declared = sorted(entry["assignments"])
         got = by_set.get(sid, [])
         if not got:
             failures.append(f"{sid}: no cells evaluated")
-            per_set[sid] = {"mean_delta_oracle": None, "n_seeds": 0}
+            per_set[sid] = {"n_seeds": 0, "n_target_rows": 0,
+                            "n_rows_passing": 0, "passed": False,
+                            "worst_case_delta_retrain": None}
             continue
-        deltas = [c["oracle_distances"]["delta_oracle"] for c in got]
-        missing = [c for c, d in zip(got, deltas) if d is None]
-        if missing:
-            # An oracle distance that could not be computed is not a pass.  It
-            # means the matched or LOO reference is absent or fell below the
-            # candidate-mass floor, and silently averaging over the rows that
-            # did resolve would hide a broken oracle behind a plausible number.
+        rows = [r for c in sorted(got, key=lambda c: c["seed"])
+                for r in c["oracle_targets"]
+                if r["operation"] not in NON_TRANSFORMATION_OPERATIONS]
+        # A target the matrix declares but no cell reported a row for is a
+        # hole in the evidence, not a smaller denominator.  Named per cell so
+        # the reader can tell a missing seed from a missing identity.
+        for c in sorted(got, key=lambda c: c["seed"]):
+            seen = {r["identity_id"] for r in c["oracle_targets"]}
+            for iid in sorted(set(declared) - seen):
+                failures.append(
+                    f"{sid}/seed{c['seed']}: target {iid} is declared in the "
+                    f"matrix but has no oracle row -- the matched-oracle "
+                    f"comparison was never made for it")
+        established = [r for r in rows if r["delta_retrain_established"]]
+        not_established = [r for r in rows
+                           if not r["delta_retrain_established"]]
+        for r in not_established:
             failures.append(
-                f"{sid}: no reliable delta_oracle for seed(s) "
-                f"{sorted(c['seed'] for c in missing)} -- the matched or "
-                f"leave-one-out oracle is missing or unreliable for those "
-                f"cells")
-        usable = [d for d in deltas if d is not None]
-        if not usable:
-            per_set[sid] = {"mean_delta_oracle": None, "n_seeds": 0,
-                            "n_seeds_unreliable": len(missing)}
-            continue
-        mean = sum(usable) / len(usable)
-        per_set[sid] = {"mean_delta_oracle": mean,
-                        "per_seed": {str(c["seed"]):
-                                     c["oracle_distances"]["delta_oracle"]
-                                     for c in sorted(got,
-                                                     key=lambda c: c["seed"])},
-                        "n_seeds": len(usable),
-                        "n_seeds_unreliable": len(missing),
-                        "distance_to_matched":
-                            [c["oracle_distances"]["matched"] for c in got],
-                        "distance_to_loo":
-                            [c["oracle_distances"]["loo"] for c in got]}
-        if mean <= 0.0:
+                f"{sid}/seed{r['seed']}/{r['identity_id']}: no retrain "
+                f"delta was established (matched_retrain reason="
+                f"{r['why_no_matched_retrain_distance']!r}, loo_retrain "
+                f"reason={r['why_no_loo_retrain_distance']!r}) -- a coverage "
+                f"limit, not a failed comparison")
+        failed = [r for r in established if not r["ok"]]
+        for r in failed:
             failures.append(
-                f"{sid}: mean delta_oracle {mean:+.4f} <= 0 -- the edit is no "
-                f"closer to the transformation-matched oracle than to the "
-                f"leave-one-out oracle, so it is not evidence of controlled "
-                f"coarsening")
+                f"{sid}/seed{r['seed']}/{r['identity_id']}: failed "
+                f"{'+'.join(r['failed_conditions'])} (delta_retrain_l2="
+                f"{r['delta_retrain_l2']:.4f}, matched_retrain mass="
+                f"{r['matched_retrain_mass']}, fit_ok="
+                f"{r['matched_retrain_fit_ok']})")
+        deltas = [r["delta_retrain_l2"] for r in established]
+        seeds = sorted({r["seed"] for r in rows})
+        per_set[sid] = {
+            "n_seeds": len(seeds),
+            "seeds": seeds,
+            "n_target_rows": len(rows),
+            "n_rows_established": len(established),
+            "n_rows_not_established": len(not_established),
+            "n_rows_passing": sum(1 for r in established if r["ok"]),
+            "n_rows_failing": len(failed),
+            "passed": not (failed or not_established
+                           or len(rows) < len(declared) * len(got)),
+            # Worst case, not mean: with an every-row criterion the binding
+            # number is the smallest delta, and reporting a mean beside it
+            # would invite reading the mean as the verdict.
+            "worst_case_delta_retrain": min(deltas) if deltas else None,
+            "best_case_delta_retrain": max(deltas) if deltas else None,
+            "per_target": [
+                {"seed": r["seed"], "identity_id": r["identity_id"],
+                 "delta_retrain_l2": r["delta_retrain_l2"],
+                 "l2_to_matched_retrain": r["l2_to_matched_retrain"],
+                 "l2_to_loo_retrain": r["l2_to_loo_retrain"],
+                 "matched_retrain_mass": r["matched_retrain_mass"],
+                 "matched_retrain_fit_ok": r["matched_retrain_fit_ok"],
+                 "ok": r["ok"],
+                 "failed_conditions": r["failed_conditions"]}
+                for r in rows],
+        }
     return {
         "name": "matched_oracle",
         "passed": not failures,
         "per_set": per_set,
-        "criteria": {"min_mean_delta_oracle": 0.0,
-                     "aggregation": "mean over edit seeds, per set"},
+        "criteria": {
+            "oracle_families": ["matched_retrain", "loo_retrain"],
+            "family_init": ("fresh base + fresh LoRA under route h's own "
+                            "protocol; the *_finetune families continue from "
+                            "the trained baseline h and cannot support a "
+                            "retraining claim"),
+            "matched_retrain_fit_ok": True,
+            "min_matched_retrain_mass": MATCHED_RETRAIN_MIN_MASS,
+            "min_delta_retrain_l2": DELTA_RETRAIN_MIN_MARGIN,
+            "requires_closer_to_matched_retrain": True,
+            "conditions": list(ORACLE_CONDITIONS),
+            "aggregation": ("every target identity of every edit seed must "
+                            "pass; nothing is averaged"),
+        },
+        "note": ("delta_retrain_l2 = D(edit, loo_retrain) - D(edit, "
+                 "matched_retrain); a row whose delta is null was never "
+                 "compared and is reported as a coverage limit beside the "
+                 "failures, not as one of them"),
         "failures": failures,
     }
 
 
-def cells_for_gates(runner_cells):
+def cells_for_gates(runner_cells, oracle_fit=None):
     """Adapt the GX runner's ``cell_results.json`` records to the gate schema.
 
     The runner stores per-identity hard predictions, soft probabilities and
-    PER-IDENTITY oracle distances; the gates want one flat row per identity and
-    one cell-level delta.  Adapting here rather than inside the gates keeps the
-    gates pure functions of a documented schema, so they stay testable on CPU
-    without a runner, a GPU or a model.
+    PER-IDENTITY oracle distances; the gates want one flat row per identity
+    and one row per (target identity, seed) for the matched-oracle criteria.
+    Adapting here rather than inside the gates keeps the gates pure functions
+    of a documented schema, so they stay testable on CPU without a runner, a
+    GPU or a model.
 
     ``p_source`` is the runner's ``p_baseline_alias``: for a target identity the
     baseline alias IS the exact label the edit is supposed to remove, so mass
     sitting there is precisely the residual the behavioral gate rejects.
 
-    delta_oracle is averaged over the TARGET identities only, dropping rows the
-    runner could not compute a gated distance for: a distance below the
-    candidate-mass floor is not evidence about anything, and averaging it in
-    would let an unreliable row cancel a real one.  How many rows were dropped
-    is recorded, because "mean over 2 of 2" and "mean over 1 of 2" are not the
-    same claim.
+    ``oracle_fit`` threads in what a cell cannot carry: whether the
+    ``matched_retrain`` reference actually FIT, which lives in the oracle's own
+    ``oracle_results.json`` and is summarized per set by the runner as
+    ``{set_id: {family: {fit_ok, strict_all_expected, min_candidate_mass}}}``.
+    Without it the first G3.1 condition is unknowable, so it is recorded as
+    ``None`` and the row fails that condition rather than passing it
+    vacuously -- an oracle whose fit was never checked is not evidence.
+
+    Only the fresh-retrain families are read.  The ``*_finetune`` distances
+    stay in the cell record for the G3 reports that were written against them;
+    they are not this adapter's business, because a distance to a reference
+    that continued from the trained baseline h cannot support a claim about
+    retraining.
     """
+    oracle_fit = oracle_fit or {}
     out = []
     for cell in runner_cells:
         per = {}
@@ -1006,7 +1140,9 @@ def cells_for_gates(runner_cells):
                 "unparseable": p["parsed_label"] is None,
             }
         fam = cell.get("oracle_families") or {}
-        targets = sorted(cell.get("assignments") or {})
+        assignments = cell.get("assignments") or {}
+        targets = sorted(assignments)
+        fit = (oracle_fit.get(cell["set_id"]) or {}).get("matched_retrain") or {}
 
         def _l2(iid, family, _fam=fam):
             # bound as a default argument: a closure over the loop variable
@@ -1016,22 +1152,57 @@ def cells_for_gates(runner_cells):
             d = (rec.get(family) or {}).get("distance")
             return d.get("l2") if isinstance(d, dict) else None
 
-        matched = [x for x in (_l2(i, "matched_finetune") for i in targets)
-                   if x is not None]
-        loo = [x for x in (_l2(i, "loo_finetune") for i in targets)
-               if x is not None]
-        deltas = [x for x in ((fam.get(i) or {}).get("delta_ft_l2")
-                              for i in targets) if x is not None]
+        rows = []
+        for iid in targets:
+            rec = fam.get(iid) or {}
+            mr = rec.get("matched_retrain") or {}
+            lr = rec.get("loo_retrain") or {}
+            dmr, dlr = _l2(iid, "matched_retrain"), _l2(iid, "loo_retrain")
+            delta = rec.get("delta_retrain_l2")
+            if delta is None and dmr is not None and dlr is not None:
+                # the runner writes the delta beside the distances, but a cell
+                # re-derived on CPU from stored soft probabilities may carry
+                # only the distances; recomputing it here keeps the two paths
+                # from disagreeing about the same quantity
+                delta = dlr - dmr
+            row = {
+                "identity_id": iid,
+                "set_id": cell["set_id"],
+                "seed": cell["seed"],
+                "cell_id": cell.get("cell_id"),
+                "operation": (assignments.get(iid) or {}).get("operation"),
+                "matched_retrain_fit_ok": fit.get("fit_ok"),
+                "matched_retrain_strict": fit.get("strict_all_expected"),
+                "matched_retrain_mass": fit.get("min_candidate_mass"),
+                "matched_retrain_reliable": bool(mr.get("reliable")),
+                "loo_retrain_reliable": bool(lr.get("reliable")),
+                "l2_to_matched_retrain": dmr,
+                "l2_to_loo_retrain": dlr,
+                "delta_retrain_l2": delta,
+                "delta_retrain_established": delta is not None,
+                "delta_material": (delta is not None
+                                   and delta >= DELTA_RETRAIN_MIN_MARGIN),
+                "closer_to_matched_retrain": bool(
+                    dmr is not None and dlr is not None and dmr < dlr),
+                "why_no_matched_retrain_distance": mr.get("reason"),
+                "why_no_loo_retrain_distance": lr.get("reason"),
+            }
+            # None (not []) where the comparison was never made: a row that
+            # was not established has no failed conditions, and reporting an
+            # empty list for it would read as "all conditions met".
+            row["failed_conditions"] = (
+                _oracle_condition_failures(row) if delta is not None else None)
+            row["ok"] = row["failed_conditions"] == []
+            rows.append(row)
         out.append({
             "set_id": cell["set_id"], "seed": cell["seed"],
+            "cell_id": cell.get("cell_id"),
             "per_identity": per,
-            "oracle_distances": {
-                "matched": sum(matched) / len(matched) if matched else None,
-                "loo": sum(loo) / len(loo) if loo else None,
-                "delta_oracle": sum(deltas) / len(deltas) if deltas else None,
-                "n_rows_used": len(deltas),
-                "n_target_rows": len(targets),
-            },
+            "oracle_targets": rows,
+            "n_target_rows": len(targets),
+            "n_rows_established": sum(1 for r in rows
+                                      if r["delta_retrain_established"]),
+            "oracle_fit_supplied": bool(fit),
         })
     return out
 
@@ -1039,10 +1210,103 @@ def cells_for_gates(runner_cells):
 GATE_FUNCS = (behavioral_gate, retention_gate, sibling_coverage_gate,
               matched_oracle_gate)
 
+#: The coverage audit's defect classes, in the order they are reported.  Each
+#: is a list of the specific cells or rows affected, never a count: "3 rows
+#: missing" does not say which, and the whole point of the audit is to name
+#: the hole.
+COVERAGE_DEFECTS = ("missing_cells", "duplicate_cells",
+                    "cells_outside_the_matrix", "missing_target_rows",
+                    "unreliable_oracle_rows")
+
+
+def _coverage_audit(cells, matrix):
+    """Exact-coverage audit of the RUN, independent of any metric.
+
+    A gate verdict is a claim about a design: five sets, three edit seeds,
+    every declared target identity, every target row compared against an
+    oracle the gate can trust.  None of the four gates can enforce that on its
+    own, because each aggregates over the rows it was handed -- so a run
+    missing seed 42 entirely would produce four internally consistent gates
+    and a ``passed`` that described a two-seed pilot as a three-seed one.
+    Averaging is exactly what hides a missing seed.
+
+    Each defect is a distinct failure with a distinct remedy, so they are
+    reported separately rather than collapsed:
+
+    ``missing_cells``       a declared (set, seed) was never evaluated;
+    ``duplicate_cells``     one was evaluated twice, so its rows are counted
+                            twice by every gate that aggregates;
+    ``cells_outside_the_matrix``  a cell exists for a (set, seed) the matrix
+                            does not declare, so its rows are evidence about
+                            a design nobody froze;
+    ``missing_target_rows`` a cell is present but omits an identity the matrix
+                            declares as a target for that set;
+    ``unreliable_oracle_rows``  a target row's gated distance to one of the
+                            two fresh-retrain references was refused, so the
+                            matched-oracle comparison for it rests on a
+                            distribution that left the recognized label set.
+    """
+    seeds = list(matrix.get("edit_seeds") or [])
+    entries = {e["set_id"]: e for e in matrix["sets"]}
+    expected = {(sid, s) for sid in entries for s in seeds}
+
+    by_key = {}
+    for c in cells:
+        by_key.setdefault((c["set_id"], c["seed"]), []).append(c)
+
+    defects = {
+        "missing_cells": [f"{sid}/seed{s}"
+                          for sid, s in sorted(expected - set(by_key))],
+        "duplicate_cells": [f"{sid}/seed{s}"
+                            for sid, s in sorted(by_key)
+                            if len(by_key[(sid, s)]) > 1],
+        "cells_outside_the_matrix": [f"{sid}/seed{s}"
+                                     for sid, s in sorted(by_key)
+                                     if (sid, s) not in expected],
+        "missing_target_rows": [],
+        "unreliable_oracle_rows": [],
+    }
+    for sid, seed in sorted(set(by_key) & expected):
+        declared = sorted(entries[sid]["assignments"])
+        for c in by_key[(sid, seed)]:
+            per = c.get("per_identity") or {}
+            defects["missing_target_rows"].extend(
+                f"{sid}/seed{seed}/{iid}" for iid in declared
+                if iid not in per)
+            for r in c.get("oracle_targets") or []:
+                if r["operation"] in NON_TRANSFORMATION_OPERATIONS:
+                    continue
+                if not (r["matched_retrain_reliable"]
+                        and r["loo_retrain_reliable"]):
+                    defects["unreliable_oracle_rows"].append(
+                        f"{sid}/seed{seed}/{r['identity_id']}")
+    present = {name: defects[name] for name in COVERAGE_DEFECTS
+               if defects[name]}
+    return {
+        "exact": not present,
+        "edit_seeds": seeds,
+        "n_expected_cells": len(expected),
+        "n_cells_evaluated": len(cells),
+        "n_distinct_cells": len(by_key),
+        "expected_cells": [f"{sid}/seed{s}" for sid, s in sorted(expected)],
+        "defects": present,
+        "defect_classes_checked": list(COVERAGE_DEFECTS),
+        "note": ("coverage is audited against the matrix's declared "
+                 "(set_id, seed) pairs, not against the sets that happen to "
+                 "have a cell; a missing seed is a hole in the design, not a "
+                 "smaller denominator"),
+    }
+
 
 def evaluate_gates(cells, matrix):
-    """All four gates.  ``passed`` is the conjunction, and the pilot may not
-    proceed to the 12-target matrix unless it is True."""
+    """All four gates plus the exact-coverage audit.
+
+    ``passed`` is the conjunction of the four gates AND an exact coverage
+    audit, and the pilot may not proceed to the 12-target matrix unless it is
+    True.  Coverage gates the verdict rather than merely annotating it: four
+    green gates over a run that never evaluated seed 42 are four green gates
+    about a different design than the one that was frozen.
+    """
     gates = OrderedDict()
     for fn in GATE_FUNCS:
         g = fn(cells, matrix)
@@ -1053,6 +1317,7 @@ def evaluate_gates(cells, matrix):
     covered = {c["set_id"] for c in cells}
     uncovered = [e["set_id"] for e in matrix["sets"]
                  if e["set_id"] not in covered]
+    audit = _coverage_audit(cells, matrix)
     coverage = {
         "n_cells_evaluated": len(cells),
         "n_cells_expected_when_complete": matrix["n_cells"],
@@ -1060,19 +1325,26 @@ def evaluate_gates(cells, matrix):
         "n_sets": len(matrix["sets"]),
         "sets_with_no_cells": uncovered,
         "complete": not uncovered,
+        # "complete" answered only the set-level question and stayed for
+        # comparability with the committed manifests; "exact" is the audit.
+        "exact": audit["exact"],
+        "audit": audit,
     }
     failed = [k for k, g in gates.items() if not g["passed"]]
+    passed = not failed and audit["exact"]
     return {
-        "passed": not failed,
+        "passed": passed,
         "failed_gates": failed,
+        "coverage_defects": list(audit["defects"]),
         "gates": gates,
         "coverage": coverage,
         "n_cells_evaluated": len(cells),
-        "proceed_to_full_matrix": not failed,
+        "proceed_to_full_matrix": passed,
         "proceed_note": ("the full 12-target matrix may proceed only when all "
-                         "four gates pass; a null sibling metric on a set with "
-                         "no structural sibling does not block, and is not a "
-                         "pass either"),
+                         "four gates pass AND coverage of the frozen "
+                         "(set_id, seed) design is exact; a null sibling "
+                         "metric on a set with no structural sibling does not "
+                         "block, and is not a pass either"),
     }
 
 

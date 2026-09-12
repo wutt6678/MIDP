@@ -228,6 +228,34 @@ BALANCED_REP_SETS = {
                        "gx_num_s_exact_to_broad_Y04"],  # exact->broad
 }
 
+#: Datasets whose frozen matrix IS a pilot: its own gates decide whether a
+#: larger matrix may be run, so completing it is a completed PILOT and never
+#: the full matrix.  salmu (21 sets) and celeba_numeric (28 sets) are the
+#: designed matrices themselves and keep "full_matrix"; the MLLMU design is the
+#: five-set G6.1 pilot whose verdict is ``proceed_to_full_matrix``, so naming
+#: its complete run "full_matrix" put a stage in the manifest that contradicted
+#: the ``proceed_to_full_matrix=false`` recorded beside it -- and read as
+#: though the 12-target matrix the pilot exists to license had been run.
+PILOT_DESIGNS = {"mllmu": "pilot_complete"}
+
+#: Why a dataset has no image router, in that dataset's own terms.  This used
+#: to be a single celeba_numeric sentence written into EVERY cell that had no
+#: cached g, so all fifteen MLLMU pilot cells recorded "no image router for
+#: numeric profiles" -- a taxonomic occupation benchmark described as numeric,
+#: in committed evidence, in the field a reader consults to learn why no
+#: end-to-end number exists.
+NO_ROUTER_REASON = {
+    "celeba_numeric": ("no image router for numeric profiles (CelebA g "
+                       "redesign is separate)"),
+    "mllmu": ("no image router in this design: the frozen route is the "
+              "association C->Y (occupation code -> label), every prompt is "
+              "built from the code alone and no image is passed to the model. "
+              "MLLMU-Bench separately provides ONE image per identity, so an "
+              "image-level held-out g could not be built from it either"),
+    "salmu": ("no cached frozen-g routing rows were available for this run, "
+              "so this cell is association-level only"),
+}
+
 
 def _device_name():
     return (torch.cuda.get_device_name(0)
@@ -1405,8 +1433,15 @@ def reevaluate_oracles_hard_gpu(args, ds, ctx, matrix, out_base, provenance,
                 "fit_ok": fit_ok,
                 "hard_preds": hard,
                 "parser": {
-                    "module": "e2c_v3_research_validity.recognized_labels_in",
-                    "script_sha256": rv.script_sha256(),
+                    "module": "e2c_v3_label_parser.recognized_labels_in",
+                    "script_sha256": rv.label_parser_sha256(),
+                    # The parser moved to its own torch-free module after the
+                    # first GX2H run was filed.  Both names and both digests
+                    # are recorded so an artifact written under either layout
+                    # can still be resolved to the bytes that scored it:
+                    # earlier runs name the re-exporter and pin its digest.
+                    "reexported_by": "e2c_v3_research_validity",
+                    "reexporter_sha256": rv.script_sha256(),
                     "note": ("corrected matcher: label spans receive the same "
                              "punctuation normalization as output tokens")},
                 "provenance": dict(provenance, commit=commit),
@@ -2284,10 +2319,11 @@ def run_cells(args, ds, ctx, matrix, out_base):
                 criteria = _pass_criteria(hard, soft, entry, ctx)
                 dist = oracle_family_distances(soft, entry, ctx,
                                                oracle_root, sid)
-                e2e, e2e_rows = ({"level": "association-only",
-                                  "reason": "no image router for numeric "
-                                            "profiles (CelebA g redesign "
-                                            "is separate)"}, [])
+                e2e, e2e_rows = (
+                    {"level": "association-only",
+                     "reason": NO_ROUTER_REASON.get(
+                         ds, f"no cached frozen-g routing rows for {ds}")},
+                    [])
                 if g_rows is not None:
                     e2e, e2e_rows = _e2e_replay_gx(session, ctx, entry,
                                                    g_rows, args)
@@ -2658,6 +2694,37 @@ def aggregate_gx(ds, out_base, matrix, args=None):
         hp = {p["identity_id"]: p for p in c["hard_preds"]}
         sib_ok += sum(hp[i]["correct_post_edit"]
                       for i in c["criteria"]["sibling_ids"] if i in hp)
+    # Retained-control accuracy per group, DERIVED from the same rows the
+    # retention gate reads.  The claim below used to assert "all other
+    # retained controls passed" unconditionally, and it went on saying so
+    # while the same_leaf group stood at 26/27 -- a report sentence
+    # contradicting the gate printed beside it, which is worse than no
+    # sentence at all because it is the one a reader quotes.
+    #: Likewise derived: whether this run replayed a router at all.  salmu
+    #: replays a cached frozen g; mllmu and celeba_numeric are
+    #: association-level by design and carry zero e2e rows.
+    routed = [c for c in cells if c.get("e2e_rows")]
+    retained_groups = {}
+    for c in cells:
+        for p in c["hard_preds"]:
+            grp = p.get("group")
+            if grp == "target":
+                continue
+            g = retained_groups.setdefault(grp, {"n": 0, "ok": 0, "wrong": []})
+            g["n"] += 1
+            if p["correct_post_edit"]:
+                g["ok"] += 1
+            else:
+                g["wrong"].append(
+                    f"{c['set_id']}/seed{c['seed']}/{p['identity_id']}: "
+                    f"expected {p['expected_post_edit']!r}, got "
+                    f"{p['parsed_label']!r}")
+    other_groups = {k: v for k, v in retained_groups.items() if k != "sibling"}
+    other_failed = {k: v for k, v in other_groups.items()
+                    if v["ok"] != v["n"]}
+    other_summary = ("; ".join(f"{k} {v['ok']}/{v['n']}"
+                               for k, v in sorted(other_groups.items()))
+                     or "none evaluated")
     l2_mf, l2_mr = _trans_msd("matched_finetune"), _trans_msd(
         "matched_retrain")
     d_ft, d_rt = _trans_msd("delta_ft_l2"), _trans_msd("delta_retrain_l2")
@@ -2794,14 +2861,50 @@ def aggregate_gx(ds, out_base, matrix, args=None):
             "or parameter equivalence; every proximity claim is scoped to "
             "the evaluated code prompts and candidate-label space."),
         "sibling_coverage": (
-            f"The available sibling control(s) passed {sib_ok}/{sib_tot}; "
-            "all other retained controls passed. Targets without a retained "
-            "sibling (unique branch or co-targeted) have a null sibling "
-            "metric, never a vacuous 1.0."),
+            f"The available sibling control(s) passed {sib_ok}/{sib_tot}. "
+            + ("All other retained controls passed: "
+               f"{other_summary}."
+               if not other_failed else
+               "The other retained controls did NOT all pass: "
+               f"{other_summary}.  The failing rows are named in the "
+               "retention gate, which this sentence does not override.")
+            + " Targets without a retained sibling (unique branch or "
+              "co-targeted) have a null sibling metric, never a vacuous 1.0."),
+        #: Machine-readable form of the sentence above, so the claim can be
+        #: checked against the gate rather than read.
+        "retained_controls_by_group": {
+            k: {"n_rows": v["n"], "n_correct": v["ok"],
+                "strict_accuracy": (v["ok"] / v["n"]) if v["n"] else None,
+                "wrong": v["wrong"]}
+            for k, v in sorted(retained_groups.items())},
         "refusal_separation": (
             "Refusal controls are reported in a separate block and never "
             "contribute to the granularity (transformation) headline."),
     }
+    if not routed:
+        #: Filed rather than silently rewritten.  ``e2e.reason`` is a constant
+        #: describing the design, not a measurement, but it is inside
+        #: committed cell bytes that run manifests hash -- so the stale
+        #: sentence is named here, per cell, instead of being edited in place
+        #: or left to contradict this one.
+        stale = [c["cell_id"] for c in cells
+                 if ds != "celeba_numeric"
+                 and "numeric profiles" in
+                 ((c.get("e2e") or {}).get("reason") or "")]
+        claims["no_image_router"] = (
+            "This design has NO image router: every prompt is built from the "
+            "code alone and no image is passed to the model, so the route is "
+            "the association C->Y and no end-to-end number is reported or "
+            "implied.  " + NO_ROUTER_REASON.get(ds, "")
+            + (f"  CORRECTION OF RECORD: {len(stale)} committed cell(s) "
+               f"({', '.join(sorted(stale)[:6])}"
+               f"{'...' if len(stale) > 6 else ''}) still carry the "
+               "celeba_numeric sentence 'no image router for numeric "
+               "profiles' in e2e.reason, written before this reason was made "
+               "dataset-specific.  Those bytes are left untouched so the "
+               "manifests that hash them stay verifiable; this claim, not "
+               "that field, is the accurate statement."
+               if stale else ""))
     if ds == "celeba_numeric":
         claims["numeric_boundary"] = (
             "Boundary wording: report lower/interior boundary targets that "
@@ -2813,15 +2916,33 @@ def aggregate_gx(ds, out_base, matrix, args=None):
 
     executed_seeds = sorted({c["seed"] for c in cells})
     configured_seeds = list(matrix["edit_seeds"])
+    complete = (len(cells) == matrix["n_cells"]
+                and executed_seeds == sorted(configured_seeds))
     if len(cells) == 0:
         run_stage = "no_cells"
-    elif (len(cells) == matrix["n_cells"]
-          and executed_seeds == sorted(configured_seeds)):
-        run_stage = "full_matrix"
+    elif complete:
+        run_stage = PILOT_DESIGNS.get(ds, "full_matrix")
     elif len(executed_seeds) == 1:
         run_stage = "G3_single_seed_pilot(+G3.1_reevaluation)"
     else:
-        run_stage = "partial_matrix"
+        run_stage = "partial_pilot" if ds in PILOT_DESIGNS else "partial_matrix"
+
+    #: What the multi-seed claim actually holds fixed, derived from the cells
+    #: rather than asserted per dataset.  The sentence used to name a router
+    #: and cached routing predictions unconditionally, so the MLLMU and
+    #: celeba_numeric summaries -- both association-level by design, with zero
+    #: e2e rows -- claimed a fixed router they never ran, which reads as an
+    #: end-to-end result that does not exist.
+    fixed = ["baseline h", "set selection", "oracle seed"]
+    if routed:
+        fixed = ["router g", "cached routing predictions"] + fixed
+    multi_seed_meaning = (
+        f"stable across {len(executed_seeds)} EDIT-TRAINING seed(s) "
+        f"({executed_seeds}); " + ", ".join(fixed) + " held fixed"
+        + ("" if routed else
+           ".  This design is association-level (C->Y): no image router was "
+           "run and no routing prediction was replayed, so no end-to-end "
+           "number is reported here and none is implied"))
 
     summary = {
         "dataset": ds,
@@ -2884,10 +3005,7 @@ def aggregate_gx(ds, out_base, matrix, args=None):
         "g3_1_gate": g3_1_gate,
         "claims": claims,
         "scope": {
-            "multi_seed_meaning": "stable across three EDIT-TRAINING seeds; "
-                                  "router, baseline h, cached routing "
-                                  "predictions, set selection and oracle "
-                                  "seed are fixed",
+            "multi_seed_meaning": multi_seed_meaning,
             "transformations": "granularity (taxonomic/numeric) + refusal "
                                "controls; see per-mode breakdown",
         },
@@ -3035,7 +3153,12 @@ def run_manifest_gx(args, ds, out_base, matrix, oracle_results, summary,
         # to a separate pass that could be forgotten.  Written into the run
         # directory as well, so the gate verdict is hashed with the outputs it
         # was computed from.
-        gate_cells = g6m.cells_for_gates(all_cells)
+        # The oracle's own fit record is threaded in: whether matched_retrain
+        # fits every transformed AND retained mapping lives in the oracle's
+        # oracle_results.json, not in any cell, and the G3.1 gate cannot judge
+        # a reference whose fit was never checked.  oracle_results is the
+        # per-set summary the runner already hashed into checkpoints_sha256.
+        gate_cells = g6m.cells_for_gates(all_cells, oracle_fit=oracle_results)
         g6_block = {
             "gates": g6m.evaluate_gates(gate_cells, matrix),
             "sets": g6m.per_set_provenance(matrix, gate_cells),
@@ -3132,6 +3255,7 @@ def parse_args():
 #: that entry is its own and is not repeated.
 GX_CODE = ["scripts/e2c_v3_granularity_matrix.py",
            "scripts/e2c_v3_research_validity.py",
+           "scripts/e2c_v3_label_parser.py",
            "scripts/e2c_v3_granularity.py",
            "scripts/e2c_v3_matrix.py",
            "scripts/e2c_v3_realdata.py"]
@@ -3187,6 +3311,11 @@ def main():
         "granularity_lib_sha256": rv.sha256_file(
             SCRIPT_DIR / "e2c_v3_granularity.py"),
         "shared_scoring_script_sha256": rv.script_sha256(),
+        # The parser's own bytes, pinned separately: it lives in a module of
+        # its own so the CPU-only paths can reach it without torch, and a run
+        # that pinned only the scoring script would leave the rule deciding
+        # "was this output a recognized label" unbound to any digest.
+        "label_parser_script_sha256": rv.label_parser_sha256(),
         "dirty": dirty, "clean_required": not args.smoke,
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
@@ -3194,6 +3323,7 @@ def main():
                 f"runner={provenance['runner_script_sha256'][:12]} "
                 f"gxlib={provenance['granularity_lib_sha256'][:12]} "
                 f"rv={provenance['shared_scoring_script_sha256'][:12]} "
+                f"parser={provenance['label_parser_script_sha256'][:12]} "
                 f"dirty={dirty}")
     if dirty and not args.smoke:
         if args.phase in ("GX2B", "GX2S", "GX2H"):
