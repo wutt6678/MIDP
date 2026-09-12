@@ -2223,8 +2223,16 @@ def run_cells(args, ds, ctx, matrix, out_base):
             for seed in matrix["edit_seeds"]:
                 if only_seeds and seed not in only_seeds:
                     continue
-                cell_id = f"{sid}__seed{seed}"
-                cell_dir = cells_root / sid / f"seed_{seed}"
+                tag = getattr(args, "cell_tag", None)
+                cell_id = (f"{sid}__seed{seed}"
+                           + (f"__{tag}" if tag else ""))
+                # A protocol-repair study writes to a NESTED study_<tag>/ dir
+                # (three levels under cells/) so the pilot's ``*/seed_*`` glob
+                # (two levels) can never pick a study cell up as a committed
+                # pilot cell.  The frozen pilot cells are never clobbered.
+                cell_dir = ((cells_root / sid / f"study_{tag}"
+                             / f"seed_{seed}") if tag else
+                            cells_root / sid / f"seed_{seed}")
                 cell_dir.mkdir(parents=True, exist_ok=True)
                 result_path = cell_dir / "cell_results.json"
                 ckpt = (cell_dir / "edited_h" / "adapter_final"
@@ -2239,6 +2247,16 @@ def run_cells(args, ds, ctx, matrix, out_base):
                 mx.seed_everything(seed)
                 args_c = argparse.Namespace(**vars(args))
                 args_c.seed = seed
+                # Retain weighting / target weighting are frozen constants for
+                # the committed pilot; a study may override them to investigate
+                # the over-generalization vs sharpness trade-off.  The override
+                # is recorded in the cell so a study cell can never be mistaken
+                # for a frozen-recipe pilot cell.
+                tb = (args.target_boost if getattr(args, "target_boost", None)
+                      else TARGET_BOOST)
+                rr = (args.retain_repeat
+                      if getattr(args, "retain_repeat", None)
+                      else RETAIN_REPEAT)
                 pairs = [{"prompt": rd.CODE_TO_ALIAS_PROMPT.format(
                               code=ctx["code_of"][t]),
                           "answer": a["target"]}
@@ -2250,13 +2268,11 @@ def run_cells(args, ds, ctx, matrix, out_base):
                 items = (
                     rv.build_supervised_items(session.adapter,
                                               session.processor, pairs,
-                                              repeat=args.ul_repeat
-                                              * TARGET_BOOST)
+                                              repeat=args.ul_repeat * tb)
                     + rv.build_supervised_items(session.adapter,
                                                 session.processor,
                                                 retain_pairs,
-                                                repeat=args.ul_repeat
-                                                * RETAIN_REPEAT))
+                                                repeat=args.ul_repeat * rr))
                 rv.train_supervised(f"gx_{cell_id}", session.adapter,
                                     session.model, session.processor, items,
                                     cell_dir / "edited_h", args.device,
@@ -2278,6 +2294,14 @@ def run_cells(args, ds, ctx, matrix, out_base):
                 cell = {
                     "cell_id": cell_id, "dataset": ds, "set_id": sid,
                     "mode": entry["mode"], "seed": seed,
+                    "edit_protocol": {
+                        "ul_steps": args.ul_steps,
+                        "ul_warmup": args.ul_warmup, "ul_lr": args.ul_lr,
+                        "ul_repeat": args.ul_repeat,
+                        "target_boost": tb, "retain_repeat": rr,
+                        "cell_tag": tag,
+                        "frozen_pilot_recipe": tag is None,
+                    },
                     "assignments": entry["assignments"],
                     "controls": entry.get("controls", {}),
                     "control_notes": entry.get("control_notes", {}),
@@ -3087,6 +3111,16 @@ def parse_args():
     p.add_argument("--reeval-families", nargs="*", default=None,
                    help="GX2H only: oracle families to hard-re-evaluate "
                         "(default matched_retrain)")
+    p.add_argument("--cell-tag", default=None,
+                   help="protocol-repair study: write cells to a nested "
+                        "study_<tag>/ dir (never clobbers frozen pilot cells) "
+                        "and record the overridden edit protocol in each cell")
+    p.add_argument("--retain-repeat", type=int, default=None,
+                   help="study override for RETAIN_REPEAT (retain weighting); "
+                        "default None uses the frozen pilot constant")
+    p.add_argument("--target-boost", type=int, default=None,
+                   help="study override for TARGET_BOOST (target weighting); "
+                        "default None uses the frozen pilot constant")
     p.add_argument("--smoke", action="store_true")
     return p.parse_args()
 

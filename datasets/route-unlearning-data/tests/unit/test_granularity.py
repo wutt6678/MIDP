@@ -366,3 +366,46 @@ def test_pass_criteria_frozen_gates():
     assert not crit["cell_pass"]
     assert "wrong_branch_rate==0" in crit["failed_criteria"]
     assert "strict_expected_accuracy==1.0" in crit["failed_criteria"]
+
+
+# ------------------------------------------------------------------ #
+# Protocol-repair study harness (--cell-tag): a study must never be able
+# to clobber or masquerade as a frozen pilot cell.
+# ------------------------------------------------------------------ #
+def test_study_cells_are_invisible_to_the_pilot_glob(tmp_path):
+    """The runner loads pilot cells with ``cells/*/seed_*/cell_results.json``
+    (two levels).  A study writes to ``cells/<sid>/study_<tag>/seed_<N>/``
+    (three levels), so the pilot glob -- used by load_all_cells, GX2P, GX2R
+    and aggregate_gx -- can never pick a study cell up as committed evidence,
+    and a study can never overwrite a frozen pilot cell."""
+    cells = tmp_path / "cells"
+    sid = "gx_mll_151252"
+    pilot = cells / sid / "seed_17" / "cell_results.json"
+    study = cells / sid / "study_protoA" / "seed_17" / "cell_results.json"
+    for p in (pilot, study):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("{}")
+    matched = sorted((tmp_path / "cells").glob("*/seed_*/cell_results.json"))
+    assert matched == [pilot]
+    assert study not in matched
+    # the study cell is still reachable by its explicit tagged path
+    assert study.exists()
+
+
+def test_protocol_study_flags_default_to_the_frozen_recipe(monkeypatch):
+    """The study overrides default to None so an ordinary run uses the frozen
+    RETAIN_REPEAT / TARGET_BOOST constants and writes to the ordinary cell
+    dir; only an explicit --cell-tag study changes anything."""
+    monkeypatch.setattr("sys.argv", ["prog", "--dataset", "mllmu"])
+    args = gxm.parse_args()
+    assert args.cell_tag is None
+    assert args.retain_repeat is None
+    assert args.target_boost is None
+    assert args.reeval_families is None
+    monkeypatch.setattr("sys.argv", [
+        "prog", "--dataset", "mllmu", "--phase", "GX3",
+        "--cell-tag", "protoA", "--retain-repeat", "9", "--target-boost", "5",
+        "--ul-steps", "1000"])
+    a2 = gxm.parse_args()
+    assert (a2.cell_tag, a2.retain_repeat, a2.target_boost, a2.ul_steps) == \
+        ("protoA", 9, 5, 1000)
