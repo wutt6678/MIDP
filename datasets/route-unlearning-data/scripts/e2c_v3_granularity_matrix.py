@@ -1273,6 +1273,210 @@ def reparse_cells_cpu(ds, ctx, matrix, out_base):
             "n_unchanged": n_unchanged, "changes": changes}
 
 
+def reevaluate_oracles_hard_gpu(args, ds, ctx, matrix, out_base, provenance,
+                                commit, families=("matched_retrain",),
+                                only_sets=None):
+    """GX2H: regenerate oracle HARD predictions from the PINNED checkpoints
+    under the corrected parser, storing the raw text per identity.  No
+    retraining -- the adapter bytes are the committed reference and are
+    verified by sha256 before use; only the scoring of their output changes.
+
+    Why this needs a GPU when GX2P did not: edited cells store their raw
+    generation, so a parser fix is a pure CPU re-parse (GX2P).  The oracle
+    strict-accuracy path (``_strict_accuracy``) generated text and then
+    DISCARDED it, keeping only the aggregate fraction.  When
+    ``recognized_labels_in`` stripped punctuation from output tokens but not
+    from label spans, the two comma-bearing broad SOC titles could never be
+    recognized, so ``matched_retrain`` for Software Engineer (15-1252) and
+    Museum Curator (25-4012) recorded strict 33/35 instead of 35/35 -- a
+    measurement artifact, not a model failure.  The stored full-sequence
+    distributions already show the expected label is the argmax for all 35
+    identities in both oracles, but the hard count could not be corrected from
+    disk because the raw generations were never stored.
+
+    This phase reloads each pinned checkpoint, regenerates one greedy decode
+    per identity (the SAME prompt and parser ``_strict_accuracy`` used, so it
+    cannot diverge), RECORDS the raw text, and rewrites strict_all_expected /
+    fit_ok.  Raw is now stored, so any future parser fix is a CPU re-parse
+    like GX2P and never needs this phase again.
+    """
+    logger.info("=" * 60)
+    logger.info(f"GX2H: ORACLE HARD RE-EVALUATION ({ds}) "
+                f"families={list(families)} sets={sorted(only_sets) if only_sets else 'all'}")
+    logger.info("=" * 60)
+    oracle_root = out_base / "oracles"
+    summary_path = oracle_root / "oracles_summary.json"
+    with open(summary_path) as f:
+        summary = json.load(f)
+    args_o = argparse.Namespace(**vars(args))
+    args_o.seed = ORACLE_SEED
+    session = None
+    changes = []
+    for entry in matrix["sets"]:
+        sid = entry["set_id"]
+        if only_sets and sid not in only_sets:
+            continue
+        for family in families:
+            odir = oracle_root / retrain_oracle_dir(family, sid, ORACLE_SEED)
+            ckpt = odir / "adapter_final" / "adapter_model.safetensors"
+            soft_p = odir / "oracle_soft.json"
+            res_p = odir / "oracle_results.json"
+            if not (ckpt.exists() and soft_p.exists() and res_p.exists()):
+                changes.append({"set_id": sid, "family": family,
+                                "status": "skipped_missing_artifacts"})
+                logger.warning("GX2H[%s %s]: skipped -- missing checkpoint, "
+                               "soft or results file", sid, family)
+                continue
+            sha = rv.sha256_file(ckpt)
+            pinned = (summary.get(sid, {}).get(family, {}) or {}).get("sha256")
+            if pinned and pinned != sha:
+                # Fail closed: re-evaluating anything other than the committed
+                # reference would launder an unrelated checkpoint's output into
+                # the frozen evidence.
+                raise RuntimeError(
+                    f"GX2H: {family}/{sid} checkpoint sha256 {sha[:12]} does "
+                    f"not match the pinned {pinned[:12]} in "
+                    f"oracles_summary.json -- refusing to re-evaluate a "
+                    f"checkpoint that is not the committed reference")
+            if session is None:
+                session = mx.ModelSession(args_o,
+                                          f"e2c_gx_{ds}_oracle_reeval")
+            session.reset_to(ckpt)
+            session.model.eval()
+            is_matched = family.startswith("matched_retrain")
+            # Mirror train_oracle_retrain's fit scope EXACTLY: matched must fit
+            # all transformed AND retained mappings; loo never saw the targets,
+            # so its fit covers the retained mapping only.
+            fit_ids = (list(ctx["identity_ids"]) if is_matched else
+                       [i for i in ctx["identity_ids"]
+                        if i not in entry["assignments"]])
+            fit_set = set(fit_ids)
+            hard = []
+            with torch.no_grad():
+                for iid in ctx["identity_ids"]:
+                    prompt = rd.CODE_TO_ALIAS_PROMPT.format(
+                        code=ctx["code_of"][iid])
+                    gen = session.backend().generate(
+                        None, prompt, max_new_tokens=args.max_gen_tokens)
+                    raw = gen.text.strip()
+                    parsed = rv.parse_recognized_label(raw, ctx["vocab"])
+                    labels = rv.recognized_labels_in(raw, ctx["vocab"])
+                    exp = expected_label(ctx, entry, iid)
+                    hard.append({
+                        "identity_id": iid, "raw": raw,
+                        "parsed_label": parsed,
+                        "recognized_labels": labels,
+                        "multi_label_ambiguous": len(labels) > 1,
+                        "expected": exp,
+                        "in_fit_scope": iid in fit_set,
+                        "group": ("target" if iid in entry["assignments"]
+                                  else "retained"),
+                        "correct": parsed == exp})
+            strict = (sum(h["correct"] for h in hard if h["in_fit_scope"])
+                      / max(len(fit_ids), 1))
+            with open(soft_p) as f:
+                soft = json.load(f)
+            masses = [sum(soft.get(iid, {}).get("probs", {}).get(l, 0.0)
+                          for l in ctx["vocab"])
+                      for iid in entry["assignments"]]
+            mass = min(masses) if masses else None
+            if is_matched:
+                fit_ok = bool(strict == 1.0
+                              and (mass is None or mass >= 0.99))
+                scope = "all_transformed_and_retained"
+            else:
+                fit_ok = bool(strict == 1.0)
+                scope = "retained_only(targets_never_seen)"
+            backup = odir / "oracle_results.pre_hard_reeval.json"
+            if not backup.exists():
+                shutil.copy2(res_p, backup)
+            with open(res_p) as f:
+                old = json.load(f)
+            strict_before = old.get("strict_all_expected")
+            fit_ok_before = old.get("fit_ok")
+            reeval = {
+                "phase": "GX2H", "family": family, "set_id": sid,
+                "checkpoint_sha256": sha,
+                "max_gen_tokens": args.max_gen_tokens,
+                "n_identities": len(hard),
+                "strict_fit_scope": scope,
+                "strict_all_expected": strict,
+                "min_candidate_mass": mass,
+                "fit_ok": fit_ok,
+                "hard_preds": hard,
+                "parser": {
+                    "module": "e2c_v3_research_validity.recognized_labels_in",
+                    "script_sha256": rv.script_sha256(),
+                    "note": ("corrected matcher: label spans receive the same "
+                             "punctuation normalization as output tokens")},
+                "provenance": dict(provenance, commit=commit),
+                "note": ("GX2H GPU hard re-evaluation: regenerated greedy "
+                         "decodes from the pinned checkpoint and stored raw "
+                         "text per identity.  No retraining; adapter bytes "
+                         "unchanged (sha256 above)."),
+            }
+            with open(odir / "oracle_hard_reeval.json", "w") as f:
+                json.dump(reeval, f, indent=2)
+            new = dict(old)
+            new.update({
+                "strict_all_expected": strict,
+                "min_candidate_mass": mass,
+                "fit_ok": fit_ok,
+                "strict_fit_scope": scope,
+                "hard_reeval": {
+                    "phase": "GX2H",
+                    "utc": provenance.get("started_utc"),
+                    "checkpoint_sha256": sha,
+                    "strict_before": strict_before,
+                    "strict_after": strict,
+                    "fit_ok_before": fit_ok_before,
+                    "fit_ok_after": fit_ok,
+                    "raw_file": "oracle_hard_reeval.json",
+                    "parser_script_sha256": rv.script_sha256(),
+                    "note": ("strict accuracy recomputed from the stored "
+                             "checkpoint under the corrected parser; raw "
+                             "generations now stored, so any future parser "
+                             "fix is a CPU re-parse")},
+            })
+            with open(res_p, "w") as f:
+                json.dump(new, f, indent=2)
+            rec = summary.setdefault(sid, {}).setdefault(family, {})
+            rec.update({"fit_ok": fit_ok, "strict_all_expected": strict,
+                        "min_candidate_mass": mass, "sha256": sha,
+                        "mode": "hard_reeval"})
+            changed = (strict_before != strict) or (fit_ok_before != fit_ok)
+            changes.append({
+                "set_id": sid, "family": family,
+                "status": "changed" if changed else "unchanged",
+                "strict_before": strict_before, "strict_after": strict,
+                "fit_ok_before": fit_ok_before, "fit_ok_after": fit_ok,
+                "min_candidate_mass": mass,
+                "n_identities": len(hard),
+                "n_raw_captured": sum(1 for h in hard if h["raw"]),
+                "checkpoint_sha256": sha})
+            logger.info("GX2H[%s %s]: strict %s -> %.4f fit_ok %s -> %s "
+                        "(mass=%s)", sid, family,
+                        f"{strict_before:.4f}" if strict_before is not None
+                        else "n/a", strict, fit_ok_before, fit_ok,
+                        f"{mass:.4f}" if mass is not None else "n/a")
+    if session is not None:
+        session.release()
+    with open(summary_path, "w") as f:
+        json.dump(summary, f, indent=2)
+    log = {"dataset": ds, "phase": "GX2H", "families": list(families),
+           "only_sets": sorted(only_sets) if only_sets else None,
+           "commit": commit, "n_oracles": len(changes),
+           "n_changed": sum(1 for c in changes if c["status"] == "changed"),
+           "n_unchanged": sum(1 for c in changes
+                              if c["status"] == "unchanged"),
+           "n_skipped": sum(1 for c in changes
+                            if c["status"] == "skipped_missing_artifacts"),
+           "changes": changes}
+    with open(out_base / "oracle_hard_reeval_log.json", "w") as f:
+        json.dump(log, f, indent=2)
+    return log
+
+
 # ====================================================================== #
 # GX2B: matched_retrain_balanced ablation (target_boost=1)
 #   Trains a fresh-init matched oracle WITHOUT the edit recipe's target
@@ -2862,7 +3066,8 @@ def parse_args():
                    choices=["salmu", "celeba_numeric", "mllmu"])
     p.add_argument("--phase", default="all",
                    choices=["all", "GX0", "GX1R", "GX2", "GX2P", "GX2R",
-                            "GX2B", "GX2S", "GX3", "GX4", "GX5", "GX7"])
+                            "GX2B", "GX2S", "GX2H", "GX3", "GX4", "GX5",
+                            "GX7"])
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--seeds", type=int, nargs="+",
                    default=gx.SEEDS_DEFAULT)
@@ -2879,6 +3084,9 @@ def parse_args():
     p.add_argument("--ul-lr", type=float, default=mx.UL_LR)
     p.add_argument("--ul-repeat", type=int, default=mx.UL_REPEAT)
     p.add_argument("--max-gen-tokens", type=int, default=12)
+    p.add_argument("--reeval-families", nargs="*", default=None,
+                   help="GX2H only: oracle families to hard-re-evaluate "
+                        "(default matched_retrain)")
     p.add_argument("--smoke", action="store_true")
     return p.parse_args()
 
@@ -2954,7 +3162,7 @@ def main():
                 f"rv={provenance['shared_scoring_script_sha256'][:12]} "
                 f"dirty={dirty}")
     if dirty and not args.smoke:
-        if args.phase in ("GX2B", "GX2S"):
+        if args.phase in ("GX2B", "GX2S", "GX2H"):
             dirty_code = _dirty_tracked_code()
             if dirty_code:
                 raise RuntimeError(
@@ -2985,6 +3193,21 @@ def main():
         # matched/LOO fresh-retrain references at oracle seeds 42/123
         return run_gx2s(args, ds, ctx, matrix, out_base, provenance,
                         commit, t_start)
+    if args.phase == "GX2H":
+        # oracle HARD re-evaluation: reload the pinned checkpoints, regenerate
+        # under the corrected parser, store raw text, recompute strict/fit_ok.
+        # No retraining; GPU only because generation is.  Standalone (not in
+        # "all") so it never runs implicitly against committed evidence.
+        fams = (tuple(args.reeval_families) if args.reeval_families
+                else ("matched_retrain",))
+        only = set(args.only_sets) if args.only_sets else None
+        log = reevaluate_oracles_hard_gpu(
+            args, ds, ctx, matrix, out_base, provenance, commit,
+            families=fams, only_sets=only)
+        logger.info("GX2H COMPLETE: %d oracle(s): %d changed, %d unchanged, "
+                    "%d skipped", log["n_oracles"], log["n_changed"],
+                    log["n_unchanged"], log["n_skipped"])
+        return 0
     if args.smoke:  # pilot subset: first single set only, one seed
         matrix = json.loads(json.dumps(matrix))
         keep = set(args.only_sets) if args.only_sets else \

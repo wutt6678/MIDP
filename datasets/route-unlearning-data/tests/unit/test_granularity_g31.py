@@ -1266,3 +1266,191 @@ def test_every_script_the_matrix_runner_executes_is_declared():
         "scripts/e2c_v3_granularity.py",
         "scripts/e2c_v3_matrix.py",
         "scripts/e2c_v3_realdata.py"]
+
+
+# ------------------------------------------------------------------ #
+# GX2H: oracle HARD re-evaluation (defect #2 regression)
+#   matched_retrain for the comma-bearing broad SOC targets recorded
+#   strict 33/35 because the old parser could not recognize a label
+#   containing a comma, and _strict_accuracy DISCARDED the raw text, so
+#   only a GPU regeneration under the corrected parser can fix the count.
+#   These tests stub the session/generation and exercise the REAL parser.
+# ------------------------------------------------------------------ #
+GX2H_VOCAB = ["Software Developer",
+              "Software and Web Developers, Programmers, and Testers",
+              "Unknown"]
+GX2H_BROAD = "Software and Web Developers, Programmers, and Testers"
+
+
+def _gx2h_ctx():
+    return {
+        "kind": "taxonomic",
+        "identity_ids": ["i1", "i2"],
+        "code_of": {"i1": "ID_1", "i2": "ID_2"},
+        "baseline_alias_of": {"i1": "Software Developer",
+                              "i2": "Software Developer"},
+        "vocab": GX2H_VOCAB,
+        "dag": {l: [l] for l in GX2H_VOCAB},
+        "hierarchy_of": {},
+    }
+
+
+def _gx2h_entry():
+    return {
+        "set_id": "sComma",
+        "mode": "single_level1",
+        "assignments": {
+            "i1": {"source": "Software Developer", "target": GX2H_BROAD,
+                   "operation": "taxonomic", "target_depth": 1},
+        },
+        "retain_ids": ["i2"],
+        "controls": {},
+    }
+
+
+class _StubGen:
+    def __init__(self, text):
+        self.text = text
+
+
+class _StubBackend:
+    def __init__(self, text_by_code):
+        self._by_code = text_by_code
+
+    def generate(self, image, prompt, max_new_tokens=None):
+        for code, text in self._by_code.items():
+            if code in prompt:
+                return _StubGen(text)
+        return _StubGen("")
+
+
+class _StubEvalModel:
+    def eval(self):
+        return self
+
+
+class _StubReevalSession:
+    def __init__(self, text_by_code):
+        self._backend = _StubBackend(text_by_code)
+        self.model = _StubEvalModel()
+        self.reset_to_calls = []
+        self.released = False
+
+    def reset_to(self, path):
+        self.reset_to_calls.append(str(path))
+
+    def backend(self):
+        return self._backend
+
+    def release(self):
+        self.released = True
+
+
+class _ReevalArgs:
+    def __init__(self):
+        self.device = "cpu"
+        self.max_gen_tokens = 12
+        self.seed = 17
+
+
+def _write_oracle(out_base, sid, family, ckpt_bytes, soft_by_iid, results,
+                  pin_sha=None):
+    odir = out_base / "oracles" / f"{family}_{sid}"
+    (odir / "adapter_final").mkdir(parents=True, exist_ok=True)
+    ckpt_path = odir / "adapter_final" / "adapter_model.safetensors"
+    ckpt_path.write_bytes(ckpt_bytes)
+    sha = pin_sha if pin_sha is not None else rv.sha256_file(ckpt_path)
+    with open(odir / "oracle_soft.json", "w") as f:
+        json.dump(soft_by_iid, f)
+    with open(odir / "oracle_results.json", "w") as f:
+        json.dump(results, f)
+    sp = out_base / "oracles" / "oracles_summary.json"
+    summary = {}
+    if sp.exists():
+        with open(sp) as f:
+            summary = json.load(f)
+    summary.setdefault(sid, {})[family] = {
+        "dir": str(odir), "mode": "cached", "sha256": sha,
+        "fit_ok": results["fit_ok"],
+        "strict_all_expected": results["strict_all_expected"],
+        "min_candidate_mass": results["min_candidate_mass"]}
+    with open(sp, "w") as f:
+        json.dump(summary, f)
+    return odir, sha
+
+
+def _gx2h_old_results():
+    return {"family": "matched_retrain", "init": "fresh_lora",
+            "protocol": {"steps": 3000}, "set_id": "sComma",
+            "strict_fit_scope": "all_transformed_and_retained",
+            "strict_all_expected": 0.5, "min_candidate_mass": 0.9995,
+            "fit_ok": False}
+
+
+def test_gx2h_repairs_a_comma_target_the_old_parser_scored_wrong(
+        monkeypatch, tmp_path):
+    ctx, entry = _gx2h_ctx(), _gx2h_entry()
+    # the corrected parser recognizes the comma-bearing label verbatim; this
+    # is the exact assertion the old matcher failed, which is why the oracle
+    # recorded 33/35 rather than 35/35.
+    assert rv.parse_recognized_label(GX2H_BROAD, GX2H_VOCAB) == GX2H_BROAD
+    soft = {"i1": {"probs": {GX2H_BROAD: 0.999, "Software Developer": 0.0005,
+                             "Unknown": 0.0005}},
+            "i2": {"probs": {"Software Developer": 0.999, GX2H_BROAD: 0.0005,
+                             "Unknown": 0.0005}}}
+    odir, sha = _write_oracle(tmp_path, "sComma", "matched_retrain",
+                              b"FAKE_ADAPTER_v1", soft, _gx2h_old_results())
+    stub = _StubReevalSession({"ID_1": GX2H_BROAD,
+                               "ID_2": "Software Developer"})
+    monkeypatch.setattr(gxm.mx, "ModelSession", lambda a, n: stub)
+    log = gxm.reevaluate_oracles_hard_gpu(
+        _ReevalArgs(), "mllmu", ctx, {"sets": [entry]}, tmp_path,
+        {"started_utc": "2026-09-12T00:00:00Z"}, "abc123",
+        families=("matched_retrain",), only_sets={"sComma"})
+    assert log["n_changed"] == 1 and log["n_unchanged"] == 0
+    with open(odir / "oracle_results.json") as f:
+        res = json.load(f)
+    assert res["strict_all_expected"] == 1.0
+    assert res["fit_ok"] is True
+    assert res["hard_reeval"]["strict_before"] == 0.5
+    assert res["hard_reeval"]["checkpoint_sha256"] == sha
+    # raw text is now stored per identity, so a future parser fix is CPU-only
+    with open(odir / "oracle_hard_reeval.json") as f:
+        reeval = json.load(f)
+    by_id = {h["identity_id"]: h for h in reeval["hard_preds"]}
+    assert by_id["i1"]["raw"] == GX2H_BROAD
+    assert by_id["i1"]["parsed_label"] == GX2H_BROAD
+    assert by_id["i1"]["correct"] is True
+    assert by_id["i2"]["correct"] is True
+    # the original results are backed up exactly once
+    with open(odir / "oracle_results.pre_hard_reeval.json") as f:
+        backup = json.load(f)
+    assert backup["strict_all_expected"] == 0.5
+    with open(tmp_path / "oracles" / "oracles_summary.json") as f:
+        summary = json.load(f)
+    mr = summary["sComma"]["matched_retrain"]
+    assert mr["fit_ok"] is True and mr["strict_all_expected"] == 1.0
+    assert mr["sha256"] == sha and mr["mode"] == "hard_reeval"
+    # no retraining: the session only reset_to the pinned checkpoint
+    assert stub.reset_to_calls == [
+        str(odir / "adapter_final" / "adapter_model.safetensors")]
+    assert stub.released is True
+
+
+def test_gx2h_refuses_a_checkpoint_that_is_not_the_pinned_reference(
+        monkeypatch, tmp_path):
+    ctx, entry = _gx2h_ctx(), _gx2h_entry()
+    soft = {"i1": {"probs": {GX2H_BROAD: 1.0}}, "i2": {"probs": {}}}
+    # pin a sha that does NOT match the bytes on disk
+    _write_oracle(tmp_path, "sComma", "matched_retrain", b"FAKE_ADAPTER_v1",
+                  soft, _gx2h_old_results(), pin_sha="deadbeef" * 8)
+    stub = _StubReevalSession({"ID_1": GX2H_BROAD,
+                               "ID_2": "Software Developer"})
+    monkeypatch.setattr(gxm.mx, "ModelSession", lambda a, n: stub)
+    with pytest.raises(RuntimeError, match="does not match the pinned"):
+        gxm.reevaluate_oracles_hard_gpu(
+            _ReevalArgs(), "mllmu", ctx, {"sets": [entry]}, tmp_path,
+            {"started_utc": "x"}, "abc123", families=("matched_retrain",),
+            only_sets={"sComma"})
+    # the refusal precedes any GPU work: no checkpoint was loaded
+    assert stub.reset_to_calls == []
