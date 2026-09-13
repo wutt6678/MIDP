@@ -235,10 +235,40 @@ def test_the_tool_needs_no_torch():
     assert got["no_torch_submodule"] is True
 
 
+@pytest.mark.skipif(not OUT_BASE.is_dir(),
+                    reason="sealed pilot evidence not present")
+def test_the_re_derivation_is_deterministic_apart_from_the_worktree_flag(tool):
+    """Building twice must give the same artifact, except for the one field
+    that regenerating necessarily changes.
+
+    ``provenance.clean_worktree`` records the tracked-only worktree
+    determination unscoped -- that is what ``g6m.worktree_state`` intends, its
+    ``exclude_prefixes`` reaching only the untracked accounting -- so writing
+    this tool's own output makes the NEXT run see a modified tracked file.
+    That is a property of regenerating, not drift, and the artifact says so in
+    ``regeneration_note``.  Everything that is actually a re-derivation
+    (inputs, gates, sets, delta_vs_sealed) has to be identical, or the filed
+    JSON could not be checked against the commit that claims to have produced
+    it.
+    """
+    def comparable(block):
+        prov = {k: v for k, v in block["provenance"].items()
+                if k != "clean_worktree"}
+        return json.dumps({**{k: v for k, v in block.items()
+                              if k != "provenance"},
+                           "provenance": prov}, sort_keys=True)
+
+    first = tool.build(OUT_BASE)
+    second = tool.build(OUT_BASE)
+    assert comparable(first) == comparable(second)
+    assert first["provenance"]["regeneration_note"] == tool.REGENERATION_NOTE
+    assert "dirty_tracked_only" in first["provenance"]["clean_worktree"]
+
+
 def test_it_writes_a_new_file_and_never_a_sealed_one(tool):
-    """The user's decision was to file the correction beside the sealed
-    reports, so the output name must not be one of them -- enforced in code,
-    and pinned here because a rename would defeat the guard."""
+    """The decision was to file the correction beside the sealed reports, so
+    the output name must not be one of them -- enforced in code, and pinned
+    here because a rename would defeat the guard."""
     assert tool.OUTPUT_NAME not in tool.SEALED_REPORTS
     assert sorted(tool.SEALED_REPORTS) == sorted(SEALED)
     assert tool.OUTPUT_NAME == "g6_pilot_gates_reevaluated.json"

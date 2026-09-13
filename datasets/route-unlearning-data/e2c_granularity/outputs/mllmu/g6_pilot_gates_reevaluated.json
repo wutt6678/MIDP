@@ -971,7 +971,7 @@
     "note": "the sealed report is left byte-identical; this records what the repaired criteria conclude about the SAME stored cells, verified to be the same cells by cell_id"
   },
   "provenance": {
-    "executing_commit": "1aa2583bd7ea9e48250101a8aa1a86417c1db84a",
+    "executing_commit": "1c311cbf2ebb600bbdf8a4a059e3c4d666d12f44",
     "script_sha256": "ab2fc9f04448d0ccf524af16d689bf454ed19db7af198119f69a05411bb6876f",
     "hierarchy": {
       "hierarchy_artifact": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json",
@@ -1031,20 +1031,22 @@
     "source_dataset_matches_frozen": true,
     "clean_worktree": {
       "repo_root": "/scratch/wutiantong/MIDP",
-      "git_commit": "1aa2583bd7ea9e48250101a8aa1a86417c1db84a",
-      "dirty_tracked_only": false,
-      "n_dirty_tracked_only": 0,
-      "dirty_tracked_only_lines": [],
-      "dirty_including_untracked": true,
-      "n_dirty_including_untracked": 5,
-      "untracked_outside_exclusions": [
-        "?? datasets/route-unlearning-data/scripts/e2c_v3_g6_gate_reevaluation.py",
-        "?? datasets/route-unlearning-data/tests/unit/test_g6_gate_reevaluation.py"
+      "git_commit": "1c311cbf2ebb600bbdf8a4a059e3c4d666d12f44",
+      "dirty_tracked_only": true,
+      "n_dirty_tracked_only": 4,
+      "dirty_tracked_only_lines": [
+        " M datasets/route-unlearning-data/e2c_granularity/outputs/mllmu/g6_pilot_gates_reevaluated.json",
+        " M datasets/route-unlearning-data/e2c_granularity/outputs/mllmu/study_protoB_summary.json",
+        " M datasets/route-unlearning-data/scripts/e2c_v3_g6_gate_reevaluation.py",
+        " M datasets/route-unlearning-data/tests/unit/test_g6_gate_reevaluation.py"
       ],
+      "dirty_including_untracked": true,
+      "n_dirty_including_untracked": 4,
+      "untracked_outside_exclusions": [],
       "excluded_prefixes": [
         "datasets/route-unlearning-data/e2c_granularity/outputs/mllmu/"
       ],
-      "n_excluded": 3,
+      "n_excluded": 2,
       "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts"
     },
     "identity_counts_sha256": "799706bc4b1f8ae019c7561ccc90fb7857d81877f5c1965e1ccf6a11db504ead",
@@ -1065,11 +1067,12 @@
       "ids_per_profession": 2,
       "target_depth": 1
     },
+    "regeneration_note": "provenance.clean_worktree is recorded unscoped, as g6m.worktree_state intends: its exclude_prefixes apply only to the untracked accounting, and the tracked-only determination is what provenance records.  This tool writes a tracked file, so dirty_tracked_only is False only for the first run after a commit and True for every run after that -- which is a property of regenerating, not drift.  The reproducible part is everything else: inputs, gates, sets and delta_vs_sealed are byte-identical across regenerations at an unchanged commit, and are pinned by a test that compares them with provenance.clean_worktree excluded.",
     "gate_module_sha256": "ab2fc9f04448d0ccf524af16d689bf454ed19db7af198119f69a05411bb6876f",
     "shared_scoring_script_sha256": "f649c2d72eb9e04a517724417a22fc570a39b09969943bfe9abe193b5b542f99",
     "label_parser_script_sha256": "fdf713c51c2a543801615e64cee54600a18d46d86b7510b36695c8af96632ac9",
     "reevaluated_by": "e2c_v3_g6_gate_reevaluation.py",
-    "reevaluation_script_sha256": "d338d7c163a3e8edb275dc78f4808a5e504126c760642c2829764bbe17429165",
+    "reevaluation_script_sha256": "87c51604865248421f0eefb68e0ea210802e8b1744e25eed7b8c3bb4a4be7bb0",
     "oracle_fit_source": "oracles_summary.json (matched_retrain, post-GX2H hard re-evaluation)"
   }
 }

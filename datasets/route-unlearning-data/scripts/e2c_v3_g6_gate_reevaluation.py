@@ -250,6 +250,24 @@ def delta_vs_sealed(gates, sealed_path):
     }
 
 
+#: Recorded in the artifact because it is a property of regenerating it, and
+#: mistaking it for drift would send someone looking for a bug that is not
+#: there.  ``g6m.worktree_state`` deliberately does NOT apply its
+#: ``exclude_prefixes`` to the tracked-only determination -- exclusions scope
+#: the untracked accounting, while what provenance RECORDS stays unscoped -- so
+#: writing this file necessarily makes the next run see a modified tracked file.
+REGENERATION_NOTE = (
+    "provenance.clean_worktree is recorded unscoped, as g6m.worktree_state "
+    "intends: its exclude_prefixes apply only to the untracked accounting, and "
+    "the tracked-only determination is what provenance records.  This tool "
+    "writes a tracked file, so dirty_tracked_only is False only for the first "
+    "run after a commit and True for every run after that -- which is a "
+    "property of regenerating, not drift.  The reproducible part is everything "
+    "else: inputs, gates, sets and delta_vs_sealed are byte-identical across "
+    "regenerations at an unchanged commit, and are pinned by a test that "
+    "compares them with provenance.clean_worktree excluded.")
+
+
 def build(out_base):
     g6m = _load_sibling("e2c_v3_mllmu_matrix", "e2c_v3_mllmu_matrix.py")
     sha = g6m.sha256_file
@@ -301,6 +319,7 @@ def build(out_base):
             gates, out_base / "g6_pilot_gates.json"),
         "provenance": {
             **g6m.g6_provenance(out_base),
+            "regeneration_note": REGENERATION_NOTE,
             "gate_module_sha256": sha(Path(g6m.__file__).resolve()),
             # Hashed from the files directly rather than by calling
             # rv.script_sha256() / rv.label_parser_sha256(), so this tool stays
