@@ -6,11 +6,21 @@
   "authoritative_result": {
     "file": "g6_pilot_gates_reevaluated.json",
     "path": "g6_pilot_gates_reevaluated.json",
-    "sha256": "4a3678389b7c2a916d19b2550c051b445148ff67807a5caea3d84d013a115397",
-    "read_from": "g6_pilot_gates_reevaluated.json",
+    "sha256": "8f66f66397be7386ee74c67eb447d6cdb6d8cce87e06ed271abaa9823aec6080",
+    "read_from": "/scratch/wutiantong/stage_B_1789339943/g6_pilot_gates_reevaluated.json",
     "kind": "g6_pilot_gate_reevaluation_v1",
     "why_this_one": "it is the only report that applies the repaired criteria of 992efa9 -- a strict per-target fresh-retrain oracle gate with no averaging and an exact (set_id, seed) coverage audit -- to the post-GX2H oracle fit, and it binds the bytes it read: every cell and gate oracle is digest-verified against the sealed run_manifest",
-    "content_binding": null,
+    "content_binding": {
+      "verified": true,
+      "method": "three-way digest agreement: adapter bytes recomputed now, the digest recorded in the cell / oracle summary, and the sealed run_manifest.json checkpoints_sha256",
+      "why_the_sealed_manifest_is_the_enforcing_side": "it was written by the pilot run itself and is never written by this tool, so its value was fixed before this re-derivation existed; the other two could both be produced by whoever wrote the data",
+      "n_cells_bound": 15,
+      "n_oracles_bound": 10,
+      "oracle_families_bound": [
+        "matched_retrain",
+        "loo_retrain"
+      ]
+    },
     "read_any_of_these_first": [
       "pilot_verdict below for the decision",
       "g6_pilot_gates_reevaluated.json -> gates for the per-gate detail",
@@ -68,19 +78,25 @@
     "decision_not_measurement": true
   },
   "metric_terminology": {
-    "candidate_mass_is_not_a_probability": null,
+    "candidate_mass_is_not_a_probability": {
+      "is_not": "a probability, and not a normalized distribution",
+      "is": "the sum of teacher-forced full-sequence scores over the recognized candidate labels, each a product of per-token conditionals over a different label string",
+      "why_it_need_not_reach_one": "there is no termination event and no normalization across candidates, so the per-label terms overlap and their sum is not constrained to 1",
+      "consequence_for_other_mass": "other_mass = 1 - candidate_mass is a residual against an arbitrary ceiling, not the probability of everything else; it is structurally nonzero even for a perfectly concentrated edit",
+      "gate_reading": "the frozen floor is therefore a candidate-SCORE-SUM threshold, and failing it is a protocol failure rather than a statement that the model put weight outside the candidate set"
+    },
     "set_failing_only_the_score_sum": {
-      "set_id": null,
-      "target_label": null,
-      "candidate_mass_floor": null,
-      "min_over_seeds": null,
-      "max_over_seeds": null,
-      "floor_cleared_on_any_seed": null,
-      "target_rows_correct": null,
-      "target_rows": null,
-      "only_failed_criterion_is_the_score_sum": null,
-      "statement": null,
-      "interpretation": null
+      "set_id": "gx_mll_254012",
+      "target_label": "Museum Curator",
+      "candidate_mass_floor": 0.99,
+      "min_over_seeds": 0.978575846438776,
+      "max_over_seeds": 0.9845502283683981,
+      "floor_cleared_on_any_seed": false,
+      "target_rows_correct": 6,
+      "target_rows": 6,
+      "only_failed_criterion_is_the_score_sum": true,
+      "statement": "Museum Curator (gx_mll_254012) fails the frozen 0.99 candidate-SCORE-SUM gate on all 3 edit seeds while 6 of 6 strict target outputs are correct; the only criterion it fails is the score sum",
+      "interpretation": "a valid protocol failure, and the pilot is correctly recorded as not passing -- but it is NOT evidence that the transformation itself failed, because the edit produced the intended label on every target row it was scored on.  Reading the score sum as a probability is what would turn this threshold into that claim."
     },
     "source": "recomputed from the pilot cells by g6_pilot_gates_reevaluated.json; quoted here, never restated from prose"
   },
@@ -411,7 +427,7 @@
     "statement": "closing G6 changes no frozen design: the hierarchy, the target selection, the matrix and the route architecture (g, h, prompts, LoRA recipe) are all untouched.  A failed auxiliary pilot is not a reason to modify the route"
   },
   "provenance": {
-    "executing_commit": "e7470e04135c73613e2d041dd52d286ee66fc107",
+    "executing_commit": "2633e5bfdf4840427d156baf2eb8db0f83e5d483",
     "script_sha256": "ab2fc9f04448d0ccf524af16d689bf454ed19db7af198119f69a05411bb6876f",
     "hierarchy": {
       "hierarchy_artifact": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json",
@@ -471,15 +487,12 @@
     "source_dataset_matches_frozen": true,
     "clean_worktree": {
       "repo_root": "/scratch/wutiantong/MIDP",
-      "git_commit": "e7470e04135c73613e2d041dd52d286ee66fc107",
-      "dirty_tracked_only": true,
-      "n_dirty_tracked_only": 2,
-      "dirty_tracked_only_lines": [
-        " M datasets/route-unlearning-data/scripts/e2c_v3_g6_canonical_status.py",
-        " M datasets/route-unlearning-data/tests/unit/test_g6_canonical_status.py"
-      ],
-      "dirty_including_untracked": true,
-      "n_dirty_including_untracked": 2,
+      "git_commit": "2633e5bfdf4840427d156baf2eb8db0f83e5d483",
+      "dirty_tracked_only": false,
+      "n_dirty_tracked_only": 0,
+      "dirty_tracked_only_lines": [],
+      "dirty_including_untracked": false,
+      "n_dirty_including_untracked": 0,
       "untracked_outside_exclusions": [],
       "excluded_prefixes": [
         "datasets/route-unlearning-data/e2c_granularity/outputs/mllmu/"
