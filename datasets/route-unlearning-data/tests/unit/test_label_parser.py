@@ -28,6 +28,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _ROOT = Path(__file__).resolve().parents[2]
 _SCRIPTS = _ROOT / "scripts"
 PARSER = _SCRIPTS / "e2c_v3_label_parser.py"
@@ -36,6 +38,28 @@ PARSER = _SCRIPTS / "e2c_v3_label_parser.py"
 #: MLLMU pilot sets, and that the asymmetric matcher scored as unparseable.
 COMMA_LABEL = "Software and Web Developers, Programmers, and Testers"
 VOCAB = ["Software Developer", COMMA_LABEL, "Unknown"]
+
+#: Sealed GX artifacts that pinned ``rv.script_sha256()`` while the parser
+#: still lived inside that file.  The extraction moved the digest without
+#: moving a measurement, so these are the records a naive recorded-vs-current
+#: equality check would have reported stale -- and, under the quarantine policy
+#: this project declares for exactly that key, sent back to the GPU.
+_PILOT = _ROOT / "e2c_granularity" / "outputs" / "mllmu"
+_ORACLES = _PILOT / "oracles"
+_PINNED_ARTIFACTS = (
+    (_PILOT / "run_manifest.json", "shared_scoring_script_sha256"),
+    (_ORACLES / "matched_retrain_gx_mll_151252" / "oracle_results.json",
+     "parser_script_sha256"),
+    (_ORACLES / "matched_retrain_gx_mll_254012" / "oracle_results.json",
+     "parser_script_sha256"),
+    (_ORACLES / "matched_retrain_gx_mll_151252" / "oracle_hard_reeval.json",
+     "shared_scoring_script_sha256"),
+    (_ORACLES / "matched_retrain_gx_mll_254012" / "oracle_hard_reeval.json",
+     "shared_scoring_script_sha256"),
+)
+#: The digest those artifacts pin, i.e. rv's whole-file hash before 992efa9.
+PRE_EXTRACTION_DIGEST = (
+    "92859f2de357e4b7453d30f8d345e4ca22023d8b8d4ab8529d68c52f0cbc87f8")
 
 
 def _load(name, filename):
@@ -181,3 +205,87 @@ def test_the_runner_declares_and_pins_the_parser_module():
     assert "scripts/e2c_v3_label_parser.py" in gxm.GX_CODE
     rv = gxm.rv
     assert rv.label_parser_sha256() == _sha256(PARSER)
+
+
+def _values_under_key(node, key):
+    """Every value stored under ``key``, at any depth."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == key and isinstance(v, str):
+                yield v
+            yield from _values_under_key(v, key)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _values_under_key(item, key)
+
+
+def test_sealed_pilot_artifacts_pin_an_accepted_predecessor_digest():
+    """The extraction moved rv's digest, and five sealed artifacts pin the old
+    one.  Nothing in the repo reads those keys back today, so the only thing
+    standing between this and a wrong "stale, quarantine and re-run" verdict
+    is the declaration in ``SCORING_DIGEST_HISTORY`` -- this is the test that
+    the declaration actually covers the records it claims to.
+
+    Skips when the evidence tree is absent, but asserts it checked something:
+    a path typo must not turn this into a silent pass, which is the same
+    failure mode the monkeypatch test above exists to rule out.
+    """
+    rv = _load("rv_digest_history_under_test", "e2c_v3_research_validity.py")
+    accepted = rv.accepted_scoring_digests()
+    checked = []
+    for path, key in _PINNED_ARTIFACTS:
+        if not path.is_file():
+            continue
+        recorded = list(_values_under_key(
+            json.loads(path.read_text(encoding="utf-8")), key))
+        assert recorded, f"{path.name}: no {key!r} found -- path or key drifted"
+        for digest in recorded:
+            assert digest in accepted, (
+                f"{path.relative_to(_ROOT)} pins {digest[:12]} under {key!r}, "
+                f"which accepted_scoring_digests() does not accept: either the "
+                f"change that moved rv was not provenance-only, or the "
+                f"successor was never declared")
+            checked.append((path.name, digest))
+    if not checked:
+        pytest.skip("no sealed pilot artifacts present in this checkout")
+    assert len(checked) >= 5, checked
+    assert PRE_EXTRACTION_DIGEST in accepted
+
+
+def test_only_a_provenance_only_predecessor_is_accepted():
+    """The successor list must be a filter, not a blanket amnesty.
+
+    An entry whose reason is anything other than ``provenance_only`` has to
+    stay OUT of the accepted set, otherwise declaring a digest would silence
+    the genuine staleness signal the digest exists to give -- a scoring change
+    would look identical to a file move.
+    """
+    rv = _load("rv_digest_filter_under_test", "e2c_v3_research_validity.py")
+    current = rv.script_sha256()
+    assert current in rv.accepted_scoring_digests()
+
+    for entry in rv.SCORING_DIGEST_HISTORY:
+        # every entry must carry the evidence for its own claim, not just the
+        # digest: an unverifiable amnesty is worse than none
+        for field in ("previous_script_sha256", "superseded_by_commit",
+                      "reason", "change", "evidence", "pinned_by"):
+            assert entry.get(field), f"{field} missing from {entry}"
+        assert entry["reason"] == "provenance_only"
+
+    # teeth: a scoring change must not be laundered by relabelling it
+    scoring_change = dict(rv.SCORING_DIGEST_HISTORY[0],
+                          reason="scoring_change")
+    monkey_history = (scoring_change,)
+    saved = rv.SCORING_DIGEST_HISTORY
+    try:
+        rv.SCORING_DIGEST_HISTORY = monkey_history
+        assert rv.accepted_scoring_digests() == {current}
+    finally:
+        rv.SCORING_DIGEST_HISTORY = saved
+
+    # and the accepted set is bounded: current plus the declared predecessors,
+    # never a wildcard that would accept any digest an artifact happens to pin
+    assert rv.accepted_scoring_digests() == (
+        {current} | {e["previous_script_sha256"]
+                     for e in rv.SCORING_DIGEST_HISTORY})
+    assert "0" * 64 not in rv.accepted_scoring_digests()

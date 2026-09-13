@@ -330,6 +330,63 @@ def script_sha256():
         return "unknown"
 
 
+#: Previous whole-file digests of this module that sealed artifacts may still
+#: legitimately pin.  Mirrors ``accepted_panel_digests`` in
+#: ``e2c_v3_prompt_panel``, which accepts "the current frozen panel digest, or
+#: a previous digest superseded by a provenance-only refreeze (measurement
+#: content byte-identical by construction)".
+#:
+#: An entry belongs here ONLY when the change that moved the digest was
+#: provenance-only, so a recorded-vs-current mismatch against it is not
+#: staleness and must not trigger a quarantine or a GPU re-run.  Each entry
+#: carries the evidence for that claim rather than asserting it, because the
+#: whole value of pinning a code digest is that a reader can check the code
+#: behind a number without trusting the person who wrote the number down.
+#:
+#: A change that edits a scoring function belongs in none of these.  It makes
+#: every artifact pinning the old digest genuinely stale -- which is the signal
+#: the digest exists to give, and suppressing it would be worse than the
+#: false positive it avoids.
+SCORING_DIGEST_HISTORY = (
+    {
+        "previous_script_sha256": (
+            "92859f2de357e4b7453d30f8d345e4ca22023d8b8d4ab8529d68c52f0cbc87f8"),
+        "superseded_by_commit": "992efa9",
+        "reason": "provenance_only",
+        "change": ("the three strict-parser functions moved verbatim into the "
+                   "torch-free e2c_v3_label_parser module and are re-exported "
+                   "here under the same names; no scoring function, no "
+                   "distance metric and no trainer was edited"),
+        "evidence": ("recognized_labels_in, parse_recognized_label and "
+                     "check_vocab_parseable are byte-identical before and "
+                     "after the move -- the only insertions are an "
+                     "importlib.util import, the sibling loader, three "
+                     "re-export bindings and label_parser_sha256() -- so the "
+                     "digest moved without the measurement moving"),
+        "pinned_by": ("the mllmu G6.1 pilot run_manifest.json under "
+                      "shared_scoring_script_sha256; the two GX2H "
+                      "oracle_hard_reeval.json parser blocks under "
+                      "script_sha256 and shared_scoring_script_sha256; the "
+                      "two matched_retrain oracle_results.json under "
+                      "parser_script_sha256"),
+    },
+)
+
+
+def accepted_scoring_digests():
+    """Whole-file digests of this module a sealed record may legitimately pin.
+
+    The current digest plus every provenance-only predecessor.  A validator
+    comparing a recorded ``shared_scoring_script_sha256`` should test
+    membership here rather than equality with ``script_sha256()``, otherwise a
+    change that cannot alter a measurement -- moving a function into another
+    file -- reports as stale the very evidence that pins what was measured.
+    """
+    return ({script_sha256()}
+            | {h["previous_script_sha256"] for h in SCORING_DIGEST_HISTORY
+               if h.get("reason") == "provenance_only"})
+
+
 def git_worktree_dirty():
     """True if the git worktree has uncommitted changes to TRACKED files.
 
