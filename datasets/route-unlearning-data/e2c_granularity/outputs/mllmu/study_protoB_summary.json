@@ -1,0 +1,644 @@
+{
+  "study": "protocol_repair_protoB",
+  "completes": "study_protoA_summary.json",
+  "question": "Which of the two knobs protoA moved together is responsible for the same-leaf retention repair on gx_mll_151252, and which for the candidate-mass degradation on gx_mll_254012?",
+  "protocol": {
+    "protoB": {
+      "ul_steps": 500,
+      "ul_warmup": 50,
+      "ul_lr": 2e-05,
+      "ul_repeat": 50,
+      "target_boost": 5,
+      "retain_repeat": 9,
+      "cell_tag": "protoB",
+      "frozen_pilot_recipe": false
+    },
+    "design": {
+      "recipes": {
+        "baseline": {
+          "ul_steps": 500,
+          "retain_repeat": 3
+        },
+        "protoB": {
+          "ul_steps": 500,
+          "retain_repeat": 9
+        },
+        "protoA": {
+          "ul_steps": 1000,
+          "retain_repeat": 9
+        }
+      },
+      "factor_chain": {
+        "baseline_to_protoB": {
+          "isolates": "retain_repeat",
+          "moved": {
+            "retain_repeat": "3 -> 9"
+          },
+          "held": {
+            "ul_steps": 500
+          }
+        },
+        "protoB_to_protoA": {
+          "isolates": "ul_steps",
+          "moved": {
+            "ul_steps": "500 -> 1000"
+          },
+          "held": {
+            "retain_repeat": 9
+          }
+        }
+      },
+      "confound_resolved": "protoA moved both knobs together against the baseline and could therefore report that retention was repaired and candidate mass degraded without attributing either."
+    },
+    "launch": "--phase GX3 --cell-tag protoB --ul-steps 500 --retain-repeat 9 --only-sets gx_mll_151252 gx_mll_254012; cells written three levels down under study_protoB/ so the pilot's own two-level glob cannot pick them up and the frozen pilot cells are never clobbered"
+  },
+  "sets": [
+    "gx_mll_151252",
+    "gx_mll_254012"
+  ],
+  "seeds": [
+    17,
+    42,
+    123
+  ],
+  "arms": {
+    "gx_mll_151252": {
+      "baseline": {
+        "17": {
+          "cell_pass": true,
+          "failed_criteria": [],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.9954817291422746,
+          "per_target_candidate_mass": {
+            "003": 0.9954817291422746,
+            "004": 0.9962754293026479
+          },
+          "min_target_p_desired": 0.994920313529529,
+          "max_target_p_source": 2.748400757649158e-05,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "42": {
+          "cell_pass": true,
+          "failed_criteria": [],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.9970332170523927,
+          "per_target_candidate_mass": {
+            "003": 0.9970332170523927,
+            "004": 0.9973219428276823
+          },
+          "min_target_p_desired": 0.9968829376175544,
+          "max_target_p_source": 7.883310926896142e-06,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "123": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99",
+            "retained_strict_accuracy==1.0",
+            "strict_expected_accuracy==1.0"
+          ],
+          "strict_expected_accuracy": 0.9714285714285714,
+          "min_candidate_mass": 0.8701684130351267,
+          "per_target_candidate_mass": {
+            "003": 0.9938222432553871,
+            "004": 0.9949365331528527
+          },
+          "min_target_p_desired": 0.9935494607012172,
+          "max_target_p_source": 2.748143245801363e-05,
+          "retain_acc": 0.9696969696969697,
+          "same_leaf_correct": 1,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [
+            {
+              "identity_id": "024",
+              "expected": "Software Developer",
+              "got": "Software and Web Developers, Programmers, and Testers"
+            }
+          ],
+          "retained_correct": 32,
+          "retained_total": 33
+        }
+      },
+      "protoB": {
+        "17": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99",
+            "min_target_p_desired>=0.90"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.8022775140260169,
+          "per_target_candidate_mass": {
+            "003": 0.808142479189162,
+            "004": 0.8022775140260169
+          },
+          "min_target_p_desired": 0.7926255215987468,
+          "max_target_p_source": 0.0011806474114279596,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "42": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "max_target_p_source<=0.01",
+            "min_candidate_mass>=0.99",
+            "min_target_p_desired>=0.90",
+            "strict_expected_accuracy==1.0",
+            "unparseable_outputs==0"
+          ],
+          "strict_expected_accuracy": 0.9428571428571428,
+          "min_candidate_mass": 0.1263870669064377,
+          "per_target_candidate_mass": {
+            "003": 0.46631054769252533,
+            "004": 0.1263870669064377
+          },
+          "min_target_p_desired": 0.004997408389837283,
+          "max_target_p_source": 0.062401282867887105,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "123": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99",
+            "min_target_p_desired>=0.90"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.3382642080949155,
+          "per_target_candidate_mass": {
+            "003": 0.3382642080949155,
+            "004": 0.3391258400169699
+          },
+          "min_target_p_desired": 0.2766270837221101,
+          "max_target_p_source": 0.007438261600968062,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        }
+      },
+      "protoA": {
+        "17": {
+          "cell_pass": true,
+          "failed_criteria": [],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.9962679334882265,
+          "per_target_candidate_mass": {
+            "003": 0.9970195751882618,
+            "004": 0.9962679334882265
+          },
+          "min_target_p_desired": 0.9955413789626183,
+          "max_target_p_source": 1.5672343898289472e-05,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "42": {
+          "cell_pass": true,
+          "failed_criteria": [],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.993689015275503,
+          "per_target_candidate_mass": {
+            "003": 0.993689015275503,
+            "004": 0.9961057257200799
+          },
+          "min_target_p_desired": 0.9924531991568583,
+          "max_target_p_source": 0.00013939817490314044,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "123": {
+          "cell_pass": true,
+          "failed_criteria": [],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.995606398340864,
+          "per_target_candidate_mass": {
+            "003": 0.995606398340864,
+            "004": 0.996589597113358
+          },
+          "min_target_p_desired": 0.9938856588954369,
+          "max_target_p_source": 7.460446718843372e-05,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        }
+      }
+    },
+    "gx_mll_254012": {
+      "baseline": {
+        "17": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.9845502283683981,
+          "per_target_candidate_mass": {
+            "034": 0.9851852320530804,
+            "120": 0.9845502283683981
+          },
+          "min_target_p_desired": 0.9836284097630575,
+          "max_target_p_source": 3.429061843254567e-08,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "42": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.9811975890179738,
+          "per_target_candidate_mass": {
+            "034": 0.9811975890179738,
+            "120": 0.9880985857213328
+          },
+          "min_target_p_desired": 0.9788661883309195,
+          "max_target_p_source": 8.668488161301217e-09,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "123": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.978575846438776,
+          "per_target_candidate_mass": {
+            "034": 0.9854877672773513,
+            "120": 0.978575846438776
+          },
+          "min_target_p_desired": 0.9783197232136512,
+          "max_target_p_source": 1.0553847735713332e-07,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        }
+      },
+      "protoB": {
+        "17": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99",
+            "min_target_p_desired>=0.90",
+            "strict_expected_accuracy==1.0",
+            "wrong_branch_rate==0"
+          ],
+          "strict_expected_accuracy": 0.9714285714285714,
+          "min_candidate_mass": 0.23777658204058674,
+          "per_target_candidate_mass": {
+            "034": 0.764691698501993,
+            "120": 0.23777658204058674
+          },
+          "min_target_p_desired": 0.01305652789033024,
+          "max_target_p_source": 1.762141112546358e-05,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "42": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "max_target_p_source<=0.01",
+            "min_candidate_mass>=0.99",
+            "min_target_p_desired>=0.90",
+            "strict_expected_accuracy==1.0",
+            "wrong_branch_rate==0"
+          ],
+          "strict_expected_accuracy": 0.9714285714285714,
+          "min_candidate_mass": 0.3674039417285557,
+          "per_target_candidate_mass": {
+            "034": 0.7121710082636976,
+            "120": 0.3674039417285557
+          },
+          "min_target_p_desired": 4.998055203229399e-07,
+          "max_target_p_source": 0.05981359983150744,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "123": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99",
+            "min_target_p_desired>=0.90",
+            "strict_expected_accuracy==1.0",
+            "wrong_branch_rate==0"
+          ],
+          "strict_expected_accuracy": 0.9714285714285714,
+          "min_candidate_mass": 0.39743179820800445,
+          "per_target_candidate_mass": {
+            "034": 0.9673842767438064,
+            "120": 0.39743179820800445
+          },
+          "min_target_p_desired": 0.001716888829053513,
+          "max_target_p_source": 3.155308029704738e-05,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        }
+      },
+      "protoA": {
+        "17": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.9836036398446141,
+          "per_target_candidate_mass": {
+            "034": 0.9836036398446141,
+            "120": 0.9851389479142837
+          },
+          "min_target_p_desired": 0.982349451970473,
+          "max_target_p_source": 3.6138270474202975e-09,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "42": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99",
+            "min_target_p_desired>=0.90"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.8648972652841161,
+          "per_target_candidate_mass": {
+            "034": 0.8648972652841161,
+            "120": 0.9802408853892844
+          },
+          "min_target_p_desired": 0.695231481889914,
+          "max_target_p_source": 3.890448808012602e-05,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        },
+        "123": {
+          "cell_pass": false,
+          "failed_criteria": [
+            "min_candidate_mass>=0.99"
+          ],
+          "strict_expected_accuracy": 1.0,
+          "min_candidate_mass": 0.9579437446728861,
+          "per_target_candidate_mass": {
+            "034": 0.9632138135870848,
+            "120": 0.9579437446728861
+          },
+          "min_target_p_desired": 0.9577848331938854,
+          "max_target_p_source": 9.920647362564623e-08,
+          "retain_acc": 1.0,
+          "same_leaf_correct": 2,
+          "same_leaf_total": 2,
+          "same_leaf_leaks": [],
+          "retained_correct": 33,
+          "retained_total": 33
+        }
+      }
+    }
+  },
+  "attribution": {
+    "retain_repeat_3_to_9": {
+      "isolated_by": "baseline -> protoB (ul_steps held at 500)",
+      "repairs_retention": true,
+      "evidence": "gx_mll_151252 seed 123 is the pilot's only retention failure: the baseline leaks identity 024, expected 'Software Developer' but emitting 'Software and Web Developers, Programmers, and Testers', same_leaf 1/2, retain_acc 0.9697. Under protoB that leak is gone -- same_leaf 2/2, retained 33/33, retain_acc 1.0000 -- with ul_steps unchanged, so the repair is retain_repeat's and not the extra steps'.",
+      "cost": "at 500 steps the raised retain weighting suppresses the edit itself.  Per seed, min_candidate_mass falls 0.9955 -> 0.8023 and 0.9970 -> 0.1264 on gx_mll_151252, and 0.9846 -> 0.2378 (seed 17), 0.9812 -> 0.3674 (seed 42), 0.9786 -> 0.3974 (seed 123) on gx_mll_254012, with min_target_p_desired collapsing to 0.000000 at 254012/seed42.  Two cells the baseline PASSED (151252 seeds 17 and 42) fail under protoB.",
+      "net": "a net regression on its own: it fixes one leaking retained row and breaks 2 previously-passing cells on gx_mll_151252"
+    },
+    "ul_steps_500_to_1000": {
+      "isolated_by": "protoB -> protoA (retain_repeat held at 9)",
+      "restores_the_edit": true,
+      "evidence": "on gx_mll_151252 every seed recovers: min_candidate_mass 0.8023 -> 0.9963 (seed 17), 0.1264 -> 0.9937 (seed 42), 0.3383 -> 0.9956 (seed 123), and all three cells pass (3/3) against protoB's 0/3.  Retention stays repaired at 2/2 throughout, so the extra steps cost nothing that retain_repeat had bought.",
+      "insufficient_for_254012": "on gx_mll_254012 the extra steps lift every seed (0.2378 -> 0.9836 at seed 17, 0.3674 -> 0.8649 at seed 42, 0.3974 -> 0.9579 at seed 123) but no seed reaches the 0.99 floor.  ProtoA is also still WORSE than the frozen recipe at seed 42 (0.864897 against 0.981198), where identity 034 regresses to 0.864897 with p_desired 0.695231."
+    },
+    "interaction": "the two knobs are COMPLEMENTARY, not redundant and not substitutes.  retain_repeat buys retention, ul_steps buys the edit, and neither arm passes without the other: retain_repeat alone leaves the edit too weak to clear the mass floor, while the frozen recipe's 500 steps at retain_repeat 3 leak a same-leaf control.  Only protoA passes gx_mll_151252 on all three seeds.",
+    "candidate_mass_254012": {
+      "repairable_by_either_knob": false,
+      "cells_failing_under_all_three_recipes": 9,
+      "floor": 0.99,
+      "best_min_candidate_mass_by_arm": {
+        "baseline": 0.9845502283683981,
+        "protoB": 0.39743179820800445,
+        "protoA": 0.9836036398446141
+      },
+      "best_ever": 0.9845502283683981,
+      "detail": "9 of 9 cells across three recipes stay under the 0.99 floor.  The closest any cell gets is 0.984550, 0.0054 short -- and it is reached by the FROZEN recipe, not by either study arm: protoA's best is 0.983604 and protoB's 0.397432.  Both knobs therefore move this set the WRONG way or not at all, so the pilot's behavioral failure on gx_mll_254012 is a property of that set under this route rather than a recipe defect to tune away."
+    }
+  },
+  "gates_on_study_cells": {
+    "protoB": {
+      "note": "evaluated over a 2-set sub-matrix (6 cells) with the frozen matrix's own edit_seeds, so the coverage audit is exact for what the study actually ran; this is NOT a pilot verdict",
+      "n_cells": 6,
+      "passed": false,
+      "failed_gates": [
+        "behavioral",
+        "matched_oracle"
+      ],
+      "coverage_defects": [],
+      "coverage_exact": true,
+      "per_gate_passed": {
+        "behavioral": false,
+        "retention": true,
+        "sibling_coverage": true,
+        "matched_oracle": false
+      },
+      "behavioral_failures": [
+        "gx_mll_151252/seed123/003: p_desired 0.3166 < 0.9",
+        "gx_mll_151252/seed123/003: candidate_mass 0.3383 < 0.99",
+        "gx_mll_151252/seed123/004: p_desired 0.2766 < 0.9",
+        "gx_mll_151252/seed123/004: candidate_mass 0.3391 < 0.99",
+        "gx_mll_151252/seed17/003: p_desired 0.7985 < 0.9",
+        "gx_mll_151252/seed17/003: candidate_mass 0.8081 < 0.99",
+        "gx_mll_151252/seed17/004: p_desired 0.7926 < 0.9",
+        "gx_mll_151252/seed17/004: candidate_mass 0.8023 < 0.99",
+        "gx_mll_151252/seed42/003: expected 'Software and Web Developers, Programmers, and Testers', strict-parsed None (class=unparseable)",
+        "gx_mll_151252/seed42/003: p_desired 0.0050 < 0.9",
+        "gx_mll_151252/seed42/003: p_source 0.0624 > 0.01 -- the exact label still carries mass",
+        "gx_mll_151252/seed42/003: candidate_mass 0.4663 < 0.99",
+        "gx_mll_151252/seed42/003: unparseable output",
+        "gx_mll_151252/seed42/004: expected 'Software and Web Developers, Programmers, and Testers', strict-parsed None (class=unparseable)",
+        "gx_mll_151252/seed42/004: p_desired 0.0141 < 0.9",
+        "gx_mll_151252/seed42/004: p_source 0.0185 > 0.01 -- the exact label still carries mass",
+        "gx_mll_151252/seed42/004: candidate_mass 0.1264 < 0.99",
+        "gx_mll_151252/seed42/004: unparseable output",
+        "gx_mll_254012/seed123/034: expected 'Archivists, Curators, and Museum Technicians', strict-parsed 'Architect' (class=wrong_branch)",
+        "gx_mll_254012/seed123/034: p_desired 0.0017 < 0.9",
+        "gx_mll_254012/seed123/034: candidate_mass 0.9674 < 0.99",
+        "gx_mll_254012/seed123/120: p_desired 0.3803 < 0.9",
+        "gx_mll_254012/seed123/120: candidate_mass 0.3974 < 0.99",
+        "gx_mll_254012/seed17/034: expected 'Archivists, Curators, and Museum Technicians', strict-parsed 'Architect' (class=wrong_branch)",
+        "gx_mll_254012/seed17/034: p_desired 0.0131 < 0.9",
+        "gx_mll_254012/seed17/034: candidate_mass 0.7647 < 0.99",
+        "gx_mll_254012/seed17/120: p_desired 0.2280 < 0.9",
+        "gx_mll_254012/seed17/120: candidate_mass 0.2378 < 0.99",
+        "gx_mll_254012/seed42/034: expected 'Archivists, Curators, and Museum Technicians', strict-parsed 'Architect' (class=wrong_branch)",
+        "gx_mll_254012/seed42/034: p_desired 0.0000 < 0.9",
+        "gx_mll_254012/seed42/034: p_source 0.0598 > 0.01 -- the exact label still carries mass",
+        "gx_mll_254012/seed42/034: candidate_mass 0.7122 < 0.99",
+        "gx_mll_254012/seed42/120: p_desired 0.3626 < 0.9",
+        "gx_mll_254012/seed42/120: candidate_mass 0.3674 < 0.99",
+        "3 target row(s) classified wrong_branch"
+      ],
+      "matched_oracle_failures": [
+        "gx_mll_254012/seed17/034: failed delta_retrain_margin+closer_to_matched_retrain (delta_retrain_l2=-0.1918, matched_retrain mass=0.9991128811160906, fit_ok=True)",
+        "gx_mll_254012/seed42/034: failed delta_retrain_margin+closer_to_matched_retrain (delta_retrain_l2=-0.5812, matched_retrain mass=0.9991128811160906, fit_ok=True)",
+        "gx_mll_254012/seed123/034: failed delta_retrain_margin+closer_to_matched_retrain (delta_retrain_l2=-0.2075, matched_retrain mass=0.9991128811160906, fit_ok=True)",
+        "gx_mll_151252/seed42/003: failed delta_retrain_margin+closer_to_matched_retrain (delta_retrain_l2=-0.2802, matched_retrain mass=0.999085143566033, fit_ok=True)",
+        "gx_mll_151252/seed42/004: failed delta_retrain_margin+closer_to_matched_retrain (delta_retrain_l2=-0.1408, matched_retrain mass=0.999085143566033, fit_ok=True)"
+      ],
+      "matched_oracle_worst_case_delta_retrain": {
+        "gx_mll_254012": -0.5812249854722914,
+        "gx_mll_151252": -0.28021872642322376
+      },
+      "what_an_averaging_gate_would_have_concluded": {
+        "gx_mll_254012": {
+          "mean_delta_retrain_over_rows": 0.49305975166140764,
+          "averaging_gate_would_pass": true,
+          "n_rows_inverting": 3,
+          "n_rows": 6
+        },
+        "gx_mll_151252": {
+          "mean_delta_retrain_over_rows": 0.6512269672119863,
+          "averaging_gate_would_pass": true,
+          "n_rows_inverting": 2,
+          "n_rows": 6
+        }
+      }
+    },
+    "protoA": {
+      "note": "evaluated over a 2-set sub-matrix (6 cells) with the frozen matrix's own edit_seeds, so the coverage audit is exact for what the study actually ran; this is NOT a pilot verdict",
+      "n_cells": 6,
+      "passed": false,
+      "failed_gates": [
+        "behavioral"
+      ],
+      "coverage_defects": [],
+      "coverage_exact": true,
+      "per_gate_passed": {
+        "behavioral": false,
+        "retention": true,
+        "sibling_coverage": true,
+        "matched_oracle": true
+      },
+      "behavioral_failures": [
+        "gx_mll_254012/seed123/034: candidate_mass 0.9632 < 0.99",
+        "gx_mll_254012/seed123/120: candidate_mass 0.9579 < 0.99",
+        "gx_mll_254012/seed17/034: candidate_mass 0.9836 < 0.99",
+        "gx_mll_254012/seed17/120: candidate_mass 0.9851 < 0.99",
+        "gx_mll_254012/seed42/034: p_desired 0.6952 < 0.9",
+        "gx_mll_254012/seed42/034: candidate_mass 0.8649 < 0.99",
+        "gx_mll_254012/seed42/120: candidate_mass 0.9802 < 0.99"
+      ],
+      "matched_oracle_failures": [],
+      "matched_oracle_worst_case_delta_retrain": {
+        "gx_mll_254012": 0.8108539498842252,
+        "gx_mll_151252": 1.2058292113732074
+      },
+      "what_an_averaging_gate_would_have_concluded": {
+        "gx_mll_254012": {
+          "mean_delta_retrain_over_rows": 1.2275811280306037,
+          "averaging_gate_would_pass": true,
+          "n_rows_inverting": 0,
+          "n_rows": 6
+        },
+        "gx_mll_151252": {
+          "mean_delta_retrain_over_rows": 1.2197019735971857,
+          "averaging_gate_would_pass": true,
+          "n_rows_inverting": 0,
+          "n_rows": 6
+        }
+      }
+    }
+  },
+  "gate_repair_validation": {
+    "note": "the repaired matched-oracle gate earns its keep on this arm.  5 of protoB's target rows fail it with delta_retrain_l2 NEGATIVE -- gx_mll_254012 identity 034 on all three seeds (-0.1918, -0.5812, -0.2075) and both gx_mll_151252 targets at seed 42 (-0.2802, -0.1408) -- meaning the edit sits CLOSER to the leave-one-out retraining reference than to the matched one, the inversion the criterion exists to reject.  matched_retrain fit_ok=True and mass 0.999 on every one of those rows, so the oracle is sound and it is the EDIT that moved to the wrong side.  protoA has zero matched-oracle failures.  This is the pre-992efa9 gate's blind spot on real cells, not a constructed one: averaged over rows the mean delta is POSITIVE for both sets (+0.4931 on gx_mll_254012, +0.6512 on gx_mll_151252), so a gate that asked whether the mean beat zero would have PASSED both -- gx_mll_254012 because identity 120's +1.29..+1.35 outvotes identity 034 inverting on all three seeds, gx_mll_151252 because seeds 17 and 123 outvote seed 42 inverting on both its targets.  See what_an_averaging_gate_would_have_concluded, which is computed from the same rows rather than asserted.",
+    "n_matched_oracle_failures": {
+      "protoB": 5,
+      "protoA": 0
+    },
+    "protoB_matched_oracle_passed": false,
+    "protoB_worst_case_delta_retrain": {
+      "gx_mll_254012": -0.5812249854722914,
+      "gx_mll_151252": -0.28021872642322376
+    },
+    "protoA_matched_oracle_passed": true,
+    "protoA_worst_case_delta_retrain": {
+      "gx_mll_254012": 0.8108539498842252,
+      "gx_mll_151252": 1.2058292113732074
+    }
+  },
+  "recommendation": "If the pilot recipe is to be revised, revise it to protoA (ul_steps 1000, retain_repeat 9): it is the only arm that passes gx_mll_151252 on every seed and it does not regress retention.  It does NOT make gx_mll_254012 pass, and no knob in this protocol does, so the frozen 0.99 candidate-mass floor on that set stays a genuine pilot failure.  Changing the recipe is a design decision that re-opens the frozen pilot; nothing here should be read as having already made it.",
+  "provenance": {
+    "study_commit": "1aa2583bd7ea9e48250101a8aa1a86417c1db84a",
+    "runner_script_sha256": "be9c965e48e7",
+    "granularity_lib_sha256": "26610dbd485c",
+    "shared_scoring_script_sha256": "f649c2d72eb9",
+    "label_parser_script_sha256": "fdf713c51c2a",
+    "worktree_dirty_at_launch": false,
+    "gpu": "cuda:3",
+    "gpu_claimed_by": "g6_pilot_queue.wait_for_capacity at its measured REQUIRED_MB_DEFAULT of 20000 MiB, after GPU3 held 20281 MiB free for 3 consecutive polls",
+    "wall_seconds": 4299.3,
+    "n_cells": 6,
+    "oracle_fit_source": "oracles_summary.json (matched_retrain, post-GX2H hard re-evaluation)",
+    "baseline_and_protoA_arms_read_from": "the frozen pilot cells (committed e6fd1ce) and study_protoA's cells (committed a458569); neither was re-run for this comparison",
+    "reported_by": "e2c_v3_study_protocol_repair.py",
+    "gates_recomputed_at_commit": "e3ee0d9113fa5a79f135d65b8e103fb51c8e8434"
+  }
+}
