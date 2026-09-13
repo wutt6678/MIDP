@@ -11,6 +11,7 @@ re-deriving or re-running anything.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 _SCRIPTS = _ROOT / "scripts"
 OUT_BASE = _ROOT / "e2c_granularity" / "outputs" / "mllmu"
 TOOL_NAME = "e2c_v3_study_protocol_repair.py"
+_SUMMARY = OUT_BASE / "study_protoB_summary.json"
 
 
 @pytest.fixture(scope="module")
@@ -231,3 +233,73 @@ def test_the_real_arms_are_complete_and_the_attribution_holds(tool):
             assert (arms["gx_mll_254012"][name][str(s)]["min_candidate_mass"]
                     < tool.MASS_FLOOR)
             assert arms["gx_mll_254012"][name][str(s)]["cell_pass"] is False
+
+
+@pytest.mark.skipif(not _SUMMARY.is_file(), reason="study report not present")
+def test_the_conclusion_is_scoped_to_what_was_actually_tested(tool):
+    """The wording narrowing, pinned against the over-claim it replaced.
+
+    The study once concluded the shortfall was "a property of that set under
+    this route rather than a recipe defect to tune away" -- a claim about the
+    set's nature, from a search over three recipes and two knobs.  What the
+    evidence supports is that those two knobs did not repair it.  Both phrasings
+    read as findings, so the narrow one has to be pinned or the broad one creeps
+    back in on the next edit.
+    """
+    text = _SUMMARY.read_text(encoding="utf-8")
+    for over_claim in ("property of that set under this route",
+                       "recipe defect to tune away"):
+        assert over_claim not in text, f"the over-claim is back: {over_claim}"
+
+    cm = json.loads(text)["attribution"]["candidate_mass_254012"]
+    assert "NOT REPAIRED BY THE TWO TESTED FACTORS" in cm["detail"]
+    scope = cm["scope_of_that_claim"]
+    assert "NOT a claim that the shortfall is intrinsic to the set" in scope
+    assert "remains open" in scope, \
+        "the scope must say what was never tested, not only what was"
+
+    # the recipes named in prose are the design, so adding an arm cannot leave
+    # the sentence describing three
+    assert cm["recipes_evaluated"] == {
+        n: dict(tool.PROTOCOL_DESIGN[n]) for n in tool.ARMS}
+    assert f"{len(tool.ARMS)} recipes" in scope
+
+
+@pytest.mark.skipif(not _SUMMARY.is_file(), reason="study report not present")
+def test_the_strict_cell_split_separates_a_protocol_failure_from_a_collapse(
+        tool):
+    """Two different outcomes must not be merged into one sentence.
+
+    Under the frozen recipe and under protoA every target output on 254012 is
+    correct and only the candidate score sum falls short -- a protocol failure.
+    Under protoB the target outputs are themselves wrong -- a real edit
+    collapse.  Saying "every target output is correct" without splitting the
+    arms would describe six cells as if they were nine, and would understate a
+    genuine failure of the edit.
+
+    Recomputed from the arms here and compared to the filed report, so the
+    report cannot drift from the cells it summarises.
+    """
+    arms = {sid: {n: tool.arm_summary(sid, t) for n, t in tool.ARMS.items()}
+            for sid in tool.SETS}
+    sid = "gx_mll_254012"
+    strict = [(n, s) for n in tool.ARMS for s in tool.SEEDS
+              if arms[sid][n][str(s)]["strict_expected_accuracy"] == 1.0]
+
+    filed = json.loads(_SUMMARY.read_text(encoding="utf-8"))["attribution"][
+        "candidate_mass_254012"]["cells_with_all_target_outputs_strictly_correct"]
+    assert filed["n"] == len(strict)
+    assert filed["of"] == len(tool.ARMS) * len(tool.SEEDS)
+    assert sorted(filed["arm_seed_pairs"]) == sorted(
+        f"{n}/seed{s}" for n, s in strict)
+    assert sorted(filed["arms_whose_targets_are_all_correct"]) == sorted(
+        {n for n, _ in strict})
+    assert sorted(filed["arms_whose_targets_are_not_all_correct"]) == sorted(
+        set(tool.ARMS) - {n for n, _ in strict})
+
+    # and the split is real, not a distinction without a difference: some arm
+    # must have wrong target outputs, otherwise the caveat carries no content
+    assert filed["arms_whose_targets_are_not_all_correct"], \
+        "every arm is strictly correct, so the two-outcome split says nothing"
+    assert filed["n"] < filed["of"], \
+        "every cell is strictly correct; the scope note overstates the split"

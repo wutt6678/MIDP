@@ -258,7 +258,27 @@ def build_report(arms, gates, proto_b_protocol, provenance):
     def n_pass(name, sid):
         return sum(1 for s in SEEDS if arms[sid][name][str(s)]["cell_pass"])
 
+    def strict_cells(sid):
+        """Cells whose every target output was strictly correct.
+
+        Counted rather than asserted: the scope note below leans on this to
+        separate "the protocol threshold was not cleared" from "the edit did
+        not work", and a number quoted in prose about evidence has to come from
+        the code filing that prose or it survives the evidence changing.
+        """
+        return [(n, s) for n in ARMS for s in SEEDS
+                if arms[sid][n][str(s)]["strict_expected_accuracy"] == 1.0]
+
     best_ever = max(mass(n, "gx_mll_254012", s) for n in ARMS for s in SEEDS)
+    strict_254012 = strict_cells("gx_mll_254012")
+    n_cells_total = len(ARMS) * len(SEEDS)
+    # Derived from the design dict, so the prose cannot name a recipe the study
+    # did not run, and cannot keep naming three if a fourth arm is added.
+    knobs = sorted(next(iter(PROTOCOL_DESIGN.values())))
+    recipes = ", ".join(
+        f"{name}(" + ", ".join(f"{k}={PROTOCOL_DESIGN[name][k]}"
+                               for k in knobs) + ")"
+        for name in ARMS)
     leak = arms["gx_mll_151252"]["baseline"]["123"]["same_leaf_leaks"]
     p42 = arms["gx_mll_254012"]["protoA"]["42"]
     inv = gates["protoB"]["what_an_averaging_gate_would_have_concluded"]
@@ -362,14 +382,14 @@ def build_report(arms, gates, proto_b_protocol, provenance):
                 "three seeds."),
             "candidate_mass_254012": {
                 "repairable_by_either_knob": False,
-                "cells_failing_under_all_three_recipes": len(ARMS) * len(SEEDS),
+                "cells_failing_under_all_recipes": n_cells_total,
                 "floor": MASS_FLOOR,
                 "best_min_candidate_mass_by_arm": {
                     n: best(n, "gx_mll_254012") for n in ARMS},
                 "best_ever": best_ever,
                 "detail": (
-                    f"{len(ARMS) * len(SEEDS)} of "
-                    f"{len(ARMS) * len(SEEDS)} cells across three recipes stay "
+                    f"{n_cells_total} of "
+                    f"{n_cells_total} cells across the {len(ARMS)} recipes stay "
                     f"under the {MASS_FLOOR} floor.  The closest any cell gets "
                     f"is {best_ever:.6f}, {MASS_FLOOR - best_ever:.4f} short -- "
                     "and it is reached by the FROZEN recipe, not by either "
@@ -377,9 +397,36 @@ def build_report(arms, gates, proto_b_protocol, provenance):
                     f"{best('protoA', 'gx_mll_254012'):.6f} and protoB's "
                     f"{best('protoB', 'gx_mll_254012'):.6f}.  Both knobs "
                     "therefore move this set the WRONG way or not at all, so "
-                    "the pilot's behavioral failure on gx_mll_254012 is a "
-                    "property of that set under this route rather than a "
-                    "recipe defect to tune away."),
+                    "the pilot's behavioral failure on gx_mll_254012 is NOT "
+                    f"REPAIRED BY THE TWO TESTED FACTORS -- {' and '.join(knobs)}"
+                    f" -- across the {len(ARMS)} evaluated recipes."),
+                "scope_of_that_claim": (
+                    f"exactly {len(ARMS)} recipes were evaluated, over "
+                    f"{len(knobs)} knobs ({', '.join(knobs)}): {recipes}.  "
+                    "'Not repaired by these' is a statement about that search, "
+                    "and is NOT a claim that the shortfall is intrinsic to the "
+                    "set, that no recipe could repair it, or that the "
+                    "underlying transformation failed.  Two distinct outcomes "
+                    "have to be kept apart: under the FROZEN recipe and under "
+                    f"protoA ({len(strict_254012)} of {n_cells_total} cells) "
+                    "strict_expected_accuracy is 1.0, so every target output is "
+                    "correct and ONLY the candidate score sum falls short of "
+                    "the floor -- a protocol failure, not a transformation "
+                    "failure.  Under protoB the target outputs are themselves "
+                    "wrong, which is a real edit collapse and a different "
+                    "finding.  An untested factor (learning rate, "
+                    "candidate-set construction, the score-sum floor itself) "
+                    "remains open."),
+                "recipes_evaluated": {n: dict(PROTOCOL_DESIGN[n]) for n in ARMS},
+                "cells_with_all_target_outputs_strictly_correct": {
+                    "n": len(strict_254012),
+                    "of": n_cells_total,
+                    "arm_seed_pairs": [f"{n}/seed{s}" for n, s in strict_254012],
+                    "arms_whose_targets_are_all_correct": sorted(
+                        {n for n, _ in strict_254012}),
+                    "arms_whose_targets_are_not_all_correct": sorted(
+                        set(ARMS) - {n for n, _ in strict_254012}),
+                },
             },
         },
         "gates_on_study_cells": gates,

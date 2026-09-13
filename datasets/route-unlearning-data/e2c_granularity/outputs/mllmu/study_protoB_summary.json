@@ -471,7 +471,7 @@
     "interaction": "the two knobs are COMPLEMENTARY, not redundant and not substitutes.  retain_repeat buys retention, ul_steps buys the edit, and neither arm passes without the other: retain_repeat alone leaves the edit too weak to clear the mass floor, while the frozen recipe's 500 steps at retain_repeat 3 leak a same-leaf control.  Only protoA passes gx_mll_151252 on all three seeds.",
     "candidate_mass_254012": {
       "repairable_by_either_knob": false,
-      "cells_failing_under_all_three_recipes": 9,
+      "cells_failing_under_all_recipes": 9,
       "floor": 0.99,
       "best_min_candidate_mass_by_arm": {
         "baseline": 0.9845502283683981,
@@ -479,7 +479,41 @@
         "protoA": 0.9836036398446141
       },
       "best_ever": 0.9845502283683981,
-      "detail": "9 of 9 cells across three recipes stay under the 0.99 floor.  The closest any cell gets is 0.984550, 0.0054 short -- and it is reached by the FROZEN recipe, not by either study arm: protoA's best is 0.983604 and protoB's 0.397432.  Both knobs therefore move this set the WRONG way or not at all, so the pilot's behavioral failure on gx_mll_254012 is a property of that set under this route rather than a recipe defect to tune away."
+      "detail": "9 of 9 cells across the 3 recipes stay under the 0.99 floor.  The closest any cell gets is 0.984550, 0.0054 short -- and it is reached by the FROZEN recipe, not by either study arm: protoA's best is 0.983604 and protoB's 0.397432.  Both knobs therefore move this set the WRONG way or not at all, so the pilot's behavioral failure on gx_mll_254012 is NOT REPAIRED BY THE TWO TESTED FACTORS -- retain_repeat and ul_steps -- across the 3 evaluated recipes.",
+      "scope_of_that_claim": "exactly 3 recipes were evaluated, over 2 knobs (retain_repeat, ul_steps): baseline(retain_repeat=3, ul_steps=500), protoB(retain_repeat=9, ul_steps=500), protoA(retain_repeat=9, ul_steps=1000).  'Not repaired by these' is a statement about that search, and is NOT a claim that the shortfall is intrinsic to the set, that no recipe could repair it, or that the underlying transformation failed.  Two distinct outcomes have to be kept apart: under the FROZEN recipe and under protoA (6 of 9 cells) strict_expected_accuracy is 1.0, so every target output is correct and ONLY the candidate score sum falls short of the floor -- a protocol failure, not a transformation failure.  Under protoB the target outputs are themselves wrong, which is a real edit collapse and a different finding.  An untested factor (learning rate, candidate-set construction, the score-sum floor itself) remains open.",
+      "recipes_evaluated": {
+        "baseline": {
+          "ul_steps": 500,
+          "retain_repeat": 3
+        },
+        "protoB": {
+          "ul_steps": 500,
+          "retain_repeat": 9
+        },
+        "protoA": {
+          "ul_steps": 1000,
+          "retain_repeat": 9
+        }
+      },
+      "cells_with_all_target_outputs_strictly_correct": {
+        "n": 6,
+        "of": 9,
+        "arm_seed_pairs": [
+          "baseline/seed17",
+          "baseline/seed42",
+          "baseline/seed123",
+          "protoA/seed17",
+          "protoA/seed42",
+          "protoA/seed123"
+        ],
+        "arms_whose_targets_are_all_correct": [
+          "baseline",
+          "protoA"
+        ],
+        "arms_whose_targets_are_not_all_correct": [
+          "protoB"
+        ]
+      }
     }
   },
   "gates_on_study_cells": {
@@ -639,6 +673,6 @@
     "oracle_fit_source": "oracles_summary.json (matched_retrain, post-GX2H hard re-evaluation)",
     "baseline_and_protoA_arms_read_from": "the frozen pilot cells (committed e6fd1ce) and study_protoA's cells (committed a458569); neither was re-run for this comparison",
     "reported_by": "e2c_v3_study_protocol_repair.py",
-    "gates_recomputed_at_commit": "1c311cbf2ebb600bbdf8a4a059e3c4d666d12f44"
+    "gates_recomputed_at_commit": "e4caa0305103c2d5e2ba6212da663be562c15bb4"
   }
 }

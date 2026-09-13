@@ -1,0 +1,516 @@
+{
+  "kind": "g6_canonical_status_v1",
+  "dataset": "mllmu",
+  "generated_by": "scripts/e2c_v3_g6_canonical_status.py",
+  "purpose": "the single place that says which G6.1 artifact is authoritative, what the pilot concluded, what was never launched, what role G6 plays, and exactly which statements in the sealed reports are stale and why",
+  "authoritative_result": {
+    "file": "g6_pilot_gates_reevaluated.json",
+    "path": "g6_pilot_gates_reevaluated.json",
+    "sha256": "4a3678389b7c2a916d19b2550c051b445148ff67807a5caea3d84d013a115397",
+    "read_from": "g6_pilot_gates_reevaluated.json",
+    "kind": "g6_pilot_gate_reevaluation_v1",
+    "why_this_one": "it is the only report that applies the repaired criteria of 992efa9 -- a strict per-target fresh-retrain oracle gate with no averaging and an exact (set_id, seed) coverage audit -- to the post-GX2H oracle fit, and it binds the bytes it read: every cell and gate oracle is digest-verified against the sealed run_manifest",
+    "content_binding": null,
+    "read_any_of_these_first": [
+      "pilot_verdict below for the decision",
+      "g6_pilot_gates_reevaluated.json -> gates for the per-gate detail",
+      "g6_pilot_gates_reevaluated.json -> metric_semantics for what candidate_mass is and is not"
+    ]
+  },
+  "pilot_verdict": {
+    "passed": false,
+    "failed_gates": [
+      "behavioral",
+      "retention"
+    ],
+    "proceed_to_full_matrix": false,
+    "coverage_exact": true,
+    "coverage_defects": [],
+    "per_gate_passed": {
+      "behavioral": false,
+      "matched_oracle": true,
+      "retention": false,
+      "sibling_coverage": true
+    },
+    "n_cells_evaluated": 15,
+    "n_cells_expected_when_complete": 15,
+    "statement": "the G6.1 five-set pilot FAILED its frozen gates (behavioral, retention); proceed_to_full_matrix is False",
+    "source": "read from g6_pilot_gates_reevaluated.json, not retyped"
+  },
+  "full_matrix": {
+    "launched": false,
+    "will_not_proceed": true,
+    "design_of_record": "the frozen G6.1 pilot design covers 5 sets x 3 edit seeds = 15 cells, all of which were evaluated; the larger matrix the gates decide about was never frozen as a design artifact and no cells exist for it",
+    "sets_in_frozen_pilot_design": [
+      "gx_mll_151252",
+      "gx_mll_191023",
+      "gx_mll_192041",
+      "gx_mll_193091",
+      "gx_mll_254012"
+    ],
+    "set_ids_with_cells_on_disk": [
+      "gx_mll_151252",
+      "gx_mll_191023",
+      "gx_mll_192041",
+      "gx_mll_193091",
+      "gx_mll_254012"
+    ],
+    "cells_outside_the_pilot_design": [],
+    "pilot_study_cells_excluded_from_this_count": "cells under a study_<tag>/ subdirectory are the protocol study arms, are not part of the pilot design, and are not counted here",
+    "gate_that_would_have_authorised_it": "the full 12-target matrix may proceed only when all four gates pass AND coverage of the frozen (set_id, seed) design is exact; a null sibling metric on a set with no structural sibling does not block, and is not a pass either",
+    "statement": "the full 12-target matrix was NOT LAUNCHED and WILL NOT PROCEED: the gate that authorises it requires all four gates to pass with exact coverage, and two gates fail"
+  },
+  "g6_role": {
+    "is": "auxiliary granularity evidence: one controlled study of whether an edit can be confined to a coarser taxonomic level than the identity it was trained on",
+    "is_not": "MIDP's main claim.  Nothing in G6.1 supports or is required by the route-establishment or route-dependent-forgetting claims, and no G6 result is load-bearing for them",
+    "why": "the pilot FAILED its frozen gates, so it produced no positive granularity finding to headline; what it produced is a measured negative plus two repaired instruments -- a strict per-target oracle gate and a candidate-score-sum reading that no longer pretends to be a probability",
+    "status_of_the_frozen_route": "unchanged by this pilot.  g, h, the prompts and the LoRA recipe are frozen, and no G6 result is a reason to modify them",
+    "decision_not_measurement": true
+  },
+  "metric_terminology": {
+    "candidate_mass_is_not_a_probability": null,
+    "set_failing_only_the_score_sum": {
+      "set_id": null,
+      "target_label": null,
+      "candidate_mass_floor": null,
+      "min_over_seeds": null,
+      "max_over_seeds": null,
+      "floor_cleared_on_any_seed": null,
+      "target_rows_correct": null,
+      "target_rows": null,
+      "only_failed_criterion_is_the_score_sum": null,
+      "statement": null,
+      "interpretation": null
+    },
+    "source": "recomputed from the pilot cells by g6_pilot_gates_reevaluated.json; quoted here, never restated from prose"
+  },
+  "protocol_study": {
+    "file": "study_protoB_summary.json",
+    "sha256": "95a5ae2c6d48ed2386cecf1426c4bf260080eb3803308c0ee1ddfb9cdd5d2358",
+    "narrowed_conclusion": "9 of 9 cells across the 3 recipes stay under the 0.99 floor.  The closest any cell gets is 0.984550, 0.0054 short -- and it is reached by the FROZEN recipe, not by either study arm: protoA's best is 0.983604 and protoB's 0.397432.  Both knobs therefore move this set the WRONG way or not at all, so the pilot's behavioral failure on gx_mll_254012 is NOT REPAIRED BY THE TWO TESTED FACTORS -- retain_repeat and ul_steps -- across the 3 evaluated recipes.",
+    "scope_of_that_claim": "exactly 3 recipes were evaluated, over 2 knobs (retain_repeat, ul_steps): baseline(retain_repeat=3, ul_steps=500), protoB(retain_repeat=9, ul_steps=500), protoA(retain_repeat=9, ul_steps=1000).  'Not repaired by these' is a statement about that search, and is NOT a claim that the shortfall is intrinsic to the set, that no recipe could repair it, or that the underlying transformation failed.  Two distinct outcomes have to be kept apart: under the FROZEN recipe and under protoA (6 of 9 cells) strict_expected_accuracy is 1.0, so every target output is correct and ONLY the candidate score sum falls short of the floor -- a protocol failure, not a transformation failure.  Under protoB the target outputs are themselves wrong, which is a real edit collapse and a different finding.  An untested factor (learning rate, candidate-set construction, the score-sum floor itself) remains open.",
+    "recipes_evaluated": {
+      "baseline": {
+        "ul_steps": 500,
+        "retain_repeat": 3
+      },
+      "protoB": {
+        "ul_steps": 500,
+        "retain_repeat": 9
+      },
+      "protoA": {
+        "ul_steps": 1000,
+        "retain_repeat": 9
+      }
+    },
+    "cells_with_all_target_outputs_strictly_correct": {
+      "n": 6,
+      "of": 9,
+      "arm_seed_pairs": [
+        "baseline/seed17",
+        "baseline/seed42",
+        "baseline/seed123",
+        "protoA/seed17",
+        "protoA/seed42",
+        "protoA/seed123"
+      ],
+      "arms_whose_targets_are_all_correct": [
+        "baseline",
+        "protoA"
+      ],
+      "arms_whose_targets_are_not_all_correct": [
+        "protoB"
+      ]
+    },
+    "no_further_tuning": {
+      "planned": false,
+      "why": "the two knobs that could be tuned were already crossed -- retain repetition and edit steps, over three recipes -- and the study filed the result: the score-sum shortfall on the set that fails it is not repaired by either.  Continuing to search would be tuning a measurement threshold until the desired verdict appears, which is the practice the frozen criteria exist to prevent",
+      "what_would_reopen_it": "a change to the candidate-set construction or to the score-sum semantics themselves -- i.e. a decision that the floor measures the wrong quantity -- and not another training recipe",
+      "decision_not_measurement": true,
+      "sets_it_covers": [
+        {
+          "set_id": "gx_mll_151252",
+          "target_label": "Software Engineer",
+          "target_soc": "15-1252"
+        },
+        {
+          "set_id": "gx_mll_254012",
+          "target_label": "Museum Curator",
+          "target_soc": "25-4012"
+        }
+      ],
+      "scope": "no further protocol tuning of the studied cells is planned -- no fourth recipe, no re-run of the pilot, and no relaxation of the frozen candidate-score-sum floor to make a set pass.  The sets this covers are named in sets_it_covers, taken from the frozen matrix's own target_label"
+    },
+    "superseded_wording": "an earlier revision of this study called the shortfall 'a property of that set under this route rather than a recipe defect to tune away'.  That claimed more than three recipes over two knobs can support and was narrowed to what was tested"
+  },
+  "historical_sealed_artifacts": {
+    "policy": "retained ONLY as historical sealed artifacts.  They are evidence of what the pilot concluded when it was written and are never rewritten; where a statement in one is stale, the staleness is recorded here rather than edited out of the file.  Do not cite them for a current verdict",
+    "files": {
+      "g6_pilot_gates.json": {
+        "path": "g6_pilot_gates.json",
+        "sha256": "d9e06baad1963fe7d86af095839c4634fa6c86c72f46e98588430751a482a4f2",
+        "present": true
+      },
+      "granularity_summary.json": {
+        "path": "granularity_summary.json",
+        "sha256": "aff3c0178cd917323de2b1ca85efaea7481a79a1444482541853a8037fad5e42",
+        "present": true
+      },
+      "run_manifest.json": {
+        "path": "run_manifest.json",
+        "sha256": "5847326d9adae645a2414b4e67d993bbba9c6d496708444f0b1251526df79486",
+        "present": true
+      }
+    },
+    "stale_claims": {
+      "granularity_summary.json": {
+        "run_stage": {
+          "value_as_written": "full_matrix",
+          "why_stale": "'full_matrix' describes the completeness of the five-set PILOT design (its own full_matrix_cells_expected is 15), not the larger 12-target matrix, which was never launched.  Read beside the authoritative report it implies a stage that does not exist",
+          "current_value": "pilot_only_full_matrix_not_launched"
+        },
+        "g3_1_gate": {
+          "value_as_written": {
+            "status": "evaluated",
+            "passed": false,
+            "n_transformation_targets": 30,
+            "n_separation_established": 30,
+            "n_established_and_failing": 12
+          },
+          "why_stale": "computed against the PRE-GX2H oracle fit.  The retrain oracles' own strict parsing was broken by a punctuation-asymmetric matcher, so several reported fit_ok=false, and rows failed on the ORACLE's fit rather than on the edit's behaviour. GX2H re-parsed the stored raw generations and repaired that fit; the authoritative report reads the repaired one",
+          "evidence": {
+            "comparison": "oracle_results.pre_hard_reeval.json (what the sealed summary read) against oracle_results.json (what the authoritative report reads)",
+            "n_pairs": 10,
+            "n_fit_ok_flipped_false_to_true": 2,
+            "pairs": [
+              {
+                "family": "matched_retrain",
+                "set_id": "gx_mll_151252",
+                "pre_gx2h": {
+                  "present": true,
+                  "fit_ok": false,
+                  "strict_all_expected": 0.9428571428571428,
+                  "min_candidate_mass": 0.999085143566033
+                },
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.999085143566033
+                },
+                "fit_ok_flipped_false_to_true": true
+              },
+              {
+                "family": "loo_retrain",
+                "set_id": "gx_mll_151252",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9894995443500658
+                },
+                "fit_ok_flipped_false_to_true": false
+              },
+              {
+                "family": "matched_retrain",
+                "set_id": "gx_mll_191023",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9998462197240071
+                },
+                "fit_ok_flipped_false_to_true": false
+              },
+              {
+                "family": "loo_retrain",
+                "set_id": "gx_mll_191023",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9982092121517699
+                },
+                "fit_ok_flipped_false_to_true": false
+              },
+              {
+                "family": "matched_retrain",
+                "set_id": "gx_mll_192041",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9996188554118737
+                },
+                "fit_ok_flipped_false_to_true": false
+              },
+              {
+                "family": "loo_retrain",
+                "set_id": "gx_mll_192041",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9881753553059492
+                },
+                "fit_ok_flipped_false_to_true": false
+              },
+              {
+                "family": "matched_retrain",
+                "set_id": "gx_mll_193091",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9991419015304189
+                },
+                "fit_ok_flipped_false_to_true": false
+              },
+              {
+                "family": "loo_retrain",
+                "set_id": "gx_mll_193091",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9961942055446952
+                },
+                "fit_ok_flipped_false_to_true": false
+              },
+              {
+                "family": "matched_retrain",
+                "set_id": "gx_mll_254012",
+                "pre_gx2h": {
+                  "present": true,
+                  "fit_ok": false,
+                  "strict_all_expected": 0.9428571428571428,
+                  "min_candidate_mass": 0.9991128811160906
+                },
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9991128811160906
+                },
+                "fit_ok_flipped_false_to_true": true
+              },
+              {
+                "family": "loo_retrain",
+                "set_id": "gx_mll_254012",
+                "pre_gx2h": null,
+                "current": {
+                  "fit_ok": true,
+                  "strict_all_expected": 1.0,
+                  "min_candidate_mass": 0.9911384289391636
+                },
+                "fit_ok_flipped_false_to_true": false
+              }
+            ]
+          },
+          "causal_check": {
+            "claim": "every row the sealed summary called established-and-failing belongs to a set whose ORACLE fit -- not whose edit -- was repaired at GX2H",
+            "checked_not_asserted": true,
+            "n_rows_called_failing": 12,
+            "sets_those_rows_are_in": [
+              "gx_mll_151252",
+              "gx_mll_254012"
+            ],
+            "sets_whose_oracle_fit_flipped": [
+              "gx_mll_151252",
+              "gx_mll_254012"
+            ],
+            "rows_unexplained_by_the_oracle_fit": [],
+            "agrees": true,
+            "mechanism_also_derived": {
+              "claim": "the sets needing an oracle-fit repair are exactly the sets whose coarsened label contains a comma, which is the punctuation-asymmetric matcher defect GX2H repaired",
+              "sets_whose_coarsened_label_has_a_comma": [
+                "gx_mll_151252",
+                "gx_mll_254012"
+              ],
+              "coarser_labels": {
+                "gx_mll_151252": "Software and Web Developers, Programmers, and Testers",
+                "gx_mll_191023": "Biological Scientists",
+                "gx_mll_192041": "Environmental Scientists and Geoscientists",
+                "gx_mll_193091": "Miscellaneous Social Scientists and Related Workers",
+                "gx_mll_254012": "Archivists, Curators, and Museum Technicians"
+              },
+              "matches_the_flipped_sets": true
+            },
+            "note": "both checks raise rather than file: if a failing row sat outside the repaired sets, or the repaired sets were not the comma-containing ones, this record's explanation of the staleness would be incomplete and the authoritative reading would not be entitled to disagree"
+          },
+          "current_reading": {
+            "matched_oracle_passed": true,
+            "n_target_rows": 30,
+            "n_rows_failing": 0
+          }
+        }
+      },
+      "g6_pilot_gates.json": {
+        "matched_oracle_criteria": {
+          "value_as_written": {
+            "min_mean_delta_oracle": 0.0,
+            "aggregation": "mean over edit seeds, per set"
+          },
+          "passed_as_written": true,
+          "why_stale": "the sealed gate PASSED, but on criteria that cannot support the claim: a mean delta over edit seeds against a threshold of zero, over the *_finetune families, which continue from the trained baseline h and so are not fresh-retrain references at all.  Averaging also lets one inverted seed cancel another",
+          "replaced_by": {
+            "oracle_families": [
+              "matched_retrain",
+              "loo_retrain"
+            ],
+            "family_init": "fresh base + fresh LoRA under route h's own protocol; the *_finetune families continue from the trained baseline h and cannot support a retraining claim",
+            "matched_retrain_fit_ok": true,
+            "min_matched_retrain_mass": 0.99,
+            "min_delta_retrain_l2": 0.5,
+            "requires_closer_to_matched_retrain": true,
+            "conditions": [
+              "matched_retrain_fit",
+              "candidate_mass",
+              "delta_retrain_margin",
+              "closer_to_matched_retrain"
+            ],
+            "aggregation": "every target identity of every edit seed must pass; nothing is averaged"
+          },
+          "verdict_changed": false,
+          "note": "the pass/fail COINCIDES -- both True -- so nothing here changes the pilot's outcome.  What changes is that the pass now rests on per-target fresh-retrain evidence instead of an average over a threshold of zero"
+        },
+        "overall_verdict": {
+          "value_as_written": {
+            "passed": false,
+            "failed_gates": [
+              "behavioral",
+              "retention"
+            ]
+          },
+          "why_stale": "not stale: the sealed overall verdict agrees with the authoritative one",
+          "agrees_with_authoritative": true
+        }
+      },
+      "run_manifest.json": {
+        "shared_scoring_script_sha256": {
+          "value_as_written": "92859f2de357e4b7453d30f8d345e4ca22023d8b8d4ab8529d68c52f0cbc87f8",
+          "why_stale": "it pins the digest of e2c_v3_research_validity.py from before 992efa9 extracted the three strict parser functions into e2c_v3_label_parser.  That move was provenance-only -- the functions are byte-identical -- so the pinned digest is accepted rather than invalidated",
+          "accepted_by_rv": true,
+          "accepted_digests": [
+            "92859f2de357e4b7453d30f8d345e4ca22023d8b8d4ab8529d68c52f0cbc87f8",
+            "f649c2d72eb9e04a517724417a22fc570a39b09969943bfe9abe193b5b542f99"
+          ],
+          "supersession_history": [
+            {
+              "previous_script_sha256": "92859f2de357e4b7453d30f8d345e4ca22023d8b8d4ab8529d68c52f0cbc87f8",
+              "reason": "provenance_only",
+              "superseded_by_commit": "992efa9"
+            }
+          ],
+          "note": "acceptance is re-derived from rv's own SCORING_DIGEST_HISTORY by AST here, not retyped, and only reason='provenance_only' entries are accepted"
+        }
+      }
+    }
+  },
+  "frozen_design_unchanged": {
+    "g6_manifest_sha256": "c85f04a8c55567064edea2e9f2fb6813a823cd8eaacc1040dcc1cfa543f75d35",
+    "g6_matrix_sha256": "dd7131556416c0757bbdacd212ee95bbf3539c544f4946579e6a5b3d55e8b56e",
+    "statement": "closing G6 changes no frozen design: the hierarchy, the target selection, the matrix and the route architecture (g, h, prompts, LoRA recipe) are all untouched.  A failed auxiliary pilot is not a reason to modify the route"
+  },
+  "provenance": {
+    "executing_commit": "e7470e04135c73613e2d041dd52d286ee66fc107",
+    "script_sha256": "ab2fc9f04448d0ccf524af16d689bf454ed19db7af198119f69a05411bb6876f",
+    "hierarchy": {
+      "hierarchy_artifact": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_hierarchy.json",
+      "hierarchy_content_sha256": "fd254a1750e1b9d64a599d9b2d795bca4c0d70e107bcf9c5332f8fcdfeaa6728",
+      "selection_manifest": "datasets/route-unlearning-data/e2c_mllmu/manifests/mllmu_target_selection.json",
+      "selection_sha256": "a55ce00e38d70630c74db14904f2819a735b7a56dfc773d9a7f03573f5082b97",
+      "source_table_path": "datasets/route-unlearning-data/e2c_mllmu/external/soc_2019_structure.csv",
+      "source_table_sha256": "d43d3a83c2228672dbb386c4ba5295c0c4dd8679bb9312c6c4fa18a255b6eb15",
+      "source_dataset": {
+        "path": "/scratch/wutiantong/datasets/MLLMU-Bench/data/Full_Set.jsonl",
+        "outside_repository": true,
+        "sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+        "n_identities": 500,
+        "n_distinct_professions": 71,
+        "count_semantics": "one identity per JSONL line; the profession is biography.Employment, a JSON string nested inside the row rather than a top-level key"
+      },
+      "g7_status": "committed",
+      "n_records": 71,
+      "n_retained": 30,
+      "n_selected_targets": 12,
+      "verified": {
+        "ok": true,
+        "gates_passed": true,
+        "selection_reproduced_from_artifact": true,
+        "selection_manifest_checks": {
+          "hierarchy_digest_matches": true,
+          "selected_targets_match": true,
+          "target_count_matches": true,
+          "distinct_leaf_count_matches": true,
+          "identity_counts_match": true,
+          "selection_digest_matches": true
+        },
+        "committed_state": {
+          "hierarchy_artifact": {
+            "tracked": true,
+            "matches_index": true,
+            "matches_head": true,
+            "clean": true
+          },
+          "source_soc_table": {
+            "tracked": true,
+            "matches_index": true,
+            "matches_head": true,
+            "clean": true
+          },
+          "target_selection_manifest": {
+            "tracked": true,
+            "matches_index": true,
+            "matches_head": true,
+            "clean": true
+          }
+        },
+        "n_warnings": 6
+      }
+    },
+    "source_dataset_sha256": "4102b8699cc02c87263f8370f8b60f84c6823b6d73d7c2f2abe0867d928db18f",
+    "source_dataset_matches_frozen": true,
+    "clean_worktree": {
+      "repo_root": "/scratch/wutiantong/MIDP",
+      "git_commit": "e7470e04135c73613e2d041dd52d286ee66fc107",
+      "dirty_tracked_only": true,
+      "n_dirty_tracked_only": 2,
+      "dirty_tracked_only_lines": [
+        " M datasets/route-unlearning-data/scripts/e2c_v3_g6_canonical_status.py",
+        " M datasets/route-unlearning-data/tests/unit/test_g6_canonical_status.py"
+      ],
+      "dirty_including_untracked": true,
+      "n_dirty_including_untracked": 2,
+      "untracked_outside_exclusions": [],
+      "excluded_prefixes": [
+        "datasets/route-unlearning-data/e2c_granularity/outputs/mllmu/"
+      ],
+      "n_excluded": 0,
+      "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts"
+    },
+    "identity_counts_sha256": "799706bc4b1f8ae019c7561ccc90fb7857d81877f5c1965e1ccf6a11db504ead",
+    "selection_criteria": {
+      "deferred_are_not_rejected": "a deferred profession keeps matrix_role=target_eligible and can be promoted without re-adjudicating its mapping",
+      "max_per_major_group": 3,
+      "min_identities": 2,
+      "order": "adjudicated primary targets first, then identity frequency descending, then label"
+    },
+    "config": {
+      "seed": null,
+      "device": null,
+      "edit_seeds": [
+        17,
+        42,
+        123
+      ],
+      "ids_per_profession": 2,
+      "target_depth": 1
+    },
+    "frozen_design": {
+      "n_identities": 35,
+      "n_professions": 19,
+      "n_sets": 5,
+      "n_cells_in_pilot_design": 15,
+      "held_out_note": "MLLMU-Bench has ONE image per identity, so image-level held-out g evaluation is impossible and is stated as a limitation.  Held-out evidence is at the association level: strict parsing, oracle distance and the native Mask_Task probes."
+    }
+  }
+}

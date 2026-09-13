@@ -18,8 +18,10 @@ torch.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -150,34 +152,290 @@ def test_an_empty_per_gate_read_raises_instead_of_reporting_no_difference(
         tool.delta_vs_sealed(good_new, sealed)
 
 
+def _sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _pilot_tree(tmp_path, sids=("gx_mll_151252", "gx_mll_254012"),
+                seeds=(17,), families=("matched_retrain", "loo_retrain")):
+    """A complete miniature of the pilot output tree.
+
+    Each cell gets a ``cell_results.json`` and an ``adapter_model.safetensors``;
+    each gate oracle gets the same pair; and ``run_manifest.json`` records the
+    digests of those very bytes.  Writing the manifest from the same bytes the
+    cells record is what makes the three-way check pass, and it is also what
+    makes a tamper detectable: change any byte and one of the three disagrees.
+
+    Returns ``(cells, manifest)`` as the loaded records.
+    """
+    ckpts = {}
+    cells = []
+    for sid in sids:
+        for seed in seeds:
+            cell_id = f"{sid}__seed{seed}"
+            d = tmp_path / "cells" / sid / f"seed_{seed}"
+            (d / "edited_h" / "adapter_final").mkdir(parents=True)
+            ad = d / "edited_h" / "adapter_final" / "adapter_model.safetensors"
+            ad.write_bytes(b"adapter:" + cell_id.encode())
+            ckpts[f"cell_{cell_id}"] = _sha(ad)
+            rec = {"cell_id": cell_id, "set_id": sid, "seed": seed,
+                   "checkpoint_sha256": ckpts[f"cell_{cell_id}"]}
+            (d / "cell_results.json").write_text(json.dumps(rec),
+                                                 encoding="utf-8")
+            cells.append(rec)
+        for fam in families:
+            od = tmp_path / "oracles" / f"{fam}_{sid}" / "adapter_final"
+            od.mkdir(parents=True)
+            oa = od / "adapter_model.safetensors"
+            oa.write_bytes(b"oracle:" + f"{fam}_{sid}".encode())
+            ckpts[f"oracle_{fam}_{sid}"] = _sha(oa)
+            (od.parent / "oracle_results.json").write_text(
+                json.dumps({"family": fam, "set_id": sid, "fit_ok": True}),
+                encoding="utf-8")
+
+    oracle_fit = {
+        sid: {fam: {"fit_ok": True, "strict_all_expected": 1.0,
+                    "min_candidate_mass": 0.999,
+                    "sha256": ckpts[f"oracle_{fam}_{sid}"]}
+              for fam in families}
+        for sid in sids}
+    (tmp_path / "oracles").mkdir(exist_ok=True)
+    (tmp_path / "oracles" / "oracles_summary.json").write_text(
+        json.dumps(oracle_fit), encoding="utf-8")
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"checkpoints_sha256": ckpts}), encoding="utf-8")
+    (tmp_path / "g6_pilot_gates.json").write_text(
+        json.dumps({"n_cells_adapted": len(cells), "gates": {}}),
+        encoding="utf-8")
+    return cells, {"checkpoints_sha256": ckpts}
+
+
 def test_the_cell_cross_check_refuses_a_different_cell_set(tool, tmp_path):
     """Identity, not count: a run that swapped one cell for another must not
     be compared against the pilot it claims to re-derive."""
-    cells = [{"cell_id": "gx_mll_151252__seed17"},
-             {"cell_id": "gx_mll_254012__seed42"}]
-
-    def write_manifest(ids, n_adapted=2):
-        (tmp_path / "run_manifest.json").write_text(json.dumps(
-            {"checkpoints_sha256": {f"cell_{i}": "deadbeef" for i in ids}}),
-            encoding="utf-8")
-        (tmp_path / "g6_pilot_gates.json").write_text(json.dumps(
-            {"n_cells_adapted": n_adapted, "gates": {}}), encoding="utf-8")
-
-    write_manifest(["gx_mll_151252__seed17", "gx_mll_254012__seed42"])
-    got = tool.cross_check_cells(cells, tmp_path)
+    cells, _ = _pilot_tree(tmp_path)
+    fit = json.loads((tmp_path / "oracles" / "oracles_summary.json")
+                     .read_text(encoding="utf-8"))
+    got = tool.cross_check_cells(cells, tmp_path, _sha, fit)
     assert got["checked"] is True
-    assert got["method"] == "cell_id set equality"
-    assert got["n_cells"] == 2
+    assert got["identity"]["method"] == "cell_id set equality"
+    assert got["identity"]["n_cells"] == 2
+    assert got["content"]["verified"] is True
 
     # same COUNT, different identity -- a count check would have passed this
-    write_manifest(["gx_mll_151252__seed17", "gx_mll_191023__seed123"])
+    (tmp_path / "run_manifest.json").write_text(json.dumps(
+        {"checkpoints_sha256": {
+            "cell_gx_mll_151252__seed17": "deadbeef",
+            "cell_gx_mll_191023__seed123": "deadbeef"}}), encoding="utf-8")
     with pytest.raises(RuntimeError, match="cell identity disagrees"):
-        tool.cross_check_cells(cells, tmp_path)
+        tool.cross_check_cells(cells, tmp_path, _sha, fit)
 
     # and it refuses to degrade to "could not check"
     (tmp_path / "run_manifest.json").unlink()
     with pytest.raises(RuntimeError, match="cannot cross-check"):
-        tool.cross_check_cells(cells, tmp_path)
+        tool.cross_check_cells(cells, tmp_path, _sha, fit)
+
+
+def test_content_binding_verifies_bytes_not_just_cell_names(tool, tmp_path):
+    """The point of the binding: same cell IDs, same recorded digest, but the
+    evidence bytes differ -- which an identity-only check cannot see.
+
+    A cell that keeps its name and its ``checkpoint_sha256`` while its adapter
+    is replaced is exactly the forgery the binding exists to stop, and the
+    sealed manifest is what catches it: the recomputed adapter digest no longer
+    matches the digest the run itself filed.
+    """
+    cells, _ = _pilot_tree(tmp_path)
+    fit = json.loads((tmp_path / "oracles" / "oracles_summary.json")
+                     .read_text(encoding="utf-8"))
+
+    ad = (tmp_path / "cells" / "gx_mll_151252" / "seed_17" / "edited_h"
+          / "adapter_final" / "adapter_model.safetensors")
+    ad.write_bytes(b"adapter:RETRAINED-BEHIND-AN-UNCHANGED-NAME")
+    with pytest.raises(RuntimeError, match="content binding failed"):
+        tool.cross_check_cells(cells, tmp_path, _sha, fit)
+
+
+def test_content_binding_catches_a_hand_edited_cell_record(tool, tmp_path):
+    """Editing the JSON while leaving the weights alone must also fail.
+
+    This is the more likely accident -- a re-score written straight over a
+    committed cell -- and it is invisible to a checkpoint-only check, because
+    the adapter still hashes to what the manifest recorded.
+    """
+    cells, _ = _pilot_tree(tmp_path)
+    fit = json.loads((tmp_path / "oracles" / "oracles_summary.json")
+                     .read_text(encoding="utf-8"))
+
+    p = tmp_path / "cells" / "gx_mll_254012" / "seed_17" / "cell_results.json"
+    rec = json.loads(p.read_text(encoding="utf-8"))
+    rec["checkpoint_sha256"] = "0" * 64          # plausible shape, wrong value
+    p.write_text(json.dumps(rec), encoding="utf-8")
+    cells = [rec if c["cell_id"] == rec["cell_id"] else c for c in cells]
+    with pytest.raises(RuntimeError, match="content binding failed"):
+        tool.cross_check_cells(cells, tmp_path, _sha, fit)
+
+
+def test_a_missing_adapter_is_a_refusal_not_a_partial_pass(tool, tmp_path):
+    """An adapter that is gone cannot be recomputed, so its digest is
+    unverified.  Reporting "14 of 15 bound" and continuing would let a reader
+    take the artifact as fully bound."""
+    cells, _ = _pilot_tree(tmp_path)
+    fit = json.loads((tmp_path / "oracles" / "oracles_summary.json")
+                     .read_text(encoding="utf-8"))
+    (tmp_path / "oracles" / "loo_retrain_gx_mll_151252" / "adapter_final"
+     / "adapter_model.safetensors").unlink()
+    with pytest.raises(RuntimeError, match="cannot be recomputed"):
+        tool.cross_check_cells(cells, tmp_path, _sha, fit)
+
+
+def test_the_binding_hashes_every_cell_and_gate_oracle_file(tool, tmp_path):
+    """Coverage of the binding itself: a per-file hash table that silently
+    omitted the oracles would still report ``verified: True``."""
+    cells, _ = _pilot_tree(tmp_path, seeds=(17, 42))
+    fit = json.loads((tmp_path / "oracles" / "oracles_summary.json")
+                     .read_text(encoding="utf-8"))
+    got = tool.cross_check_cells(cells, tmp_path, _sha, fit)
+
+    assert len(got["cell_files"]) == 4                       # 2 sets x 2 seeds
+    assert len(got["oracle_files"]) == 4                     # 2 sets x 2 fams
+    assert got["content"]["n_cells_bound"] == 4
+    assert got["content"]["n_oracles_bound"] == 4
+    for entry in got["cell_files"].values():
+        assert len(entry["cell_results_sha256"]) == 64
+        assert entry["adapter_present"] is True
+        assert entry["adapter_sha256_recomputed"] == \
+            entry["checkpoint_sha256_recorded_by_cell"]
+    for entry in got["oracle_files"].values():
+        assert entry["oracle_results_present"] is True
+        assert len(entry["oracle_results_sha256"]) == 64
+    # only the two families the repaired gate actually reads are bound; the
+    # *_finetune families are not this gate's evidence
+    assert sorted(got["content"]["oracle_families_bound"]) == \
+        ["loo_retrain", "matched_retrain"]
+
+
+def test_the_score_sum_reading_is_recomputed_and_refuses_to_guess(tool):
+    """Every figure in the terminology correction comes from the cells.
+
+    The correction exists because ``candidate_mass`` was read as a probability,
+    so a hardcoded "6 of 6" beside it would be the same class of error one
+    level up: prose that survives the evidence moving.
+    """
+    def cell(seed, mass, ok=True, failed=("min_candidate_mass>=0.99",)):
+        return {"set_id": tool.SCORE_SUM_SET, "seed": seed,
+                "criteria": {"min_candidate_mass": mass,
+                             "strict_expected_accuracy": 1.0 if ok else 0.5,
+                             "cell_pass": not failed,
+                             "failed_criteria": list(failed)},
+                "hard_preds": [{"group": "target", "correct_post_edit": ok},
+                               {"group": "target", "correct_post_edit": ok}]}
+
+    got = tool.candidate_score_sum_reading(
+        [cell(17, 0.9845), cell(42, 0.9812), cell(123, 0.9786)], 0.99)
+    assert got["target_rows_correct"] == 6
+    assert got["target_rows"] == 6
+    assert got["all_target_rows_strictly_correct"] is True
+    assert got["only_failed_criterion_is_the_score_sum"] is True
+    assert got["candidate_mass_floor_cleared_on_any_seed"] is False
+    assert got["min_candidate_mass_over_seeds"] == 0.9786
+    assert "6 of 6" in got["verdict"]
+    assert "NOT evidence that the transformation" in got["interpretation"]
+
+    # a seed that clears the floor must move the reading, not be ignored
+    cleared = tool.candidate_score_sum_reading(
+        [cell(17, 0.995), cell(42, 0.9812)], 0.99)
+    assert cleared["candidate_mass_floor_cleared_on_any_seed"] is True
+
+    # and a wrong target output must break the "only the score sum" claim
+    broke = tool.candidate_score_sum_reading(
+        [cell(17, 0.9845, ok=False, failed=("strict", "min_candidate_mass>=0.99"))],
+        0.99)
+    assert broke["all_target_rows_strictly_correct"] is False
+    assert broke["only_failed_criterion_is_the_score_sum"] is False
+
+    with pytest.raises(RuntimeError, match="cannot be recomputed"):
+        # no cell for the set at all -- an empty reading would report 0 of 0
+        # strictly correct, which is the vacuous pass this guard exists to stop
+        other = cell(17, 0.98)
+        other["set_id"] = "gx_mll_191023"
+        tool.candidate_score_sum_reading([other], 0.99)
+    with pytest.raises(RuntimeError, match="cannot be recomputed"):
+        tool.candidate_score_sum_reading([], 0.99)
+
+
+def test_the_terminology_note_carries_no_measured_figures(tool):
+    """The qualitative definition must stay free of MEASUREMENTS, so every
+    number in the artifact traces to the cells it was computed from.
+
+    The definition legitimately contains the literal 1 -- it states the formula
+    ``other_mass = 1 - candidate_mass`` and that the sum is not constrained to
+    1 -- so what is forbidden is a decimal, a count of rows, or the floor
+    itself: those are measurements, and a measurement in prose outlives the
+    evidence it was read from.
+    """
+    text = json.dumps(tool.METRIC_SEMANTICS)
+    assert not re.search(r"\d+\.\d+", text), \
+        "METRIC_SEMANTICS quotes a decimal measurement"
+    assert not re.search(r"\d+\s+of\s+\d+", text), \
+        "METRIC_SEMANTICS quotes a row count"
+    assert "0.99" not in text, "the floor belongs to gx.PASS_CRITERIA"
+    assert "probability" in tool.METRIC_SEMANTICS["candidate_mass"]["is_not"]
+    assert "termination" in tool.METRIC_SEMANTICS["candidate_mass"][
+        "why_it_need_not_reach_one"]
+    # the score-sum set is identified by ID, and its figures are recomputed
+    assert tool.SCORE_SUM_SET == "gx_mll_254012"
+
+
+@pytest.mark.skipif(not OUT_BASE.is_dir(),
+                    reason="sealed pilot evidence not present")
+def test_the_real_binding_covers_every_pilot_cell_and_gate_oracle(tool):
+    """On the committed evidence: all fifteen cells and all ten gate oracles
+    (five sets x two retrain families) bind, and the enforced side is the
+    sealed manifest rather than a value this tool could have written."""
+    block = tool.build(OUT_BASE)
+    cc = block["inputs"]["cell_identity_and_content_cross_check"]
+    assert cc["content"]["verified"] is True
+    assert cc["content"]["n_cells_bound"] == 15
+    assert cc["content"]["n_oracles_bound"] == 10
+    assert len(cc["cell_files"]) == 15
+    # the artifact must say WHICH side enforces: the sealed manifest, because
+    # this tool never writes it.  Without that a reader cannot tell a binding
+    # from a self-consistent re-derivation.
+    why = cc["content"]["why_the_sealed_manifest_is_the_enforcing_side"]
+    assert "never written by this tool" in why
+    assert "three-way" in cc["content"]["method"]
+
+    reading = block["metric_semantics"]["candidate_score_sum_reading"]
+    assert reading["set_id"] == "gx_mll_254012"
+    assert reading["target_rows_correct"] == reading["target_rows"] == 6
+    assert reading["only_failed_criterion_is_the_score_sum"] is True
+    assert reading["candidate_mass_floor_cleared_on_any_seed"] is False
+    # the floor is read from the frozen criteria, and the artifact says so
+    assert reading["candidate_mass_floor"] == 0.99
+    assert block["metric_semantics"]["criteria_source"].startswith(
+        "gx.PASS_CRITERIA")
+
+
+@pytest.mark.skipif(not OUT_BASE.is_dir(),
+                    reason="sealed pilot evidence not present")
+def test_dest_outside_the_tree_is_allowed_but_a_sealed_path_is_not(tool,
+                                                                   tmp_path):
+    """``--dest`` exists so the artifact can be derived at a clean worktree.
+    It must not become a way to write over a sealed report by absolute path,
+    which a name-only guard would permit."""
+    ok = tmp_path / "elsewhere" / "reeval.json"
+    assert tool.main(["--out-base", str(OUT_BASE), "--dest", str(ok)]) == 0
+    assert ok.is_file()
+    assert json.loads(ok.read_text(encoding="utf-8"))["kind"] == tool.KIND
+
+    for sealed_name in SEALED:
+        with pytest.raises(RuntimeError, match="never over"):
+            tool.main(["--out-base", str(OUT_BASE),
+                       "--dest", str(OUT_BASE / sealed_name), "--dry-run"])
+    # the default destination is still inside the tree and still not sealed
+    assert (OUT_BASE / tool.OUTPUT_NAME).resolve() not in {
+        (OUT_BASE / n).resolve() for n in SEALED}
 
 
 def test_it_hashes_the_scoring_script_without_importing_it(tool):
@@ -292,7 +550,9 @@ def test_the_real_re_derivation_leaves_every_sealed_byte_untouched(tool):
 
     assert block["kind"] == tool.KIND
     assert block["n_cells_adapted"] == 15
-    assert block["inputs"]["cell_identity_cross_check"]["checked"] is True
+    cc = block["inputs"]["cell_identity_and_content_cross_check"]
+    assert cc["checked"] is True
+    assert cc["content"]["verified"] is True
     assert block["gates"]["coverage"]["exact"] is True
     assert block["delta_vs_sealed"]["available"] is True
     # the delta must have found the per-gate results rather than reporting an
