@@ -1581,11 +1581,14 @@ def verify_manifest(path):
                                       "sha256": sha256_file(p)})
     elif readiness is not None:
         # v3 froze no status block, so there is nothing here that could go stale
-        # and nothing to compare a live digest against.  The roles this design
-        # was BUILT over are bound through provenance.input_file_sha256 and
-        # re-hashed by the loop above, which REPORTS drift instead of failing to
-        # reconstruct; the roles it asks to be trained are hashed live, because
-        # their bytes are bound by the cell results that use them.
+        # and nothing to compare a live digest against.  What is reported is what
+        # the live probe hashed on THIS disk: the roles that are present, whether
+        # or not the design declared them as inputs or as work.  Nothing about
+        # them is inside design_sha256, and no role file is listed in
+        # provenance.input_file_sha256 either -- adapters are gitignored, so a
+        # digest of one recorded at freeze time would make every fresh clone
+        # report drift while telling the truth about its own disk.  The weights
+        # are bound by the RESULTS that consume them, which RF2 re-checks.
         rehashed = readiness["n_files_present"]
         trained_since = readiness["trained_since_declared"]
 
@@ -3897,7 +3900,44 @@ class PilotSpec(NamedTuple):
     baseline_cell: bool
     embed_live_checkpoint_status: bool
     direct_gate_aggregation: str
+    declared_gate_aggregation: object
     superseded_filenames: tuple
+
+
+#: What a design says about HOW its rate gates aggregate, as opposed to what
+#: number they compare against.  The threshold and the aggregation are two halves
+#: of one rule: "a 0.90 floor" and "a 0.90 floor on every direct seed
+#: separately" are different analyses of the same rows and reach different
+#: verdicts, so a pre-registration that recorded only the number had not recorded
+#: the rule it was frozen with.
+#:
+#: Empty for v2, whose bytes are frozen and cannot gain a field; its pooled rule
+#: is recoverable from ``PILOT_SPEC_V2.direct_gate_aggregation`` and from the
+#: supersession record every v3 design carries.
+PER_SEED_GATE_AGGREGATION = OrderedDict((
+    ("rule", "every_seed"),
+    ("gates", ("direct_image_accuracy", "direct_code_following_rate")),
+    ("applies_to_every_level_of", "direct_seed"),
+    ("level_field_on_a_row", "direct_seed"),
+    ("why", ("a factor with three levels is three measurements, each on its own "
+             "separately trained and separately hashed adapter; pooling them "
+             "lets one adapter that clears the floor carry two that do not, and "
+             "the pooled rate still reads as a measurement of the pathway "
+             "rather than of the seed that worked")),
+    ("witness", ("ten of twelve on one seed and twelve of twelve on the other "
+                 "two is 0.833 against a 0.90 floor and 0.944 pooled; three of "
+                 "twelve captured on one seed is 0.25 against a 0.10 ceiling "
+                 "and 0.083 pooled")),
+    ("a_row_with_no_level_is",
+     ("refused, not pooled: pooling is the only way such a row could be counted "
+      "at all, and it would be counted toward a seed it does not belong to")),
+    ("levels_that_failed_is_a_field",
+     ("naming the level is the content of the rule, so the report carries it as "
+      "a field and not only inside a sentence")),
+    ("the_router_gate_has_always_worked_this_way",
+     ("router_held_out_accuracy is required of every router seed; the direct "
+      "gates now use the same shape rather than a looser one")),
+))
 
 
 PILOT_SPEC_V2 = PilotSpec(
@@ -3911,6 +3951,7 @@ PILOT_SPEC_V2 = PilotSpec(
     thresholds=GATE_THRESHOLDS_V2, gate_to_verdict=GATE_TO_VERDICT,
     baseline_cell=False, embed_live_checkpoint_status=True,
     direct_gate_aggregation="pooled_over_seeds",
+    declared_gate_aggregation={},
     superseded_filenames=("rf_pilot_ppubench.json", "rf_pilot_salmu.json"))
 
 PILOT_SPEC_V3 = PilotSpec(
@@ -3924,6 +3965,8 @@ PILOT_SPEC_V3 = PilotSpec(
     thresholds=GATE_THRESHOLDS_V3, gate_to_verdict=GATE_TO_VERDICT_V3,
     baseline_cell=True, embed_live_checkpoint_status=False,
     direct_gate_aggregation="every_seed",
+    declared_gate_aggregation={
+        "direct_gate_aggregation": PER_SEED_GATE_AGGREGATION},
     superseded_filenames=("rf_pilot_ppubench.json", "rf_pilot_salmu.json",
                           "rf_pilot_ppubench_v2.json",
                           "rf_pilot_salmu_v2.json"))
@@ -5542,13 +5585,20 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
              "path each file must occupy, and the seed lists the roles are "
              "multiplied out from -- all of them statements about the design, "
              "none of them changed by a training run finishing"),
-         "inputs_that_exist_already_are_bound_in_provenance": (
-             "a role declared exists_already is a file this design was built "
-             "over, so its digest is bound through provenance.input_file_sha256 "
-             "and re-hashed by verify_manifest, which REPORTS drift instead of "
-             "failing to reconstruct -- and which, unlike a digest inside the "
-             "design, also survives a fresh clone where the gitignored adapters "
-             "are legitimately absent")})
+         "where_an_input_that_already_existed_is_bound": (
+             "a role declared exists_already is an input this design was built "
+             "over rather than work it is waiting for, and its digest is bound "
+             "in two places, neither of them inside design_sha256: "
+             "checkpoint_readiness re-hashes every role file it finds whenever "
+             "RF0 or verify_manifest runs, and the cell result that consumed the "
+             "weights records the digest it used, which RF2 re-checks -- a "
+             "mismatch is refused and an absence is reported.  It is "
+             "deliberately NOT listed in provenance.input_file_sha256: adapters "
+             "are gitignored, so a digest of one recorded at freeze time would "
+             "make verify_manifest report drift in every fresh clone, where the "
+             "clone is telling the truth about its own disk and the artifact "
+             "would be unreadable because of it.  The design binds the design; "
+             "the result binds the weights")})
 
     execution_policy = (
         "FROZEN AND NOT EXECUTED.  No cell of this pilot has been run, no "
@@ -5631,6 +5681,11 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
             "n_gates": len(spec.gate_to_verdict),
             "supportable_on_this_dataset": applicability["n_gates_supportable"],
             "not_adjustable_afterwards": True,
+            # How the rate gates AGGREGATE, which is the other half of the rule a
+            # threshold states.  Comes from the spec rather than from a version
+            # test here, so the difference between two versions stays a field a
+            # reader can list; it is empty for a version whose bytes are frozen.
+            **spec.declared_gate_aggregation,
             **({"added_in_this_version": {
                     "gates": new_gates, "thresholds": new_thresholds,
                     "why": ("a gate added after a design was frozen is not a "

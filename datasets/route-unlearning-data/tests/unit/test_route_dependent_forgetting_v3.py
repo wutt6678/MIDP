@@ -75,6 +75,20 @@ _needs_superseded = pytest.mark.skipif(
             + ", ".join(str(p) for p in _V1_MANIFESTS + _V2_MANIFESTS
                         if not p.is_file())))
 
+#: The authoritative pilots.  Tracked, so a fresh clone has them -- and the tests
+#: that read them are deliberately NOT gated on the gitignored adapter weights
+#: being present, because "this manifest verifies in a clone that has no weights"
+#: is the property item 1 exists for.  A gate on the weights would skip exactly
+#: the checkout the property is about.
+_V3_MANIFESTS = [_ROOT / "e2c_route_forgetting" / "manifests" / n
+                 for n in ("rf_pilot_ppubench_v3.json", "rf_pilot_salmu_v3.json")]
+_BY_DATASET = {("salmu" if "salmu" in p.name else "ppubench"): p
+               for p in _V3_MANIFESTS}
+_needs_v3_manifests = pytest.mark.skipif(
+    not all(p.is_file() for p in _V3_MANIFESTS),
+    reason=("the v3 pilots are not frozen in this checkout: "
+            + ", ".join(str(p) for p in _V3_MANIFESTS if not p.is_file())))
+
 
 def _absent_images(dataset):
     """The first image the dataset manifest names that is not on disk.
@@ -1858,3 +1872,357 @@ def test_the_v2_notes_say_why_v2_is_superseded_structurally(rf):
         assert doc["checkpoint_requirements"]["verification"] is not None
         assert rf.checkpoint_readiness(doc)[
             "frozen_status_block_present_in_this_manifest"] is True
+
+
+# ==========================================================================
+# the frozen v3 pilots themselves
+# ==========================================================================
+#
+# Everything above pins the repairs on hermetic pilots this file builds.  What
+# follows pins the two artifacts that were actually frozen and committed, because
+# a repair that holds on a fixture and not on the artifact is a repair to the
+# fixture.
+
+@_needs_v3_manifests
+def test_the_frozen_v3_pilots_verify_with_no_problems_at_all(rf):
+    """Zero problems, not one.
+
+    The superseded pilots each report exactly one problem -- this runner's own
+    digest, which moved when v3 was added -- and that is what superseding means.
+    The v3 pilots were frozen from the commit that implements v3, so every input
+    they name is still on disk with the bytes they recorded, and a manifest that
+    reported drift here would be reporting that the implementation moved after
+    the artifact was frozen against it.
+
+    NOT gated on the adapter weights being present.  That is the property, not an
+    omission: the design binds no gitignored file as an input, so it verifies in a
+    fresh clone exactly as it verifies on the machine that has every weight.  The
+    weights are bound by the RESULTS at RF2, where an absent one is reported and a
+    mismatched one is refused.
+    """
+    for path in _V3_MANIFESTS:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        got = rf.verify_manifest(path)
+        assert got["valid"] is True, (path.name, got["problems"])
+        assert got["problems"] == [], (path.name, got["problems"])
+        assert got["kind"] == rf.PREREG_V3_KIND
+        assert got["design_sha256"] == doc["design_sha256"]
+        # Not a fixed number: this is what the live probe hashed on THIS disk, so
+        # it is 9 here and 0 in a clone with no gitignored weights.  Asserting 9
+        # would make this a test that passes only on the machine that froze it --
+        # the same shape as v1's absolute paths.
+        ready = got["checkpoint_readiness"]
+        assert got["n_checkpoints_rehashed"] == ready["n_files_present"]
+        n_declared = sum(e["n_files_required"]
+                         for e in doc["checkpoint_requirements"]["roles"].values())
+        assert 0 <= ready["n_files_present"] <= n_declared
+        assert ready["n_files_required"] == n_declared
+        assert got["executed"] is False
+        # readiness is live, and says so in the block rather than only in prose
+        assert got["readiness_is_computed_live"], \
+            "the report has to say the readiness beside it was probed and not " \
+            "read out of the frozen design"
+        assert ready["computed_live_not_read_from_the_frozen_design"] is True
+        assert ready["frozen_status_block_present_in_this_manifest"] is False, \
+            "a v3 design carries no frozen status block to be tempted by"
+        assert ready["why_this_is_not_in_the_design"]
+        assert ready["runnable_now_is_about_inputs_not_about_results"]
+        assert got["checkpoints_complete"] is ready["complete"]
+        assert got["must_be_trained"] == ready["must_be_trained"]
+        assert got["n_must_be_trained"] == len(ready["must_be_trained"])
+        cr = doc["checkpoint_requirements"]
+        for absent in ("verification", "complete", "unexpectedly_absent",
+                       "must_be_trained_before_this_pilot_can_run",
+                       "n_must_be_trained"):
+            assert absent not in cr, \
+                f"{absent} is live status, and live status inside the design is " \
+                f"the defect that made v2 unverifiable by its own training"
+        assert cr["readiness_is_computed_live_not_frozen"]
+        assert cr["what_the_design_does_bind"]
+        assert cr["paths_are_recorded_relative_not_absolute"]
+        # v1 recorded the paths it hashed as ABSOLUTE, against the checkout that
+        # froze them, so its design_sha256 reproduced only at that root and every
+        # role read as absent from anywhere else
+        recorded = [entry[key] for entry in cr["roles"].values()
+                    for key in rf.CHECKPOINT_FILE_KEYS_V2
+                    if entry.get(key) and entry[key] != "reuses edited_h"]
+        assert recorded
+        assert all(not Path(raw).is_absolute() for raw in recorded), recorded
+        # The claim about where an existing input's digest lives is checked
+        # against the artifact rather than read: it says the gitignored adapters
+        # are NOT in provenance.input_file_sha256, because a digest recorded
+        # there at freeze time would make verify_manifest report drift in every
+        # fresh clone.  Prose that names a location is a claim about that
+        # location, and item 7 is what happens to one nobody checks.
+        bound = cr["where_an_input_that_already_existed_is_bound"]
+        assert "NOT listed in provenance.input_file_sha256" in bound
+        assert "gitignored" in bound
+        inputs = doc["provenance"]["input_file_sha256"]
+        adapters = [rel for rel in inputs if rel.endswith(".safetensors")]
+        assert adapters == [], adapters
+        # A role file MAY be a freeze-time input where it is tracked evidence a
+        # clone also has -- PPUBench's frozen router predictions are exactly
+        # that, which is why the design binds them.  What may not be one is a
+        # weight, and what may not be one at all is a role the design declared as
+        # work still to do: binding pending work at freeze time is binding
+        # progress, which is the defect this version exists for.
+        exists_already_files = {
+            e[key] for e in cr["roles"].values()
+            if e.get("exists_already")
+            for key in rf.CHECKPOINT_FILE_KEYS_V2
+            if e.get(key) and e[key] != "reuses edited_h"}
+        role_inputs = sorted(raw for raw in recorded if raw in inputs)
+        assert set(role_inputs) <= exists_already_files, \
+            f"a pending role bound at freeze time: {role_inputs}"
+        assert all(not raw.endswith(".safetensors") for raw in role_inputs), \
+            "a gitignored adapter recorded as a freeze-time input would make " \
+            "every fresh clone report drift while telling the truth about its " \
+            "own disk"
+        assert all((rf.DATASET_ROOT / raw).is_file() for raw in role_inputs)
+        # ... and the live prober can read this table, so readiness is a real
+        # answer here rather than a None that quietly means "wrong shape"
+        assert rf.roles_are_v2_shaped(cr)
+        assert got["roles_trained_since_freeze"] == []
+
+
+@_needs_v3_manifests
+def test_the_frozen_v3_pilots_name_the_commit_and_tree_they_came_from(rf):
+    """Item 4's list, on the artifact rather than on a cell: commit, worktree
+    state, script digest, every input hashed, and no input missing."""
+    for path in _V3_MANIFESTS:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        prov = doc["provenance"]
+        ws = prov["clean_worktree"]
+        assert prov["executing_commit"] and len(prov["executing_commit"]) == 40
+        assert ws["git_commit"] == prov["executing_commit"]
+        assert ws["dirty_tracked_only"] is False, ws["dirty_tracked_only_lines"]
+        assert ws["dirty_including_untracked"] is False
+        assert ws["untracked_outside_exclusions"] == []
+        assert ws["excluded_prefixes"], \
+            "the exclusion of this stage's own output prefix is reported, so a " \
+            "reader can see what was not counted rather than infer it"
+        assert prov["script_sha256"] == _sha(
+            _SCRIPTS / "e2c_v3_route_dependent_forgetting.py"), \
+            "the frozen script digest and the script that just verified it " \
+            "disagree, so this manifest was not frozen from this implementation"
+        assert prov["missing_input_files"] == []
+        assert prov["n_input_files_hashed"] == len(prov["input_file_sha256"])
+        inputs = prov["input_file_sha256"]
+        assert "scripts/e2c_v3_route_dependent_forgetting.py" in inputs
+        for sup in _V1_MANIFESTS + _V2_MANIFESTS:
+            assert rf._rel(sup) in inputs, \
+                "a superseded pre-registration is an input to the design that " \
+                "supersedes it, so its bytes are named and hashed"
+        for rel, digest in inputs.items():
+            p = Path(prov["paths_are_relative_to"]) / rel
+            assert p.is_file(), rel
+            assert _sha(p) == digest, rel
+
+
+@_needs_v3_manifests
+def test_the_frozen_v3_pilots_declare_the_baseline_cell_and_its_gate(rf):
+    """Item 5, on the artifact: the before is a cell with rows, a phase to fill
+    it, and a gate that feeds a verdict."""
+    for path in _V3_MANIFESTS:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        baseline = [c for c in doc["cells"] if c["kind"] == "baseline"]
+        assert len(baseline) == 1, doc["cells_by_kind"]
+        cell = baseline[0]
+        assert cell["phase"] == "RF1B"
+        assert "RF1B" in rf.PHASES_BY_VERSION["v3"]
+        assert "RF1B" not in rf.PHASES_BY_VERSION["v2"]
+        n_codes = len(doc["retained_identity_ids"]) + \
+            len(doc["forget_identity_ids"])
+        assert cell["n_rows"] == n_codes == len(cell["rows"]), \
+            "one row per route code and no more, because a hard mediator's " \
+            "response to a code does not depend on anything else -- which is " \
+            "also why the baseline is not multiplied by router or edit seed"
+        assert len(doc["cells_by_kind"]["baseline"]) == 1
+        assert all(r["condition"] == "baseline_forced_code"
+                   for r in cell["rows"])
+        assert all(r["execution"].startswith("h_base(") for r in cell["rows"])
+        assert all(r["image_to_h"] is False for r in cell["rows"]), \
+            "the baseline is the intervention call with the unedited h, so it " \
+            "cannot be the one place an image reaches the mediator"
+        assert all(r["image_uri"] is None for r in cell["rows"])
+        forgotten = [r for r in cell["rows"]
+                     if r["forced_identity_id"] in doc["forget_identity_ids"]]
+        assert forgotten, "a baseline with no forgotten code measures no before"
+        assert len(forgotten) == len(doc["forget_identity_ids"])
+        assert all(r["arm"] == "forgotten" for r in forgotten)
+        # the whole of item 5 in two lines: BEFORE the edit, a forgotten code is
+        # required to produce its OWN alias, and the refusal label is not an
+        # acceptable answer -- an h that had already refused it would make every
+        # post-edit suppression gate pass without the edit having moved anything
+        assert all(r["expected_label"] == r["forced_label"] for r in forgotten)
+        assert all(r["expected_label"] != doc["deleted_label"]
+                   for r in forgotten), doc["deleted_label"]
+        assert all(r["expected_label"] != doc["deleted_label"]
+                   for r in cell["rows"])
+        # and the gate that makes it a requirement rather than a description
+        fg = doc["frozen_gates"]
+        assert "baseline_forgotten_route_following" in fg["gate_to_verdict"]
+        assert fg["gate_to_verdict"]["baseline_forgotten_route_following"] == \
+            "mediation"
+        assert fg["thresholds"]["min_baseline_forgotten_route_following"] == \
+            fg["thresholds"]["forgotten_route_suppression"], \
+            "the two are the paired halves of one claim, so a floor looser on " \
+            "the before than on the after would let a partial pre-edit failure " \
+            "count as an edit-induced change"
+        assert fg["added_in_this_version"]["gates"] == \
+            ["baseline_forgotten_route_following"]
+        assert fg["added_in_this_version"]["thresholds"] == \
+            ["min_baseline_forgotten_route_following"]
+        assert doc["conditions"]["baseline_forced_code"]["prompt_key"] == \
+            doc["conditions"]["forgotten_route_intervention"]["prompt_key"], \
+            "the before and the after differ in which h answers, not in what is " \
+            "asked"
+
+
+@_needs_v3_manifests
+def test_the_declared_gate_aggregation_is_the_one_the_gates_use(rf, run_v3):
+    """Item 6, on the artifact -- and the declaration is checked against the
+    behaviour rather than merely present.
+
+    A threshold and an aggregation are two halves of one rule, and only the
+    threshold was recorded before: "a 0.90 floor" and "a 0.90 floor on every
+    direct seed separately" are different analyses of the same rows that reach
+    different verdicts, so a pre-registration carrying only the number had not
+    recorded the rule it was frozen with.  Prose nothing checks goes stale, which
+    is item 7, so this reads the declaration and then computes the gates.
+    """
+    for path in _V3_MANIFESTS:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        decl = doc["frozen_gates"]["direct_gate_aggregation"]
+        spec = rf.SPEC_BY_PREREG_KIND[doc["kind"]]
+        assert decl["rule"] == spec.direct_gate_aggregation == "every_seed"
+        assert set(decl["gates"]) == {"direct_image_accuracy",
+                                      "direct_code_following_rate"}
+        assert decl["applies_to_every_level_of"] == \
+            decl["level_field_on_a_row"] == "direct_seed"
+        assert "pooled" in decl["why"] and "three measurements" in decl["why"]
+        # v2's block has no such field, and cannot gain one: its bytes are frozen
+        for old in _V2_MANIFESTS:
+            if old.is_file():
+                v2doc = json.loads(old.read_text(encoding="utf-8"))
+                assert "direct_gate_aggregation" not in v2doc["frozen_gates"]
+                assert rf.SPEC_BY_PREREG_KIND[
+                    v2doc["kind"]].declared_gate_aggregation == {}
+
+    # ... and the declaration is true of what the gates do
+    rows = _all_rows(run_v3)
+    accs = _accuracies(rf.aggregate_cells_v3(run_v3["prereg"],
+                                             run_v3["loaded"][0]))
+    per_seed = _gates(rf, rows, accs, "v3")
+    pooled = _gates(rf, rows, accs, "v2")
+    for name in rf.PER_SEED_GATE_AGGREGATION["gates"]:
+        assert per_seed[name]["aggregation"] == \
+            "every direct_seed, not the pooled mean"
+        assert per_seed[name]["n_seeds"] == len(run_v3["direct_seeds"])
+        assert "levels_that_failed" in per_seed[name]
+        assert "levels_that_failed" not in pooled[name], \
+            "the pooled gate has no levels to name, which is the defect"
+        assert pooled[name]["n"] == per_seed[name]["n"], \
+            "the same rows, aggregated differently -- not different rows"
+
+
+@_needs_v3_manifests
+def test_load_prereg_dispatches_on_version_and_only_v3_loads(rf):
+    """The phases load the authoritative design and refuse the superseded ones.
+
+    A superseded pre-registration that still loaded would be a design two
+    versions of the runner could disagree about, and the disagreement would show
+    up as two different answers from the same command line.
+    """
+    for ds in ("ppubench", "salmu"):
+        doc = rf.load_prereg_v3(ds)
+        assert doc["kind"] == rf.PREREG_V3_KIND
+        assert doc["dataset"] == ds
+        assert doc["preregistered"] and doc["frozen"] and not doc["executed"]
+        # A phase that names no version gets the authoritative design, so the
+        # default and the explicit call cannot disagree about which pilot ran.
+        assert rf.load_prereg(ds)["design_sha256"] == doc["design_sha256"]
+        assert rf.load_prereg_for(rf.LATEST_PILOT_SPEC, ds)[
+            "design_sha256"] == doc["design_sha256"]
+        with pytest.raises(RuntimeError, match="does not verify"):
+            rf.load_prereg_v2(ds)
+        with pytest.raises(RuntimeError, match="does not verify"):
+            rf.load_prereg_for(rf.PILOT_SPEC_V2, ds)
+        # ... and the path a version reads is the path that version froze
+        assert rf.prereg_path_for(rf.PILOT_SPEC_V3, ds).name == \
+            f"rf_pilot_{ds}_v3.json"
+        assert rf.prereg_path_for(rf.PILOT_SPEC_V2, ds).name == \
+            f"rf_pilot_{ds}_v2.json"
+        assert rf.prereg_path_for(rf.PILOT_SPEC_V3, ds) == _BY_DATASET[ds], \
+            "the version's canonical name has to be the file that is tracked, " \
+            "or a phase run with no --manifest reads something else"
+
+
+@_needs_v3_manifests
+def test_rf0_on_the_frozen_v3_pilots_reports_what_is_still_missing(
+        rf, tmp_path):
+    """RF0 is the phase that says what is missing, and it now says it live.
+
+    The report goes under ``tmp_path``: a test that files into the repository
+    leaves an untracked artifact behind, and CI's post-preflight step fails on a
+    tree that is not clean -- a red build whose subject is the test run rather
+    than the code.
+    """
+    for path in _V3_MANIFESTS:
+        ds = "salmu" if "salmu" in path.name else "ppubench"
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        out = tmp_path / ds
+        out.mkdir()
+        rep = rf.phase_rf0(ds, path=path, out=out)
+        assert rep["manifest_valid"] is True, rep["problems"]
+        assert rep["problems"] == []
+        assert rep["design_version"] == "v3"
+        assert rep["kind"] == rf.PREREG_V3_KIND
+        assert rep["design_sha256"] == doc["design_sha256"]
+        assert rep["readiness_is_computed_live"] is True
+        assert rep["roles_that_changed_since_freeze"] == []
+        assert rep["held_out_image_drift_since_freeze"] == [], \
+            "the drift check compares recorded URIs against the dataset " \
+            "manifest, both of them tracked, so it answers the same thing in a " \
+            "clone with no image bytes as it does here"
+        assert rep["n_cells_filed"] == 0
+        assert rep["n_cells_missing"] == rep["n_cells"] == doc["n_cells"]
+        assert rep["executed"] is False
+        # Verification and readiness are separate questions, and the report says
+        # so rather than leaving a reader to infer it from two booleans.
+        assert rep["verification_and_readiness_are_separate_questions"]
+        assert rep["runnable_now_is_about_inputs_not_about_results"]
+        # What is still missing is derived live from the declared roles and what
+        # is on disk, never read out of a block frozen before the training
+        # existed -- which is why RF0 can ever say the work arrived.
+        roles = doc["checkpoint_requirements"]["roles"]
+        work = {r for r, e in roles.items() if not e.get("exists_already")}
+        inputs = set(roles) - work
+        assert work and inputs, roles
+        present = set(rep["roles_present"])
+        must = set(rep["must_be_trained_before_this_pilot_can_run"])
+        # Readiness keeps PENDING WORK and MISSING INPUTS apart, and both answers
+        # are about this disk.  A fresh clone has neither the gitignored adapters
+        # the design was built over nor the ones it asks to be trained, so both
+        # lists are non-empty there while only the first is non-empty here --
+        # which is why neither is asserted empty.
+        assert must == work - present
+        assert set(rep["unexpectedly_absent"]) == inputs - present
+        assert must <= work, \
+            "readiness never demands a role the design declared was an input " \
+            "that already existed, and never invents one it did not declare"
+        assert rep["n_must_be_trained"] == len(must)
+        assert rep["checkpoint_requirements_complete"] is (
+            not (set(roles) - present))
+        assert rep["runnable_now"] is not (set(roles) - present)
+        if rep["runnable_now"]:
+            assert rep["why_not_runnable"] is None
+        else:
+            assert rep["why_not_runnable"]
+            for role in sorted(must | set(rep["unexpectedly_absent"])):
+                assert role in rep["why_not_runnable"], \
+                    f"{role} is what is missing and the report does not name it"
+        assert sorted(p.name for p in out.iterdir()) == [f"rf0_{ds}_v3.json"]
+        assert json.loads((out / f"rf0_{ds}_v3.json").read_text(
+            encoding="utf-8"))["design_sha256"] == doc["design_sha256"]
+
