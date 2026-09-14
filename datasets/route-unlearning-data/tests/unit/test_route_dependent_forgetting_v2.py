@@ -2418,13 +2418,17 @@ def test_the_phases_read_the_frozen_v2_pilots_and_nothing_else(rf):
 
 
 @_needs_v2_verifiable
-def test_the_frozen_v2_pilots_verify_from_their_tracked_location(rf):
+def test_the_frozen_v2_pilots_verify_from_their_tracked_location(rf, tmp_path):
     """The claim that matters once the bytes are committed: each v2 pilot
     rebuilds from its own recorded parameters through the same constructor that
     froze it, and every digest it names still matches.
 
     Gated on the images and the weights because the rebuild re-hashes both; the
     record-reading tests above run in a fresh clone.
+
+    RF0 files its report under ``tmp_path``: a test that writes into the
+    repository leaves an untracked artifact behind, and CI fails on a tree that
+    is not clean after the suite has run.
     """
     for path in _V2_MANIFESTS:
         ds = "salmu" if "salmu" in path.name else "ppubench"
@@ -2442,7 +2446,7 @@ def test_the_frozen_v2_pilots_verify_from_their_tracked_location(rf):
             "frozen and not executed, so the training work is still outstanding"
         # the verified reading is the one the phases use
         assert rf.load_prereg_v2(ds)["design_sha256"] == got["design_sha256"]
-        rep = rf.phase_rf0(ds)
+        rep = rf.phase_rf0(ds, out=tmp_path)
         assert rep["manifest_valid"] is True, rep["problems"]
         assert rep["runnable_now"] is False
         assert "must be trained first" in rep["why_not_runnable"]
