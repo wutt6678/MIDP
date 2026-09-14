@@ -2388,7 +2388,16 @@ def test_rf0_reports_what_the_frozen_v2_pilots_still_need(rf, tmp_path):
             "the frozen g's predictions are the route's own committed cache"
         acc = frozen_router["held_out_accuracy"]
         assert acc and not frozen_router["accuracy_error"]
-        assert acc["accuracy"] == rf.HELD_OUT_G[ds]["accuracy"], (ds, acc)
+        # Recomputed from the prediction file rather than read out of
+        # HELD_OUT_G: the table carries the published rounding and RF0 carries
+        # the fraction, and a report that echoed the table would still say
+        # 0.8056 after the cache it describes had been replaced.
+        assert acc["n_correct"] / acc["n"] == acc["accuracy"]
+        assert round(acc["accuracy"], 4) == rf.HELD_OUT_G[ds]["accuracy"], \
+            (ds, acc)
+        assert acc["n"] == rep["n_held_out_images"], \
+            "an accuracy over fewer images than the design names is an accuracy " \
+            "over a subset"
         for seed in doc["router_seeds"]:
             if seed == rf.EXISTING_ROUTER_SEED:
                 continue
@@ -2437,3 +2446,51 @@ def test_the_frozen_v2_pilots_verify_from_their_tracked_location(rf):
         assert rep["manifest_valid"] is True, rep["problems"]
         assert rep["runnable_now"] is False
         assert "must be trained first" in rep["why_not_runnable"]
+
+
+def test_out_is_a_directory_in_every_v2_phase_that_writes(rf, tmp_path):
+    """One flag, one meaning.
+
+    RF0 used to take ``--out`` as a FILE while RF2 and RF2P took it as a
+    directory, so the same command line filed a report in one phase and died
+    inside ``os.replace`` with an IsADirectoryError in another -- an error about
+    a filesystem call, where the actual subject is what the flag means.
+    """
+    assert rf.report_path("salmu", "RF0", tmp_path) == \
+        tmp_path / "rf0_salmu_v2.json"
+    assert rf.report_path("salmu", "RF2", tmp_path) == \
+        tmp_path / "rf_report_salmu_v2.json"
+    assert rf.report_path("salmu", "RF2P", tmp_path) == \
+        tmp_path / "rf_report_salmu_v2_rescored.json"
+    names = [rf.report_path("salmu", k, tmp_path).name
+             for k in rf.REPORT_FILENAMES]
+    assert len(set(names)) == len(names), \
+        "RF2P reproduces RF2; a reproduction that overwrote the original would " \
+        "leave no way to see whether the two agreed"
+    # a phase that files no report says so instead of raising a KeyError from a
+    # dict lookup, which is a stack trace rather than a refusal
+    with pytest.raises(RuntimeError, match="files no report"):
+        rf.report_path("salmu", "RF1G", tmp_path)
+
+
+def test_the_cli_freezes_into_out_under_the_canonical_name(rf, tmp_path,
+                                                           monkeypatch):
+    """``--out`` is the directory this run writes into, and the manifest keeps
+    the name the phases look for inside it: a staged artifact written under some
+    other name is one that has to be renamed by hand, and renaming by hand is
+    how a manifest gets placed at a path nothing reads."""
+    man = _disk_manifest(tmp_path)
+    _stub_tree(rf, monkeypatch)
+    monkeypatch.setattr(rf, "load_manifest", lambda ds: man)
+    monkeypatch.setattr(rf, "pilot_forget_set",
+                        lambda ds, seeds: dict(SELECTION))
+    stage = tmp_path / "stage"
+    assert rf.main(["--dataset", "ppubench", "--preregister",
+                    "--out", str(stage)]) == 0
+    placed = stage / "rf_pilot_ppubench_v2.json"
+    assert placed.is_file()
+    assert placed == rf.prereg_path_v2("ppubench", placed)
+    assert rf.verify_manifest(placed)["valid"] is True
+    assert sorted(p.name for p in stage.iterdir()) == [placed.name], \
+        "a staging directory that also accumulated something else is a " \
+        "directory whose bytes are not the bytes that get placed"

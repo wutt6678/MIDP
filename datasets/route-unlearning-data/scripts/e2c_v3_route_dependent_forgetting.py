@@ -1663,8 +1663,11 @@ def _build_parser():
     p.add_argument("--verify", action="store_true",
                    help="verify a frozen manifest and exit")
     p.add_argument("--out", default=None,
-                   help="where the report is written (RF0/RF2/RF2P), or where a "
-                        "v1 manifest is frozen")
+                   help="v2: the DIRECTORY this run writes into -- a report for "
+                        "RF0/RF2/RF2P, or the frozen manifest for --preregister, "
+                        "always under its canonical name so a staged artifact "
+                        "cannot be written under a name the phases will never "
+                        "look for.  v1: the manifest FILE to freeze")
     p.add_argument("--cells", default=None,
                    help="v2 only: the root the per-cell results are filed under; "
                         "trained adapters always go to the path the frozen "
@@ -4947,16 +4950,33 @@ def cell_result_path(dataset, cell_id, out=None):
     return cell_dir(dataset, cell_id, out) / "cell_results.json"
 
 
-def report_path(dataset, kind, out=None):
-    """Where an RF2 or RF2P report is written.
+#: The report file each phase writes, by phase name.  One table so ``--out``
+#: cannot mean a directory in one phase and a file in another: RF0 used to take
+#: it as a file while RF2 and RF2P took it as a directory, and passing a
+#: directory to RF0 failed inside ``os.replace`` with an IsADirectoryError
+#: rather than saying what the flag means.
+REPORT_FILENAMES = {
+    "RF0": "rf0_{dataset}_v2.json",
+    "RF2": "rf_report_{dataset}_v2.json",
+    "RF2P": "rf_report_{dataset}_v2_rescored.json",
+}
 
-    The two get different names on purpose: RF2P reproduces RF2 from stored raw
+
+def report_path(dataset, kind, out=None):
+    """Where a phase files its report.
+
+    ``out`` is a DIRECTORY, the same reading ``--cells`` gives it.
+
+    The names differ per phase on purpose: RF2P reproduces RF2 from stored raw
     text, and a reproduction that overwrote the original would leave no way to
     see whether the two agreed.
     """
+    if kind not in REPORT_FILENAMES:
+        raise RuntimeError(
+            f"phase {kind!r} files no report; the phases that do are "
+            f"{sorted(REPORT_FILENAMES)}")
     root = Path(out) if out else (DATASET_ROOT / REPORTS_DIR)
-    suffix = {"RF2": "", "RF2P": "_rescored"}[kind]
-    return root / f"rf_report_{dataset}_v2{suffix}.json"
+    return root / REPORT_FILENAMES[kind].format(dataset=dataset)
 
 
 def write_cell_result(dataset, cell_id, obj, out=None):
@@ -5728,9 +5748,9 @@ def phase_rf0(dataset, path=None, out=None, cells=None):
             doc.get("verdicts_to_be_reported") or {}
         ).get("expected_on_this_dataset"),
     }
-    path_out = Path(out) if out else (DATASET_ROOT / REPORTS_DIR
-                                      / f"rf0_{dataset}_v2.json")
+    path_out = report_path(dataset, "RF0", out)
     atomic_write_json(path_out, report)
+    logger.info("RF0: filed %s", _rel(path_out))
     return report
 
 
@@ -6185,7 +6205,13 @@ def _freeze_v2(args):
         args.dataset, forget_set, forget_ids, args.router_seeds,
         args.edit_seeds, args.direct_seeds, man=man, images=images,
         selection=selection)
-    out = Path(args.out or prereg_path_v2(args.dataset))
+    # ``--out`` is the DIRECTORY this run writes into, the same reading RF0, RF2
+    # and RF2P give it, and the manifest keeps its canonical name inside it.  A
+    # staged artifact written under some other name is one the phases will never
+    # look for, and one that has to be renamed by hand is one that can be
+    # renamed wrongly.
+    out = (Path(args.out) / prereg_path_v2(args.dataset).name if args.out
+           else prereg_path_v2(args.dataset))
 
     # The superseded v1 manifests are named as inputs, so every later
     # verification of this file re-hashes them: "preserved byte-identical"
