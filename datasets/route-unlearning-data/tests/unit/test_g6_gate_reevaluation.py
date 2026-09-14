@@ -35,6 +35,57 @@ OUT_BASE = _ROOT / "e2c_granularity" / "outputs" / "mllmu"
 SEALED = ("g6_pilot_gates.json", "granularity_summary.json",
           "run_manifest.json")
 
+#: Adapters ``verify_content_bindings`` recomputes: the pilot's own cells and
+#: the two GATE oracle families.
+#:
+#: The weights are gitignored and live in the HF revision-pinned archive, so a
+#: fresh clone -- which is what CI checks out -- carries the sealed JSON evidence
+#: (cell_results.json, run_manifest.json, the oracle summaries, adapter_config.json)
+#: and NONE of the adapter bytes.  ``OUT_BASE.is_dir()`` is therefore true there,
+#: so a guard on the directory alone lets these tests run against a tree that
+#: cannot satisfy them, and the binding correctly refuses: an absent adapter
+#: cannot be hashed, and "14 of 15 bound" is indistinguishable from having bound
+#: the evidence.
+#:
+#: Enumerated from the TRACKED file beside each adapter, so the list is derived
+#: from the repository and picks up a new cell without being edited.  It
+#: deliberately does NOT glob every ``adapter_final`` under the output tree: that
+#: tree also holds the protocol-study cells, the two non-gate oracle families and
+#: an unrelated ``route_h`` adapter, none of which this binding touches, and a
+#: guard that counted them would skip these tests whenever any of THOSE lost its
+#: weights.  Under-enumerating is the safe direction -- it fails loudly in CI
+#: rather than skipping silently.
+_GATE_ORACLE_FAMILIES = ("matched_retrain", "loo_retrain")
+
+
+def _sealed_adapters_the_binding_needs():
+    paths = [cr.parent / "edited_h" / "adapter_final"
+             / "adapter_model.safetensors"
+             for cr in sorted(OUT_BASE.glob("cells/*/seed_*/cell_results.json"))]
+    for fam in _GATE_ORACLE_FAMILIES:
+        paths += [cfg.parent / "adapter_model.safetensors"
+                  for cfg in sorted(OUT_BASE.glob(
+                      f"oracles/{fam}_*/adapter_final/adapter_config.json"))]
+    return paths
+
+
+_SEALED_ADAPTERS = _sealed_adapters_the_binding_needs()
+_ABSENT_ADAPTERS = [str(p.relative_to(OUT_BASE)) for p in _SEALED_ADAPTERS
+                    if not p.is_file()]
+
+_needs_sealed_evidence = pytest.mark.skipif(
+    not OUT_BASE.is_dir() or bool(_ABSENT_ADAPTERS),
+    reason=("runs against the REAL sealed pilot evidence, which needs the "
+            "adapter weights beside it; those are gitignored and live in the HF "
+            "revision-pinned archive, so a fresh clone has the committed JSON "
+            "evidence but not the bytes"
+            + (f" -- {len(_ABSENT_ADAPTERS)} of {len(_SEALED_ADAPTERS)} absent, "
+               f"e.g. {_ABSENT_ADAPTERS[0]}" if _ABSENT_ADAPTERS else "")
+            + ". Skipping is not a weakened check: the binding's BEHAVIOUR is "
+              "pinned without the weights by the hermetic tests over a synthetic "
+              "pilot tree, which forge an adapter, hand-edit a cell record and "
+              "delete an adapter, and those do run everywhere"))
+
 
 def _load(name, filename=None):
     path = _SCRIPTS / (filename or Path(name).name)
@@ -387,8 +438,7 @@ def test_the_terminology_note_carries_no_measured_figures(tool):
     assert tool.SCORE_SUM_SET == "gx_mll_254012"
 
 
-@pytest.mark.skipif(not OUT_BASE.is_dir(),
-                    reason="sealed pilot evidence not present")
+@_needs_sealed_evidence
 def test_the_real_binding_covers_every_pilot_cell_and_gate_oracle(tool):
     """On the committed evidence: all fifteen cells and all ten gate oracles
     (five sets x two retrain families) bind, and the enforced side is the
@@ -399,6 +449,11 @@ def test_the_real_binding_covers_every_pilot_cell_and_gate_oracle(tool):
     assert cc["content"]["n_cells_bound"] == 15
     assert cc["content"]["n_oracles_bound"] == 10
     assert len(cc["cell_files"]) == 15
+    # and the guard deciding whether this test runs enumerates exactly what the
+    # binding checked -- so it cannot drift into skipping these tests because
+    # some unrelated adapter elsewhere in the tree lost its weights
+    assert len(_SEALED_ADAPTERS) == (cc["content"]["n_cells_bound"]
+                                     + cc["content"]["n_oracles_bound"])
     # the artifact must say WHICH side enforces: the sealed manifest, because
     # this tool never writes it.  Without that a reader cannot tell a binding
     # from a self-consistent re-derivation.
@@ -417,18 +472,14 @@ def test_the_real_binding_covers_every_pilot_cell_and_gate_oracle(tool):
         "gx.PASS_CRITERIA")
 
 
-@pytest.mark.skipif(not OUT_BASE.is_dir(),
-                    reason="sealed pilot evidence not present")
-def test_dest_outside_the_tree_is_allowed_but_a_sealed_path_is_not(tool,
-                                                                   tmp_path):
-    """``--dest`` exists so the artifact can be derived at a clean worktree.
-    It must not become a way to write over a sealed report by absolute path,
-    which a name-only guard would permit."""
-    ok = tmp_path / "elsewhere" / "reeval.json"
-    assert tool.main(["--out-base", str(OUT_BASE), "--dest", str(ok)]) == 0
-    assert ok.is_file()
-    assert json.loads(ok.read_text(encoding="utf-8"))["kind"] == tool.KIND
+def test_a_sealed_destination_is_refused_by_absolute_path_too(tool):
+    """``--dest`` must not become a way to write over a sealed report by
+    absolute path, which a name-only guard would permit.
 
+    Deliberately unguarded: the refusal fires on the DESTINATION alone, before
+    anything is re-derived, so it needs neither the adapter weights nor the
+    sealed bytes and can be covered on a fresh clone as well as here.
+    """
     for sealed_name in SEALED:
         with pytest.raises(RuntimeError, match="never over"):
             tool.main(["--out-base", str(OUT_BASE),
@@ -436,6 +487,17 @@ def test_dest_outside_the_tree_is_allowed_but_a_sealed_path_is_not(tool,
     # the default destination is still inside the tree and still not sealed
     assert (OUT_BASE / tool.OUTPUT_NAME).resolve() not in {
         (OUT_BASE / n).resolve() for n in SEALED}
+
+
+@_needs_sealed_evidence
+def test_dest_outside_the_tree_is_allowed_but_a_sealed_path_is_not(tool,
+                                                                   tmp_path):
+    """``--dest`` exists so the artifact can be derived at a clean worktree,
+    which means it has to be able to write OUTSIDE the tracked output path."""
+    ok = tmp_path / "elsewhere" / "reeval.json"
+    assert tool.main(["--out-base", str(OUT_BASE), "--dest", str(ok)]) == 0
+    assert ok.is_file()
+    assert json.loads(ok.read_text(encoding="utf-8"))["kind"] == tool.KIND
 
 
 def test_it_hashes_the_scoring_script_without_importing_it(tool):
@@ -493,8 +555,7 @@ def test_the_tool_needs_no_torch():
     assert got["no_torch_submodule"] is True
 
 
-@pytest.mark.skipif(not OUT_BASE.is_dir(),
-                    reason="sealed pilot evidence not present")
+@_needs_sealed_evidence
 def test_the_re_derivation_is_deterministic_apart_from_the_worktree_flag(tool):
     """Building twice must give the same artifact, except for the one field
     that regenerating necessarily changes.
@@ -532,8 +593,7 @@ def test_it_writes_a_new_file_and_never_a_sealed_one(tool):
     assert tool.OUTPUT_NAME == "g6_pilot_gates_reevaluated.json"
 
 
-@pytest.mark.skipif(not OUT_BASE.is_dir(),
-                    reason="sealed pilot evidence not present")
+@_needs_sealed_evidence
 def test_the_real_re_derivation_leaves_every_sealed_byte_untouched(tool):
     """End to end on the committed evidence: the re-derivation must succeed,
     the cells it used must be the pilot's own, and the three sealed reports

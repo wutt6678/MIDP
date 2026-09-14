@@ -26,6 +26,38 @@ import pytest
 _ROOT = Path(__file__).resolve().parents[2]
 _SCRIPTS = _ROOT / "scripts"
 
+#: The five checkpoints ``verify_checkpoints(req, "ppubench", "fs_001")`` hashes,
+#: laid out as ``required_checkpoints`` lays them out.
+#:
+#: Adapter weights are gitignored and live in the HF revision-pinned archive, so
+#: a fresh clone -- which is what CI checks out -- has the tracked dataset and
+#: matrix manifests and the tracked ``adapter_config.json`` beside each adapter,
+#: but none of the adapter bytes.  Enumerated as exactly these five rather than
+#: globbed: ``e2c_v3_real/outputs/realdata`` also holds adapters this test never
+#: looks at, and a guard that counted them would skip on their account.  The
+#: guarded test asserts the count against what the code hashed, so the two cannot
+#: drift apart.
+_PPU_ADAPTER = ("adapter_final", "adapter_model.safetensors")
+_PPU_CHECKPOINTS = (
+    [_ROOT / "e2c_v3_real" / "outputs" / "realdata" / sub / Path(*_PPU_ADAPTER)
+     for sub in ("g_X_to_C", "h_C_to_Y")]
+    + [_ROOT / "e2c_matrix" / "outputs" / "ppubench" / "cells" / "fs_001"
+       / f"seed_{s}" / "edited_h" / Path(*_PPU_ADAPTER)
+       for s in (17, 42, 123)])
+_ABSENT_PPU_ADAPTERS = [str(p.relative_to(_ROOT)) for p in _PPU_CHECKPOINTS
+                        if not p.is_file()]
+
+_needs_ppu_weights = pytest.mark.skipif(
+    bool(_ABSENT_PPU_ADAPTERS),
+    reason=("asserts on the actual adapter bytes, which are gitignored and live "
+            "in the HF revision-pinned archive, so a fresh clone has the tracked "
+            "manifests but not the weights"
+            + (f" -- {len(_ABSENT_PPU_ADAPTERS)} of {len(_PPU_CHECKPOINTS)} "
+               f"absent, e.g. {_ABSENT_PPU_ADAPTERS[0]}"
+               if _ABSENT_PPU_ADAPTERS else "")
+            + ". The refusal half of this behaviour needs no weights and is "
+              "asserted separately, so it still runs everywhere"))
+
 
 def _load():
     spec = importlib.util.spec_from_file_location(
@@ -588,9 +620,14 @@ def test_provenance_hashes_every_input_file_it_names(rf, tmp_path):
     assert prov["untracked_files_count_as_dirty"]
 
 
-def test_checkpoints_are_hashed_and_a_missing_one_is_a_refusal(rf):
-    """Existence is not identity: a checkpoint replaced in place keeps its path,
-    and the digest is what ties a result to the weights that produced it."""
+def test_checkpoint_requirements_state_what_a_cell_needs(rf):
+    """The role table is a statement about the DESIGN, so it holds whether or
+    not any weights are on disk -- and so does the refusal it implies.
+
+    Unguarded on purpose: this is the half of the checkpoint behaviour a fresh
+    clone can still check, and losing it to a skip would leave the role set and
+    the missing-checkpoint refusal untested in CI.
+    """
     req = rf.required_checkpoints("ppubench", "fs_001", [17, 42, 123],
                                   [17, 42, 123])
     assert sorted(req["roles"]) == ["baseline_g", "baseline_h",
@@ -600,19 +637,44 @@ def test_checkpoints_are_hashed_and_a_missing_one_is_a_refusal(rf):
     assert req["roles"]["direct_condition"]["adapter"] == "reuses edited_h"
     assert req["router_seed_is_not_a_checkpoint"]
 
+    # a forget set with no cells is refused rather than silently accepted, and
+    # proving that needs no weights at all.  n_present is deliberately NOT
+    # asserted: baseline_g and baseline_h are dataset-level, so they are present
+    # here and absent on a fresh clone, and a test whose expectation moves with
+    # the checkout is not a test of the code.
+    got = rf.verify_checkpoints(req, "ppubench", "fs_999_does_not_exist")
+    assert got["complete"] is False
+    assert got["n_required"] == 5
+    # three absent edit-seed adapters plus the summary entry that counts them
+    assert sum(1 for m in got["missing"]
+               if m["role"].startswith("edited_h")) == 4
+    assert any("0 of 3 edit-seed checkpoints present" in m["path"]
+               for m in got["missing"])
+
+
+@_needs_ppu_weights
+def test_the_real_checkpoints_are_hashed_not_just_found(rf):
+    """Existence is not identity: a checkpoint replaced in place keeps its path,
+    and the digest is what ties a result to the weights that produced it.
+
+    This half needs the actual adapter bytes, which are gitignored, so it runs
+    only where they exist.
+    """
+    req = rf.required_checkpoints("ppubench", "fs_001", [17, 42, 123],
+                                  [17, 42, 123])
     got = rf.verify_checkpoints(req, "ppubench", "fs_001")
     assert got["n_required"] == 5
+    assert got["n_present"] == 5
+    # the guard that decided to run this test enumerated the same five adapters
+    # the code just hashed, so it cannot drift into skipping on some other
+    # adapter's account, or into running when one of these is missing
+    assert len(_PPU_CHECKPOINTS) == got["n_present"] == got["n_required"]
     for role, entry in got["present"].items():
         assert len(entry["sha256"]) == 64 and entry["bytes"] > 0
         assert role in ("baseline_g", "baseline_h") or \
             role.startswith("edited_h__seed")
     # PPUBench has all 21 matrix cells, so the three fs_001 adapters exist
     assert got["complete"] is True, got["missing"]
-
-    # a forget set with no cells cannot be silently accepted
-    got2 = rf.verify_checkpoints(req, "ppubench", "fs_999_does_not_exist")
-    assert got2["complete"] is False
-    assert any(m["role"].startswith("edited_h") for m in got2["missing"])
 
 
 # --------------------------------------------------------------------------
