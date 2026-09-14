@@ -15,6 +15,7 @@ phase that needs one, and the module says so rather than failing obscurely.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import sys
@@ -1012,3 +1013,751 @@ def test_rescoring_from_stored_raw_regenerates_nothing(rf):
     got2 = rf.rescore_from_raw(partial, rf.label_vocab(_manifest()))
     assert got2["n_rows_scored"] == 30
     assert got2["per_condition"]["direct_path"]["n"] == 0
+
+
+# ==========================================================================
+# the pre-registration layer
+# ==========================================================================
+#
+# Everything above tests a design.  What follows tests the thing that gets
+# FILED: an audit of what the images actually are, which gates the dataset can
+# support, which checkpoints already exist, and the frozen pilot block that
+# ties them together.  Those matter more than the design, because a
+# pre-registration is the one artifact that cannot be corrected afterwards
+# without ceasing to be one.
+
+_HAS_PPU = (_ROOT / "e2c_v3_real" / "manifests"
+            / "realdata_identity_mapping.json").is_file()
+_HAS_SALMU = (_ROOT / "e2c_salmu" / "manifests"
+              / "salmu_manifest.json").is_file()
+_HAS_MATRIX = all(
+    (_ROOT / "e2c_matrix" / "manifests" / f"matrix_{ds}.json").is_file()
+    for ds in ("ppubench", "salmu"))
+_REAL = (_ROOT / "e2c_matrix" / "outputs" / "ppubench" / "cells"
+         / "fs_001" / "seed_17" / "edited_h" / "adapter_final"
+         / "adapter_model.safetensors").is_file()
+_needs_tree = pytest.mark.skipif(
+    not (_HAS_PPU and _HAS_SALMU and _HAS_MATRIX and _REAL),
+    reason="the frozen matrices, dataset manifests and reused checkpoints "
+           "are not all present")
+
+
+def _write_image(path, token):
+    """A real file with real bytes, so an audit has something to hash."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + token.encode("utf-8"))
+    return str(path)
+
+
+def _disk_manifest(tmp_path, duplicate_test_bytes=False, n_test=3,
+                   recorded=None, identity_ids=("001", "002", "003", "004")):
+    """A manifest whose ``image_uri`` values point at files that exist.
+
+    ``duplicate_test_bytes`` reproduces the condition the audit exists for: the
+    test split names DIFFERENT FILES whose bytes also appear in train, so the
+    split partitions filenames rather than images.  That is what PPUBench does,
+    and it is invisible to any check that reads the manifest alone.
+    """
+    items = []
+    for iid in identity_ids:
+        first_train = None
+        for i in range(2):
+            uri = _write_image(tmp_path / "img" / f"{iid}_train_{i}.png",
+                               f"{iid}-train-{i}")
+            if i == 0:
+                first_train = f"{iid}-train-{i}"
+            items.append({"identity_id": iid, "split": "train",
+                          "image_uri": uri})
+        for i in range(n_test):
+            token = (first_train if duplicate_test_bytes
+                     else f"{iid}-test-{i}")
+            uri = _write_image(tmp_path / "img" / f"{iid}_test_{i}.png", token)
+            items.append({"identity_id": iid, "split": "test",
+                          "image_uri": uri})
+    man = {
+        "dataset": "ppubench",
+        "identity_ids": list(identity_ids),
+        "alias_of": {i: ALIASES[i] for i in identity_ids},
+        "code_of": {i: f"RID_{i}" for i in identity_ids},
+        "deleted_label": "Unknown",
+        "forget_identity_ids": ["001"],
+        "images_per_identity": {i: 2 + n_test for i in identity_ids},
+        "items": items,
+        "seed": 17,
+    }
+    if recorded is not None:
+        man["images_sha256"] = recorded
+    return man
+
+
+def _sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _prereg(rf, tmp_path, man=None, monkeypatch=None, **kw):
+    """A hermetic pilot block: real image bytes, no real checkpoints.
+
+    ``verify_checkpoints`` is stubbed because checkpoint PRESENCE is a property
+    of the GPU tree rather than of the pre-registration logic, and it is pinned
+    against the real tree separately below.
+    """
+    man = man or _disk_manifest(tmp_path)
+    if monkeypatch is not None:
+        monkeypatch.setattr(
+            rf, "verify_checkpoints",
+            lambda req, ds, sid: {"complete": True, "n_present": 5,
+                                  "n_required": 5, "present": {},
+                                  "missing": []})
+    ap = rf.gate_applicability(rf.image_content_audit(man))
+    inv = {"n_forget_sets": 7, "n_reusable_edited_h": 21,
+           "n_edited_h_required": 21, "complete": True}
+    promo = rf.promotion_rule_ppubench([17, 42, 123], [17, 42, 123], inv, ap)
+    sel = {"dataset": "ppubench", "set_id": "fs_001", "targets": ["001"],
+           "selection_rule": "fixture", "n_candidates": 7, "n_considered": 4,
+           "candidates": []}
+    return rf.build_pilot_preregistration(
+        "ppubench", "fs_001", ["001"], [17, 42, 123], [17, 42, 123],
+        promotion=promo, man=man, images=rf.held_out_images(man),
+        selection=sel, **kw)
+
+
+# --------------------------------------------------------------------------
+# 12. the image-content audit
+# --------------------------------------------------------------------------
+
+def test_the_split_is_audited_by_content_not_by_filename(rf, tmp_path):
+    """A train/test split partitions manifest ROWS.  Whether it partitions
+    IMAGE CONTENT is a separate question, and the two routing gates depend on
+    the second one.
+
+    This reproduces the PPUBench condition on purpose: different files, same
+    bytes.  An accuracy measured on them is memorization, and a gate frozen
+    against a number that cannot mean anything is worse than no gate at all.
+    """
+    audit = rf.image_content_audit(
+        _disk_manifest(tmp_path, duplicate_test_bytes=True))
+
+    assert audit["n_items"] == 20 and audit["n_uris"] == 20
+    # two distinct images per identity: train_1 differs, everything else is
+    # train_0's bytes under four more filenames
+    assert audit["n_distinct_image_bytes"] == 8
+    assert audit["by_split"]["test"]["n_uris"] == 12
+    assert audit["by_split"]["test"]["n_distinct_bytes"] == 4
+    assert audit["n_test_bytes_also_in_train"] == 4
+    assert audit["held_out_image_content_exists"] is False
+    assert audit["identities_whose_uris_are_not_all_distinct"]
+
+
+def test_a_genuine_held_out_split_is_recognised_as_one(rf, tmp_path):
+    """The audit has to say yes as well as no, or it is only a complaint."""
+    audit = rf.image_content_audit(_disk_manifest(tmp_path))
+    assert audit["n_items"] == audit["n_uris"] == 20
+    assert audit["n_distinct_image_bytes"] == 20
+    assert audit["n_test_bytes_also_in_train"] == 0
+    assert audit["held_out_image_content_exists"] is True
+    assert not audit["identities_whose_uris_are_not_all_distinct"]
+    assert audit["cross_check_against_manifest_table"][
+        "manifest_carries_images_sha256"] is False
+
+
+def test_a_repeated_uri_is_one_image_not_a_duplicated_one(rf, tmp_path):
+    """Counting rows instead of URIs would report duplication that is only
+    bookkeeping, and would then force the identity cluster level for no
+    reason."""
+    man = _disk_manifest(tmp_path, n_test=1)
+    man["items"].append(dict(man["items"][2]))     # 001's test row, again
+    audit = rf.image_content_audit(man)
+    assert audit["n_items"] == 13 and audit["n_uris"] == 12
+    assert audit["by_split"]["test"]["n_items"] == 5
+    assert audit["by_split"]["test"]["n_uris"] == 4
+    assert not audit["identities_whose_uris_are_not_all_distinct"]
+
+
+def test_a_missing_image_refuses_the_audit(rf, tmp_path):
+    """An absent image means the cross cannot be executed, so it is named at
+    audit time rather than surfacing later as a smaller row set -- which would
+    still produce a rate, about the images that happened to be there."""
+    man = _disk_manifest(tmp_path)
+    Path(man["items"][0]["image_uri"]).unlink()
+    with pytest.raises(RuntimeError, match="absent from disk"):
+        rf.image_content_audit(man)
+
+
+def test_the_manifest_digest_table_is_an_independent_record(rf, tmp_path):
+    """Where the manifest carries its own ``images_sha256``, agreement ties the
+    audit to the snapshot it was frozen against and disagreement means the
+    images have been replaced since."""
+    man = _disk_manifest(tmp_path, n_test=1)
+    table = {Path(it["image_uri"]).name: _sha(it["image_uri"])
+             for it in man["items"]}
+    ok = rf.image_content_audit({**man, "images_sha256": table})
+    cc = ok["cross_check_against_manifest_table"]
+    assert cc["manifest_carries_images_sha256"] is True
+    assert cc["n_compared"] == 12 and cc["n_disagreeing"] == 0
+
+    broken = dict(table)
+    broken[Path(man["items"][0]["image_uri"]).name] = "0" * 64
+    with pytest.raises(RuntimeError, match="changed since"):
+        rf.image_content_audit({**man, "images_sha256": broken})
+
+
+# --------------------------------------------------------------------------
+# 13. which gates a dataset can support
+# --------------------------------------------------------------------------
+
+def test_an_unsupportable_gate_is_neither_waived_nor_lowered(rf, tmp_path):
+    """Marking a gate untestable must not become a way of passing it.
+
+    The threshold stays where it was, the gate stays named, and the count says
+    five of seven rather than five of five.
+    """
+    man = _disk_manifest(tmp_path, duplicate_test_bytes=True)
+    ap = rf.gate_applicability(rf.image_content_audit(man))
+
+    assert ap["routing_gates"]["supportable"] is False
+    assert ap["mediation_gates"]["supportable"] is True
+    assert ap["n_gates_supportable"] == 5 and ap["n_gates_total"] == 7
+    assert set(ap["routing_gates"]["gates"]) == {
+        "router_held_out_accuracy", "e2e_matches_the_routing_composition"}
+    assert rf.GATE_THRESHOLDS["min_router_held_out_accuracy"] == 0.90
+    assert "training bytes" in ap["routing_gates"]["reason_if_not"]
+    assert "not waived" in ap["policy"]
+
+    # the gate count is the number of gates evaluate_gates actually returns,
+    # counted from names rather than from the threshold table (gate six
+    # consumes two thresholds, so len(GATE_THRESHOLDS) is not the gate count)
+    d = _design(rf, man)
+    got = rf.evaluate_gates(_scored(rf, d), {"17": 1.0}, None)
+    assert got["n_gates"] == ap["n_gates_total"] == 7
+    assert set(got["gates"]) == (set(ap["routing_gates"]["gates"])
+                                 | set(ap["mediation_gates"]["gates"]))
+
+
+def test_the_mediation_gates_survive_duplicate_images(rf, tmp_path):
+    """Those conditions FORCE the code, so the image is a distractor by design.
+
+    If duplicated image content weakened them too, there would be no dataset
+    left on which to run the intervention at all -- and the reason it does not
+    weaken them is the reason the design crosses image against route.
+    """
+    ap = rf.gate_applicability(
+        rf.image_content_audit(_disk_manifest(tmp_path,
+                                              duplicate_test_bytes=True)))
+    assert ap["mediation_gates"]["supportable"] is True
+    assert "FORCE the code" in ap["mediation_gates"][
+        "why_unaffected_by_duplicate_images"]
+    assert len(ap["mediation_gates"]["gates"]) == 5
+
+
+def test_degenerate_image_clustering_forces_the_identity_level(rf, tmp_path):
+    """Where every identity has ONE distinct held-out image, image clusters are
+    identity clusters wearing a different name, and resampling them would look
+    like a finer unit while counting the same four images."""
+    dup = rf.gate_applicability(
+        rf.image_content_audit(_disk_manifest(tmp_path / "a",
+                                              duplicate_test_bytes=True)))
+    c = dup["clustering"]
+    assert c["held_out_scope"]["image_level_is_degenerate"] is True
+    assert c["level_to_use"] == "identity"
+    assert c["clusters_at_the_level_to_use"] == 4
+
+    real = rf.gate_applicability(
+        rf.image_content_audit(_disk_manifest(tmp_path / "b")))["clustering"]
+    assert real["held_out_scope"]["image_level_is_degenerate"] is False
+    assert real["level_to_use"] == "image"
+    assert real["clusters_at_the_level_to_use"] == 12
+
+
+def test_the_cluster_counts_are_held_out_only(rf, tmp_path):
+    """Training images are not clusters of anything the bootstrap resamples, so
+    a count over the whole manifest would advertise units the interval never
+    uses."""
+    c = rf.gate_applicability(
+        rf.image_content_audit(_disk_manifest(tmp_path)))["clustering"]
+    assert c["n_image_clusters"] == 20
+    assert c["held_out_scope"]["n_image_clusters"] == 12
+    assert c["held_out_scope"]["n_identity_clusters"] == 4
+
+
+# --------------------------------------------------------------------------
+# 14. the frozen pilot block
+# --------------------------------------------------------------------------
+
+def test_the_preregistration_is_frozen_and_carries_no_result(rf, tmp_path,
+                                                             monkeypatch):
+    b = _prereg(rf, tmp_path, monkeypatch=monkeypatch)
+    assert b["kind"] == rf.PREREG_KIND
+    assert b["preregistered"] is True
+    assert b["executed"] is False
+    assert "FROZEN AND NOT EXECUTED" in b["execution_policy"]
+    assert "no router has been trained" in b["execution_policy"]
+
+    # a pre-registration that carried an outcome would not be one
+    rows = [r for c in b["cells"] for r in c["rows"]]
+    assert rows and not any("raw_text" in r for r in rows)
+    assert not any("correct" in r for r in rows)
+    assert b["frozen_gates"]["not_adjustable_afterwards"] is True
+    assert "no threshold is imported from the G6 granularity pilot" in \
+        b["frozen_gates"]["independent_of_the_granularity_gates"]
+    assert b["score_sum_semantics"]["name_used_everywhere"] == \
+        "candidate_score_sum"
+
+
+def test_every_held_out_image_is_named_with_its_own_digest(rf, tmp_path,
+                                                           monkeypatch):
+    """The exact held-out image IDs and hashes are part of the record.
+
+    A pilot that says "the held-out images" without naming bytes cannot be
+    re-run against the same images, and cannot later be shown to have used
+    them.
+    """
+    man = _disk_manifest(tmp_path)
+    b = _prereg(rf, tmp_path, man=man, monkeypatch=monkeypatch)
+    ho = b["held_out_images"]
+    assert ho["n"] == 12 and ho["warning"] is None
+
+    test_uris = {it["image_uri"] for it in man["items"]
+                 if it["split"] == "test"}
+    assert {e["image_uri"] for e in ho["images"]} == test_uris
+    for e in ho["images"]:
+        assert e["sha256"] == _sha(e["image_uri"])
+        assert e["bytes"] == Path(e["image_uri"]).stat().st_size
+        assert e["is_forgotten"] == (e["identity_id"] == "001")
+        assert e["alias"] == ALIASES[e["identity_id"]]
+        assert e["code"] == f"RID_{e['identity_id']}"
+        assert e["image_id"] == Path(e["image_uri"]).name
+
+    # and the warning fires exactly when the content is not held out
+    b2 = _prereg(rf, tmp_path, monkeypatch=monkeypatch,
+                 man=_disk_manifest(tmp_path / "dup",
+                                    duplicate_test_bytes=True))
+    assert b2["held_out_images"]["warning"]
+    assert "NOT HELD OUT IN CONTENT" in b2["held_out_images"]["warning"]
+    assert "mediation gates remain valid" in b2["held_out_images"]["warning"]
+
+
+def test_the_bootstrap_is_fixed_before_any_cell_exists(rf, tmp_path,
+                                                       monkeypatch):
+    """A bootstrap whose resample count or seed is picked after seeing the
+    interval is not a confidence interval."""
+    b = _prereg(rf, tmp_path, monkeypatch=monkeypatch)
+    bs = b["cluster_bootstrap"]
+    assert bs["n_resamples"] == rf.BOOTSTRAP["n_resamples"] == 2000
+    assert bs["seed"] == rf.BOOTSTRAP["seed"] == 17
+    assert bs["alpha"] == 0.05
+    assert "not selected at analysis time" in bs["cluster_level_chosen_by"]
+    assert bs["counts_are_held_out_only"]
+
+    # the recorded level and count are the ones the rows actually give
+    rows = b["cells"][0]["rows"]
+    assert bs["n_row_clusters_at_that_level"] == len(
+        rf.cluster_units(rows, bs["cluster_level"]))
+    assert bs["n_clusters_resampled"] == bs["n_row_clusters_at_that_level"]
+    assert bs["n_clusters_resampled"] >= 2
+
+
+def test_a_cluster_level_that_overcounts_content_is_refused(rf, tmp_path,
+                                                            monkeypatch):
+    """Twelve filename-clusters over four distinct images would resample the
+    same picture three times and call the repeats independent, which is a
+    narrower interval than the data supports."""
+    dup = _disk_manifest(tmp_path, duplicate_test_bytes=True)
+    real = rf.gate_applicability
+
+    def forced(audit):
+        ap = real(audit)
+        ap["clustering"]["level_to_use"] = "image"
+        ap["clustering"]["clusters_at_the_level_to_use"] = 4
+        return ap
+
+    monkeypatch.setattr(rf, "gate_applicability", forced)
+    with pytest.raises(RuntimeError, match="understates the interval"):
+        _prereg(rf, tmp_path, man=dup, monkeypatch=monkeypatch)
+
+
+def test_one_cluster_cannot_be_frozen_as_a_bootstrap(rf, tmp_path, monkeypatch):
+    """Caught at freeze time rather than at analysis time: a point estimate
+    presented with an interval of width zero looks like a confidence statement
+    and is not one."""
+    real = rf.gate_applicability
+
+    def one(audit):
+        ap = real(audit)
+        ap["clustering"]["clusters_at_the_level_to_use"] = 1
+        return ap
+
+    monkeypatch.setattr(rf, "gate_applicability", one)
+    with pytest.raises(RuntimeError, match="cannot produce an interval"):
+        _prereg(rf, tmp_path, monkeypatch=monkeypatch)
+
+
+def test_the_e2e_decomposition_is_scoped_to_the_dataset(rf, tmp_path,
+                                                        monkeypatch):
+    """The composition explains a routing gap.  Where there is no held-out
+    routing to get wrong, there is no gap to explain, and saying otherwise
+    would file a formula against a quantity the dataset cannot produce."""
+    ok = _prereg(rf, tmp_path, monkeypatch=monkeypatch)
+    assert ok["e2e_decomposition"]["supportable_on_this_dataset"] is True
+    assert "the IMAGE, not the code" in \
+        ok["e2e_decomposition"]["required_label_is_keyed_by"]
+
+    dup = _prereg(rf, tmp_path, monkeypatch=monkeypatch,
+                  man=_disk_manifest(tmp_path / "d2",
+                                     duplicate_test_bytes=True))
+    assert dup["e2e_decomposition"]["supportable_on_this_dataset"] is False
+    assert "conditional" in dup["e2e_decomposition"]
+    assert "unconditional" in dup["e2e_decomposition"]
+
+
+def test_the_missing_data_policy_names_refusals_the_code_raises(rf, tmp_path,
+                                                               monkeypatch):
+    """A policy table that nothing implements is decoration."""
+    pol = rf.MISSING_DATA_POLICY
+    assert set(pol) == {
+        "missing_router_seed", "missing_edit_seed", "missing_image",
+        "missing_checkpoint", "missing_intervention_row", "unparseable_output",
+        "multi_label_output", "partial_cell", "gate_failure"}
+    assert all(v["action"] and v["why"] for v in pol.values())
+
+    man = _disk_manifest(tmp_path / "seeds")
+    images = rf.held_out_images(man)
+    with pytest.raises(RuntimeError, match="no router seeds given"):
+        rf.build_design("ppubench", "fs_001", ["001"], [], [17],
+                        man=man, images=images)
+    with pytest.raises(RuntimeError, match="no edit seeds given"):
+        rf.build_design("ppubench", "fs_001", ["001"], [17], [],
+                        man=man, images=images)
+
+    # an absent FILE is the audit's refusal; an identity the manifest lists no
+    # held-out image for is the design's, and they are not the same check
+    gone = _disk_manifest(tmp_path / "gone", n_test=1)
+    Path(gone["items"][2]["image_uri"]).unlink()      # 001's only test image
+    with pytest.raises(RuntimeError, match="absent from disk"):
+        rf.image_content_audit(gone)
+    # the manifest still LISTS that row, so the design layer is satisfied --
+    # which is exactly why the audit has to exist separately
+    assert rf.held_out_images(gone)["001"]
+
+    no_test = _disk_manifest(tmp_path / "notest")
+    no_test["items"] = [it for it in no_test["items"]
+                        if not (it["split"] == "test"
+                                and it["identity_id"] == "001")]
+    with pytest.raises(RuntimeError, match="no held-out image"):
+        rf.build_design("ppubench", "fs_001", ["001"], [17], [17],
+                        man=no_test, images=rf.held_out_images(no_test))
+
+    # the checkpoint refusal names every absent role rather than reporting a
+    # smaller requirement as complete
+    req = rf.required_checkpoints("ppubench", "fs_001", [17, 42, 123],
+                                  [17, 42, 123])
+    monkeypatch.setattr(rf, "ADAPTER_RELPATH",
+                        ("adapter_final", "does_not_exist.safetensors"))
+    got = rf.verify_checkpoints(req, "ppubench", "fs_001")
+    assert got["complete"] is False and got["n_present"] == 0
+    roles = {m["role"] for m in got["missing"]}
+    assert "baseline_g" in roles and "baseline_h" in roles
+    assert sum(1 for m in got["missing"]
+               if m["role"].startswith("edited_h")) == 4
+
+
+
+# --------------------------------------------------------------------------
+# 15. the two frozen pilots, read off the real tree
+# --------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def real_pilots(rf):
+    out = {}
+    for ds in ("ppubench", "salmu"):
+        sel = rf.pilot_forget_set(ds, [17, 42, 123])
+        out[ds] = (sel, rf.build_pilot_preregistration(
+            ds, sel["set_id"], sel["targets"], [17, 42, 123], [17, 42, 123],
+            selection=sel))
+    return out
+
+
+@_needs_tree
+def test_the_pilot_forget_set_is_chosen_by_a_stated_rule(rf, real_pilots):
+    """Not hand-picked: whatever the rule selects from the frozen matrix, with
+    the sets passed over recorded and the reason they were passed over."""
+    sel, b = real_pilots["ppubench"]
+    assert sel["set_id"] == "fs_001" and sel["targets"] == ["001"]
+    assert b["forget_set_id"] == "fs_001"
+    assert b["forget_identity_ids"] == ["001"]
+    assert sel["n_candidates"] == 7 and sel["n_considered"] == 4
+    passed_over = [c for c in sel["candidates"] if not c["considered"]]
+    assert len(passed_over) == 3
+    assert all("single-target" in c["why_not"] for c in passed_over)
+    assert all(c["complete"] for c in sel["candidates"] if c["considered"])
+    assert "first single-target set" in sel["selection_rule"]
+    assert "selection effect" in sel["rule_is_derived_not_preferred"]
+
+    # SALMU's dataset manifest declares no forget_identity_ids at all, so the
+    # rule is the only way its target is not typed in by hand
+    s_sel, s = real_pilots["salmu"]
+    assert len(s_sel["targets"]) == 1
+    assert s_sel["n_considered"] == 6
+    assert s["forget_identity_ids"] == s_sel["targets"]
+    assert s_sel["set_id"] == "fs_" + s_sel["targets"][0]
+
+
+@_needs_tree
+def test_edit_seeds_the_matrix_never_trained_are_refused(rf):
+    """Reusing checkpoints trained under other seeds is not reuse, it is a
+    request for a retraining -- and this turn trains nothing."""
+    with pytest.raises(RuntimeError, match="not the ones the frozen"):
+        rf.pilot_forget_set("ppubench", [17, 42])
+    with pytest.raises(RuntimeError, match="not the ones the frozen"):
+        rf.pilot_forget_set("salmu", [7])
+
+
+@_needs_tree
+def test_the_promotion_counts_are_multiplied_not_written_down(rf, real_pilots):
+    _, p = real_pilots["ppubench"]
+    pr = p["promotion_rule"]
+    assert (pr["n_router_seeds"], pr["n_forget_sets"],
+            pr["n_edit_seeds"]) == (3, 7, 3)
+    assert pr["n_e2e_cells"] == 63 == 3 * pr["n_forget_sets"] * 3
+    assert pr["retrained_per_cell"] is False
+    assert pr["reuses_existing_edited_h"] == pr["edited_h_required"] == 21
+    assert pr["reuse_inventory_is_complete"] is True
+
+    # the inventory names real bytes, so "reuse" is a checkable claim
+    inv = pr["reuse_inventory"]
+    assert inv["n_forget_sets"] == 7 and inv["complete"] is True
+    for sid, e in inv["sets"].items():
+        assert e["n_reusable"] == e["n_required"] == 3, sid
+        for seed, v in e["per_edit_seed"].items():
+            assert v["adapter_present"] and v["cell_results_present"], (sid, seed)
+            assert v["adapter_sha256"] and len(v["adapter_sha256"]) == 64
+    assert all(s["present"] and s["sha256"]
+               for s in inv["shared_route_checkpoints"].values())
+    assert set(inv["shared_route_checkpoints"]) == {"baseline_g", "baseline_h"}
+
+    _, s = real_pilots["salmu"]
+    spr = s["promotion_rule"]
+    assert spr["n_e2e_cells"] == 3 * spr["n_forget_sets"] * 3
+    assert spr["blocked_by"] is None
+    assert spr["held_out_routing_is_testable_here"] is True
+
+
+@_needs_tree
+def test_ppubench_routing_gates_are_recorded_untestable_not_passed(rf,
+                                                                  real_pilots):
+    """The headline PPUBench fact, derived here rather than asserted: its test
+    images are byte-identical to its training images, so the 1.0 held-out
+    routing accuracy on record was measured on training bytes."""
+    _, b = real_pilots["ppubench"]
+    a = b["held_out_images"]["content_audit"]
+    assert a["n_uris"] == 74 and a["n_distinct_image_bytes"] == 4
+    assert a["by_split"]["test"]["n_uris"] == 12
+    assert a["by_split"]["test"]["n_distinct_bytes"] == 4
+    assert a["n_test_bytes_also_in_train"] == 4
+    assert a["held_out_image_content_exists"] is False
+
+    ap = b["gate_applicability"]
+    assert ap["n_gates_supportable"] == 5 and ap["n_gates_total"] == 7
+    assert ap["routing_gates"]["supportable"] is False
+    assert "UNSUPPORTABLE" in b["promotion_rule"]["blocked_by"]
+    assert b["held_out_images"]["warning"]
+
+    # untestable is not lowered, and not waived
+    th = b["frozen_gates"]["thresholds"]
+    assert th == dict(rf.GATE_THRESHOLDS)
+    assert th["min_router_held_out_accuracy"] == 0.90
+    assert b["frozen_gates"]["n_gates"] == 7
+    assert ap["clustering"]["level_to_use"] == "identity"
+    assert b["cluster_bootstrap"]["n_clusters_resampled"] == 4
+
+
+@_needs_tree
+def test_salmu_is_the_pilot_that_can_test_routing(rf, real_pilots):
+    _, b = real_pilots["salmu"]
+    a = b["held_out_images"]["content_audit"]
+    assert a["n_uris"] == a["n_distinct_image_bytes"] == 132
+    assert a["n_test_bytes_also_in_train"] == 0
+    assert a["held_out_image_content_exists"] is True
+    assert b["held_out_images"]["warning"] is None
+
+    # the manifest's own digest table agrees, which ties the audit to the
+    # snapshot the manifest was frozen against
+    cc = a["cross_check_against_manifest_table"]
+    assert cc["manifest_carries_images_sha256"] is True
+    assert cc["n_compared"] == 132 and cc["n_disagreeing"] == 0
+
+    assert b["gate_applicability"]["n_gates_supportable"] == 7
+    assert b["cluster_bootstrap"]["cluster_level"] == "image"
+    assert b["cluster_bootstrap"]["n_clusters_resampled"] == 36
+    assert b["checkpoint_requirements"]["complete"] is True
+
+
+@_needs_tree
+def test_gate_one_expected_outcome_is_computed_not_asserted(rf, real_pilots,
+                                                            monkeypatch):
+    """0.8056 against a 0.90 floor is a FAIL, and the artifact says so before
+    the run.  That it flips when the input flips is what makes it computed."""
+    _, s = real_pilots["salmu"]
+    g1 = s["promotion_rule"]["expected_gate_one_outcome"]
+    assert g1["recorded_held_out_accuracy"] == pytest.approx(0.8056)
+    assert g1["frozen_threshold"] == rf.GATE_THRESHOLDS[
+        "min_router_held_out_accuracy"] == 0.90
+    assert g1["expected_to_pass"] is False
+    assert "expected to FAIL" in g1["reading"]
+    assert "not to be tuned away" in g1["reading"]
+    assert g1["recorded_source"] == rf.HELD_OUT_G["salmu"]["source"]
+
+    monkeypatch.setitem(rf.HELD_OUT_G["salmu"], "accuracy", 0.95)
+    inv = {"n_forget_sets": 9, "n_reusable_edited_h": 27,
+           "n_edited_h_required": 27, "complete": True}
+    got = rf.promotion_rule_salmu([17, 42, 123], [17, 42, 123], inv,
+                                  s["gate_applicability"])
+    assert got["expected_gate_one_outcome"]["expected_to_pass"] is True
+    assert "expected to PASS" in got["expected_gate_one_outcome"]["reading"]
+
+
+@_needs_tree
+def test_the_promotion_block_follows_the_audit(rf, real_pilots):
+    """Whether promotion is blocked is a consequence of the bytes, not a
+    sentence written about them."""
+    _, p = real_pilots["ppubench"]
+    _, s = real_pilots["salmu"]
+    assert p["promotion_rule"]["held_out_routing_is_testable_here"] is False
+    assert s["promotion_rule"]["held_out_routing_is_testable_here"] is True
+
+    inv = {"n_forget_sets": 7, "n_reusable_edited_h": 21,
+           "n_edited_h_required": 21, "complete": True}
+    supportable = {"routing_gates": {"supportable": True, "gates": [],
+                                     "reason_if_not": "n/a"}}
+    got = rf.promotion_rule_ppubench([17, 42, 123], [17, 42, 123], inv,
+                                     supportable)
+    assert got["blocked_by"] is None
+    assert got["held_out_routing_is_testable_here"] is True
+
+    # the two rules are read side by side, so the fields a reader compares must
+    # exist in both: "blocked_by" absent on one and None on the other would be
+    # indistinguishable from a field that was never computed
+    common = set(rf._promotion_common("ppubench", [17, 42, 123], [17, 42, 123],
+                                      inv))
+    for name, rule in (("ppubench", p["promotion_rule"]),
+                       ("salmu", s["promotion_rule"])):
+        assert common <= set(rule), name
+        assert "blocked_by" in rule, name
+        assert "held_out_routing_is_testable_here" in rule, name
+        assert "reuse_inventory" in rule, name
+    assert "expected_gate_one_outcome" in s["promotion_rule"]
+
+
+def test_mllmu_gets_no_promotion_rule_rather_than_another_datasets(rf):
+    """MLLMU has ONE image per identity, so held-out routing does not exist
+    there.  A default branch would hand it SALMU's prose and freeze a claim the
+    dataset cannot support."""
+    assert "mllmu" not in rf.PROMOTION_RULES
+    assert set(rf.PROMOTION_RULES) == {"ppubench", "salmu"}
+    inv = {"n_forget_sets": 1, "n_reusable_edited_h": 3,
+           "n_edited_h_required": 3, "complete": True}
+    ap = {"routing_gates": {"supportable": False, "gates": [],
+                            "reason_if_not": "one image per identity"}}
+    with pytest.raises(RuntimeError, match="no promotion rule for 'mllmu'"):
+        rf.promotion_rule("mllmu", [17], [17, 42, 123], inv, ap)
+
+
+# --------------------------------------------------------------------------
+# 16. freezing and verifying a pilot
+# --------------------------------------------------------------------------
+
+@_needs_tree
+def test_a_frozen_pilot_verifies_through_the_constructor_that_made_it(
+        rf, real_pilots, tmp_path):
+    """The bug this pins: verify_manifest rebuilt EVERY manifest with
+    build_design, so a pilot -- which also carries the audit, the gates and the
+    promotion rule -- could never reproduce its own digest and would have
+    reported invalid the moment it was frozen."""
+    _, block = real_pilots["ppubench"]
+    path, digest = rf.freeze_manifest(block, tmp_path / "rf_pilot.json")
+    got = rf.verify_manifest(path)
+    assert got["valid"] is True, got["problems"]
+    assert got["kind"] == rf.PREREG_KIND
+    assert got["executed"] is False
+    assert got["n_cells"] == 3 and got["n_rows_total"] == 126
+    assert got["n_checkpoints_rehashed"] == 5
+
+    frozen = json.loads(path.read_text(encoding="utf-8"))
+    assert frozen["frozen"] is True
+    assert got["design_sha256"] == frozen["design_sha256"]
+    assert digest == _sha(path)
+    # every input the manifest names is resolvable, so the digest table binds
+    for name, want in frozen["provenance"]["input_file_sha256"].items():
+        p = rf.DATASET_ROOT / name
+        assert p.is_file(), name
+        assert _sha(p) == want, name
+    assert frozen["provenance"]["missing_input_files"] == []
+
+    # a bare design is still verified as a bare design, and is not mistaken
+    # for a pilot
+    d = rf.build_design("ppubench", "fs_001", ["001"], [17, 42, 123],
+                        [17, 42, 123])
+    p2, _ = rf.freeze_manifest(d, tmp_path / "rf_manifest.json")
+    got2 = rf.verify_manifest(p2)
+    assert got2["valid"] is True, got2["problems"]
+    assert got2["kind"] == rf.KIND
+    assert got2["executed"] is None
+    assert got2["n_checkpoints_rehashed"] == 0
+
+
+@_needs_tree
+def test_the_pilot_manifest_is_deterministic(rf, real_pilots):
+    """Deriving the promotion rule and the selection explicitly must give the
+    same bytes as letting the constructor derive both."""
+    sel, block = real_pilots["ppubench"]
+    again = rf.build_pilot_preregistration(
+        "ppubench", sel["set_id"], sel["targets"], [17, 42, 123], [17, 42, 123])
+    assert rf.design_sha256(again) == rf.design_sha256(block)
+    assert again["pilot_forget_set_selection"] == block[
+        "pilot_forget_set_selection"]
+    assert again["promotion_rule"] == block["promotion_rule"]
+
+
+@_needs_tree
+def test_editing_a_frozen_pilot_is_detected(rf, real_pilots, tmp_path):
+    """A pre-registration is only one if it cannot be quietly edited
+    afterwards; the digest plus the rebuild is what makes that checkable."""
+    _, block = real_pilots["ppubench"]
+    path, _ = rf.freeze_manifest(block, tmp_path / "p.json")
+    assert rf.verify_manifest(path)["valid"] is True
+
+    frozen = json.loads(path.read_text(encoding="utf-8"))
+    frozen["frozen_gates"]["thresholds"][
+        "min_router_held_out_accuracy"] = 0.50     # lower a gate afterwards
+    path.write_text(rf.canonical_json(frozen), encoding="utf-8")
+    got = rf.verify_manifest(path)
+    assert got["valid"] is False
+    assert any("design_sha256 does not match" in p for p in got["problems"])
+
+    # claiming the pilot had been executed is caught the same way
+    frozen = json.loads(path.read_text(encoding="utf-8"))
+    frozen["executed"] = True
+    path.write_text(rf.canonical_json(frozen), encoding="utf-8")
+    assert rf.verify_manifest(path)["valid"] is False
+
+
+@_needs_tree
+def test_a_manifest_of_an_unknown_kind_is_not_verified_as_a_design(
+        rf, real_pilots, tmp_path):
+    """Rebuilding through the wrong constructor is how a verifier comes to
+    fail everything, so an unrecognised kind is refused rather than guessed
+    at."""
+    _, block = real_pilots["ppubench"]
+    path, _ = rf.freeze_manifest(block, tmp_path / "q.json")
+    frozen = json.loads(path.read_text(encoding="utf-8"))
+    frozen["kind"] = "something_else_v1"
+    frozen["design_sha256"] = rf.design_sha256(
+        {k: v for k, v in frozen.items()
+         if k not in ("frozen", "design_sha256", "provenance")})
+    path.write_text(rf.canonical_json(frozen), encoding="utf-8")
+    got = rf.verify_manifest(path)
+    assert got["valid"] is False
+    assert any("cannot be rebuilt at all" in p for p in got["problems"])
+    assert "unknown manifest kind" in json.dumps(got["problems"])
+
+
+
