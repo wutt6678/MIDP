@@ -910,12 +910,20 @@ def test_missing_intervention_rows_block_the_freeze(rf, monkeypatch):
 
 
 def test_rf1_refuses_rather_than_pretending_to_run(rf):
-    """The GPU phase is the one thing this iteration does not implement, and it
-    must say so instead of producing an empty cell that later reads as a
-    result."""
-    with pytest.raises(RuntimeError, match="needs a GPU session"):
+    """A GPU phase must say so instead of producing an empty cell that later
+    reads as a result.
+
+    v1's single RF1 stub is gone rather than implemented: it named no factor,
+    so "run RF1" could not say which router, which edited h or which direct
+    model it meant.  The refusal now names the four phases that replaced it, and
+    the superseded v1 session stub still refuses exactly as it did.
+    """
+    with pytest.raises(RuntimeError, match="RF1 no longer exists") as exc:
         rf.main(["--dataset", "ppubench", "--phase", "RF1",
                  "--forget-ids", "001"])
+    for replacement in ("RF1G", "RF1D", "RF1H", "RF1E"):
+        assert replacement in str(exc.value), \
+            f"the refusal must name {replacement} as what replaced RF1"
 
     session = rf.RouteSession("ppubench", "cpu")
     for call in (lambda: session.load("x"),
