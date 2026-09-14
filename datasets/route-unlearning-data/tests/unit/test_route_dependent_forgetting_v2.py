@@ -1938,25 +1938,58 @@ _needs_v2_manifests = pytest.mark.skipif(
     reason=("the v2 pilots are not frozen in this checkout: "
             + ", ".join(str(p) for p in _V2_MANIFESTS if not p.is_file())))
 
-def _absent_recorded_weights(paths):
-    """The weights these frozen manifests hashed that are not on disk here.
 
-    Derived from the artifacts themselves rather than from a list of paths
-    written into this file: the rebuild inside ``verify_manifest`` re-runs the
-    constructor, which embeds live checkpoint PRESENCE, so a checkout without
-    the gitignored adapters cannot reproduce a frozen design_sha256 no matter
-    what the code does.
+def _recorded_paths(node):
+    """Every ``path`` a frozen checkpoint table names, at any depth.
+
+    v1 recorded one path per ROLE and v2 records one per FILE per role, so this
+    walks the table rather than branching on a shape it recognizes.  A helper
+    that only understood v1's shape reported "no weights are missing" for a v2
+    table whose weights were all missing, and a gate that never fires is not a
+    gate -- it is a test that fails in a fresh clone instead of skipping.
+    """
+    if isinstance(node, dict):
+        found = node.get("path")
+        if isinstance(found, str):
+            yield found
+        for value in node.values():
+            yield from _recorded_paths(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _recorded_paths(value)
+
+
+def _absent_recorded_weights(paths):
+    """The weights these frozen manifests hashed that are not on disk HERE.
+
+    Derived from the artifacts rather than from a list of paths written into this
+    file: the rebuild inside ``verify_manifest`` re-runs the constructor, which
+    embeds live checkpoint PRESENCE, so a checkout without the gitignored
+    adapters cannot reproduce a frozen design_sha256 no matter what the code does.
+
+    An absolute recorded path points at the checkout that froze it, and the root
+    it was recorded against is in the artifact's own provenance, so the path is
+    re-rooted here before being asked about.  Taking an absolute path at face
+    value asks the ORIGINAL checkout whether the CLONE has the weights, answers
+    yes, and runs a test that can only fail -- which is precisely the
+    consequence of v1's absolute recording that the artifact itself warns about.
     """
     absent = []
     for path in paths:
         doc = json.loads(path.read_text(encoding="utf-8"))
+        frozen_root = Path((doc.get("provenance") or {})
+                           .get("paths_are_relative_to") or _ROOT)
         present = ((doc.get("checkpoint_requirements") or {})
                    .get("verification") or {}).get("present") or {}
-        for entry in present.values():
-            if not (isinstance(entry, dict) and entry.get("path")):
-                continue
-            q = Path(entry["path"])
-            q = q if q.is_absolute() else _ROOT / q
+        for raw in _recorded_paths(present):
+            q = Path(raw)
+            if not q.is_absolute():
+                q = _ROOT / q
+            else:
+                try:
+                    q = _ROOT / q.relative_to(frozen_root)
+                except ValueError:
+                    pass  # recorded against a root this artifact does not name
             if not q.is_file():
                 absent.append(str(q))
     return absent
@@ -1996,6 +2029,66 @@ _needs_v2_verifiable = pytest.mark.skipif(
             "verifying a frozen v2 pilot re-hashes every image and every weight "
             "it names and rebuilds the design over them -- "
             + _V2_UNVERIFIABLE_BECAUSE))
+
+
+def test_the_weight_gate_reads_both_frozen_shapes(tmp_path):
+    """The gate deciding whether a rebuild can be checked has to see every weight
+    the artifact names, or it never fires.
+
+    v1 recorded one path per ROLE and v2 records one per FILE per role.  A helper
+    that understood only the first shape reported "nothing is missing" for a v2
+    table whose weights were all missing, and the test it guarded then FAILED in
+    a fresh clone instead of skipping -- a gate that cannot fire is worse than no
+    gate, because it reads as coverage.
+
+    Every recorded path is re-rooted into THIS checkout before being asked about:
+    taken at face value an absolute path asks the checkout that FROZE the manifest
+    whether the checkout READING it has the bytes, and the answer is about the
+    wrong tree.
+    """
+    # A tracked file stands in for a present weight.  The real ones are
+    # gitignored, so no checkout testing this can have them, and writing a fake
+    # one under the dataset root would leave the tree dirty -- which is its own
+    # failure, and the reason the tests file their reports under tmp_path.
+    present = "pyproject.toml"
+    assert (_ROOT / present).is_file()
+    gone = "w/adapter_model.safetensors"
+    other = tmp_path / "the_checkout_that_froze_it"
+
+    def artifact(name, freezing_root, table):
+        p = tmp_path / name
+        p.write_text(json.dumps({
+            "provenance": {"paths_are_relative_to": str(freezing_root)},
+            "checkpoint_requirements": {"verification": {"present": table}},
+        }), encoding="utf-8")
+        return p
+
+    cases = [
+        # v1's shape: one path per role, recorded relative
+        ("v1_relative.json", _ROOT, {
+            "baseline_g": {"path": present, "sha256": "x"},
+            "edited_h__seed17": {"path": gone, "sha256": "y"}}),
+        # v2's shape: one path per FILE per role, nested one level deeper, so a
+        # walker that stops at the first level sees nothing at all
+        ("v2_relative.json", _ROOT, {
+            "router_g__seed17": {
+                "role": "r", "declared_exists_already": True,
+                "adapter": {"path": present, "sha256": "x"},
+                "held_out_predictions": {"path": gone, "sha256": None}}}),
+        # v1's actual recording: ABSOLUTE against the root that froze it.  The
+        # present file has to come back as present, or re-rooting is untested and
+        # a helper that reported everything absent would look correct.
+        ("v1_absolute.json", other, {
+            "baseline_g": {"path": str(other / present), "sha256": "x"},
+            "edited_h__seed17": {"path": str(other / gone), "sha256": "y"}}),
+    ]
+    made = []
+    for name, root, table in cases:
+        p = artifact(name, root, table)
+        made.append(p)
+        assert set(_absent_recorded_weights([p])) == {str(_ROOT / gone)}, name
+    assert set(_absent_recorded_weights(made)) == {str(_ROOT / gone)}, \
+        "three manifests naming one missing weight are one missing weight"
 
 
 def test_the_supersession_record_names_every_repair(rf):
@@ -2173,6 +2266,12 @@ def test_the_v1_pilots_are_superseded_but_their_designs_still_rebuild(rf):
     manifests bind the bytes of the file that has since gained v2.  They are not
     re-frozen, because a pre-registration changed after freezing was never a
     pre-registration.
+
+    One problem is only the answer where the weights the v1 pilots hashed still
+    exist -- elsewhere the rebuild also reports every absent checkpoint digest
+    and a selection rule that can no longer find a complete set.  That is what
+    the gate below is for, and it is why the gate re-roots the recorded absolute
+    paths into THIS checkout instead of believing them.
     """
     for path in _V1_MANIFESTS:
         got = rf.verify_manifest(path)
