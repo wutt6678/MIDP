@@ -1,0 +1,3617 @@
+{
+  "bootstrap_plan": {
+    "alpha": 0.05,
+    "method": "percentile bootstrap over resampled clusters",
+    "n_resamples": 2000,
+    "one_cluster_is_refused_not_reported": "a bootstrap over a single cluster restates the point estimate as an interval of width zero",
+    "primary": {
+      "level": "identity",
+      "why": "images of one person share an identity, the router's training and the edited h, so they are not independent; identity is the unit the design actually randomizes over"
+    },
+    "repeated_intervention_rows_are_never_independent": "every row of one cell shares a router and an edited h, and every row of one code shares the same h(c) call, so no bootstrap resamples rows",
+    "seed": 17,
+    "sensitivity": {
+      "level": "image",
+      "why": "reported alongside the primary interval, never instead of it: if the two disagree the identity-level interval is the one to believe, because it is the one whose units are independent"
+    }
+  },
+  "cells": [
+    {
+      "cell_id": "intervention__h17",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_forgotten_codes": 1,
+          "n_retained_codes": 3,
+          "n_rows": 4
+        },
+        "kind": "intervention",
+        "mediator_is_hard": true,
+        "n_rows": 4,
+        "required": {
+          "n_forgotten_codes": 1,
+          "n_retained_codes": 3,
+          "n_rows": 4
+        }
+      },
+      "edit_seed": 17,
+      "kind": "intervention",
+      "n_rows": 4,
+      "phase": "RF1H",
+      "rows": [
+        {
+          "also_reported_as": [],
+          "arm": "forgotten",
+          "cell_id": "intervention__h17",
+          "cluster_id": "001",
+          "condition": "forgotten_route_intervention",
+          "decisive": true,
+          "edit_seed": 17,
+          "execution": "h_e(do(C=C_f)) -- a forgotten identity's code, no image",
+          "expected_label": "Unknown",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png"
+          ],
+          "identity_cluster_id": "001",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h17::do_C_001"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h17",
+          "cluster_id": "002",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 17,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Seri",
+          "forced_code": "RID_002",
+          "forced_identity_id": "002",
+          "forced_label": "Seri",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png"
+          ],
+          "identity_cluster_id": "002",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h17::do_C_002"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h17",
+          "cluster_id": "003",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 17,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Kael",
+          "forced_code": "RID_003",
+          "forced_identity_id": "003",
+          "forced_label": "Kael",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png"
+          ],
+          "identity_cluster_id": "003",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h17::do_C_003"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h17",
+          "cluster_id": "004",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 17,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Dax",
+          "forced_code": "RID_004",
+          "forced_identity_id": "004",
+          "forced_label": "Dax",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png"
+          ],
+          "identity_cluster_id": "004",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h17::do_C_004"
+        }
+      ]
+    },
+    {
+      "cell_id": "intervention__h42",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_forgotten_codes": 1,
+          "n_retained_codes": 3,
+          "n_rows": 4
+        },
+        "kind": "intervention",
+        "mediator_is_hard": true,
+        "n_rows": 4,
+        "required": {
+          "n_forgotten_codes": 1,
+          "n_retained_codes": 3,
+          "n_rows": 4
+        }
+      },
+      "edit_seed": 42,
+      "kind": "intervention",
+      "n_rows": 4,
+      "phase": "RF1H",
+      "rows": [
+        {
+          "also_reported_as": [],
+          "arm": "forgotten",
+          "cell_id": "intervention__h42",
+          "cluster_id": "001",
+          "condition": "forgotten_route_intervention",
+          "decisive": true,
+          "edit_seed": 42,
+          "execution": "h_e(do(C=C_f)) -- a forgotten identity's code, no image",
+          "expected_label": "Unknown",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png"
+          ],
+          "identity_cluster_id": "001",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h42::do_C_001"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h42",
+          "cluster_id": "002",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 42,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Seri",
+          "forced_code": "RID_002",
+          "forced_identity_id": "002",
+          "forced_label": "Seri",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png"
+          ],
+          "identity_cluster_id": "002",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h42::do_C_002"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h42",
+          "cluster_id": "003",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 42,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Kael",
+          "forced_code": "RID_003",
+          "forced_identity_id": "003",
+          "forced_label": "Kael",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png"
+          ],
+          "identity_cluster_id": "003",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h42::do_C_003"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h42",
+          "cluster_id": "004",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 42,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Dax",
+          "forced_code": "RID_004",
+          "forced_identity_id": "004",
+          "forced_label": "Dax",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png"
+          ],
+          "identity_cluster_id": "004",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h42::do_C_004"
+        }
+      ]
+    },
+    {
+      "cell_id": "intervention__h123",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_forgotten_codes": 1,
+          "n_retained_codes": 3,
+          "n_rows": 4
+        },
+        "kind": "intervention",
+        "mediator_is_hard": true,
+        "n_rows": 4,
+        "required": {
+          "n_forgotten_codes": 1,
+          "n_retained_codes": 3,
+          "n_rows": 4
+        }
+      },
+      "edit_seed": 123,
+      "kind": "intervention",
+      "n_rows": 4,
+      "phase": "RF1H",
+      "rows": [
+        {
+          "also_reported_as": [],
+          "arm": "forgotten",
+          "cell_id": "intervention__h123",
+          "cluster_id": "001",
+          "condition": "forgotten_route_intervention",
+          "decisive": true,
+          "edit_seed": 123,
+          "execution": "h_e(do(C=C_f)) -- a forgotten identity's code, no image",
+          "expected_label": "Unknown",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png"
+          ],
+          "identity_cluster_id": "001",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h123::do_C_001"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h123",
+          "cluster_id": "002",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 123,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Seri",
+          "forced_code": "RID_002",
+          "forced_identity_id": "002",
+          "forced_label": "Seri",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png"
+          ],
+          "identity_cluster_id": "002",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h123::do_C_002"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h123",
+          "cluster_id": "003",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 123,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Kael",
+          "forced_code": "RID_003",
+          "forced_identity_id": "003",
+          "forced_label": "Kael",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png"
+          ],
+          "identity_cluster_id": "003",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h123::do_C_003"
+        },
+        {
+          "also_reported_as": [
+            "retained_control"
+          ],
+          "arm": "retained",
+          "cell_id": "intervention__h123",
+          "cluster_id": "004",
+          "condition": "retained_route_intervention",
+          "decisive": true,
+          "edit_seed": 123,
+          "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+          "expected_label": "Dax",
+          "forced_code": "RID_004",
+          "forced_identity_id": "004",
+          "forced_label": "Dax",
+          "held_out_images_of_this_identity": [
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+            "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png"
+          ],
+          "identity_cluster_id": "004",
+          "image_cluster_id": null,
+          "image_identity_id": null,
+          "image_to_h": false,
+          "image_uri": null,
+          "prompt_key": "h_code_to_alias",
+          "row_id": "intervention__h123::do_C_004"
+        }
+      ]
+    },
+    {
+      "cell_id": "natural__g17__h17",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_identities": 4,
+          "n_rows": 12
+        },
+        "kind": "natural",
+        "mediator_is_hard": true,
+        "n_rows": 12,
+        "required": {
+          "n_identities": 4,
+          "n_rows": 12
+        }
+      },
+      "edit_seed": 17,
+      "kind": "natural",
+      "n_rows": 12,
+      "phase": "RF1E",
+      "router_seed": 17,
+      "rows": [
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::001::Nicolas_Cage_32.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::001::Nicolas_Cage_33.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::001::Nicolas_Cage_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::002::Michelle_Obama_47.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::002::Michelle_Obama_49.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::002::Michelle_Obama_50.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::003::George_W_Bush_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::003::George_W_Bush_35.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::003::George_W_Bush_48.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::004::Walt_Disney_43.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::004::Walt_Disney_45.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h17",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 17,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h17::nat::004::Walt_Disney_47.png",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "cell_id": "natural__g17__h42",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_identities": 4,
+          "n_rows": 12
+        },
+        "kind": "natural",
+        "mediator_is_hard": true,
+        "n_rows": 12,
+        "required": {
+          "n_identities": 4,
+          "n_rows": 12
+        }
+      },
+      "edit_seed": 42,
+      "kind": "natural",
+      "n_rows": 12,
+      "phase": "RF1E",
+      "router_seed": 17,
+      "rows": [
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::001::Nicolas_Cage_32.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::001::Nicolas_Cage_33.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::001::Nicolas_Cage_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::002::Michelle_Obama_47.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::002::Michelle_Obama_49.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::002::Michelle_Obama_50.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::003::George_W_Bush_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::003::George_W_Bush_35.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::003::George_W_Bush_48.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::004::Walt_Disney_43.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::004::Walt_Disney_45.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h42",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 42,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h42::nat::004::Walt_Disney_47.png",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "cell_id": "natural__g17__h123",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_identities": 4,
+          "n_rows": 12
+        },
+        "kind": "natural",
+        "mediator_is_hard": true,
+        "n_rows": 12,
+        "required": {
+          "n_identities": 4,
+          "n_rows": 12
+        }
+      },
+      "edit_seed": 123,
+      "kind": "natural",
+      "n_rows": 12,
+      "phase": "RF1E",
+      "router_seed": 17,
+      "rows": [
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::001::Nicolas_Cage_32.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::001::Nicolas_Cage_33.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "001",
+          "code_of_image_identity": "RID_001",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Unknown",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::001::Nicolas_Cage_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::002::Michelle_Obama_47.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::002::Michelle_Obama_49.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "002",
+          "code_of_image_identity": "RID_002",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Seri",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::002::Michelle_Obama_50.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::003::George_W_Bush_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::003::George_W_Bush_35.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "003",
+          "code_of_image_identity": "RID_003",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Kael",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::003::George_W_Bush_48.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::004::Walt_Disney_43.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::004::Walt_Disney_45.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "cell_id": "natural__g17__h123",
+          "cluster_id": "004",
+          "code_of_image_identity": "RID_004",
+          "condition": "natural_mediated",
+          "decisive": false,
+          "edit_seed": 123,
+          "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+          "expected_label": "Dax",
+          "filled_by": "RF1E, from router seed 17's own held-out prediction file",
+          "forced_identity_id": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+          "observation_pending": true,
+          "prompt_key": "h_code_to_alias",
+          "routable": null,
+          "routed_code": null,
+          "routed_code_correct": null,
+          "routed_code_raw": null,
+          "router_seed": 17,
+          "row_id": "natural__g17__h123::nat::004::Walt_Disney_47.png",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "cell_id": "direct__d17",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_identities": 4,
+          "n_rows": 12
+        },
+        "kind": "direct",
+        "mediator_is_hard": true,
+        "n_rows": 12,
+        "required": {
+          "n_identities": 4,
+          "n_rows": 12
+        }
+      },
+      "direct_seed": 17,
+      "kind": "direct",
+      "n_rows": 12,
+      "phase": "RF1D",
+      "rows": [
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "001",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Oden",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::001::Nicolas_Cage_32.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "001",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Oden",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::001::Nicolas_Cage_33.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "001",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Oden",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::001::Nicolas_Cage_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "002",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Seri",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::002::Michelle_Obama_47.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "002",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Seri",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::002::Michelle_Obama_49.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "002",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Seri",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::002::Michelle_Obama_50.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "003",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Kael",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::003::George_W_Bush_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "003",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Kael",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::003::George_W_Bush_35.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "003",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Kael",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::003::George_W_Bush_48.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "004",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Dax",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::004::Walt_Disney_43.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "004",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Dax",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::004::Walt_Disney_45.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": false,
+          "cell_id": "direct__d17",
+          "cluster_id": "004",
+          "condition": "direct_control",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X) -- image only, no code, separate adapter",
+          "expected_label": "Dax",
+          "forced_code": null,
+          "forced_identity_id": null,
+          "forced_label": null,
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+          "prompt_key": "d_image_to_alias",
+          "routed_code": null,
+          "row_id": "direct__d17::dir::004::Walt_Disney_47.png",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "auxiliary": true,
+      "cell_id": "hybrid__d17",
+      "coverage": {
+        "defects": [],
+        "exact": true,
+        "got": {
+          "n_identities": 4,
+          "n_rows": 12
+        },
+        "kind": "direct",
+        "mediator_is_hard": true,
+        "n_rows": 12,
+        "required": {
+          "n_identities": 4,
+          "n_rows": 12
+        }
+      },
+      "direct_seed": 17,
+      "kind": "hybrid",
+      "n_rows": 12,
+      "phase": "RF1D",
+      "rows": [
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "001",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Oden",
+          "forced_code": "RID_002",
+          "forced_identity_id": "002",
+          "forced_label": "Seri",
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::001::Nicolas_Cage_32.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "001",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Oden",
+          "forced_code": "RID_002",
+          "forced_identity_id": "002",
+          "forced_label": "Seri",
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::001::Nicolas_Cage_33.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "001",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Oden",
+          "forced_code": "RID_002",
+          "forced_identity_id": "002",
+          "forced_label": "Seri",
+          "identity_cluster_id": "001",
+          "image_cluster_id": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_identity_id": "001",
+          "image_is_forgotten": true,
+          "image_sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::001::Nicolas_Cage_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "002",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Seri",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::002::Michelle_Obama_47.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "002",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Seri",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::002::Michelle_Obama_49.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "002",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Seri",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "002",
+          "image_cluster_id": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_identity_id": "002",
+          "image_is_forgotten": false,
+          "image_sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::002::Michelle_Obama_50.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "003",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Kael",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::003::George_W_Bush_34.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "003",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Kael",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::003::George_W_Bush_35.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "003",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Kael",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "003",
+          "image_cluster_id": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_identity_id": "003",
+          "image_is_forgotten": false,
+          "image_sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::003::George_W_Bush_48.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "004",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Dax",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::004::Walt_Disney_43.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "004",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Dax",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::004::Walt_Disney_45.png",
+          "split": "test"
+        },
+        {
+          "also_reported_as": [],
+          "auxiliary": true,
+          "cell_id": "hybrid__d17",
+          "cluster_id": "004",
+          "condition": "hybrid_conflict_probe",
+          "decisive": false,
+          "direct_seed": 17,
+          "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+          "expected_label": "Dax",
+          "forced_code": "RID_001",
+          "forced_identity_id": "001",
+          "forced_label": "Oden",
+          "identity_cluster_id": "004",
+          "image_cluster_id": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_identity_id": "004",
+          "image_is_forgotten": false,
+          "image_sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+          "image_to_h": false,
+          "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+          "prompt_key": "hybrid_image_and_code",
+          "routed_code": null,
+          "row_id": "hybrid__d17::hyb::004::Walt_Disney_47.png",
+          "split": "test"
+        }
+      ]
+    }
+  ],
+  "cells_by_kind": {
+    "direct": [
+      "direct__d17"
+    ],
+    "hybrid": [
+      "hybrid__d17"
+    ],
+    "intervention": [
+      "intervention__h17",
+      "intervention__h42",
+      "intervention__h123"
+    ],
+    "natural": [
+      "natural__g17__h17",
+      "natural__g17__h42",
+      "natural__g17__h123"
+    ]
+  },
+  "checkpoint_requirements": {
+    "complete": false,
+    "dataset": "ppubench",
+    "direct_seeds": [
+      17
+    ],
+    "edit_seeds": [
+      17,
+      42,
+      123
+    ],
+    "forget_set_id": "fs_001",
+    "must_be_trained_before_this_pilot_can_run": [
+      "direct_d__seed17"
+    ],
+    "n_must_be_trained": 1,
+    "no_direct_condition_reuses_edited_h": "v1's direct condition reused edited_h and so measured a code-trained adapter on an image; v2 requires an independent D_s with its own digest",
+    "paths_are_recorded_relative_not_absolute": "v1's verification table recorded the checkpoint paths it hashed as ABSOLUTE (its requirement table recorded the same paths relative), so a frozen v1 manifest reproduces its design_sha256 only on a checkout rooted where it was frozen; from another clone every role reads as absent.  v2 records both tables relative to the dataset root -- the convention provenance.paths_are_relative_to already states -- and verify_manifest resolves a recorded path through resolve_recorded_path, which still accepts the absolute shape so the superseded v1 manifests keep verifying where they were frozen",
+    "roles": {
+      "baseline_h": {
+        "adapter": "e2c_v3_real/outputs/realdata/h_C_to_Y/adapter_final/adapter_model.safetensors",
+        "exists_already": true,
+        "n_files_required": 1,
+        "role": "the unedited code->label map; the before in before/after"
+      },
+      "direct_d__seed17": {
+        "adapter": "e2c_route_forgetting/outputs/ppubench/direct_seed_17/adapter_final/adapter_model.safetensors",
+        "exists_already": false,
+        "n_files_required": 1,
+        "role": "a separately trained X -> Y adapter on the same training associations, image-only, never edited when h is edited"
+      },
+      "edited_h__seed123": {
+        "adapter": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/edited_h/adapter_final/adapter_model.safetensors",
+        "cell_results": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/cell_results.json",
+        "exists_already": true,
+        "n_files_required": 2,
+        "role": "the post-edit route, reused from the frozen matrix"
+      },
+      "edited_h__seed17": {
+        "adapter": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/edited_h/adapter_final/adapter_model.safetensors",
+        "cell_results": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/cell_results.json",
+        "exists_already": true,
+        "n_files_required": 2,
+        "role": "the post-edit route, reused from the frozen matrix"
+      },
+      "edited_h__seed42": {
+        "adapter": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/edited_h/adapter_final/adapter_model.safetensors",
+        "cell_results": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/cell_results.json",
+        "exists_already": true,
+        "n_files_required": 2,
+        "role": "the post-edit route, reused from the frozen matrix"
+      },
+      "router_g__seed17": {
+        "adapter": "e2c_v3_real/outputs/realdata/g_X_to_C/adapter_final/adapter_model.safetensors",
+        "exists_already": true,
+        "held_out_predictions": "e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json",
+        "n_files_required": 2,
+        "role": "the frozen router, read not retrained"
+      }
+    },
+    "router_seed_is_a_real_factor": "one checkpoint and one held-out prediction file per router seed; forced-code interventions are evaluated once per EDIT seed because they do not depend on g, so they are not repeated across router seeds and counted as additional evidence",
+    "router_seeds": [
+      17
+    ],
+    "unexpectedly_absent": [],
+    "verification": {
+      "absent": {
+        "direct_d__seed17": {
+          "adapter": {
+            "absent": true,
+            "bytes": null,
+            "path": "e2c_route_forgetting/outputs/ppubench/direct_seed_17/adapter_final/adapter_model.safetensors",
+            "sha256": null
+          },
+          "declared_exists_already": false,
+          "role": "direct_d__seed17"
+        }
+      },
+      "complete": false,
+      "hashed_not_just_existence_checked": "a checkpoint replaced in place keeps its path, so the digest is what ties a result to the weights that produced it",
+      "must_be_trained": [
+        "direct_d__seed17"
+      ],
+      "n_files_required": 10,
+      "n_must_be_trained": 1,
+      "n_present": 5,
+      "n_required": 6,
+      "note": "must_be_trained is the GPU work this pilot requires and does not have; unexpectedly_absent is a role this design assumed was already on disk and is not, which is a broken assumption rather than training work",
+      "present": {
+        "baseline_h": {
+          "adapter": {
+            "bytes": 7873736,
+            "path": "e2c_v3_real/outputs/realdata/h_C_to_Y/adapter_final/adapter_model.safetensors",
+            "sha256": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4"
+          },
+          "declared_exists_already": true,
+          "role": "baseline_h"
+        },
+        "edited_h__seed123": {
+          "adapter": {
+            "bytes": 7873736,
+            "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/edited_h/adapter_final/adapter_model.safetensors",
+            "sha256": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677"
+          },
+          "cell_results": {
+            "bytes": 29071,
+            "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/cell_results.json",
+            "sha256": "46ed2acada04e8f232ce94b864df99536a273b13f5b11109a1ba65fd8015e00a"
+          },
+          "declared_exists_already": true,
+          "role": "edited_h__seed123"
+        },
+        "edited_h__seed17": {
+          "adapter": {
+            "bytes": 7873736,
+            "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/edited_h/adapter_final/adapter_model.safetensors",
+            "sha256": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1"
+          },
+          "cell_results": {
+            "bytes": 29074,
+            "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/cell_results.json",
+            "sha256": "44489bf66ae458dc4b5dbe3e34676ee2f4957b5b66422a0759b0c0e151066b0a"
+          },
+          "declared_exists_already": true,
+          "role": "edited_h__seed17"
+        },
+        "edited_h__seed42": {
+          "adapter": {
+            "bytes": 7873736,
+            "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/edited_h/adapter_final/adapter_model.safetensors",
+            "sha256": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345"
+          },
+          "cell_results": {
+            "bytes": 29074,
+            "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/cell_results.json",
+            "sha256": "73b287398ffcc5408193663ef00b92b2b55559edc8497b199a173cfbb54cc3d8"
+          },
+          "declared_exists_already": true,
+          "role": "edited_h__seed42"
+        },
+        "router_g__seed17": {
+          "adapter": {
+            "bytes": 7873736,
+            "path": "e2c_v3_real/outputs/realdata/g_X_to_C/adapter_final/adapter_model.safetensors",
+            "sha256": "6d6a9dd22de3806cbc117cfd97344e3ef17c6e32a0b7773e9431d3a122086f42"
+          },
+          "declared_exists_already": true,
+          "held_out_predictions": {
+            "bytes": 27892,
+            "path": "e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json",
+            "sha256": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31"
+          },
+          "role": "router_g__seed17"
+        }
+      },
+      "unexpectedly_absent": []
+    }
+  },
+  "cluster_bootstrap": {
+    "alpha": 0.05,
+    "cluster_counts_held_out": {
+      "identity": 4,
+      "image": 4
+    },
+    "dataset": "ppubench",
+    "exploratory": true,
+    "exploratory_because": "4 identity clusters, and every held-out image's bytes also appear in the train split, so any interval computed here is exploratory rather than a held-out claim",
+    "image_level_is_degenerate": true,
+    "method": "percentile bootstrap over resampled clusters",
+    "n_resamples": 2000,
+    "one_cluster_is_refused_not_reported": "a bootstrap over a single cluster restates the point estimate as an interval of width zero",
+    "primary": {
+      "level": "identity",
+      "why": "images of one person share an identity, the router's training and the edited h, so they are not independent; identity is the unit the design actually randomizes over"
+    },
+    "primary_n_clusters": 4,
+    "repeated_intervention_rows_are_never_independent": "every row of one cell shares a router and an edited h, and every row of one code shares the same h(c) call, so no bootstrap resamples rows",
+    "seed": 17,
+    "sensitivity": {
+      "level": "image",
+      "why": "reported alongside the primary interval, never instead of it: if the two disagree the identity-level interval is the one to believe, because it is the one whose units are independent"
+    },
+    "sensitivity_is_not_a_refinement_here": "every identity has a single distinct held-out image, so image clusters ARE identity clusters and the sensitivity analysis restates the primary one",
+    "sensitivity_n_clusters": 4
+  },
+  "conditions": {
+    "direct_control": {
+      "decisive": false,
+      "depends_on": [
+        "direct_seed"
+      ],
+      "execution": "D_s(X) -- image only, no code, separate adapter",
+      "expectation": "follows_image",
+      "image_to_h": false,
+      "prompt_key": "d_image_to_alias",
+      "role": "the unchanged X -> Y pathway.  It is NOT edited_h: an adapter trained on code-to-label pairs is not an image model, so v1's 'reuses edited_h' measured nothing.  Expected to survive, because the claim is route-dependent forgetting and not global erasure"
+    },
+    "forgotten_route_intervention": {
+      "decisive": true,
+      "depends_on": [
+        "edit_seed"
+      ],
+      "execution": "h_e(do(C=C_f)) -- a forgotten identity's code, no image",
+      "expectation": "refusal",
+      "image_to_h": false,
+      "prompt_key": "h_code_to_alias",
+      "role": "the mediator is set by hand to a code in F and h must refuse"
+    },
+    "hybrid_conflict_probe": {
+      "auxiliary": true,
+      "decisive": false,
+      "depends_on": [
+        "direct_seed"
+      ],
+      "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+      "expectation": "follows_image",
+      "image_to_h": false,
+      "not_the_mediator_intervention": "presenting an image and a code together makes the system f(X, C), which is not the frozen architecture Y = h(C).  This condition is retained because it is a useful bypass/conflict probe -- it asks whether a code can capture a pathway that was never trained on codes -- and it is reported separately from every mediated gate.  v1 reported it AS the causal intervention, which is the defect this repairs",
+      "prompt_key": "hybrid_image_and_code",
+      "role": "auxiliary bypass/conflict probe only"
+    },
+    "natural_mediated": {
+      "decisive": false,
+      "depends_on": [
+        "router_seed",
+        "edit_seed"
+      ],
+      "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+      "expectation": "refusal_if_forgotten_else_image_alias",
+      "image_to_h": false,
+      "prompt_key": "h_code_to_alias",
+      "role": "the composition the edit was trained to break; it is the only condition that involves X at all, and it is what the E2E factorization predicts"
+    },
+    "retained_control": {
+      "decisive": false,
+      "depends_on": [
+        "edit_seed"
+      ],
+      "execution": "h_e(do(C=C_r)) -- IDENTICAL to the condition above",
+      "expectation": "follows_code",
+      "image_to_h": false,
+      "prompt_key": "h_code_to_alias",
+      "role": "with a hard mediator the retained control and the retained-route intervention are the SAME call: h receives a code and nothing else, so no image distinguishes them.  v1 counted them as two rows because it also passed an image; v2 evaluates the code once and reports it under both names, because counting one measurement twice is not more evidence",
+      "same_execution_as": "retained_route_intervention"
+    },
+    "retained_route_intervention": {
+      "decisive": true,
+      "depends_on": [
+        "edit_seed"
+      ],
+      "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+      "expectation": "follows_code",
+      "image_to_h": false,
+      "prompt_key": "h_code_to_alias",
+      "role": "the mediator is set by hand to a code outside F and h must produce that code's alias"
+    }
+  },
+  "corrected_architecture": {
+    "auxiliary_bypass_probe": "hybrid_conflict_probe presents an image and a code together, which makes the system f(X, C); it is reported as a bypass/conflict test and is not the causal mediator intervention",
+    "conditions_as_executed": {
+      "direct_control": {
+        "auxiliary": false,
+        "execution": "D_s(X) -- image only, no code, separate adapter",
+        "image_to_h": false,
+        "prompt_key": "d_image_to_alias"
+      },
+      "forgotten_route_intervention": {
+        "auxiliary": false,
+        "execution": "h_e(do(C=C_f)) -- a forgotten identity's code, no image",
+        "image_to_h": false,
+        "prompt_key": "h_code_to_alias"
+      },
+      "hybrid_conflict_probe": {
+        "auxiliary": true,
+        "execution": "D_s(X, C_irrelevant) -- image AND a code, auxiliary",
+        "image_to_h": false,
+        "prompt_key": "hybrid_image_and_code"
+      },
+      "natural_mediated": {
+        "auxiliary": false,
+        "execution": "c = g_s(X) from that router seed's own held-out prediction file, then h_e(c)",
+        "image_to_h": false,
+        "prompt_key": "h_code_to_alias"
+      },
+      "retained_control": {
+        "auxiliary": false,
+        "execution": "h_e(do(C=C_r)) -- IDENTICAL to the condition above",
+        "image_to_h": false,
+        "prompt_key": "h_code_to_alias"
+      },
+      "retained_route_intervention": {
+        "auxiliary": false,
+        "execution": "h_e(do(C=C_r)) -- a retained identity's code, no image",
+        "image_to_h": false,
+        "prompt_key": "h_code_to_alias"
+      }
+    },
+    "direct_control": "D_s(X), image only, separate adapter",
+    "forgotten_route_intervention": "h_e(do(C=C_f))",
+    "image_identity_on_forced_code_rows": "retained as experimental metadata (held_out_images_of_this_identity) and never sent to h",
+    "natural_mediated": "c = g_s(X), then h_e(c)",
+    "retained_control": "h_e(do(C=C_r)) -- the SAME call as the retained-route intervention, reported under a second name rather than run twice",
+    "retained_route_intervention": "h_e(do(C=C_r))",
+    "statement": "Y = h(C) with C = g(X); h receives a code and never an image",
+    "why_v1_was_wrong": {
+      "also": "v1 used the prompt 'Identity code: {code}. What is the alias?', which is not the CODE_TO_ALIAS_PROMPT the route was trained with; v2 reads the prompt from the frozen scripts and requires all three to agree",
+      "v1": "forced-code rows used CODE_IMG_PROMPT, so h received the image and the system was f(X, C) rather than the frozen Y = h(C)",
+      "v2": "h receives a code and nothing else; the image-plus-code condition is retained as hybrid_conflict_probe and reported as an auxiliary bypass/conflict test, never as the intervention"
+    }
+  },
+  "dataset": "ppubench",
+  "decisive_conditions": [
+    "forgotten_route_intervention",
+    "retained_route_intervention"
+  ],
+  "deleted_label": "Unknown",
+  "delta_route": {
+    "excluded_and_why": {
+      "direct_control": "presents no code at all -- that is what makes it a control on the X -> Y pathway",
+      "hybrid_conflict_probe": "presents an image AND a code, so it is f(X, C) and not the mediator; it is auxiliary and is reported separately",
+      "natural_mediated": "no code is forced; the route is g's own prediction, so it belongs to the composition and not to the intervention",
+      "retained_control": "the same rows as retained_route_intervention, so including it would count one measurement twice"
+    },
+    "formula": "Delta_route = P(Unknown | do(C in F)) - P(Unknown | do(C not in F))",
+    "numerator_arms": [
+      "forgotten_route_intervention",
+      "retained_route_intervention"
+    ],
+    "unit_of_analysis": "the CODE, not the image.  With a hard mediator the intervention is h_e(do(C=c)) and nothing else varies, so one code is one observation and there is no image axis to average over"
+  },
+  "delta_route_definition": {
+    "excluded_and_why": {
+      "direct_control": "presents no code at all -- that is what makes it a control on the X -> Y pathway",
+      "hybrid_conflict_probe": "presents an image AND a code, so it is f(X, C) and not the mediator; it is auxiliary and is reported separately",
+      "natural_mediated": "no code is forced; the route is g's own prediction, so it belongs to the composition and not to the intervention",
+      "retained_control": "the same rows as retained_route_intervention, so including it would count one measurement twice"
+    },
+    "formula": "Delta_route = P(Unknown | do(C in F)) - P(Unknown | do(C not in F))",
+    "numerator_arms": [
+      "forgotten_route_intervention",
+      "retained_route_intervention"
+    ],
+    "unit_of_analysis": "the CODE, not the image.  With a hard mediator the intervention is h_e(do(C=c)) and nothing else varies, so one code is one observation and there is no image axis to average over"
+  },
+  "design_sha256": "35f3242f8c091318f28504d5c1962b11c96a9914fdc2adf1524b86e76e4eb9c1",
+  "direct_seeds": [
+    17
+  ],
+  "e2e_decomposition": {
+    "if_stochastic_decoding_is_ever_introduced": "P_h must then be estimated from repeated generations under a preregistered sampling configuration recorded in a NEW pre-registration; greedy decoding needs no such estimate because h_e(c) is one call with one answer",
+    "p_g_is": "the empirical hard router confusion: one code per image, from that router seed's own held-out prediction file, with an unparseable code counted as unroutable rather than dropped",
+    "p_h_is": "the empirical hard-response matrix H_e(c, y) = 1{parse(h_e(c)) = y}, read off h's own generations",
+    "p_h_is_not": "a candidate score sum.  A score sum over teacher-forced full-sequence labels has no termination event and no normalization across candidates, so it is not a probability and cannot be substituted for one",
+    "prediction_formula": "sum_c P_g(c|X) * H_e(c, Y*(X))",
+    "required_label_is_keyed_by": "the IMAGE, not the code -- keying it by the code would make every routing mistake correct by construction and predict 1.0 for any router whatsoever",
+    "supportable_on_this_dataset": false,
+    "what_a_disagreement_would_mean": "under greedy decoding the composed system and this prediction coincide exactly whenever h is a function of the code alone, so a disagreement is evidence that the mediator is NOT hard -- that h also responded to the image, or that the router predictions replayed are not the ones the confusion matrix was built from, or that the parse differs between the per-code and the composed call.  The gate is therefore a test of the architecture item 1 asks to preserve, not a restatement of the observation"
+  },
+  "edit_seeds": [
+    17,
+    42,
+    123
+  ],
+  "executed": false,
+  "execution_policy": "FROZEN AND NOT EXECUTED.  No cell of this pilot has been run, no router has been trained, no direct adapter has been trained and no matrix has been launched.  The checkpoint table below names exactly what must be trained first, and RF2 refuses to aggregate cells that do not exist",
+  "existing_router_seed": 17,
+  "forget_identity_ids": [
+    "001"
+  ],
+  "forget_set_id": "fs_001",
+  "frozen": true,
+  "frozen_gates": {
+    "gate_to_verdict": {
+      "conditional_forgotten_route_suppression": "mediation",
+      "conditional_retained_route_accuracy": "mediation",
+      "direct_code_following_rate": "mediation",
+      "direct_image_accuracy": "mediation",
+      "e2e_matches_the_routing_composition": "routing_factorization",
+      "mediator_intervention_following_accuracy": "mediation",
+      "no_unparseable_or_multi_label_outputs": "mediation",
+      "router_held_out_accuracy": "routing_reliability"
+    },
+    "independent_of_the_granularity_gates": "no threshold is imported from the G6 granularity pilot",
+    "n_gates": 8,
+    "new_in_v2": "direct_image_accuracy, because bounding code-following from above alone is satisfied by a model that emits arbitrary wrong labels",
+    "not_adjustable_afterwards": true,
+    "supportable_on_this_dataset": 6,
+    "thresholds": {
+      "forgotten_route_suppression": 1.0,
+      "max_abs_e2e_prediction_error": 0.02,
+      "max_direct_code_following_rate": 0.1,
+      "max_multi_label_outputs": 0,
+      "max_unparseable_outputs": 0,
+      "min_direct_image_accuracy": 0.9,
+      "min_intervention_following_accuracy": 0.99,
+      "min_router_held_out_accuracy": 0.9,
+      "retained_route_accuracy": 1.0
+    }
+  },
+  "gate_applicability": {
+    "clustering": {
+      "clusters_at_the_level_to_use": 4,
+      "distinct_images_per_identity": {
+        "001": 1,
+        "002": 1,
+        "003": 1,
+        "004": 1
+      },
+      "held_out_scope": {
+        "distinct_test_images_per_identity": {
+          "001": 1,
+          "002": 1,
+          "003": 1,
+          "004": 1
+        },
+        "image_level_is_degenerate": true,
+        "n_identity_clusters": 4,
+        "n_image_clusters": 4,
+        "note": "the intervention rows are built from held-out images, so these are the clusters the bootstrap actually resamples; the whole-manifest counts above include training images the design never touches"
+      },
+      "image_level_is_degenerate": true,
+      "level_to_use": "identity",
+      "n_identity_clusters": 4,
+      "n_image_clusters": 4,
+      "reason": "every identity has a single distinct held-out image, so image clusters collapse onto identity clusters and resampling them would only look like a finer unit"
+    },
+    "dataset": "ppubench",
+    "expected_verdicts": {
+      "mediation": "supported",
+      "routing_factorization": "not_established on unseen content",
+      "routing_reliability": "not_established"
+    },
+    "expected_verdicts_are_derived": "from the image-content audit and from HELD_OUT_G against the frozen floor; no dataset is named in a branch here, so a dataset whose images were replaced would get a different expectation rather than a stale one",
+    "held_out_image_content_exists": false,
+    "n_gates_supportable": 6,
+    "n_gates_total": 8,
+    "policy": "a verdict that is not established is recorded as such; it is not waived, not lowered, and not counted as passed or as failed",
+    "verdict_support": {
+      "mediation": {
+        "direct_gate_scope": "images whose bytes also appear in the train split, so direct_image_accuracy bounds ERASURE of the X -> Y pathway rather than establishing that it generalizes",
+        "reason": "every mediated condition forces the code and sends h nothing else, so the image is not an input and duplicated image content cannot affect it",
+        "supportable": true
+      },
+      "routing_factorization": {
+        "reason": "the factorization explains the gap between conditional and unconditional E2E accuracy; with no held-out image content there is no such gap to explain, so the formula would be filed against a quantity this dataset cannot produce",
+        "supportable": false
+      },
+      "routing_reliability": {
+        "reason": "every test image's bytes also appear in train (4 of 4 distinct test images), so an accuracy measured here is measured on training bytes and is not a held-out routing accuracy",
+        "supportable": false
+      }
+    }
+  },
+  "gate_thresholds": {
+    "forgotten_route_suppression": 1.0,
+    "max_abs_e2e_prediction_error": 0.02,
+    "max_direct_code_following_rate": 0.1,
+    "max_multi_label_outputs": 0,
+    "max_unparseable_outputs": 0,
+    "min_direct_image_accuracy": 0.9,
+    "min_intervention_following_accuracy": 0.99,
+    "min_router_held_out_accuracy": 0.9,
+    "retained_route_accuracy": 1.0
+  },
+  "gate_to_verdict": {
+    "conditional_forgotten_route_suppression": "mediation",
+    "conditional_retained_route_accuracy": "mediation",
+    "direct_code_following_rate": "mediation",
+    "direct_image_accuracy": "mediation",
+    "e2e_matches_the_routing_composition": "routing_factorization",
+    "mediator_intervention_following_accuracy": "mediation",
+    "no_unparseable_or_multi_label_outputs": "mediation",
+    "router_held_out_accuracy": "routing_reliability"
+  },
+  "gates_are_independent_of_granularity": "no threshold here is derived from the G6 granularity pilot",
+  "held_out_g": {
+    "accuracy": 1.0,
+    "source": "RD1 gate, commit 9bf3652"
+  },
+  "held_out_images": {
+    "content_audit": {
+      "by_split": {
+        "test": {
+          "n_distinct_bytes": 4,
+          "n_items": 12,
+          "n_uris": 12
+        },
+        "train": {
+          "n_distinct_bytes": 4,
+          "n_items": 62,
+          "n_uris": 62
+        }
+      },
+      "counts_are": "items are manifest rows, uris are distinct image paths and bytes are distinct image CONTENT; a dataset where these three differ partitions filenames rather than images",
+      "cross_check_against_manifest_table": {
+        "manifest_carries_images_sha256": false,
+        "n_compared": 0,
+        "n_disagreeing": 0,
+        "note": "the manifest's table was written when the snapshot was frozen, so it is an independent record of the bytes; agreement ties the audit to that snapshot"
+      },
+      "held_out_image_content_exists": false,
+      "identities_whose_uris_are_not_all_distinct": {
+        "001": {
+          "n_distinct_bytes": 1,
+          "n_uris": 17
+        },
+        "002": {
+          "n_distinct_bytes": 1,
+          "n_uris": 21
+        },
+        "003": {
+          "n_distinct_bytes": 1,
+          "n_uris": 19
+        },
+        "004": {
+          "n_distinct_bytes": 1,
+          "n_uris": 17
+        }
+      },
+      "images_by_uri_sha256": {
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_03.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_07.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_10.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_14.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_15.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_16.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_17.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_18.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_21.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_22.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_23.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_26.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_28.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_29.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_32.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_33.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_01.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_03.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_06.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_07.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_08.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_09.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_13.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_17.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_21.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_23.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_24.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_28.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_30.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_32.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_33.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_34.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_43.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_46.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_01.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_03.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_10.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_15.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_16.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_17.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_18.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_19.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_22.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_23.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_24.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_25.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_26.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_30.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_02.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_08.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_13.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_15.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_16.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_19.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_20.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_25.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_31.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_32.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_33.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_35.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_36.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_38.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+        "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a"
+      },
+      "n_distinct_image_bytes": 4,
+      "n_items": 74,
+      "n_test_bytes_also_in_train": 4,
+      "n_uris": 74,
+      "per_identity": {
+        "001": {
+          "digests": [
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61"
+          ],
+          "n_distinct_bytes": 1,
+          "n_test_distinct_bytes": 1,
+          "n_test_uris": 3,
+          "n_uris": 17
+        },
+        "002": {
+          "digests": [
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+          ],
+          "n_distinct_bytes": 1,
+          "n_test_distinct_bytes": 1,
+          "n_test_uris": 3,
+          "n_uris": 21
+        },
+        "003": {
+          "digests": [
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379"
+          ],
+          "n_distinct_bytes": 1,
+          "n_test_distinct_bytes": 1,
+          "n_test_uris": 3,
+          "n_uris": 19
+        },
+        "004": {
+          "digests": [
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a"
+          ],
+          "n_distinct_bytes": 1,
+          "n_test_distinct_bytes": 1,
+          "n_test_uris": 3,
+          "n_uris": 17
+        }
+      },
+      "what_this_decides": "whether a gate on HELD-OUT routing can be tested at all.  If every test image's bytes also appear in train, the split partitions filenames rather than images, and any accuracy measured on the test split is measured on images the router was trained on"
+    },
+    "images": [
+      {
+        "alias": "Oden",
+        "bytes": 88172,
+        "code": "RID_001",
+        "identity_id": "001",
+        "image_id": "Nicolas_Cage_32.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+        "is_forgotten": true,
+        "sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61"
+      },
+      {
+        "alias": "Oden",
+        "bytes": 88172,
+        "code": "RID_001",
+        "identity_id": "001",
+        "image_id": "Nicolas_Cage_33.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+        "is_forgotten": true,
+        "sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61"
+      },
+      {
+        "alias": "Oden",
+        "bytes": 88172,
+        "code": "RID_001",
+        "identity_id": "001",
+        "image_id": "Nicolas_Cage_34.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+        "is_forgotten": true,
+        "sha256": "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61"
+      },
+      {
+        "alias": "Seri",
+        "bytes": 194066,
+        "code": "RID_002",
+        "identity_id": "002",
+        "image_id": "Michelle_Obama_47.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+        "is_forgotten": false,
+        "sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+      },
+      {
+        "alias": "Seri",
+        "bytes": 194066,
+        "code": "RID_002",
+        "identity_id": "002",
+        "image_id": "Michelle_Obama_49.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+        "is_forgotten": false,
+        "sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+      },
+      {
+        "alias": "Seri",
+        "bytes": 194066,
+        "code": "RID_002",
+        "identity_id": "002",
+        "image_id": "Michelle_Obama_50.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+        "is_forgotten": false,
+        "sha256": "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+      },
+      {
+        "alias": "Kael",
+        "bytes": 219671,
+        "code": "RID_003",
+        "identity_id": "003",
+        "image_id": "George_W_Bush_34.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+        "is_forgotten": false,
+        "sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379"
+      },
+      {
+        "alias": "Kael",
+        "bytes": 219671,
+        "code": "RID_003",
+        "identity_id": "003",
+        "image_id": "George_W_Bush_35.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+        "is_forgotten": false,
+        "sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379"
+      },
+      {
+        "alias": "Kael",
+        "bytes": 219671,
+        "code": "RID_003",
+        "identity_id": "003",
+        "image_id": "George_W_Bush_48.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+        "is_forgotten": false,
+        "sha256": "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379"
+      },
+      {
+        "alias": "Dax",
+        "bytes": 236676,
+        "code": "RID_004",
+        "identity_id": "004",
+        "image_id": "Walt_Disney_43.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+        "is_forgotten": false,
+        "sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a"
+      },
+      {
+        "alias": "Dax",
+        "bytes": 236676,
+        "code": "RID_004",
+        "identity_id": "004",
+        "image_id": "Walt_Disney_45.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+        "is_forgotten": false,
+        "sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a"
+      },
+      {
+        "alias": "Dax",
+        "bytes": 236676,
+        "code": "RID_004",
+        "identity_id": "004",
+        "image_id": "Walt_Disney_47.png",
+        "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+        "is_forgotten": false,
+        "sha256": "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a"
+      }
+    ],
+    "n": 12,
+    "warning": "THESE IMAGES ARE NOT HELD OUT IN CONTENT: every test image's bytes also appear in the train split, so the split partitions filenames rather than images.  The URIs and digests below are exact and the mediation gates remain valid because they force the code, but no held-out ROUTING claim can be made from them"
+  },
+  "image_cluster_key": {
+    "digest_table_supplied": true,
+    "is": "the image's BYTES, not its filename",
+    "why": "a dataset whose held-out filenames outnumber its held-out byte-values would resample one picture several times and call the copies independent, which understates every interval; the pre-registration checks the row clusters against the image-content audit at BOTH levels so the two cannot disagree"
+  },
+  "kind": "route_dependent_forgetting_preregistration_v2",
+  "mediator_is_hard": {
+    "auxiliary_conditions_reported_separately": [
+      "hybrid_conflict_probe"
+    ],
+    "image_to_h_in_any_condition": false,
+    "prompt_read_from": [
+      "e2c_v3_realdata.py",
+      "e2c_v3_salmu.py",
+      "e2c_v3_phaseC_discrete_bottleneck.py"
+    ],
+    "prompt_used_for_h": "Identity code: {code}. Generate the alias.",
+    "statement": "Y = h(C): h receives a code and never an image"
+  },
+  "missing_data_policy": {
+    "gate_failure": {
+      "action": "block promotion; thresholds are not adjustable afterwards",
+      "why": "a threshold chosen once the data exists is not a gate.  What may change is the measurement, and only with a new pre-registration"
+    },
+    "missing_checkpoint": {
+      "action": "refuse to run, and name every absent role",
+      "why": "verify_checkpoints hashes each role and reports the missing ones; existence is not identity, so a replaced checkpoint is also caught by digest"
+    },
+    "missing_edit_seed": {
+      "action": "refuse to run the cell",
+      "why": "a cell without its edited h has no intervention to measure, and an absent checkpoint must not be read as a null result"
+    },
+    "missing_image": {
+      "action": "refuse to freeze the design",
+      "why": "intervention rows are built per held-out image; a missing image means the cross is incomplete, and coverage_audit names the shortfall rather than reporting a smaller design as exact"
+    },
+    "missing_intervention_row": {
+      "action": "refuse to freeze, and refuse to gate",
+      "why": "a partial cross leaves a cell of the image-by-route table unmeasured, and the decisive claim is a claim about all of them"
+    },
+    "missing_router_seed": {
+      "action": "refuse to run the cell",
+      "why": "the router seed selects which cached g predictions are replayed; running without it silently substitutes another router and the cell no longer tests the design it is labelled with"
+    },
+    "multi_label_output": {
+      "action": "count it as ambiguous; gate six fails",
+      "why": "an output naming two aliases followed neither route, and taking the first match would manufacture an intervention-following rate"
+    },
+    "partial_cell": {
+      "action": "report no verdict for it",
+      "why": "a cell that scored some of its rows is not a weaker cell, it is a cell about a different design"
+    },
+    "unparseable_output": {
+      "action": "count it; gate six fails",
+      "why": "an output that names no candidate label identifies no route; resolving it to the nearest match would invent a result"
+    }
+  },
+  "n_cells": 8,
+  "n_rows_total": 72,
+  "n_vocab": 5,
+  "p_h_is_not_a_score_sum": "the factorization uses the empirical hard-response matrix H_e(c, y) = 1{parse(h_e(c)) = y}; candidate score sums are still reported where a phase records them, but never as P_h",
+  "pilot_forget_set_selection": {
+    "candidates": [
+      {
+        "complete": true,
+        "considered": true,
+        "per_edit_seed": {
+          "123": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "17": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "42": {
+            "adapter": true,
+            "cell_results": true
+          }
+        },
+        "set_id": "fs_001",
+        "targets": [
+          "001"
+        ],
+        "why_not": null
+      },
+      {
+        "complete": true,
+        "considered": true,
+        "per_edit_seed": {
+          "123": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "17": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "42": {
+            "adapter": true,
+            "cell_results": true
+          }
+        },
+        "set_id": "fs_002",
+        "targets": [
+          "002"
+        ],
+        "why_not": null
+      },
+      {
+        "complete": true,
+        "considered": true,
+        "per_edit_seed": {
+          "123": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "17": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "42": {
+            "adapter": true,
+            "cell_results": true
+          }
+        },
+        "set_id": "fs_003",
+        "targets": [
+          "003"
+        ],
+        "why_not": null
+      },
+      {
+        "complete": true,
+        "considered": true,
+        "per_edit_seed": {
+          "123": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "17": {
+            "adapter": true,
+            "cell_results": true
+          },
+          "42": {
+            "adapter": true,
+            "cell_results": true
+          }
+        },
+        "set_id": "fs_004",
+        "targets": [
+          "004"
+        ],
+        "why_not": null
+      },
+      {
+        "considered": false,
+        "set_id": "fs_002-003",
+        "targets": [
+          "002",
+          "003"
+        ],
+        "why_not": "mode is 'simultaneous', and the pilot is single-target"
+      },
+      {
+        "considered": false,
+        "set_id": "fs_001-003",
+        "targets": [
+          "001",
+          "003"
+        ],
+        "why_not": "mode is 'simultaneous', and the pilot is single-target"
+      },
+      {
+        "considered": false,
+        "set_id": "fs_003-004",
+        "targets": [
+          "003",
+          "004"
+        ],
+        "why_not": "mode is 'simultaneous', and the pilot is single-target"
+      }
+    ],
+    "dataset": "ppubench",
+    "n_candidates": 7,
+    "n_considered": 4,
+    "rule_is_derived_not_preferred": "the rule is stated here and applied to the matrix as it exists, so the choice is reproducible and cannot be made after seeing a result; a set picked because it looked favourable would be a selection effect inside a pre-registration",
+    "selection_rule": "the first single-target set in the frozen matrix's own order whose checkpoints are complete for every required edit seed",
+    "set_id": "fs_001",
+    "targets": [
+      "001"
+    ]
+  },
+  "preregistered": true,
+  "promotion_rule": {
+    "blocked_by": "the ['routing_factorization', 'routing_reliability'] verdicts are not supportable on this dataset: the factorization explains the gap between conditional and unconditional E2E accuracy; with no held-out image content there is no such gap to explain, so the formula would be filed against a quantity this dataset cannot produce; every test image's bytes also appear in train (4 of 4 distinct test images), so an accuracy measured here is measured on training bytes and is not a held-out routing accuracy",
+    "cell_plan": {
+      "counts_derived_not_written_down": true,
+      "dataset": "ppubench",
+      "direct_cells": 1,
+      "direct_cells_do_not_vary_by_forget_set": "D_s is trained on the same associations whatever is forgotten and is not modified when h is edited, so it is one adapter set per dataset rather than one per cell",
+      "hybrid_cells": 1,
+      "intervention_cells": 21,
+      "n_direct_seeds": 1,
+      "n_edit_seeds": 3,
+      "n_forget_sets": 7,
+      "n_router_seeds": 1,
+      "natural_cells": 21,
+      "total_cells": 44
+    },
+    "conditions": [
+      "the mediation verdict passes on the pilot",
+      "no gate threshold is altered between pilot and promotion; a threshold chosen once the data exists is not a gate",
+      "every router seed in the promotion has its OWN checkpoint and its own held-out prediction file, hashed at promotion time, because a checkpoint replaced in place keeps its path",
+      "every direct seed has its own D_s checkpoint, and no D_s is edited when an h is edited",
+      "a verdict recorded as not_established on the pilot stays not_established on the promotion unless the dataset changes"
+    ],
+    "counts_derived_from": "the forget sets are read from the frozen matrix manifest by _promotion_forget_sets, and the reused checkpoints are hashed off disk by reuse_inventory; neither count is written down here",
+    "edited_h_required": 21,
+    "must_be_trained": {
+      "edited_h": "none, if the reuse inventory above is complete",
+      "routers": "only the router seeds that do not exist yet; the existing frozen g is one of them"
+    },
+    "n_cells_total": 44,
+    "n_e2e_cells": 21,
+    "n_edit_seeds": 3,
+    "n_forget_sets": 7,
+    "n_router_seeds": 1,
+    "retrained_per_cell": false,
+    "reuse_inventory": {
+      "complete": true,
+      "dataset": "ppubench",
+      "n_edited_h_required": 21,
+      "n_forget_sets": 7,
+      "n_reusable_edited_h": 21,
+      "sets": {
+        "fs_001": {
+          "n_required": 3,
+          "n_reusable": 3,
+          "per_edit_seed": {
+            "123": {
+              "adapter_present": true,
+              "adapter_sha256": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "17": {
+              "adapter_present": true,
+              "adapter_sha256": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "42": {
+              "adapter_present": true,
+              "adapter_sha256": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+              "cell_results_present": true,
+              "reusable": true
+            }
+          }
+        },
+        "fs_001-003": {
+          "n_required": 3,
+          "n_reusable": 3,
+          "per_edit_seed": {
+            "123": {
+              "adapter_present": true,
+              "adapter_sha256": "307fd6df97ca39250df5f2406adcdc3b07979e722bd0a0641c4206fc7df42f5a",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "17": {
+              "adapter_present": true,
+              "adapter_sha256": "dc909fae0c62738cca81204ece93a526fbaeb86169c7e59158d0e1707dfa0bb8",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "42": {
+              "adapter_present": true,
+              "adapter_sha256": "1ceb5772e9d6e2d79dcaa86d5d0039577778366eda2728f563ecc42cb6d1b33e",
+              "cell_results_present": true,
+              "reusable": true
+            }
+          }
+        },
+        "fs_002": {
+          "n_required": 3,
+          "n_reusable": 3,
+          "per_edit_seed": {
+            "123": {
+              "adapter_present": true,
+              "adapter_sha256": "71787e6931b5b458b5156fd62025b8603c0a84692f509ddf79790ea555bd694e",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "17": {
+              "adapter_present": true,
+              "adapter_sha256": "dcda3894074ad478d23631ebcedc7e2b0f3afa0314b56c744bfb6d0fe02edebf",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "42": {
+              "adapter_present": true,
+              "adapter_sha256": "28655905d6a4e9c177dcf1ccf848eca298f3c0e5028df1ccd8d1dcd352a008a8",
+              "cell_results_present": true,
+              "reusable": true
+            }
+          }
+        },
+        "fs_002-003": {
+          "n_required": 3,
+          "n_reusable": 3,
+          "per_edit_seed": {
+            "123": {
+              "adapter_present": true,
+              "adapter_sha256": "1c5c7426a3f3c4e5a0e231d43384d10464faeb4cf8d1db8e9a348de289f626d1",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "17": {
+              "adapter_present": true,
+              "adapter_sha256": "fa971d7a9fb7336267974f1d34ea49c6a0536c38da25dc99aed5d80b1629b892",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "42": {
+              "adapter_present": true,
+              "adapter_sha256": "a7055a0b12c6a98b31e6d3ced09746538e6a4e3dd9c8e52618a26c2dd60a6cb1",
+              "cell_results_present": true,
+              "reusable": true
+            }
+          }
+        },
+        "fs_003": {
+          "n_required": 3,
+          "n_reusable": 3,
+          "per_edit_seed": {
+            "123": {
+              "adapter_present": true,
+              "adapter_sha256": "7f79b406110f3f8ef56c1ae586163be37b6cb741374482770d00b98d501b01d2",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "17": {
+              "adapter_present": true,
+              "adapter_sha256": "fdd9eefe4420e0b187ba596378eaa2eca338c4cfc9648fcb6a4b0f2e838d2ff6",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "42": {
+              "adapter_present": true,
+              "adapter_sha256": "441c14238e5ed15f8aeb57d214aaecb9b99e5f3dfbf7769baa794b3c9ac16e93",
+              "cell_results_present": true,
+              "reusable": true
+            }
+          }
+        },
+        "fs_003-004": {
+          "n_required": 3,
+          "n_reusable": 3,
+          "per_edit_seed": {
+            "123": {
+              "adapter_present": true,
+              "adapter_sha256": "1e630ac90b7cb0947aeddf06b075b028c3697ebb2aaf12463da848f9bc3aa38a",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "17": {
+              "adapter_present": true,
+              "adapter_sha256": "5ac742dc3241cb6301e829de597cc6d26e94f2367bb10f253f01a04aaf5cb8c8",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "42": {
+              "adapter_present": true,
+              "adapter_sha256": "3bb37813c116495200f683fefebd61debfb342d07fda8704fec737332334f895",
+              "cell_results_present": true,
+              "reusable": true
+            }
+          }
+        },
+        "fs_004": {
+          "n_required": 3,
+          "n_reusable": 3,
+          "per_edit_seed": {
+            "123": {
+              "adapter_present": true,
+              "adapter_sha256": "daabae4d210fca99684e3ee87b4bceafcb3729f0276e85dfc3f470b6b7893813",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "17": {
+              "adapter_present": true,
+              "adapter_sha256": "7e8f15a8efa277d000abf7c5d2252052996b67a5339cb9eb70a4a70427c55811",
+              "cell_results_present": true,
+              "reusable": true
+            },
+            "42": {
+              "adapter_present": true,
+              "adapter_sha256": "72d7c9c5829cea4a55868cd75e180cbc338b9888799392c341bb2ebc5aed9776",
+              "cell_results_present": true,
+              "reusable": true
+            }
+          }
+        }
+      },
+      "shared_route_checkpoints": {
+        "baseline_g": {
+          "present": true,
+          "sha256": "6d6a9dd22de3806cbc117cfd97344e3ef17c6e32a0b7773e9431d3a122086f42"
+        },
+        "baseline_h": {
+          "present": true,
+          "sha256": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4"
+        }
+      }
+    },
+    "reuse_inventory_is_complete": true,
+    "reuse_statement": "21 of 21 required edited-h checkpoints already exist across 7 forget sets x 3 edit seeds and are reused for the intervention matrix rather than retrained; each edited h is probed under every router seed",
+    "reuses_existing_edited_h": 21,
+    "router_budget_is_not_spent_here": "this pilot stays at three edited-h intervention cells and replays the one frozen router it has: an additional router seed on a dataset whose test bytes are its train bytes could only measure seed stability on repeated content and could never establish held-out routing, so the router-training budget goes to a dataset that can use it",
+    "to": "the full ppubench route factorial",
+    "v1_product_was_wrong_because": "v1 reported one product, 3 x sets x 3, as the cell count; that is the NATURAL cell count only.  Intervention cells do not involve g and direct cells involve neither g nor the forget set, so multiplying them by the router seeds would run the identical call three times and file it as three observations",
+    "variance_to_be_reported_separately": [
+      "router training seed",
+      "edit training seed",
+      "forget-set composition",
+      "held-out image"
+    ],
+    "what_this_corrects": "existing results vary ONLY the h-edit seed while holding g fixed, so reported seed-stability is stability to a single router"
+  },
+  "prompts": {
+    "agreement_checked": true,
+    "d_image_to_alias": "Identify the synthetic person shown here. Return only the alias.",
+    "g_image_to_code": "What is the identity code for this person?",
+    "h_code_to_alias": "Identity code: {code}. Generate the alias.",
+    "hybrid_image_and_code": "Identity code: {code}. Identify the person shown. Return only the alias.",
+    "hybrid_prompt_is_not_part_of_the_frozen_route": "the frozen route is g(X) then h(c) and h never sees an image, so the image-plus-code prompt belongs to the AUXILIARY probe only; it is reported here so a reader can see exactly what the probe presents, and no mediated condition may reference this key",
+    "read_from": [
+      "e2c_v3_realdata.py",
+      "e2c_v3_salmu.py",
+      "e2c_v3_phaseC_discrete_bottleneck.py"
+    ],
+    "why_read_not_retyped": "v1 retyped a paraphrase of the h prompt and so evaluated a different input than the route was trained on; reading the constant from the frozen scripts makes that class of error impossible rather than merely unlikely"
+  },
+  "provenance": {
+    "clean_worktree": {
+      "dirty_including_untracked": false,
+      "dirty_tracked_only": false,
+      "dirty_tracked_only_lines": [],
+      "excluded_prefixes": [
+        "datasets/route-unlearning-data/e2c_route_forgetting/"
+      ],
+      "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts",
+      "git_commit": "7f83140431e8b2dc78998a7ad1d55ad0e6ccf608",
+      "n_dirty_including_untracked": 0,
+      "n_dirty_tracked_only": 0,
+      "n_excluded": 0,
+      "repo_root": "/scratch/wutiantong/MIDP",
+      "untracked_outside_exclusions": []
+    },
+    "executing_commit": "7f83140431e8b2dc78998a7ad1d55ad0e6ccf608",
+    "input_file_sha256": {
+      "e2c_matrix/manifests/matrix_ppubench.json": "95101f8233ca6d5c5db2cb38c5ebfe5ed4dc2c1347697bc2386ec2ccc977d8b8",
+      "e2c_route_forgetting/manifests/rf_pilot_ppubench.json": "783b237a00c45199e97be252a67b37ee54516cbdf38c563851735a618a3f65d9",
+      "e2c_route_forgetting/manifests/rf_pilot_salmu.json": "35b2e38c1e6f71265c87561ac586fc9f19aa1cb139e5938565c57bb47f6e44a3",
+      "e2c_v3_real/manifests/realdata_identity_mapping.json": "be45a797022e822049fb6f672725605d9a1c12889d5c0253a01d5a0b2e30c161",
+      "e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+      "scripts/e2c_v3_label_parser.py": "fdf713c51c2a543801615e64cee54600a18d46d86b7510b36695c8af96632ac9",
+      "scripts/e2c_v3_matrix.py": "f42a74390d6a15b771096a1b1f1056312996f300a245268eaf027c8575b8a7d4",
+      "scripts/e2c_v3_research_validity.py": "f649c2d72eb9e04a517724417a22fc570a39b09969943bfe9abe193b5b542f99",
+      "scripts/e2c_v3_route_dependent_forgetting.py": "3512c62c8b6a7a7ca7d1394876659d6328527d6965db7a480d700459f92454fb"
+    },
+    "missing_input_files": [],
+    "n_input_files_hashed": 9,
+    "paths_are_relative_to": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data",
+    "script_sha256": "3512c62c8b6a7a7ca7d1394876659d6328527d6965db7a480d700459f92454fb",
+    "untracked_files_count_as_dirty": "an untracked conftest, sitecustomize or shadowing module changes what executes while a tracked-only query reports a clean tree"
+  },
+  "retained_identity_ids": [
+    "002",
+    "003",
+    "004"
+  ],
+  "route_architecture_is_frozen": "g, h, the prompts and the LoRA recipe are read from the frozen route scripts and never modified; the new adapters this design requires (g_42, g_123, D_s) are trained UNDER that same protocol, which is what makes them comparable to the existing route rather than a change to it",
+  "route_protocol": {
+    "agreement_checked": true,
+    "fresh_lora_init": "gxm.fresh_reinit_lora(named_params, seed): lora_A kaiming_uniform (a=sqrt5), lora_B zeros, under the router seed.  PEFT 0.20 has no reset_adapter API, so a new seed is a genuine fresh init rather than a re-load",
+    "lora": {
+      "alpha": 16,
+      "dropout": 0.05,
+      "rank": 8,
+      "scope": "S0 -- q,k,v,o projections of the language layers",
+      "source": "rv.create_adapter_model / rv.attach_lora"
+    },
+    "lr": 2e-05,
+    "model": {
+      "dtype": "bfloat16",
+      "model_id": "Qwen/Qwen3.5-9B",
+      "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "source": "rv.create_adapter_model"
+    },
+    "read_from": [
+      "e2c_v3_matrix.py",
+      "e2c_v3_salmu.py"
+    ],
+    "repeat": 50,
+    "steps": 3000,
+    "warmup": 200
+  },
+  "router_seeds": [
+    17
+  ],
+  "rows_are_not_duplicated_across_router_seeds": "forced-code interventions are one cell per EDIT seed only; the router seed varies the natural cells, which are the only ones that involve g",
+  "score_sum_semantics": {
+    "consequence": "a residual computed as 1 - score_sum is a residual against an arbitrary ceiling, not the probability of everything else",
+    "is": "the sum of teacher-forced full-sequence scores over the recognized candidate labels, each a product of per-token conditionals over a different label string",
+    "is_not": "a probability, and not a normalized distribution",
+    "legacy_field_name": "candidate_mass",
+    "name_used_everywhere": "candidate_score_sum",
+    "no_floor_is_imported_from_the_granularity_pilot": "the G6 pilot's candidate score-sum floor is not reused here and no gate in this file is derived from it",
+    "why_it_need_not_reach_one": "there is no termination event and no normalization across candidates, so the per-label terms overlap and their sum is not constrained to 1"
+  },
+  "seed_policy": {
+    "dataset": "ppubench",
+    "direct_seeds": [
+      17
+    ],
+    "edit_seeds": [
+      17,
+      42,
+      123
+    ],
+    "edited_h_seeds_are_always_three": "the mediation verdict is what every dataset can support, and edit-seed stability is what makes it a measurement rather than a single lucky training run",
+    "held_out_image_content_exists": false,
+    "router_seed_budget": "not spent here: only the existing frozen g (seed 17) is replayed, because an additional router seed on a dataset whose test bytes are its train bytes measures seed stability on repeated content and cannot establish held-out routing",
+    "router_seeds": [
+      17
+    ]
+  },
+  "supersession": {
+    "authoritative_design": "v2",
+    "kind": "route_dependent_forgetting_supersession_v1",
+    "n_repairs": 8,
+    "policy": "the v1 manifests are preserved unmodified and their designs are still reconstructible; they are marked superseded here rather than edited, because a pre-registration changed after freezing was never a pre-registration",
+    "repairs": {
+      "direct_control": {
+        "v1": "checkpoint_requirements.roles.direct_condition.adapter was 'reuses edited_h'",
+        "v2": "separate D_s: X -> Y adapters, independently trained and hashed, image-only, with a pre-edit held-out accuracy and a direct_image_accuracy >= 0.90 gate, because bounding code-following from above alone is satisfied by a model that emits arbitrary wrong labels"
+      },
+      "hard_mediator": {
+        "also": "v1 used the prompt 'Identity code: {code}. What is the alias?', which is not the CODE_TO_ALIAS_PROMPT the route was trained with; v2 reads the prompt from the frozen scripts and requires all three to agree",
+        "v1": "forced-code rows used CODE_IMG_PROMPT, so h received the image and the system was f(X, C) rather than the frozen Y = h(C)",
+        "v2": "h receives a code and nothing else; the image-plus-code condition is retained as hybrid_conflict_probe and reported as an auxiliary bypass/conflict test, never as the intervention"
+      },
+      "inference_unit": {
+        "v1": "image-level bootstrap selected on SALMU as 'a real refinement over identity-level', 36 clusters",
+        "v2": "identity-level PRIMARY (12 clusters on SALMU) with image-level as a SENSITIVITY analysis: three images of one person share an identity, a router and an edited h, so they are not independent"
+      },
+      "manifests": {
+        "v1": "rf_pilot_ppubench.json and rf_pilot_salmu.json",
+        "v2": "rf_pilot_ppubench_v2.json and rf_pilot_salmu_v2.json; the v1 files are preserved byte-identical and their designs are still reconstructible through the v1 constructor, which is retained for exactly this reason"
+      },
+      "p_h": {
+        "v1": "the factorization took P_h from candidate score sums",
+        "v2": "P_h is the empirical hard-response matrix H_e(c, y) = 1{parse(h_e(c)) = y}, composed with the empirical hard router confusion; score sums are reported only as auxiliary and never as probabilities"
+      },
+      "phases": {
+        "v1": "RF0/RF1/RF2/RF2P, where RF1 raised NotImplementedError",
+        "v2": "RF0, RF1G, RF1D, RF1H, RF1E, RF2, RF2P, with --router-seed, --edit-seed, --direct-seed, --device, --resume, --out and atomic per-cell writes; RF2 and RF2P fail on absent inputs"
+      },
+      "router_seed_is_a_factor": {
+        "v1": "three router seeds declared over one baseline_g checkpoint and one cached prediction file, with three cells indexed by EDIT seed only, so the router seed was a label rather than an experimental factor",
+        "v2": "one checkpoint and one held-out prediction file per router seed, each hashed; the real 3_g x 3_h natural cells on SALMU; forced-code interventions once per EDIT seed, because they do not depend on g and repeating them would count one measurement three times"
+      },
+      "verdicts": {
+        "v1": "one omnibus 'passed' boolean over seven gates",
+        "v2": "mediation_pass, routing_reliability_pass and routing_factorization_pass, each three-state so that a question a dataset cannot answer is recorded as not_established rather than coerced to True or False"
+      }
+    },
+    "superseded": [
+      {
+        "bytes": 176475,
+        "bytes_preserved": true,
+        "design_is_still_reconstructible": "verify_manifest dispatches on kind and rebuilds a v1 pilot through build_pilot_preregistration, which is retained for exactly this reason, so the frozen design_sha256 still reproduces and the checkpoint digests still match",
+        "design_sha256": "bc41a4436cc5fd46e064b017ce69ed7d175a34804ae4bfb5cbfe8711e82db95c",
+        "executed": false,
+        "frozen_at_commit": "df54064d5990c3556a3aa9f314979a82e7da67e1",
+        "input_digests_will_report_drift": "a v1 manifest binds the bytes of this script as it was when that manifest was frozen, and this script has since gained v2, so verify_manifest names the script digest as drifted and returns valid=False.  That is the expected state of a superseded artifact and not a defect: it records what was pre-registered at the commit above, and it is not re-frozen because a pre-registration changed after freezing was never a pre-registration",
+        "kind": "route_dependent_forgetting_preregistration_v1",
+        "path": "e2c_route_forgetting/manifests/rf_pilot_ppubench.json",
+        "present": true,
+        "sha256": "783b237a00c45199e97be252a67b37ee54516cbdf38c563851735a618a3f65d9",
+        "status": "superseded_by_v2",
+        "verification_is_bound_to_the_root_it_was_frozen_at": "the v1 verification table recorded the checkpoint paths it hashed as ABSOLUTE, so a v1 manifest rebuilds to its own design_sha256 only on a checkout rooted where it was frozen; from another clone every role reads as absent and the rebuild does not reproduce.  v2 records the same paths relative to the dataset root and resolve_recorded_path still accepts the absolute shape, so this is reported as a property of the superseded artifacts rather than retro-fitted into bytes that are frozen"
+      },
+      {
+        "bytes": 476741,
+        "bytes_preserved": true,
+        "design_is_still_reconstructible": "verify_manifest dispatches on kind and rebuilds a v1 pilot through build_pilot_preregistration, which is retained for exactly this reason, so the frozen design_sha256 still reproduces and the checkpoint digests still match",
+        "design_sha256": "1906c7b398a9e0dced67b4228580a61f2518a4b56bfadda9676abcd2277961a3",
+        "executed": false,
+        "frozen_at_commit": "df54064d5990c3556a3aa9f314979a82e7da67e1",
+        "input_digests_will_report_drift": "a v1 manifest binds the bytes of this script as it was when that manifest was frozen, and this script has since gained v2, so verify_manifest names the script digest as drifted and returns valid=False.  That is the expected state of a superseded artifact and not a defect: it records what was pre-registered at the commit above, and it is not re-frozen because a pre-registration changed after freezing was never a pre-registration",
+        "kind": "route_dependent_forgetting_preregistration_v1",
+        "path": "e2c_route_forgetting/manifests/rf_pilot_salmu.json",
+        "present": true,
+        "sha256": "35b2e38c1e6f71265c87561ac586fc9f19aa1cb139e5938565c57bb47f6e44a3",
+        "status": "superseded_by_v2",
+        "verification_is_bound_to_the_root_it_was_frozen_at": "the v1 verification table recorded the checkpoint paths it hashed as ABSOLUTE, so a v1 manifest rebuilds to its own design_sha256 only on a checkout rooted where it was frozen; from another clone every role reads as absent and the rebuild does not reproduce.  v2 records the same paths relative to the dataset root and resolve_recorded_path still accepts the absolute shape, so this is reported as a property of the superseded artifacts rather than retro-fitted into bytes that are frozen"
+      }
+    ]
+  },
+  "verdict_names": [
+    "mediation",
+    "routing_reliability",
+    "routing_factorization"
+  ],
+  "verdicts_to_be_reported": {
+    "expected_on_this_dataset": {
+      "mediation": "supported",
+      "routing_factorization": "not_established on unseen content",
+      "routing_reliability": "not_established"
+    },
+    "expected_routing_reliability_false_because": null,
+    "names": [
+      "mediation",
+      "routing_reliability",
+      "routing_factorization"
+    ],
+    "no_omnibus_boolean": "there is deliberately no combined 'passed' field: a routing failure and a mediation success answer different questions, and one boolean would let either cancel the other",
+    "three_state": "pass / fail / not_established; a question this dataset cannot answer is recorded as not_established rather than coerced to True (unmeasured success) or False (unobserved failure)"
+  },
+  "vocab": [
+    "Dax",
+    "Kael",
+    "Oden",
+    "Seri",
+    "Unknown"
+  ]
+}
