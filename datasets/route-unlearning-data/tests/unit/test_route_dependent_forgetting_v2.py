@@ -986,9 +986,28 @@ def test_a_duplicate_code_in_h_e_is_a_contradiction_not_a_replicate(rf,
 
 
 def test_h_e_from_zero_rows_is_refused(rf, tmp_path):
+    """An empty matrix would predict 0 for every image and read as a finding.
+
+    ``hard_response_matrix`` builds the post-edit H_e and the pre-edit H_base, so
+    the refusal is stated over rows rather than over intervention rows: the
+    baseline cell has no intervention rows at all and is still a matrix.
+    """
     design, _ = _design_v2(rf, tmp_path)
-    with pytest.raises(RuntimeError, match="zero intervention rows"):
+    with pytest.raises(RuntimeError, match="zero rows"):
         rf.hard_response_matrix([], design["vocab"])
+
+
+def test_rows_that_are_no_forced_code_measurement_build_no_matrix(rf, tmp_path):
+    """Rows present but none of them a forced-code row is refused by name.
+
+    Filtering on a hardcoded pair of condition names would have dropped every
+    baseline row and then reported an empty matrix as a finding about the edit,
+    so the refusal names the conditions it was asked for.
+    """
+    design, man = _design_v2(rf, tmp_path)
+    rows = _scored(rf, design, man, "natural")
+    with pytest.raises(RuntimeError, match="forced-code conditions"):
+        rf.hard_response_matrix(rows, design["vocab"])
 
 
 def test_an_unparseable_h_response_gets_its_own_column(rf, tmp_path):
@@ -1508,10 +1527,58 @@ def _write_routers(rf, prereg, man, tmp, monkeypatch, misroutes=None):
     return made
 
 
+def _materialize_roles(rf, prereg, tmp, routers=None):
+    """Real bytes for every role file the design names, and a pilot pointing at
+    them.
+
+    ``verify_cell_inputs`` re-hashes at RF2 the file each cell says it used, so a
+    fixture that recorded "stub" fails the very check the repair added -- and a
+    fixture weakened until it passes is a repair tested by nothing.  The weights
+    this hermetic pilot names are the GPU work it is waiting for and do not exist
+    here, so they are written with distinct bytes: the digest a cell records is
+    then a digest OF SOMETHING, and the mismatch branch has something to mismatch
+    against.
+
+    A router role's prediction file is the one ``_write_routers`` already made, so
+    the digest a natural cell records is of the file ``load_router_predictions``
+    actually reads -- one file and one digest, rather than two that happen to
+    agree in this checkout and would not in another.
+    """
+    root = tmp / "roles"
+    roles = {}
+    for name, decl in (prereg["checkpoint_requirements"]["roles"] or {}).items():
+        entry = dict(decl)
+        seed = int(name.rsplit("seed", 1)[1]) if "seed" in name else None
+        for key in rf.CHECKPOINT_FILE_KEYS_V2:
+            raw = entry.get(key)
+            if not raw or raw == "reuses edited_h":
+                continue
+            if routers and key == "held_out_predictions" and seed in routers:
+                p = routers[seed]
+            else:
+                p = root / name / Path(raw).name
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(f"{name}:{key}".encode())
+            entry[key] = str(p)
+        roles[name] = entry
+    out = dict(prereg)
+    out["checkpoint_requirements"] = {**prereg["checkpoint_requirements"],
+                                      "roles": roles}
+    return out
+
+
 def _file_all(rf, prereg, man, cells_out, routers, behaves="design"):
-    """File every cell as RF1H, RF1D and RF1E would have, from the fake model."""
+    """File every cell as RF1B, RF1H, RF1D and RF1E would have, from the fake
+    model.
+
+    The recorded ``input_sha256`` is built by the same function the phases build
+    it with, so the fixture cannot drift from the contract it is filing against:
+    a test that typed its own binding dict would keep passing after the phases
+    changed which weight they hash.
+    """
     forget = set(prereg["forget_identity_ids"])
-    forced = rf.FORCED_CODE_CONDITIONS_V2
+    spec = rf.SPEC_BY_PREREG_KIND[prereg["kind"]]
+    forced = spec.forced_code_conditions
     by_uri = {s: {r["image_uri"]: r for r in
                   json.loads(p.read_text(encoding="utf-8"))["rows"]}
               for s, p in routers.items()}
@@ -1527,21 +1594,22 @@ def _file_all(rf, prereg, man, cells_out, routers, behaves="design"):
                        "routed_code_correct": got["code_correct"],
                        "routable": code is not None,
                        "observation_pending": False, "filled_by": "fixture"}
-                row[rf.generation_field(r["condition"])] = _fake_generation(
-                    row, man, forget, behaves, forced)
+                row[rf.generation_field(r["condition"], spec.conditions)] = \
+                    _fake_generation(row, man, forget, behaves, forced)
             else:
-                row = {**r, rf.generation_field(r["condition"]):
+                row = {**r, rf.generation_field(r["condition"], spec.conditions):
                        _fake_generation(r, man, forget, behaves, forced)}
             rows.append(row)
         scored, missing = rf.score_rows_v2(rows, prereg["vocab"])
         rf.write_cell_result(prereg["dataset"], cell["cell_id"], {
-            "kind": rf.RESULT_KIND_V2, "cell_id": cell["cell_id"],
+            "kind": spec.result_kind, "cell_id": cell["cell_id"],
             "kind_of_cell": cell["kind"], "phase": cell["phase"],
             "edit_seed": cell.get("edit_seed"),
             "router_seed": cell.get("router_seed"),
             "direct_seed": cell.get("direct_seed"),
             "n_rows": len(rows), "prompts": rf.frozen_route_prompts(),
-            "input_sha256": {"edited_h": "stub"},
+            "input_sha256": rf._input_sha256(
+                prereg, **rf.cell_input_digests(prereg, cell)),
             "rows": rows, "scored": scored,
             "rows_without_a_stored_generation": missing}, cells_out)
         filed.append(cell["cell_id"])
@@ -1554,6 +1622,7 @@ def pipeline(rf, tmp_path, monkeypatch):
     prereg, man = _prereg_v2(rf, tmp_path, monkeypatch)
     cells = tmp_path / "cells"
     routers = _write_routers(rf, prereg, man, tmp_path, monkeypatch)
+    prereg = _materialize_roles(rf, prereg, tmp_path, routers)
     filed = _file_all(rf, prereg, man, cells, routers)
     return {"rf": rf, "prereg": prereg, "man": man, "cells": cells,
             "routers": routers, "filed": filed, "tmp": tmp_path,
@@ -1755,11 +1824,81 @@ def test_a_partial_cell_is_not_filed(rf, tmp_path):
     cell = _cells(design, "intervention")[0]
     rows = cell["rows"][:2]
     scored, _ = rf.score_rows_v2(rows, design["vocab"])
+    prov = rf.start_of_run_provenance(design, tmp_path / "pilot.json")
     with pytest.raises(RuntimeError, match="partial cell is not filed"):
         rf._file_cell("ppubench", cell, "RF1H", rows, scored,
                       [r["row_id"] for r in cell["rows"][2:]],
+                      {"prompts": {}, "input_sha256": {},
+                       "run_provenance": prov}, tmp_path / "c")
+    assert not (tmp_path / "c" / cell["cell_id"]).exists(), \
+        "a refused cell leaves nothing behind for --resume to find"
+
+
+def test_a_cell_with_no_run_provenance_is_not_filed(rf, tmp_path):
+    """A result that does not name the code that produced it cannot be scoped.
+
+    When a defect is found in a filed cell months later, the question is which
+    runs it affected, and the answer has to come out of the cell rather than out
+    of somebody's shell history.  So the commit, the worktree state, the digest
+    of the executing script and its siblings, the pre-registration and the
+    complete command line are all required at filing time -- a phase that could
+    not supply them files nothing.
+    """
+    design, man = _design_v2(rf, tmp_path)
+    cell = _cells(design, "intervention")[0]
+    # already generated, so the refusal below is about the provenance and not
+    # about a partial cell -- two defects in one fixture is a test that passes
+    # for the wrong reason once either is fixed
+    rows = _scored(rf, design, man, "intervention")
+    scored, missing = rf.score_rows_v2(rows, design["vocab"])
+    assert not missing, missing
+    with pytest.raises(RuntimeError, match="no run_provenance"):
+        rf._file_cell("ppubench", cell, "RF1H", rows, scored, missing,
                       {"prompts": {}, "input_sha256": {}}, tmp_path / "c")
-    assert not (tmp_path / "c" / cell["cell_id"]).exists()
+    assert not (tmp_path / "c" / cell["cell_id"]).exists(), \
+        "a refused cell leaves nothing behind for --resume to find"
+    prov = rf.start_of_run_provenance(
+        design, tmp_path / "pilot.json",
+        cli=rf._build_parser().parse_args(
+            ["--dataset", "ppubench", "--phase", "RF1H", "--edit-seed", "17",
+             "--device", "cuda:1", "--resume"]))
+    for field in ("executing_commit", "clean_worktree", "executing_script_sha256",
+                  "runtime_module_sha256", "preregistration_design_sha256",
+                  "preregistration_file_sha256", "cli"):
+        assert field in prov, field
+    # EVERY flag, not the ones this phase reads: a cell that recorded its own
+    # phase's arguments alone could not be told from one produced under a
+    # different device or a --resume that reused a stale file
+    assert prov["cli"]["device"] == "cuda:1"
+    assert prov["cli"]["resume"] is True
+    assert prov["cli"]["design_version"] == "v3"
+    filed = rf._file_cell("ppubench", cell, "RF1H", rows, scored, missing,
+                          {"prompts": {}, "input_sha256": {},
+                           "run_provenance": prov}, tmp_path / "c")
+    assert filed["run_provenance"]["executing_script_sha256"] == \
+        rf.sha256_file(Path(rf.__file__))
+    assert filed["run_provenance"]["cli"]["edit_seed"] == 17
+    # a sibling this runner reads at run time is hashed too, including the frozen
+    # route scripts it parses by AST for the prompts and the recipe
+    hashed = filed["run_provenance"]["runtime_module_sha256"]
+    for name in rf.RUNTIME_SIBLING_SCRIPTS:
+        assert f"scripts/{name}" in hashed, name
+    assert filed["run_provenance"]["runtime_module_sha256"], \
+        "the command line and the sibling hashes are part of the record: two " \
+        "runs of one script that differ only in their flags or in a module they " \
+        "read are two experiments"
+
+
+def test_a_run_with_no_captured_command_line_says_so(rf, tmp_path):
+    """A null CLI reads as "no flags were given", which is a different claim.
+
+    A phase called as a library function never went through ``main``, so there is
+    no launch configuration to record; the absence is stated rather than left to
+    be mistaken for an empty command line.
+    """
+    prov = rf.start_of_run_provenance()
+    assert prov["cli"] is None
+    assert prov["cli_is_absent_because"]
 
 
 def test_resume_reuses_only_a_result_whose_inputs_still_match(rf):
@@ -1836,12 +1975,25 @@ def test_resume_without_the_flag_always_runs(rf, tmp_path):
 def test_every_phase_the_runner_promises_exists(rf):
     """Item 4.  A phase in the CLI that has no function behind it is a phase that
     silently does nothing."""
-    for phase in ("rf0", "rf1g", "rf1d", "rf1h", "rf1e", "rf2", "rf2p"):
+    for phase in ("rf0", "rf1b", "rf1g", "rf1d", "rf1h", "rf1e", "rf2", "rf2p"):
         assert callable(getattr(rf, f"phase_{phase}")), f"no phase_{phase}"
-    assert set(rf.CELL_KIND_PHASE.values()) == {"RF1H", "RF1E", "RF1D"}
+    assert set(rf.CELL_KIND_PHASE.values()) == {"RF1B", "RF1H", "RF1E", "RF1D"}
     assert rf.CELL_KIND_PHASE["intervention"] == "RF1H"
     assert rf.CELL_KIND_PHASE["natural"] == "RF1E"
     assert rf.CELL_KIND_PHASE["direct"] == rf.CELL_KIND_PHASE["hybrid"] == "RF1D"
+    assert rf.CELL_KIND_PHASE["baseline"] == "RF1B"
+    # and the CLI accepts exactly the phases the current version has, so a phase
+    # in one list and not the other is caught here rather than at launch.  RF1G
+    # fills no cell kind: it produces the router adapter and the held-out
+    # prediction file that RF1E's natural cells consume.
+    assert set(rf.PHASES_BY_VERSION["v3"]) == (
+        set(rf.CELL_KIND_PHASE.values()) | {"RF0", "RF1G", "RF2", "RF2P"})
+    assert set(rf.ALL_PHASES) == set(rf.PHASES_BY_VERSION["v3"])
+    assert "RF1B" not in rf.PHASES_BY_VERSION["v2"], \
+        "v2 has no baseline cell, so it has no phase to fill one"
+    assert set(rf.PHASES_BY_VERSION["v2"]) == \
+        set(rf.PHASES_BY_VERSION["v3"]) - {"RF1B"}, \
+        "v3 adds the baseline phase and changes nothing else about the sequence"
 
 
 def test_the_cli_names_every_factor_and_every_phase(rf):
@@ -1853,11 +2005,16 @@ def test_the_cli_names_every_factor_and_every_phase(rf):
     assert (args.router_seed, args.edit_seed, args.direct_seed) == (42, 17, 123)
     assert args.device == "cuda:1" and args.resume is True
     assert args.out == "/tmp/o.json" and args.cells == "/tmp/cells"
-    assert args.design_version == "v2"
+    # v3 is the default because it is the design that survives its own training;
+    # v2 stays selectable so the frozen v2 pilots can still be rebuilt.
+    assert args.design_version == "v3" == rf.LATEST_PILOT_SPEC.version
+    assert parser.parse_args(["--design-version", "v2"]).design_version == "v2"
     choices = parser._actions[
         [a.dest for a in parser._actions].index("phase")].choices
-    assert set(choices) == {"RF0", "RF1", "RF1G", "RF1D", "RF1H", "RF1E",
-                            "RF2", "RF2P"}
+    # "RF1" is accepted only so ``main`` can refuse it with the explanation of
+    # what replaced it; argparse could say only that the choice was invalid.
+    assert set(choices) == {"RF0", "RF1", "RF1B", "RF1G", "RF1D", "RF1H",
+                            "RF1E", "RF2", "RF2P"} == set(rf.ALL_PHASES) | {"RF1"}
 
 
 def test_a_phase_that_needs_a_factor_refuses_without_it(rf):
@@ -2137,7 +2294,7 @@ def test_the_supersession_record_reports_the_v1_bytes_it_does_not_edit(rf):
     are.  "Preserved" is a checked property here: the record carries each file's
     own digest and size, read out of the bytes, so an edit to a superseded
     pre-registration shows up as a disagreement with the v2 artifact."""
-    rec = rf.supersession_record()
+    rec = rf.supersession_record(rf.PILOT_SPEC_V2)
     assert rec["authoritative_design"] == "v2"
     assert rec["n_repairs"] == 8 == len(rf.SUPERSESSION_ITEMS)
     by_path = {e["path"]: e for e in rec["superseded"]}
@@ -2460,23 +2617,41 @@ def test_the_frozen_v2_pilots_spend_the_router_budget_where_it_buys_something(
 
 @_needs_v2_manifests
 def test_rf0_reports_what_the_frozen_v2_pilots_still_need(rf, tmp_path):
-    """RF0 is the phase that says what is missing.  It reads the checkpoint
-    table out of the frozen record, so WHAT MUST BE TRAINED is the same answer
-    in a fresh clone with no weights and on the machine that has them; what
-    differs is whether the manifest still VERIFIES, and RF0 reports that too
-    rather than refusing to answer until the tree is complete."""
+    """RF0 is the phase that says what is missing.
+
+    The manifest is named explicitly: RF0 without a path reads the LATEST
+    version's canonical name, and a test that meant the v2 pilots but got the v3
+    one would report on a design it did not load.
+
+    WHAT MUST BE TRAINED is now computed live rather than read out of the frozen
+    record, so it is the same answer in a fresh clone with no weights and on the
+    machine that has them -- which is the repair, because reading it from a block
+    frozen before the training existed could never say the training happened.
+    """
     for path in _V2_MANIFESTS:
         ds = "salmu" if "salmu" in path.name else "ppubench"
         doc = json.loads(path.read_text(encoding="utf-8"))
-        rep = rf.phase_rf0(ds, out=tmp_path)
+        rep = rf.phase_rf0(ds, path, tmp_path)
         assert rep["phase"] == "RF0" and rep["dataset"] == ds
         assert rep["kind"] == rf.PREREG_V2_KIND
+        assert rep["design_version"] == "v2", \
+            "RF0 reports the version of the manifest it was handed, not the " \
+            "module default, or a v2 report would be filed under a v3 name"
+        assert rep["manifest"] == rf._rel(path)
         assert rep["executed"] is False
         assert rep["manifest_valid"] == (rep["problems"] == []), \
             "invalid without naming a problem is a refusal with no reason"
         assert rep["runnable_now"] is False
         assert rep["why_not_runnable"]
         assert rep["n_must_be_trained"] > 0
+        # the live answer, computed the way the frozen block could not have been
+        # after it was written: the declared training work minus whatever has
+        # since arrived
+        assert rep["readiness_is_computed_live"] is True
+        assert set(rep["must_be_trained_before_this_pilot_can_run"]) == (
+            set(doc["checkpoint_requirements"]
+                ["must_be_trained_before_this_pilot_can_run"])
+            - set(rep["roles_present"])), (ds, rep["roles_present"])
         assert rep["n_cells_filed"] == 0
         assert rep["n_cells_missing"] == rep["n_cells"] == doc["n_cells"]
         assert rep["held_out_image_drift_since_freeze"] == [], \
@@ -2517,10 +2692,21 @@ def test_the_phases_read_the_frozen_v2_pilots_and_nothing_else(rf):
 
 
 @_needs_v2_verifiable
-def test_the_frozen_v2_pilots_verify_from_their_tracked_location(rf, tmp_path):
-    """The claim that matters once the bytes are committed: each v2 pilot
-    rebuilds from its own recorded parameters through the same constructor that
-    froze it, and every digest it names still matches.
+def test_the_frozen_v2_pilots_still_rebuild_and_name_only_the_runner_drift(
+        rf, tmp_path):
+    """The claim that matters once the bytes are committed: each v2 pilot still
+    REBUILDS from its own recorded parameters through the same constructor that
+    froze it, and every checkpoint digest it names still matches.
+
+    Exactly ONE problem is expected and it is this script's own digest, the state
+    the v1 pilots are already in: a v2 manifest binds the bytes of the runner
+    that froze it, and that runner has since gained v3.  Its ``design_sha256``
+    still reproduces, so the artifact is still readable and still says what was
+    pre-registered -- which is the whole reason a superseded manifest is kept.
+
+    What is asserted alongside it is the repair: readiness is computed LIVE, so
+    even this superseded manifest answers "what is still missing" from the tree
+    as it is now rather than from a block written before the training existed.
 
     Gated on the images and the weights because the rebuild re-hashes both; the
     record-reading tests above run in a fresh clone.
@@ -2532,10 +2718,15 @@ def test_the_frozen_v2_pilots_verify_from_their_tracked_location(rf, tmp_path):
     for path in _V2_MANIFESTS:
         ds = "salmu" if "salmu" in path.name else "ppubench"
         got = rf.verify_manifest(path)
-        assert got["valid"] is True, (path.name, got["problems"])
-        assert got["problems"] == []
         assert got["kind"] == rf.PREREG_V2_KIND
         assert got["executed"] is False
+        assert got["valid"] is False, (path.name, got["problems"])
+        assert len(got["problems"]) == 1, got["problems"]
+        only = got["problems"][0]
+        assert "e2c_v3_route_dependent_forgetting.py" in only, only
+        assert only.startswith("input "), only
+        assert "does not reproduce design_sha256" not in only, \
+            "the v2 design still rebuilds; only the runner's bytes have moved"
         assert got["n_checkpoints_rehashed"] > 0, \
             "a pilot that hashed nothing binds no weights"
         assert got["roles_trained_since_freeze"] == [], \
@@ -2543,12 +2734,25 @@ def test_the_frozen_v2_pilots_verify_from_their_tracked_location(rf, tmp_path):
             "result has been bound to yet"
         assert got["must_be_trained"], \
             "frozen and not executed, so the training work is still outstanding"
-        # the verified reading is the one the phases use
-        assert rf.load_prereg_v2(ds)["design_sha256"] == got["design_sha256"]
-        rep = rf.phase_rf0(ds, out=tmp_path)
-        assert rep["manifest_valid"] is True, rep["problems"]
+        # the repair, applied to a manifest that predates it
+        assert got["checkpoint_readiness"] is not None
+        assert got["checkpoints_complete"] is False
+        assert got["checkpoint_readiness"]["computed_live_not_read_from_the_"
+                                          "frozen_design"] is True
+        assert got["checkpoint_readiness"]["runnable_now"] is False
+        # the verified reading refuses a drifted manifest, so the design hash is
+        # compared through the unverified one; refusing is the point, not a bug
+        with pytest.raises(RuntimeError, match="does not verify"):
+            rf.load_prereg_v2(ds)
+        assert rf.load_prereg_v2(ds, verify=False)["design_sha256"] == \
+            got["design_sha256"]
+        rep = rf.phase_rf0(ds, path, tmp_path)
+        assert rep["manifest_valid"] is False, rep["problems"]
         assert rep["runnable_now"] is False
         assert "must be trained first" in rep["why_not_runnable"]
+        assert "does not verify" in rep["why_not_runnable"], \
+            "every reason, not the first one: an operator who fixed the drift " \
+            "and re-ran would otherwise meet the training work as a surprise"
 
 
 def test_out_is_a_directory_in_every_v2_phase_that_writes(rf, tmp_path):
@@ -2558,13 +2762,22 @@ def test_out_is_a_directory_in_every_v2_phase_that_writes(rf, tmp_path):
     directory, so the same command line filed a report in one phase and died
     inside ``os.replace`` with an IsADirectoryError in another -- an error about
     a filesystem call, where the actual subject is what the flag means.
+
+    Every name carries its version, so a v3 report cannot land on a v2 one: the
+    two designs do not have the same cells, and a report whose name said v2 while
+    its contents were v3 would be read against the wrong design.
     """
+    for spec, tag in ((rf.PILOT_SPEC_V2, "v2"), (rf.PILOT_SPEC_V3, "v3")):
+        assert rf.report_path("salmu", "RF0", tmp_path, spec) == \
+            tmp_path / f"rf0_salmu_{tag}.json"
+        assert rf.report_path("salmu", "RF2", tmp_path, spec) == \
+            tmp_path / f"rf_report_salmu_{tag}.json"
+        assert rf.report_path("salmu", "RF2P", tmp_path, spec) == \
+            tmp_path / f"rf_report_salmu_{tag}_rescored.json"
+    # and the default is the current version, one constant rather than a default
+    # repeated per phase
     assert rf.report_path("salmu", "RF0", tmp_path) == \
-        tmp_path / "rf0_salmu_v2.json"
-    assert rf.report_path("salmu", "RF2", tmp_path) == \
-        tmp_path / "rf_report_salmu_v2.json"
-    assert rf.report_path("salmu", "RF2P", tmp_path) == \
-        tmp_path / "rf_report_salmu_v2_rescored.json"
+        rf.report_path("salmu", "RF0", tmp_path, rf.LATEST_PILOT_SPEC)
     names = [rf.report_path("salmu", k, tmp_path).name
              for k in rf.REPORT_FILENAMES]
     assert len(set(names)) == len(names), \
@@ -2587,13 +2800,20 @@ def test_the_cli_freezes_into_out_under_the_canonical_name(rf, tmp_path,
     monkeypatch.setattr(rf, "load_manifest", lambda ds: man)
     monkeypatch.setattr(rf, "pilot_forget_set",
                         lambda ds, seeds: dict(SELECTION))
-    stage = tmp_path / "stage"
-    assert rf.main(["--dataset", "ppubench", "--preregister",
-                    "--out", str(stage)]) == 0
-    placed = stage / "rf_pilot_ppubench_v2.json"
-    assert placed.is_file()
-    assert placed == rf.prereg_path_v2("ppubench", placed)
-    assert rf.verify_manifest(placed)["valid"] is True
-    assert sorted(p.name for p in stage.iterdir()) == [placed.name], \
-        "a staging directory that also accumulated something else is a " \
-        "directory whose bytes are not the bytes that get placed"
+    for argv, expected, getter in (
+            ([], "rf_pilot_ppubench_v3.json", rf.prereg_path_v3),
+            (["--design-version", "v2"], "rf_pilot_ppubench_v2.json",
+             rf.prereg_path_v2)):
+        stage = tmp_path / (expected.split("_")[-1].split(".")[0])
+        assert rf.main(["--dataset", "ppubench", "--preregister",
+                        "--out", str(stage), *argv]) == 0
+        placed = stage / expected
+        assert placed.is_file(), sorted(p.name for p in stage.iterdir())
+        assert placed == getter("ppubench", placed), \
+            "the canonical name is the one the phases resolve, not a name this " \
+            "test happens to expect"
+        assert rf.verify_manifest(placed)["valid"] is True, \
+            rf.verify_manifest(placed)["problems"]
+        assert sorted(p.name for p in stage.iterdir()) == [placed.name], \
+            "a staging directory that also accumulated something else is a " \
+            "directory whose bytes are not the bytes that get placed"
