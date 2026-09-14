@@ -1406,6 +1406,19 @@ def provenance(extra_paths=()):
         "untracked_files_count_as_dirty": (
             "an untracked conftest, sitecustomize or shadowing module changes "
             "what executes while a tracked-only query reports a clean tree"),
+        "what_a_drifted_input_digest_means": (
+            "this block is NOT covered by design_sha256, so nothing here can "
+            "change what was pre-registered.  A digest below that no longer "
+            "matches the file on disk means the world moved since freezing, and "
+            "for the runner's own digest it means the phases would execute "
+            "something other than the code this design was frozen against -- so "
+            "verify_manifest reports it, returns valid=False, and load_prereg "
+            "refuses.  Re-freezing is the repair and is provably not a new "
+            "pre-registration: it re-binds these inputs and leaves "
+            "design_sha256 byte-identical, which is the property that "
+            "distinguishes re-binding a design from changing one.  What is NOT "
+            "repaired by re-freezing is a design_sha256 that no longer "
+            "reproduces, because that means the design itself moved"),
     }
 
 

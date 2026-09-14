@@ -36,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -1882,42 +1883,121 @@ def test_the_v2_notes_say_why_v2_is_superseded_structurally(rf):
 # follows pins the two artifacts that were actually frozen and committed, because
 # a repair that holds on a fixture and not on the artifact is a repair to the
 # fixture.
+#
+# Split by what a checkout has to HAVE.  Reading the record -- what the design
+# declares, what it refuses to declare, what its provenance names -- needs only
+# the artifact, so those tests run everywhere including a fresh clone.  REBUILDING
+# the design needs bytes the constructor reads, and two kinds of them are not in a
+# clone: PPUBench's images live outside the repository, SALMU's are gitignored, and
+# the selection rule checks the frozen matrix's adapters on disk.  A clone cannot
+# rebuild, and reports that as though it were a fact about the manifest when it is
+# a fact about the clone -- so the rebuild tests are gated, and the ungated ones
+# assert that every problem a clone does report is one of those and never one
+# about the design.
+
+#: The problems a checkout reports because of what IT lacks rather than because of
+#: anything the artifact did.  Named, so that "no drift in anything the design
+#: froze" stays assertable in a clone where ``valid`` is legitimately False.
+_ENVIRONMENTAL_PROBLEM = (
+    "images are absent from disk",
+    "the selection rule can no longer be applied",
+    "the manifest cannot be rebuilt at all",
+    "input scripts/e2c_v3_route_dependent_forgetting.py",
+)
+
+
+@pytest.fixture(scope="module")
+def verifiable_v3(rf):
+    """Skip unless a frozen v3 pilot can be verified to ZERO problems HERE.
+
+    Three things can stand in the way, and all three are probed rather than
+    assumed, because a gate that probes a directory instead of the requirement
+    silently turns an assertion into a pass in the checkout it was written for
+    and then the assertion is never run anywhere:
+
+      * the artifacts are not frozen in this checkout;
+      * the rebuild cannot be performed -- PPUBench's images live outside the
+        repository, SALMU's are gitignored, and the selection rule checks the
+        frozen matrix's adapters on disk, so a clone has neither;
+      * an input has drifted since the freeze, which after the freezing commit
+        means this runner was edited.  That is reported by ``verify_manifest``
+        and repaired by re-freezing, and re-freezing leaves ``design_sha256``
+        byte-identical -- so it is a reason not to assert zero problems, not a
+        defect in the artifact.
+    """
+    if not all(p.is_file() for p in _V3_MANIFESTS):
+        pytest.skip("the v3 pilots are not frozen in this checkout: "
+                    + ", ".join(str(p) for p in _V3_MANIFESTS
+                                if not p.is_file()))
+    why = []
+    for ds, path in sorted(_BY_DATASET.items()):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        if _ABSENT.get(ds):
+            why.append(f"{ds} images: {_ABSENT[ds]}")
+        try:
+            got = rf.pilot_forget_set(ds, doc["edit_seeds"])
+        except RuntimeError as exc:
+            why.append(f"{ds} selection rule: {exc}")
+        else:
+            if got["set_id"] != doc["forget_set_id"]:
+                why.append(f"{ds}: the rule now picks {got['set_id']!r} and the "
+                           f"pilot was frozen against {doc['forget_set_id']!r}")
+        drifted = sorted(p[len("input "):].split(":")[0]
+                         for p in rf.verify_manifest(path)["problems"]
+                         if p.startswith("input "))
+        if drifted:
+            why.append(f"{ds}: {len(drifted)} input(s) drifted since the freeze "
+                       f"({', '.join(drifted)}); re-freezing re-binds them and "
+                       f"leaves design_sha256 byte-identical")
+    if why:
+        pytest.skip("verifying a frozen v3 pilot to zero problems rebuilds the "
+                    "design over the images and the matrix on disk and re-hashes "
+                    "every input it binds -- " + "; ".join(why))
+    return True
+
 
 @_needs_v3_manifests
-def test_the_frozen_v3_pilots_verify_with_no_problems_at_all(rf):
-    """Zero problems, not one.
+def test_the_frozen_v3_pilots_report_no_drift_in_anything_they_froze(rf):
+    """No problem is ever about the design, on any checkout.
 
-    The superseded pilots each report exactly one problem -- this runner's own
-    digest, which moved when v3 was added -- and that is what superseding means.
-    The v3 pilots were frozen from the commit that implements v3, so every input
-    they name is still on disk with the bytes they recorded, and a manifest that
-    reported drift here would be reporting that the implementation moved after
-    the artifact was frozen against it.
-
-    NOT gated on the adapter weights being present.  That is the property, not an
-    omission: the design binds no gitignored file as an input, so it verifies in a
-    fresh clone exactly as it verifies on the machine that has every weight.  The
-    weights are bound by the RESULTS at RF2, where an absent one is reported and a
-    mismatched one is refused.
+    A fresh clone reports two problems and both are about the clone: the images
+    the constructor would have to hash, and the selection rule it would have to
+    apply to adapters that are gitignored.  What it never reports is a design that
+    does not reproduce, or a checkpoint digest that moved -- because v3 froze no
+    live status, so there is no digest of one to drift.  That is the difference
+    between this artifact and the two it supersedes, which report eight problems in
+    the same clone, and it is assertable everywhere rather than only where the
+    weights are.
     """
     for path in _V3_MANIFESTS:
         doc = json.loads(path.read_text(encoding="utf-8"))
         got = rf.verify_manifest(path)
-        assert got["valid"] is True, (path.name, got["problems"])
-        assert got["problems"] == [], (path.name, got["problems"])
         assert got["kind"] == rf.PREREG_V3_KIND
         assert got["design_sha256"] == doc["design_sha256"]
+        assert got["executed"] is False
+        for problem in got["problems"]:
+            assert any(kind in problem for kind in _ENVIRONMENTAL_PROBLEM), \
+                f"{path.name} reports a problem that is not about what this " \
+                f"checkout lacks: {problem}"
+        assert not any("does not reproduce design_sha256" in p
+                       for p in got["problems"]), got["problems"]
+        assert not any(p.startswith("checkpoint ") for p in got["problems"]), \
+            "v3 froze no checkpoint digest inside the design, so none can drift"
+        assert not any("no longer names the held-out images" in p
+                       for p in got["problems"]), \
+            "the held-out images are an INPUT the design is a statement about, " \
+            "so a manifest that no longer describes them is a real problem"
         # Not a fixed number: this is what the live probe hashed on THIS disk, so
-        # it is 9 here and 0 in a clone with no gitignored weights.  Asserting 9
-        # would make this a test that passes only on the machine that froze it --
-        # the same shape as v1's absolute paths.
+        # it is 9 on the machine that has the weights and 0 in a clone.
         ready = got["checkpoint_readiness"]
         assert got["n_checkpoints_rehashed"] == ready["n_files_present"]
-        n_declared = sum(e["n_files_required"]
-                         for e in doc["checkpoint_requirements"]["roles"].values())
+        cr = doc["checkpoint_requirements"]
+        n_declared = sum(e["n_files_required"] for e in cr["roles"].values())
         assert 0 <= ready["n_files_present"] <= n_declared
         assert ready["n_files_required"] == n_declared
-        assert got["executed"] is False
+        assert rf.roles_are_v2_shaped(cr), \
+            "the live prober has to be able to read this table, or readiness is " \
+            "a None that quietly means 'wrong shape' rather than an answer"
         # readiness is live, and says so in the block rather than only in prose
         assert got["readiness_is_computed_live"], \
             "the report has to say the readiness beside it was probed and not " \
@@ -1930,7 +2010,7 @@ def test_the_frozen_v3_pilots_verify_with_no_problems_at_all(rf):
         assert got["checkpoints_complete"] is ready["complete"]
         assert got["must_be_trained"] == ready["must_be_trained"]
         assert got["n_must_be_trained"] == len(ready["must_be_trained"])
-        cr = doc["checkpoint_requirements"]
+        assert got["roles_trained_since_freeze"] == ready["trained_since_declared"]
         for absent in ("verification", "complete", "unexpectedly_absent",
                        "must_be_trained_before_this_pilot_can_run",
                        "n_must_be_trained"):
@@ -1958,14 +2038,13 @@ def test_the_frozen_v3_pilots_verify_with_no_problems_at_all(rf):
         assert "NOT listed in provenance.input_file_sha256" in bound
         assert "gitignored" in bound
         inputs = doc["provenance"]["input_file_sha256"]
-        adapters = [rel for rel in inputs if rel.endswith(".safetensors")]
-        assert adapters == [], adapters
+        assert [rel for rel in inputs if rel.endswith(".safetensors")] == []
         # A role file MAY be a freeze-time input where it is tracked evidence a
-        # clone also has -- PPUBench's frozen router predictions are exactly
-        # that, which is why the design binds them.  What may not be one is a
-        # weight, and what may not be one at all is a role the design declared as
-        # work still to do: binding pending work at freeze time is binding
-        # progress, which is the defect this version exists for.
+        # clone also has -- the frozen router's predictions are exactly that,
+        # which is why the design binds them.  What may not be one is a weight,
+        # and what may not be one at all is a role the design declared as work
+        # still to do: binding pending work at freeze time is binding progress,
+        # which is the defect this version exists for.
         exists_already_files = {
             e[key] for e in cr["roles"].values()
             if e.get("exists_already")
@@ -1978,45 +2057,122 @@ def test_the_frozen_v3_pilots_verify_with_no_problems_at_all(rf):
             "a gitignored adapter recorded as a freeze-time input would make " \
             "every fresh clone report drift while telling the truth about its " \
             "own disk"
-        assert all((rf.DATASET_ROOT / raw).is_file() for raw in role_inputs)
-        # ... and the live prober can read this table, so readiness is a real
-        # answer here rather than a None that quietly means "wrong shape"
-        assert rf.roles_are_v2_shaped(cr)
-        assert got["roles_trained_since_freeze"] == []
+
+
+@_needs_v3_manifests
+def test_the_frozen_v3_pilots_verify_with_zero_problems_where_the_inputs_are(
+        rf, verifiable_v3, tmp_path):
+    """Zero problems, not one, on a checkout that has what the rebuild reads.
+
+    The superseded pilots each report exactly one problem on the machine that
+    froze them -- this runner's own digest, which moved when v3 was added -- and
+    that is what superseding means.  The v3 pilots were frozen from the commit
+    that implements v3, so nothing they name has moved, and a manifest reporting
+    drift here would be reporting that the implementation moved after the
+    artifact was frozen against it.
+
+    The gate is the probe above rather than a directory listing, and it names
+    which of the three conditions kept it from running.
+    """
+    for path in _V3_MANIFESTS:
+        ds = "salmu" if "salmu" in path.name else "ppubench"
+        got = rf.verify_manifest(path)
+        assert got["problems"] == [], (path.name, got["problems"])
+        assert got["valid"] is True, (path.name, got["problems"])
+        assert got["n_checkpoints_rehashed"] > 0, \
+            "a pilot that hashed nothing binds no weights, and the weights this " \
+            "one declares as inputs are on disk wherever this test runs"
+        assert rf.load_prereg_v3(ds)["design_sha256"] == got["design_sha256"], \
+            "the verified load is the whole point of a manifest that verifies"
+        # ... and the phase a run starts with agrees, filing its report under
+        # tmp_path rather than into the repository
+        out = tmp_path / ds
+        out.mkdir()
+        rep = rf.phase_rf0(ds, path=path, out=out)
+        assert rep["manifest_valid"] is True, rep["problems"]
+        assert rep["problems"] == []
+        assert rep["design_sha256"] == got["design_sha256"]
+        frozen_runner = json.loads(path.read_text(
+            encoding="utf-8"))["provenance"]["script_sha256"]
+        assert rep["run_provenance"]["executing_script_sha256"] == frozen_runner, \
+            "RF0 is running under the runner this pilot was frozen against, " \
+            "which is what a zero-problem verification is saying"
 
 
 @_needs_v3_manifests
 def test_the_frozen_v3_pilots_name_the_commit_and_tree_they_came_from(rf):
     """Item 4's list, on the artifact rather than on a cell: commit, worktree
-    state, script digest, every input hashed, and no input missing."""
+    state, script digest, every input hashed, and no input missing.
+
+    Every assertion is about what the artifact RECORDED, or about a file that is
+    tracked and therefore present in any clone, so all of them hold in a fresh
+    clone and hold after the runner moves.  Comparing a recorded digest straight
+    to the live file is the one shape that would not: it passes only at the commit
+    that froze it and turns CI red on the first edit to the runner -- a fact worth
+    reporting, but through ``verify_manifest``'s drift list, where it is named and
+    where re-freezing repairs it without touching the design.
+    """
+    runner = "scripts/e2c_v3_route_dependent_forgetting.py"
     for path in _V3_MANIFESTS:
         doc = json.loads(path.read_text(encoding="utf-8"))
         prov = doc["provenance"]
         ws = prov["clean_worktree"]
-        assert prov["executing_commit"] and len(prov["executing_commit"]) == 40
+        # -- recorded facts about the freeze, which cannot change afterwards ----
+        assert re.fullmatch(r"[0-9a-f]{40}", prov["executing_commit"] or "")
         assert ws["git_commit"] == prov["executing_commit"]
         assert ws["dirty_tracked_only"] is False, ws["dirty_tracked_only_lines"]
         assert ws["dirty_including_untracked"] is False
+        assert ws["n_dirty_tracked_only"] == ws["n_dirty_including_untracked"] == 0
         assert ws["untracked_outside_exclusions"] == []
-        assert ws["excluded_prefixes"], \
+        assert ws["excluded_prefixes"] and ws["exclusion_note"], \
             "the exclusion of this stage's own output prefix is reported, so a " \
             "reader can see what was not counted rather than infer it"
-        assert prov["script_sha256"] == _sha(
-            _SCRIPTS / "e2c_v3_route_dependent_forgetting.py"), \
-            "the frozen script digest and the script that just verified it " \
-            "disagree, so this manifest was not frozen from this implementation"
+        assert prov["untracked_files_count_as_dirty"]
+        assert "design_sha256" in prov.get(
+            "what_a_drifted_input_digest_means", ""), \
+            "the provenance block has to say that re-freezing re-binds the " \
+            "inputs and leaves design_sha256 alone, because that is what makes " \
+            "re-freezing a repair rather than a new pre-registration"
+        assert re.fullmatch(r"[0-9a-f]{64}", prov["script_sha256"] or "")
         assert prov["missing_input_files"] == []
-        assert prov["n_input_files_hashed"] == len(prov["input_file_sha256"])
         inputs = prov["input_file_sha256"]
-        assert "scripts/e2c_v3_route_dependent_forgetting.py" in inputs
+        assert prov["n_input_files_hashed"] == len(inputs)
+        assert runner in inputs
+        assert inputs[runner] == prov["script_sha256"], \
+            "the block names the runner twice and the two digests disagree"
         for sup in _V1_MANIFESTS + _V2_MANIFESTS:
             assert rf._rel(sup) in inputs, \
                 "a superseded pre-registration is an input to the design that " \
                 "supersedes it, so its bytes are named and hashed"
+        # -- and what those names resolve to, in ANY checkout -------------------
+        # Re-rooted through this test file's own root rather than through the
+        # recorded paths_are_relative_to, which is an absolute path in the
+        # checkout that froze it.  Taking that at face value asks the ORIGINAL
+        # checkout whether THIS one has the file, which is the defect v1's
+        # absolute checkpoint paths were.
+        assert prov["paths_are_relative_to"]
+        drift = {p[len("input "):].split(":")[0]
+                 for p in rf.verify_manifest(path)["problems"]
+                 if p.startswith("input ")}
+        assert drift <= set(inputs), drift
         for rel, digest in inputs.items():
-            p = Path(prov["paths_are_relative_to"]) / rel
-            assert p.is_file(), rel
-            assert _sha(p) == digest, rel
+            assert not Path(rel).is_absolute(), rel
+            assert re.fullmatch(r"[0-9a-f]{64}", digest or ""), rel
+            p = _ROOT / rel
+            assert p.is_file(), \
+                f"an input the design binds is not tracked, so a fresh clone " \
+                f"would report it missing: {rel}"
+            if rel in drift:
+                assert _sha(p) != digest, rel
+            else:
+                assert _sha(p) == digest, \
+                    f"{rel} differs from the bytes the design bound and " \
+                    f"verify_manifest did not say so"
+        # A superseded pre-registration is frozen forever, so drift in one is an
+        # edit to a pre-registration and not a runner that moved
+        for sup in _V1_MANIFESTS + _V2_MANIFESTS:
+            assert rf._rel(sup) not in drift, sup
+            assert _sha(sup) == inputs[rf._rel(sup)], sup.name
 
 
 @_needs_v3_manifests
@@ -2133,29 +2289,40 @@ def test_load_prereg_dispatches_on_version_and_only_v3_loads(rf):
     A superseded pre-registration that still loaded would be a design two
     versions of the runner could disagree about, and the disagreement would show
     up as two different answers from the same command line.
+
+    Asserted through the UNVERIFIED read, which is a fact about the dispatch and
+    the file rather than about what this checkout can rebuild; the verified read
+    is asserted in the gated zero-problems test above, where the rebuild it needs
+    is available.
     """
-    for ds in ("ppubench", "salmu"):
-        doc = rf.load_prereg_v3(ds)
-        assert doc["kind"] == rf.PREREG_V3_KIND
-        assert doc["dataset"] == ds
-        assert doc["preregistered"] and doc["frozen"] and not doc["executed"]
+    for ds, path in sorted(_BY_DATASET.items()):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        got = rf.load_prereg_v3(ds, verify=False)
+        assert got["kind"] == rf.PREREG_V3_KIND
+        assert got["dataset"] == ds
+        assert got["design_sha256"] == doc["design_sha256"]
+        assert got["preregistered"] and got["frozen"] and not got["executed"]
         # A phase that names no version gets the authoritative design, so the
         # default and the explicit call cannot disagree about which pilot ran.
-        assert rf.load_prereg(ds)["design_sha256"] == doc["design_sha256"]
-        assert rf.load_prereg_for(rf.LATEST_PILOT_SPEC, ds)[
-            "design_sha256"] == doc["design_sha256"]
+        assert rf.load_prereg(ds, verify=False)["design_sha256"] == \
+            got["design_sha256"]
+        assert rf.load_prereg_for(rf.LATEST_PILOT_SPEC, ds,
+                                  verify=False)["design_sha256"] == \
+            got["design_sha256"]
+        # A superseded design refuses on EVERY checkout and for its own reason,
+        # so the refusal is not this test's environment standing in for a result
         with pytest.raises(RuntimeError, match="does not verify"):
             rf.load_prereg_v2(ds)
         with pytest.raises(RuntimeError, match="does not verify"):
             rf.load_prereg_for(rf.PILOT_SPEC_V2, ds)
-        # ... and the path a version reads is the path that version froze
-        assert rf.prereg_path_for(rf.PILOT_SPEC_V3, ds).name == \
-            f"rf_pilot_{ds}_v3.json"
+        # ... and the path a version reads is the file that is tracked
+        assert rf.prereg_path_for(rf.PILOT_SPEC_V3, ds) == path, \
+            "the version's canonical name has to be the tracked file, or a " \
+            "phase run with no --manifest reads something else"
         assert rf.prereg_path_for(rf.PILOT_SPEC_V2, ds).name == \
             f"rf_pilot_{ds}_v2.json"
-        assert rf.prereg_path_for(rf.PILOT_SPEC_V3, ds) == _BY_DATASET[ds], \
-            "the version's canonical name has to be the file that is tracked, " \
-            "or a phase run with no --manifest reads something else"
+        assert rf.prereg_path_v3(ds) == rf.prereg_path_for(
+            rf.PILOT_SPEC_V3, ds)
 
 
 @_needs_v3_manifests
@@ -2174,8 +2341,10 @@ def test_rf0_on_the_frozen_v3_pilots_reports_what_is_still_missing(
         out = tmp_path / ds
         out.mkdir()
         rep = rf.phase_rf0(ds, path=path, out=out)
-        assert rep["manifest_valid"] is True, rep["problems"]
-        assert rep["problems"] == []
+        for problem in rep["problems"]:
+            assert any(kind in problem for kind in _ENVIRONMENTAL_PROBLEM), \
+                f"RF0 reports a problem that is not about what this checkout " \
+                f"lacks: {problem}"
         assert rep["design_version"] == "v3"
         assert rep["kind"] == rf.PREREG_V3_KIND
         assert rep["design_sha256"] == doc["design_sha256"]
