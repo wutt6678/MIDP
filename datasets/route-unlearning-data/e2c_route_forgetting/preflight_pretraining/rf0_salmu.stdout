@@ -1,0 +1,41 @@
+{
+  "phase": "RF0",
+  "dataset": "salmu",
+  "design_version": "v3",
+  "manifest": "e2c_route_forgetting/manifests/rf_pilot_salmu_v3.json",
+  "manifest_valid": true,
+  "problems": [],
+  "kind": "route_dependent_forgetting_preregistration_v3",
+  "design_sha256": "e41bf04e3c4fbd301603dd52c620555b020df8ff7467a21145fb4309af96da20",
+  "n_cells": 19,
+  "cells_by_kind": {
+    "baseline": 1,
+    "direct": 3,
+    "hybrid": 3,
+    "intervention": 3,
+    "natural": 9
+  },
+  "n_checkpoints_rehashed": 9,
+  "checkpoint_requirements_complete": false,
+  "n_must_be_trained": 5,
+  "must_be_trained_before_this_pilot_can_run": [
+    "direct_d__seed123",
+    "direct_d__seed17",
+    "direct_d__seed42",
+    "router_g__seed123",
+    "router_g__seed42"
+  ],
+  "unexpectedly_absent": [],
+  "roles_that_changed_since_freeze": [],
+  "readiness_is_computed_live": true,
+  "held_out_image_drift_since_freeze": [],
+  "n_cells_filed": 0,
+  "n_cells_missing": 19,
+  "runnable_now": false,
+  "why_not_runnable": "5 role(s) must be trained first: ['direct_d__seed123', 'direct_d__seed17', 'direct_d__seed42', 'router_g__seed123', 'router_g__seed42']",
+  "expected_verdicts": {
+    "mediation": "supported",
+    "routing_factorization": "supported and scientifically informative: an imperfect router is the only condition where the factorization has something to explain",
+    "routing_reliability": "measured, expected to FAIL at 0.8056 against 0.9"
+  }
+}

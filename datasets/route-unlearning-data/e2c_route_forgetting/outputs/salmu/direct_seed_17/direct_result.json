@@ -1,0 +1,93 @@
+{
+  "adapter_bytes": 7873736,
+  "adapter_path": "e2c_route_forgetting/outputs/salmu/direct_seed_17/adapter_final/adapter_model.safetensors",
+  "adapter_sha256": "157cc0a7546b98c40b4896918e477bbaebc16d578c63a2ad0cc78c9644abcb7d",
+  "adapter_sha256_before_this_run": null,
+  "cell_id": "direct_seed_17",
+  "cells_filed": [
+    "direct__d17",
+    "hybrid__d17"
+  ],
+  "dataset": "salmu",
+  "direct_pre_edit_held_out_accuracy": 0.8611111111111112,
+  "direct_seed": 17,
+  "does_not_depend_on_forced_codes": "the direct control presents no code at all; only the auxiliary hybrid probe does, and it is gated separately",
+  "independent_of_edited_h": "a separate checkpoint with a separate digest; v1 reused edited_h, which was trained on code-to-label pairs and is not an image model",
+  "input_sha256": {
+    "preregistration_design": "e41bf04e3c4fbd301603dd52c620555b020df8ff7467a21145fb4309af96da20",
+    "route_protocol": "54994d960da11848fb1c01b2671b1ffd1fd7a541cbf2458752b09d985f231777"
+  },
+  "kind": "direct_training_result_v3",
+  "n_held_out_images": 36,
+  "n_rows": 72,
+  "phase": "RF1D",
+  "pre_edit_by_construction": "D_s is not modified when an h is edited, so there is no post-edit variant of this number and nothing to compare it with; that independence is the property item 2 requires",
+  "prompts": {
+    "d_image_to_alias": "Identify the synthetic person shown here. Return only the alias."
+  },
+  "resume": {
+    "resumed": false
+  },
+  "run_provenance": {
+    "captured_at_the_start_of_the_run": true,
+    "clean_worktree": {
+      "dirty_including_untracked": true,
+      "dirty_tracked_only": false,
+      "dirty_tracked_only_lines": [],
+      "excluded_prefixes": [
+        "datasets/route-unlearning-data/e2c_route_forgetting/"
+      ],
+      "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts",
+      "git_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+      "n_dirty_including_untracked": 28,
+      "n_dirty_tracked_only": 0,
+      "n_excluded": 28,
+      "repo_root": "/scratch/wutiantong/MIDP",
+      "untracked_outside_exclusions": []
+    },
+    "cli": {
+      "cells": null,
+      "dataset": "salmu",
+      "design_version": "v3",
+      "device": "cuda:3",
+      "direct_seed": 17,
+      "direct_seeds": null,
+      "edit_seed": null,
+      "edit_seeds": null,
+      "forget_ids": null,
+      "forget_set": null,
+      "manifest": null,
+      "out": null,
+      "phase": [
+        "RF1D"
+      ],
+      "preregister": false,
+      "resume": false,
+      "router_seed": null,
+      "router_seeds": null,
+      "verify": false
+    },
+    "executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+    "executing_script_sha256": "a435919e5085b68ff2847b8f81dd851116c8296a9e4ddf100039655cbdfb3fb6",
+    "missing_runtime_modules": [],
+    "n_runtime_modules_hashed": 9,
+    "paths_are_relative_to": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data",
+    "pilot_version": "v3",
+    "preregistration_design_sha256": "e41bf04e3c4fbd301603dd52c620555b020df8ff7467a21145fb4309af96da20",
+    "preregistration_file_sha256": "94c53a47e15ab6a4f48a7c99a842f20a23aef4c95b611dbc0c0130063b864b3a",
+    "preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+    "preregistration_path": "e2c_route_forgetting/manifests/rf_pilot_salmu_v3.json",
+    "runtime_module_sha256": {
+      "scripts/e2c_v3_granularity_matrix.py": "be9c965e48e7deb674280951dbc9e05999d699aa004df9c3910b5d8b4b5c16ef",
+      "scripts/e2c_v3_label_parser.py": "fdf713c51c2a543801615e64cee54600a18d46d86b7510b36695c8af96632ac9",
+      "scripts/e2c_v3_matrix.py": "f42a74390d6a15b771096a1b1f1056312996f300a245268eaf027c8575b8a7d4",
+      "scripts/e2c_v3_mllmu_matrix.py": "ab2fc9f04448d0ccf524af16d689bf454ed19db7af198119f69a05411bb6876f",
+      "scripts/e2c_v3_phaseC_discrete_bottleneck.py": "b5950a03f3e36606c015dc4da4567c8c1a92898e180a6854643d38f3300d8793",
+      "scripts/e2c_v3_realdata.py": "1068e2f2240f9f4cd73046e992f4bc51d505ebbe53e7090fc6c8cbb481a0e95c",
+      "scripts/e2c_v3_research_validity.py": "f649c2d72eb9e04a517724417a22fc570a39b09969943bfe9abe193b5b542f99",
+      "scripts/e2c_v3_route_dependent_forgetting.py": "a435919e5085b68ff2847b8f81dd851116c8296a9e4ddf100039655cbdfb3fb6",
+      "scripts/e2c_v3_salmu.py": "9378a0608494f3f1ec77f11417bbcda8a7702ffb138c5d995c7e000df3208807"
+    }
+  },
+  "trained_on": "the train split's image-to-alias pairs, the same associations the route encodes, under the protocol read from the frozen route scripts"
+}

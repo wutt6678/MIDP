@@ -1,0 +1,119 @@
+{
+  "path": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/e2c_route_forgetting/manifests/rf_pilot_ppubench_v3.json",
+  "valid": true,
+  "problems": [],
+  "kind": "route_dependent_forgetting_preregistration_v3",
+  "design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+  "n_rows_total": 76,
+  "n_cells": 9,
+  "executed": false,
+  "n_checkpoints_rehashed": 9,
+  "checkpoints_complete": false,
+  "n_must_be_trained": 1,
+  "must_be_trained": [
+    "direct_d__seed17"
+  ],
+  "unexpectedly_absent": [],
+  "roles_trained_since_freeze": [],
+  "checkpoint_readiness": {
+    "complete": false,
+    "n_present": 5,
+    "n_required": 6,
+    "n_files_required": 10,
+    "present": {
+      "baseline_h": {
+        "role": "baseline_h",
+        "declared_exists_already": true,
+        "adapter": {
+          "path": "e2c_v3_real/outputs/realdata/h_C_to_Y/adapter_final/adapter_model.safetensors",
+          "sha256": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4",
+          "bytes": 7873736
+        }
+      },
+      "edited_h__seed123": {
+        "role": "edited_h__seed123",
+        "declared_exists_already": true,
+        "adapter": {
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/edited_h/adapter_final/adapter_model.safetensors",
+          "sha256": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+          "bytes": 7873736
+        },
+        "cell_results": {
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/cell_results.json",
+          "sha256": "46ed2acada04e8f232ce94b864df99536a273b13f5b11109a1ba65fd8015e00a",
+          "bytes": 29071
+        }
+      },
+      "edited_h__seed17": {
+        "role": "edited_h__seed17",
+        "declared_exists_already": true,
+        "adapter": {
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/edited_h/adapter_final/adapter_model.safetensors",
+          "sha256": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+          "bytes": 7873736
+        },
+        "cell_results": {
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/cell_results.json",
+          "sha256": "44489bf66ae458dc4b5dbe3e34676ee2f4957b5b66422a0759b0c0e151066b0a",
+          "bytes": 29074
+        }
+      },
+      "edited_h__seed42": {
+        "role": "edited_h__seed42",
+        "declared_exists_already": true,
+        "adapter": {
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/edited_h/adapter_final/adapter_model.safetensors",
+          "sha256": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+          "bytes": 7873736
+        },
+        "cell_results": {
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/cell_results.json",
+          "sha256": "73b287398ffcc5408193663ef00b92b2b55559edc8497b199a173cfbb54cc3d8",
+          "bytes": 29074
+        }
+      },
+      "router_g__seed17": {
+        "role": "router_g__seed17",
+        "declared_exists_already": true,
+        "adapter": {
+          "path": "e2c_v3_real/outputs/realdata/g_X_to_C/adapter_final/adapter_model.safetensors",
+          "sha256": "6d6a9dd22de3806cbc117cfd97344e3ef17c6e32a0b7773e9431d3a122086f42",
+          "bytes": 7873736
+        },
+        "held_out_predictions": {
+          "path": "e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json",
+          "sha256": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+          "bytes": 27892
+        }
+      }
+    },
+    "absent": {
+      "direct_d__seed17": {
+        "role": "direct_d__seed17",
+        "declared_exists_already": false,
+        "adapter": {
+          "path": "e2c_route_forgetting/outputs/ppubench/direct_seed_17/adapter_final/adapter_model.safetensors",
+          "sha256": null,
+          "bytes": null,
+          "absent": true
+        }
+      }
+    },
+    "must_be_trained": [
+      "direct_d__seed17"
+    ],
+    "n_must_be_trained": 1,
+    "unexpectedly_absent": [],
+    "note": "must_be_trained is the GPU work this pilot requires and does not have; unexpectedly_absent is a role this design assumed was already on disk and is not, which is a broken assumption rather than training work",
+    "hashed_not_just_existence_checked": "a checkpoint replaced in place keeps its path, so the digest is what ties a result to the weights that produced it",
+    "n_files_present": 9,
+    "computed_live_not_read_from_the_frozen_design": true,
+    "frozen_status_block_present_in_this_manifest": false,
+    "roles_whose_presence_changed_since_freeze": [],
+    "trained_since_declared": [],
+    "runnable_now": false,
+    "runnable_now_is_about_inputs_not_about_results": "True means every weight, prediction file and image this design names is present and hashed; it says nothing about whether any gate would pass",
+    "why_this_is_not_in_the_design": "because it changes when training finishes, and a frozen design that changes when training finishes is one that cannot be verified by the run that satisfies it"
+  },
+  "readiness_is_computed_live": "presence, digests, completeness and runnable_now are probed when this function runs and are not read out of the frozen design, so a manifest that is waiting for training keeps verifying while the training arrives"
+}

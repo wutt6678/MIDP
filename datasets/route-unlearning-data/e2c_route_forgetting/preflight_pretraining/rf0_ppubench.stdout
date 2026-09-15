@@ -1,0 +1,37 @@
+{
+  "phase": "RF0",
+  "dataset": "ppubench",
+  "design_version": "v3",
+  "manifest": "e2c_route_forgetting/manifests/rf_pilot_ppubench_v3.json",
+  "manifest_valid": true,
+  "problems": [],
+  "kind": "route_dependent_forgetting_preregistration_v3",
+  "design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+  "n_cells": 9,
+  "cells_by_kind": {
+    "baseline": 1,
+    "direct": 1,
+    "hybrid": 1,
+    "intervention": 3,
+    "natural": 3
+  },
+  "n_checkpoints_rehashed": 9,
+  "checkpoint_requirements_complete": false,
+  "n_must_be_trained": 1,
+  "must_be_trained_before_this_pilot_can_run": [
+    "direct_d__seed17"
+  ],
+  "unexpectedly_absent": [],
+  "roles_that_changed_since_freeze": [],
+  "readiness_is_computed_live": true,
+  "held_out_image_drift_since_freeze": [],
+  "n_cells_filed": 0,
+  "n_cells_missing": 9,
+  "runnable_now": false,
+  "why_not_runnable": "1 role(s) must be trained first: ['direct_d__seed17']",
+  "expected_verdicts": {
+    "mediation": "supported",
+    "routing_factorization": "not_established on unseen content",
+    "routing_reliability": "not_established"
+  }
+}
