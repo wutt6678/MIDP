@@ -1,0 +1,1882 @@
+{
+  "auxiliary_conditions_reported_separately": [
+    "hybrid_conflict_probe"
+  ],
+  "baseline_hard_response_matrix": {
+    "adapter": "baseline_h, the route's own unedited h",
+    "cell_id": "baseline__h_base",
+    "definition": "H_e(c, y) = 1{parse(h_e(c)) = y}",
+    "matrix": {
+      "RID_001": {
+        "Dax": 0,
+        "Kael": 0,
+        "Oden": 1,
+        "Seri": 0,
+        "Unknown": 0
+      },
+      "RID_002": {
+        "Dax": 0,
+        "Kael": 0,
+        "Oden": 0,
+        "Seri": 1,
+        "Unknown": 0
+      },
+      "RID_003": {
+        "Dax": 0,
+        "Kael": 1,
+        "Oden": 0,
+        "Seri": 0,
+        "Unknown": 0
+      },
+      "RID_004": {
+        "Dax": 1,
+        "Kael": 0,
+        "Oden": 0,
+        "Seri": 0,
+        "Unknown": 0
+      }
+    },
+    "n_codes": 4,
+    "unparseable_key": "<unparseable>",
+    "vocab": [
+      "Dax",
+      "Kael",
+      "Oden",
+      "Seri",
+      "Unknown"
+    ],
+    "why_not_score_sums": "candidate score sums are sums of teacher-forced full-sequence scores with no termination event and no cross-candidate normalization; their terms overlap and they are not probabilities, so they cannot be P_h in a factorization"
+  },
+  "baseline_is_the_before_of_the_same_map": "H_base and each H_e are built by one function from one row shape over the same code vocabulary, so the two matrices are comparable cell for cell by construction and the difference between them is what the edit did",
+  "cell_design_lineage": {
+    "ancestor": {
+      "ancestor_version": "v3",
+      "design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+      "kind": "route_dependent_forgetting_preregistration_v3",
+      "manifest": "e2c_route_forgetting/manifests/rf_pilot_ppubench_v3.json",
+      "manifest_sha256": "f7d297652ce1b7f37c4c04cc2b349a41b62a28a88e703478df45b40a705f4131",
+      "read_not_verified": "a superseded pilot binds this script's earlier bytes and so reports drift by design; its own recorded design_sha256 is still the identity of the design it froze"
+    },
+    "n_cells": 9,
+    "n_cells_by_state": {
+      "reused_from_the_ancestor_design": 9
+    },
+    "per_cell": {
+      "baseline__h_base": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "direct__d17": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "hybrid__d17": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "intervention__h123": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "intervention__h17": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "intervention__h42": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "natural__g17__h123": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "natural__g17__h17": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      },
+      "natural__g17__h42": {
+        "recorded_executing_commit": "ab1a7a3911ff850160dc0f0185af0279d3b9a221",
+        "recorded_pilot_version": "v3",
+        "recorded_preregistration_design_sha256": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "recorded_preregistration_kind": "route_dependent_forgetting_preregistration_v3",
+        "result_kind": "route_dependent_forgetting_result_v3",
+        "state": "reused_from_the_ancestor_design"
+      }
+    },
+    "policy": "every cell's own recorded preregistration_design_sha256 is compared against this design's and against the ancestor design frozen into this manifest; a cell matching neither is refused rather than aggregated",
+    "rule": "cells_are_consumed_from_the_ancestor_design_and_checked",
+    "states": [
+      "produced_under_this_design",
+      "reused_from_the_ancestor_design",
+      "unrecognized_design"
+    ],
+    "the_cells_were_not_relabelled": "a reused cell keeps its ancestor's kind string, its ancestor's run_provenance and its own file bytes.  This block is the disclosure, not a rewrite",
+    "this_design_sha256": "a8537c467bb5439d6b2c741aeb0464184db698d7561601690e5bc5eafc71721f",
+    "why_this_check_exists": "input_verification records the pre-registration a cell was produced under without comparing it to the one doing the aggregating, so a v4 report over v3 cells would otherwise look self-produced.  Every v4 report therefore carries cell_design_lineage naming both designs and how many cells came from each"
+  },
+  "cells": {
+    "baseline__h_base": {
+      "cell_id": "baseline__h_base",
+      "direct_seed": null,
+      "edit_seed": null,
+      "input_sha256": {
+        "baseline_h": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+      },
+      "kind": "baseline",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 4,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1B",
+      "router_seed": null
+    },
+    "direct__d17": {
+      "accuracy": 1.0,
+      "bootstrap": {
+        "exploratory": true,
+        "primary": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "001",
+            "002",
+            "003",
+            "004"
+          ],
+          "cluster_sizes_rows": {
+            "001": 3,
+            "002": 3,
+            "003": 3,
+            "004": 3
+          },
+          "level": "identity",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "direct_accuracy"
+        },
+        "sensitivity": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+          ],
+          "cluster_sizes_rows": {
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a": 3,
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61": 3,
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379": 3,
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497": 3
+          },
+          "level": "image",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "direct_accuracy"
+        },
+        "sensitivity_is_degenerate": "every identity has a single distinct held-out image, so the sensitivity interval restates the primary one",
+        "which_to_believe": "the primary identity-level interval; the image-level one is a sensitivity analysis whose units are not independent"
+      },
+      "cell_id": "direct__d17",
+      "direct_seed": 17,
+      "edit_seed": null,
+      "input_sha256": {
+        "direct_adapter": "ac154ba6b9587aae03e271d5d476c09295ae2b5ae57adaac1cafb6676858db2b",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+      },
+      "kind": "direct",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 12,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1D",
+      "router_seed": null
+    },
+    "hybrid__d17": {
+      "accuracy": 0.25,
+      "bootstrap": {
+        "exploratory": true,
+        "primary": {
+          "alpha": 0.05,
+          "bootstrap_mean": 0.2515,
+          "ci_high": 0.75,
+          "ci_low": 0.0,
+          "cluster_ids": [
+            "001",
+            "002",
+            "003",
+            "004"
+          ],
+          "cluster_sizes_rows": {
+            "001": 3,
+            "002": 3,
+            "003": 3,
+            "004": 3
+          },
+          "level": "identity",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 0.25,
+          "seed": 17,
+          "statistic": "hybrid_accuracy"
+        },
+        "sensitivity": {
+          "alpha": 0.05,
+          "bootstrap_mean": 0.247875,
+          "ci_high": 0.75,
+          "ci_low": 0.0,
+          "cluster_ids": [
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+          ],
+          "cluster_sizes_rows": {
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a": 3,
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61": 3,
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379": 3,
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497": 3
+          },
+          "level": "image",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 0.25,
+          "seed": 17,
+          "statistic": "hybrid_accuracy"
+        },
+        "sensitivity_is_degenerate": "every identity has a single distinct held-out image, so the sensitivity interval restates the primary one",
+        "which_to_believe": "the primary identity-level interval; the image-level one is a sensitivity analysis whose units are not independent"
+      },
+      "cell_id": "hybrid__d17",
+      "direct_seed": 17,
+      "edit_seed": null,
+      "input_sha256": {
+        "direct_adapter": "ac154ba6b9587aae03e271d5d476c09295ae2b5ae57adaac1cafb6676858db2b",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+      },
+      "kind": "hybrid",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 12,
+      "n_unparseable": 9,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1D",
+      "router_seed": null
+    },
+    "intervention__h123": {
+      "cell_id": "intervention__h123",
+      "direct_seed": null,
+      "edit_seed": 123,
+      "input_sha256": {
+        "edited_h": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+      },
+      "kind": "intervention",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 4,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1H",
+      "router_seed": null
+    },
+    "intervention__h17": {
+      "cell_id": "intervention__h17",
+      "direct_seed": null,
+      "edit_seed": 17,
+      "input_sha256": {
+        "edited_h": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+      },
+      "kind": "intervention",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 4,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1H",
+      "router_seed": null
+    },
+    "intervention__h42": {
+      "cell_id": "intervention__h42",
+      "direct_seed": null,
+      "edit_seed": 42,
+      "input_sha256": {
+        "edited_h": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+      },
+      "kind": "intervention",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 4,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1H",
+      "router_seed": null
+    },
+    "natural__g17__h123": {
+      "accuracy": 1.0,
+      "bootstrap": {
+        "exploratory": true,
+        "primary": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "001",
+            "002",
+            "003",
+            "004"
+          ],
+          "cluster_sizes_rows": {
+            "001": 3,
+            "002": 3,
+            "003": 3,
+            "004": 3
+          },
+          "level": "identity",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "natural_accuracy"
+        },
+        "sensitivity": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+          ],
+          "cluster_sizes_rows": {
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a": 3,
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61": 3,
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379": 3,
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497": 3
+          },
+          "level": "image",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "natural_accuracy"
+        },
+        "sensitivity_is_degenerate": "every identity has a single distinct held-out image, so the sensitivity interval restates the primary one",
+        "which_to_believe": "the primary identity-level interval; the image-level one is a sensitivity analysis whose units are not independent"
+      },
+      "cell_id": "natural__g17__h123",
+      "direct_seed": null,
+      "edit_seed": 123,
+      "input_sha256": {
+        "edited_h": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "router_predictions": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31"
+      },
+      "kind": "natural",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 12,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1E",
+      "router_seed": 17
+    },
+    "natural__g17__h17": {
+      "accuracy": 1.0,
+      "bootstrap": {
+        "exploratory": true,
+        "primary": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "001",
+            "002",
+            "003",
+            "004"
+          ],
+          "cluster_sizes_rows": {
+            "001": 3,
+            "002": 3,
+            "003": 3,
+            "004": 3
+          },
+          "level": "identity",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "natural_accuracy"
+        },
+        "sensitivity": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+          ],
+          "cluster_sizes_rows": {
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a": 3,
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61": 3,
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379": 3,
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497": 3
+          },
+          "level": "image",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "natural_accuracy"
+        },
+        "sensitivity_is_degenerate": "every identity has a single distinct held-out image, so the sensitivity interval restates the primary one",
+        "which_to_believe": "the primary identity-level interval; the image-level one is a sensitivity analysis whose units are not independent"
+      },
+      "cell_id": "natural__g17__h17",
+      "direct_seed": null,
+      "edit_seed": 17,
+      "input_sha256": {
+        "edited_h": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "router_predictions": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31"
+      },
+      "kind": "natural",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 12,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1E",
+      "router_seed": 17
+    },
+    "natural__g17__h42": {
+      "accuracy": 1.0,
+      "bootstrap": {
+        "exploratory": true,
+        "primary": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "001",
+            "002",
+            "003",
+            "004"
+          ],
+          "cluster_sizes_rows": {
+            "001": 3,
+            "002": 3,
+            "003": 3,
+            "004": 3
+          },
+          "level": "identity",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "natural_accuracy"
+        },
+        "sensitivity": {
+          "alpha": 0.05,
+          "bootstrap_mean": 1.0,
+          "ci_high": 1.0,
+          "ci_low": 1.0,
+          "cluster_ids": [
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a",
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61",
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379",
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497"
+          ],
+          "cluster_sizes_rows": {
+            "6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a": 3,
+            "7cced0c69affa331b6322b8348c7a87b4381f6a57a33510b809e6e02d840df61": 3,
+            "7e07a8a17febfa97a19aa2b1bb4c5cb7d75ce45e80418b573472c295cf3cd379": 3,
+            "a2b22750812ab8c6a482895ac11ab0076ccffd5bbaec5c39a0d69db86d58a497": 3
+          },
+          "level": "image",
+          "method": "percentile bootstrap over resampled clusters with replacement; the statistic is recomputed per resample",
+          "n_clusters": 4,
+          "n_resamples": 2000,
+          "n_resamples_skipped": 0,
+          "n_resamples_used": 2000,
+          "point_estimate": 1.0,
+          "seed": 17,
+          "statistic": "natural_accuracy"
+        },
+        "sensitivity_is_degenerate": "every identity has a single distinct held-out image, so the sensitivity interval restates the primary one",
+        "which_to_believe": "the primary identity-level interval; the image-level one is a sensitivity analysis whose units are not independent"
+      },
+      "cell_id": "natural__g17__h42",
+      "direct_seed": null,
+      "edit_seed": 42,
+      "input_sha256": {
+        "edited_h": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+        "preregistration_design": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65",
+        "router_predictions": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31"
+      },
+      "kind": "natural",
+      "n_multi_label_ambiguous": 0,
+      "n_rows": 12,
+      "n_unparseable": 0,
+      "n_unroutable": 0,
+      "phase_that_produced_it": "RF1E",
+      "router_seed": 17
+    }
+  },
+  "conditions_that_feed_the_mediation_verdict": [
+    "natural_mediated",
+    "forgotten_route_intervention",
+    "retained_route_intervention",
+    "retained_control",
+    "baseline_forced_code"
+  ],
+  "consumed_cell_files": {
+    "e2c_route_forgetting/outputs/ppubench/baseline__h_base/cell_results.json": "0101decacca5e50f536994b93c3a40700e44f1e89c1ca58ae7cc5e60540cc93e",
+    "e2c_route_forgetting/outputs/ppubench/direct__d17/cell_results.json": "e86593957f5cf1e72d8c754b7af3856386243546ce5776b02da00572ca356a42",
+    "e2c_route_forgetting/outputs/ppubench/hybrid__d17/cell_results.json": "6976d7ebe23f0d0d000ee5d9afffba78b8029cef6a0336736fc5516743d164c6",
+    "e2c_route_forgetting/outputs/ppubench/intervention__h123/cell_results.json": "93c1a80e5f0ceb4a715f0e1f9f0975968bb5de9d40368e84eb4b6c291646f7c8",
+    "e2c_route_forgetting/outputs/ppubench/intervention__h17/cell_results.json": "fa15456874ad141f68b48485e998e837f67efa2a8cc9f846b9fe31a2cdd9a9fa",
+    "e2c_route_forgetting/outputs/ppubench/intervention__h42/cell_results.json": "1eb2855f5984435c04ef7d57b0eaf91c7833080d94a1cb25bf72fa97f18fc61e",
+    "e2c_route_forgetting/outputs/ppubench/natural__g17__h123/cell_results.json": "0a635a4e1929c9604feb71fba4dd0df0e302a12f1e26436619525a4c7434956e",
+    "e2c_route_forgetting/outputs/ppubench/natural__g17__h17/cell_results.json": "111cb801d8a13cdcf5a47f5f3fad4d66bfc69dc68da1e1e549155d9bdaf8c0bd",
+    "e2c_route_forgetting/outputs/ppubench/natural__g17__h42/cell_results.json": "1b529dc71feaa8347280712f1d5ab2e8ce8104584f32f9f68e66a95c70bfb65b"
+  },
+  "dataset": "ppubench",
+  "delta_route": {
+    "intervention__h123": {
+      "arms": {
+        "forgotten": {
+          "codes": [
+            "RID_001"
+          ],
+          "condition": "forgotten_route_intervention",
+          "n_codes": 1,
+          "n_refusals": 1,
+          "rate": 1.0
+        },
+        "retained": {
+          "codes": [
+            "RID_002",
+            "RID_003",
+            "RID_004"
+          ],
+          "condition": "retained_route_intervention",
+          "n_codes": 3,
+          "n_refusals": 0,
+          "rate": 0.0
+        }
+      },
+      "delta_route": 1.0,
+      "excluded_and_why": {
+        "direct_control": "presents no code at all -- that is what makes it a control on the X -> Y pathway",
+        "hybrid_conflict_probe": "presents an image AND a code, so it is f(X, C) and not the mediator; it is auxiliary and is reported separately",
+        "natural_mediated": "no code is forced; the route is g's own prediction, so it belongs to the composition and not to the intervention",
+        "retained_control": "the same rows as retained_route_intervention, so including it would count one measurement twice"
+      },
+      "formula": "Delta_route = P(Unknown | do(C in F)) - P(Unknown | do(C not in F))",
+      "interval_possible_on_forgotten_arm": false,
+      "interval_possible_on_retained_arm": true,
+      "numerator_arms": [
+        "forgotten_route_intervention",
+        "retained_route_intervention"
+      ],
+      "rows_are_codes_not_images": "v1 bootstrapped Delta_route over image-clustered rows, but a forced-code row has no image: h receives the code and nothing else, so the resampling unit is the code",
+      "single_target_limitation": "a single-target forget set puts exactly 1 code on the forgotten arm, so P(Unknown | do(C in F)) is one observation and no cluster bootstrap can produce an interval on it.  Delta_route is reported as a point estimate with its denominators stated; an interval on the forgotten arm needs a simultaneous forget set with at least two target codes",
+      "unit_of_analysis": "the CODE, not the image.  With a hard mediator the intervention is h_e(do(C=c)) and nothing else varies, so one code is one observation and there is no image axis to average over"
+    },
+    "intervention__h17": {
+      "arms": {
+        "forgotten": {
+          "codes": [
+            "RID_001"
+          ],
+          "condition": "forgotten_route_intervention",
+          "n_codes": 1,
+          "n_refusals": 1,
+          "rate": 1.0
+        },
+        "retained": {
+          "codes": [
+            "RID_002",
+            "RID_003",
+            "RID_004"
+          ],
+          "condition": "retained_route_intervention",
+          "n_codes": 3,
+          "n_refusals": 0,
+          "rate": 0.0
+        }
+      },
+      "delta_route": 1.0,
+      "excluded_and_why": {
+        "direct_control": "presents no code at all -- that is what makes it a control on the X -> Y pathway",
+        "hybrid_conflict_probe": "presents an image AND a code, so it is f(X, C) and not the mediator; it is auxiliary and is reported separately",
+        "natural_mediated": "no code is forced; the route is g's own prediction, so it belongs to the composition and not to the intervention",
+        "retained_control": "the same rows as retained_route_intervention, so including it would count one measurement twice"
+      },
+      "formula": "Delta_route = P(Unknown | do(C in F)) - P(Unknown | do(C not in F))",
+      "interval_possible_on_forgotten_arm": false,
+      "interval_possible_on_retained_arm": true,
+      "numerator_arms": [
+        "forgotten_route_intervention",
+        "retained_route_intervention"
+      ],
+      "rows_are_codes_not_images": "v1 bootstrapped Delta_route over image-clustered rows, but a forced-code row has no image: h receives the code and nothing else, so the resampling unit is the code",
+      "single_target_limitation": "a single-target forget set puts exactly 1 code on the forgotten arm, so P(Unknown | do(C in F)) is one observation and no cluster bootstrap can produce an interval on it.  Delta_route is reported as a point estimate with its denominators stated; an interval on the forgotten arm needs a simultaneous forget set with at least two target codes",
+      "unit_of_analysis": "the CODE, not the image.  With a hard mediator the intervention is h_e(do(C=c)) and nothing else varies, so one code is one observation and there is no image axis to average over"
+    },
+    "intervention__h42": {
+      "arms": {
+        "forgotten": {
+          "codes": [
+            "RID_001"
+          ],
+          "condition": "forgotten_route_intervention",
+          "n_codes": 1,
+          "n_refusals": 1,
+          "rate": 1.0
+        },
+        "retained": {
+          "codes": [
+            "RID_002",
+            "RID_003",
+            "RID_004"
+          ],
+          "condition": "retained_route_intervention",
+          "n_codes": 3,
+          "n_refusals": 0,
+          "rate": 0.0
+        }
+      },
+      "delta_route": 1.0,
+      "excluded_and_why": {
+        "direct_control": "presents no code at all -- that is what makes it a control on the X -> Y pathway",
+        "hybrid_conflict_probe": "presents an image AND a code, so it is f(X, C) and not the mediator; it is auxiliary and is reported separately",
+        "natural_mediated": "no code is forced; the route is g's own prediction, so it belongs to the composition and not to the intervention",
+        "retained_control": "the same rows as retained_route_intervention, so including it would count one measurement twice"
+      },
+      "formula": "Delta_route = P(Unknown | do(C in F)) - P(Unknown | do(C not in F))",
+      "interval_possible_on_forgotten_arm": false,
+      "interval_possible_on_retained_arm": true,
+      "numerator_arms": [
+        "forgotten_route_intervention",
+        "retained_route_intervention"
+      ],
+      "rows_are_codes_not_images": "v1 bootstrapped Delta_route over image-clustered rows, but a forced-code row has no image: h receives the code and nothing else, so the resampling unit is the code",
+      "single_target_limitation": "a single-target forget set puts exactly 1 code on the forgotten arm, so P(Unknown | do(C in F)) is one observation and no cluster bootstrap can produce an interval on it.  Delta_route is reported as a point estimate with its denominators stated; an interval on the forgotten arm needs a simultaneous forget set with at least two target codes",
+      "unit_of_analysis": "the CODE, not the image.  With a hard mediator the intervention is h_e(do(C=c)) and nothing else varies, so one code is one observation and there is no image axis to average over"
+    }
+  },
+  "e2e_factorization": {
+    "aggregation_is_stated_on_the_gate": "see gates.e2e_matches_the_routing_composition.aggregation; the rationale lives in one place so the two cannot drift",
+    "gate_is_applied_to": "natural__g17__h17",
+    "max_abs_error": 0.0,
+    "per_cell": {
+      "natural__g17__h123": {
+        "abs_error": 0.0,
+        "cell_id": "natural__g17__h123",
+        "confusion": {
+          "codes": [
+            "RID_001",
+            "RID_002",
+            "RID_003",
+            "RID_004"
+          ],
+          "hard_not_smoothed": "greedy decoding yields one code per image, so P_g(c|X) is 0/1 rather than a distribution; a smoothed version would need repeated generations under a preregistered sampling configuration, which this design does not use",
+          "n_images": 12,
+          "n_unroutable": 0,
+          "unroutable_counted_not_dropped": "an image whose code did not parse contributes to no column of the confusion matrix and is counted here; it is a routing failure and the factorization must account for it"
+        },
+        "edit_seed": 123,
+        "formula": "sum_c P_g(c|X) * H_e(c, Y*(X))",
+        "n_images": 12,
+        "n_unroutable": 0,
+        "observed": 1.0,
+        "p_h_is_the_empirical_hard_response": true,
+        "per_image": [
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          }
+        ],
+        "predicted": 1.0,
+        "router_seed": 17
+      },
+      "natural__g17__h17": {
+        "abs_error": 0.0,
+        "cell_id": "natural__g17__h17",
+        "confusion": {
+          "codes": [
+            "RID_001",
+            "RID_002",
+            "RID_003",
+            "RID_004"
+          ],
+          "hard_not_smoothed": "greedy decoding yields one code per image, so P_g(c|X) is 0/1 rather than a distribution; a smoothed version would need repeated generations under a preregistered sampling configuration, which this design does not use",
+          "n_images": 12,
+          "n_unroutable": 0,
+          "unroutable_counted_not_dropped": "an image whose code did not parse contributes to no column of the confusion matrix and is counted here; it is a routing failure and the factorization must account for it"
+        },
+        "edit_seed": 17,
+        "formula": "sum_c P_g(c|X) * H_e(c, Y*(X))",
+        "n_images": 12,
+        "n_unroutable": 0,
+        "observed": 1.0,
+        "p_h_is_the_empirical_hard_response": true,
+        "per_image": [
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          }
+        ],
+        "predicted": 1.0,
+        "router_seed": 17
+      },
+      "natural__g17__h42": {
+        "abs_error": 0.0,
+        "cell_id": "natural__g17__h42",
+        "confusion": {
+          "codes": [
+            "RID_001",
+            "RID_002",
+            "RID_003",
+            "RID_004"
+          ],
+          "hard_not_smoothed": "greedy decoding yields one code per image, so P_g(c|X) is 0/1 rather than a distribution; a smoothed version would need repeated generations under a preregistered sampling configuration, which this design does not use",
+          "n_images": 12,
+          "n_unroutable": 0,
+          "unroutable_counted_not_dropped": "an image whose code did not parse contributes to no column of the confusion matrix and is counted here; it is a routing failure and the factorization must account for it"
+        },
+        "edit_seed": 42,
+        "formula": "sum_c P_g(c|X) * H_e(c, Y*(X))",
+        "n_images": 12,
+        "n_unroutable": 0,
+        "observed": 1.0,
+        "p_h_is_the_empirical_hard_response": true,
+        "per_image": [
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_32.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_33.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "001",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Nicolas_Cage_34.png",
+            "predicted_correct": 1,
+            "required_label": "Unknown",
+            "routed_code": "RID_001",
+            "why": "H_e(RID_001, Unknown)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_47.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_49.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "002",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Michelle_Obama_50.png",
+            "predicted_correct": 1,
+            "required_label": "Seri",
+            "routed_code": "RID_002",
+            "why": "H_e(RID_002, Seri)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_34.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_35.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "003",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/George_W_Bush_48.png",
+            "predicted_correct": 1,
+            "required_label": "Kael",
+            "routed_code": "RID_003",
+            "why": "H_e(RID_003, Kael)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_43.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_45.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          },
+          {
+            "identity_id": "004",
+            "image_uri": "/scratch/wutiantong/datasets/PPU-Bench/images/ppu_eval_classification/Walt_Disney_47.png",
+            "predicted_correct": 1,
+            "required_label": "Dax",
+            "routed_code": "RID_004",
+            "why": "H_e(RID_004, Dax)"
+          }
+        ],
+        "predicted": 1.0,
+        "router_seed": 17
+      }
+    },
+    "tolerance": 0.02
+  },
+  "entries_in_gates_that_are_not_gates": [
+    "auxiliary_output_hygiene"
+  ],
+  "forget_set_id": "fs_001",
+  "gates": {
+    "auxiliary_output_hygiene": {
+      "absent_from_gate_to_verdict": true,
+      "conditions": [
+        "hybrid_conflict_probe"
+      ],
+      "distinct_expected_labels_missed": [
+        "Kael",
+        "Oden",
+        "Seri"
+      ],
+      "example_raw_outputs": [
+        "K",
+        "K",
+        "K",
+        "Mikah",
+        "Mikah",
+        "Mikah",
+        "Bubba",
+        "Bubba"
+      ],
+      "example_row_ids": [
+        "hybrid__d17::hyb::001::Nicolas_Cage_32.png",
+        "hybrid__d17::hyb::001::Nicolas_Cage_33.png",
+        "hybrid__d17::hyb::001::Nicolas_Cage_34.png",
+        "hybrid__d17::hyb::002::Michelle_Obama_47.png",
+        "hybrid__d17::hyb::002::Michelle_Obama_49.png",
+        "hybrid__d17::hyb::002::Michelle_Obama_50.png",
+        "hybrid__d17::hyb::003::George_W_Bush_34.png",
+        "hybrid__d17::hyb::003::George_W_Bush_35.png"
+      ],
+      "feeds_no_verdict": true,
+      "is_a_gate": false,
+      "n": 12,
+      "n_examples_shown": 8,
+      "name": "auxiliary_output_hygiene",
+      "passed": null,
+      "rate_unparseable": 0.75,
+      "value": {
+        "multi_label_ambiguous": 0,
+        "unparseable": 9
+      },
+      "why_it_is_reported_at_all": "these rows are outside every mediated hygiene count, which is a statement about the verdict and not about the rows.  What they did is still a finding: an auxiliary probe that derails out of the candidate vocabulary is telling us the direct pathway ignores a code it was never trained on by answering something else entirely"
+    },
+    "baseline_forgotten_route_following": {
+      "description": "h_base(do(C=C_f)) BEFORE any edit: a forgotten code must produce its own alias.  This is the other half of conditional_forgotten_route_suppression -- its own alias before, Unknown after -- and without it the suppression gate is satisfied by an adapter that never produced those aliases at all",
+      "failed_because": null,
+      "n": 1,
+      "name": "baseline_forgotten_route_following",
+      "ok": 1,
+      "paired_with": "conditional_forgotten_route_suppression",
+      "passed": true,
+      "resolution": {
+        "minimum_count_that_clears": 1,
+        "n": 1,
+        "note": "at n=1 the achievable rates are multiples of 1.0000, so a floor of 1.0 requires at least 1 of 1",
+        "smallest_step": 1.0
+      },
+      "retained_arm_reported_not_gated": {
+        "accuracy": 1.0,
+        "n": 3,
+        "why_not_gated": "the edit makes no claim about a retained code's behaviour, so the retained arm's pre-edit accuracy is context for the change claim rather than a condition on it"
+      },
+      "threshold": 1.0,
+      "value": 1.0
+    },
+    "conditional_forgotten_route_suppression": {
+      "description": "h_e(do(C=C_f)) must produce the refusal label for every forgotten code",
+      "failed_because": null,
+      "n": 3,
+      "name": "conditional_forgotten_route_suppression",
+      "ok": 3,
+      "passed": true,
+      "resolution": {
+        "minimum_count_that_clears": 3,
+        "n": 3,
+        "note": "at n=3 the achievable rates are multiples of 0.3333, so a floor of 1.0 requires at least 3 of 3",
+        "smallest_step": 0.3333333333333333
+      },
+      "threshold": 1.0,
+      "value": 1.0
+    },
+    "conditional_retained_route_accuracy": {
+      "description": "h_e(do(C=C_r)) must produce that code's own alias for every retained code",
+      "failed_because": null,
+      "n": 9,
+      "name": "conditional_retained_route_accuracy",
+      "ok": 9,
+      "passed": true,
+      "resolution": {
+        "minimum_count_that_clears": 9,
+        "n": 9,
+        "note": "at n=9 the achievable rates are multiples of 0.1111, so a floor of 1.0 requires at least 9 of 9",
+        "smallest_step": 0.1111111111111111
+      },
+      "threshold": 1.0,
+      "value": 1.0
+    },
+    "direct_code_following_rate": {
+      "aggregation": "every direct_seed, not the pooled mean",
+      "description": "AUXILIARY hybrid probe D_s(X, C_irrelevant): the rate at which an irrelevant code captures a pathway never trained on codes.  Reported beside the accuracy gate, never instead of it  Measured for EVERY direct seed",
+      "failed_because": null,
+      "levels_that_failed": [],
+      "n": 12,
+      "n_seeds": 1,
+      "name": "direct_code_following_rate",
+      "ok": {
+        "17": 0
+      },
+      "passed": true,
+      "per_seed_n": {
+        "17": 12
+      },
+      "rate_by_failed_level": {},
+      "threshold": 0.1,
+      "value": {
+        "17": 0.0
+      }
+    },
+    "direct_image_accuracy": {
+      "aggregation": "every direct_seed, not the pooled mean",
+      "description": "D_s(X), image only and no code presented: the unchanged X -> Y pathway must still identify the image.  This is the gate v1 lacked -- it reused edited_h, which was trained on code-to-label pairs and is not an image model, so a model emitting arbitrary wrong labels passed, for EVERY direct seed",
+      "failed_because": null,
+      "levels_that_failed": [],
+      "measured_on": "D_s, a separately trained and separately hashed adapter, one gate value per direct seed",
+      "n": 12,
+      "n_seeds": 1,
+      "name": "direct_image_accuracy",
+      "ok": {
+        "17": 12
+      },
+      "passed": true,
+      "per_seed_n": {
+        "17": 12
+      },
+      "rate_by_failed_level": {},
+      "resolution": {
+        "17": {
+          "minimum_count_that_clears": 11,
+          "n": 12,
+          "note": "at n=12 the achievable rates are multiples of 0.0833, so a floor of 0.9 requires at least 11 of 12",
+          "smallest_step": 0.08333333333333333
+        }
+      },
+      "resolution_is_per_seed": "a floor is resolved at the denominator it is applied to, and here that is one seed's held-out images rather than all seeds pooled",
+      "threshold": 0.9,
+      "value": {
+        "17": 1.0
+      }
+    },
+    "e2e_matches_the_routing_composition": {
+      "description": "if apparent forgetting failures and collateral errors are quantitatively explained by routing errors, the observed figure must equal what the router's own confusion and h's empirical hard response predict",
+      "failed_because": null,
+      "n": 12,
+      "name": "e2e_matches_the_routing_composition",
+      "observed": 1.0,
+      "passed": true,
+      "predicted": 1.0,
+      "threshold": 0.02,
+      "value": 0.0
+    },
+    "mediator_intervention_following_accuracy": {
+      "description": "over every forced-code row on both arms: the output must be what the FORCED code requires, which is the mediation claim itself",
+      "failed_because": null,
+      "n": 12,
+      "name": "mediator_intervention_following_accuracy",
+      "ok": 12,
+      "passed": true,
+      "resolution": {
+        "minimum_count_that_clears": 12,
+        "n": 12,
+        "note": "at n=12 the achievable rates are multiples of 0.0833, so a floor of 0.99 requires at least 12 of 12",
+        "smallest_step": 0.08333333333333333
+      },
+      "threshold": 0.99,
+      "value": 1.0
+    },
+    "no_unparseable_or_multi_label_outputs": {
+      "both_denominators_are_named": "n is the one the verdict reads; the whole-run figure is here beside it so what was excluded is a stated fact rather than something a reader has to reconstruct",
+      "conditions_excluded_from_the_count": [
+        "hybrid_conflict_probe"
+      ],
+      "description": "an output naming no candidate label identifies no route, and one naming two followed neither; resolving either would invent a result",
+      "failed_because": null,
+      "n": 64,
+      "n_rows_excluded": 12,
+      "n_rows_in_the_whole_run": 76,
+      "name": "no_unparseable_or_multi_label_outputs",
+      "passed": true,
+      "row_scope": "non_auxiliary_rows",
+      "threshold": {
+        "max_multi_label_outputs": 0,
+        "max_unparseable_outputs": 0
+      },
+      "value": {
+        "multi_label_ambiguous": 0,
+        "unparseable": 0
+      }
+    },
+    "router_held_out_accuracy": {
+      "aggregation": "every seed, not the mean",
+      "failed_because": null,
+      "levels_that_failed": [],
+      "n": 1,
+      "n_seeds": 1,
+      "name": "router_held_out_accuracy",
+      "passed": true,
+      "rate_by_failed_level": {},
+      "threshold": 0.9,
+      "value": {
+        "17": 1.0
+      }
+    }
+  },
+  "hard_response_matrices": {
+    "17": {
+      "cell_id": "intervention__h17",
+      "definition": "H_e(c, y) = 1{parse(h_e(c)) = y}",
+      "edit_seed": 17,
+      "matrix": {
+        "RID_001": {
+          "Dax": 0,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 1
+        },
+        "RID_002": {
+          "Dax": 0,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 1,
+          "Unknown": 0
+        },
+        "RID_003": {
+          "Dax": 0,
+          "Kael": 1,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 0
+        },
+        "RID_004": {
+          "Dax": 1,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 0
+        }
+      },
+      "n_codes": 4,
+      "unparseable_key": "<unparseable>",
+      "vocab": [
+        "Dax",
+        "Kael",
+        "Oden",
+        "Seri",
+        "Unknown"
+      ],
+      "why_not_score_sums": "candidate score sums are sums of teacher-forced full-sequence scores with no termination event and no cross-candidate normalization; their terms overlap and they are not probabilities, so they cannot be P_h in a factorization"
+    },
+    "42": {
+      "cell_id": "intervention__h42",
+      "definition": "H_e(c, y) = 1{parse(h_e(c)) = y}",
+      "edit_seed": 42,
+      "matrix": {
+        "RID_001": {
+          "Dax": 0,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 1
+        },
+        "RID_002": {
+          "Dax": 0,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 1,
+          "Unknown": 0
+        },
+        "RID_003": {
+          "Dax": 0,
+          "Kael": 1,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 0
+        },
+        "RID_004": {
+          "Dax": 1,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 0
+        }
+      },
+      "n_codes": 4,
+      "unparseable_key": "<unparseable>",
+      "vocab": [
+        "Dax",
+        "Kael",
+        "Oden",
+        "Seri",
+        "Unknown"
+      ],
+      "why_not_score_sums": "candidate score sums are sums of teacher-forced full-sequence scores with no termination event and no cross-candidate normalization; their terms overlap and they are not probabilities, so they cannot be P_h in a factorization"
+    },
+    "123": {
+      "cell_id": "intervention__h123",
+      "definition": "H_e(c, y) = 1{parse(h_e(c)) = y}",
+      "edit_seed": 123,
+      "matrix": {
+        "RID_001": {
+          "Dax": 0,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 1
+        },
+        "RID_002": {
+          "Dax": 0,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 1,
+          "Unknown": 0
+        },
+        "RID_003": {
+          "Dax": 0,
+          "Kael": 1,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 0
+        },
+        "RID_004": {
+          "Dax": 1,
+          "Kael": 0,
+          "Oden": 0,
+          "Seri": 0,
+          "Unknown": 0
+        }
+      },
+      "n_codes": 4,
+      "unparseable_key": "<unparseable>",
+      "vocab": [
+        "Dax",
+        "Kael",
+        "Oden",
+        "Seri",
+        "Unknown"
+      ],
+      "why_not_score_sums": "candidate score sums are sums of teacher-forced full-sequence scores with no termination event and no cross-candidate normalization; their terms overlap and they are not probabilities, so they cannot be P_h in a factorization"
+    }
+  },
+  "input_verification": {
+    "bindings_not_recheckable": [],
+    "digests_that_are_not_role_files": {
+      "preregistration_design": "hybrid__d17"
+    },
+    "n_bindings_not_recheckable": 0,
+    "n_digests_compared": 12,
+    "per_cell": {
+      "baseline__h_base": {
+        "baseline_h": {
+          "bound_to_a_role_file": true,
+          "current": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4",
+          "file_key": "adapter",
+          "path": "e2c_v3_real/outputs/realdata/h_C_to_Y/adapter_final/adapter_model.safetensors",
+          "recorded": "4df1ed1ce43408d76a703835f0a711b55b9eb1a056859176dcdcb716247617e4",
+          "role": "baseline_h",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        }
+      },
+      "direct__d17": {
+        "direct_adapter": {
+          "bound_to_a_role_file": true,
+          "current": "ac154ba6b9587aae03e271d5d476c09295ae2b5ae57adaac1cafb6676858db2b",
+          "file_key": "adapter",
+          "path": "e2c_route_forgetting/outputs/ppubench/direct_seed_17/adapter_final/adapter_model.safetensors",
+          "recorded": "ac154ba6b9587aae03e271d5d476c09295ae2b5ae57adaac1cafb6676858db2b",
+          "role": "direct_d__seed17",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        }
+      },
+      "hybrid__d17": {
+        "direct_adapter": {
+          "bound_to_a_role_file": true,
+          "current": "ac154ba6b9587aae03e271d5d476c09295ae2b5ae57adaac1cafb6676858db2b",
+          "file_key": "adapter",
+          "path": "e2c_route_forgetting/outputs/ppubench/direct_seed_17/adapter_final/adapter_model.safetensors",
+          "recorded": "ac154ba6b9587aae03e271d5d476c09295ae2b5ae57adaac1cafb6676858db2b",
+          "role": "direct_d__seed17",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        }
+      },
+      "intervention__h123": {
+        "edited_h": {
+          "bound_to_a_role_file": true,
+          "current": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+          "file_key": "adapter",
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/edited_h/adapter_final/adapter_model.safetensors",
+          "recorded": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+          "role": "edited_h__seed123",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        }
+      },
+      "intervention__h17": {
+        "edited_h": {
+          "bound_to_a_role_file": true,
+          "current": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+          "file_key": "adapter",
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/edited_h/adapter_final/adapter_model.safetensors",
+          "recorded": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+          "role": "edited_h__seed17",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        }
+      },
+      "intervention__h42": {
+        "edited_h": {
+          "bound_to_a_role_file": true,
+          "current": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+          "file_key": "adapter",
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/edited_h/adapter_final/adapter_model.safetensors",
+          "recorded": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+          "role": "edited_h__seed42",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        }
+      },
+      "natural__g17__h123": {
+        "edited_h": {
+          "bound_to_a_role_file": true,
+          "current": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+          "file_key": "adapter",
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_123/edited_h/adapter_final/adapter_model.safetensors",
+          "recorded": "3af7e7ab2951e4a2f24243971a91af4c385b168e4373826b19b56b2f67c72677",
+          "role": "edited_h__seed123",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        },
+        "router_predictions": {
+          "bound_to_a_role_file": true,
+          "current": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+          "file_key": "held_out_predictions",
+          "path": "e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json",
+          "recorded": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+          "role": "router_g__seed17",
+          "state": "matches"
+        }
+      },
+      "natural__g17__h17": {
+        "edited_h": {
+          "bound_to_a_role_file": true,
+          "current": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+          "file_key": "adapter",
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_17/edited_h/adapter_final/adapter_model.safetensors",
+          "recorded": "3de18608cb3b3961c42c19b9bb0882746e1006887e73e6baede79d9b2af889b1",
+          "role": "edited_h__seed17",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        },
+        "router_predictions": {
+          "bound_to_a_role_file": true,
+          "current": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+          "file_key": "held_out_predictions",
+          "path": "e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json",
+          "recorded": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+          "role": "router_g__seed17",
+          "state": "matches"
+        }
+      },
+      "natural__g17__h42": {
+        "edited_h": {
+          "bound_to_a_role_file": true,
+          "current": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+          "file_key": "adapter",
+          "path": "e2c_matrix/outputs/ppubench/cells/fs_001/seed_42/edited_h/adapter_final/adapter_model.safetensors",
+          "recorded": "6cab9641dfa5802cba16e5c3654bb4cab3d2b785c90bec7ed0314fed5576f345",
+          "role": "edited_h__seed42",
+          "state": "matches"
+        },
+        "preregistration_design": {
+          "bound_to_a_role_file": false,
+          "recorded": "1f8ffa176785a9413272229255883c9870bbd30a93d0a2d664d03893cffdda65"
+        },
+        "router_predictions": {
+          "bound_to_a_role_file": true,
+          "current": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+          "file_key": "held_out_predictions",
+          "path": "e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json",
+          "recorded": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31",
+          "role": "router_g__seed17",
+          "state": "matches"
+        }
+      }
+    },
+    "policy": "every digest a cell records against a declared role file is re-hashed and compared; a mismatch refuses the aggregate rather than annotating it, and an absent file is reported as a binding that could not be re-checked because RF2P must still reproduce a run from stored generations where no adapter is present"
+  },
+  "kind": "route_dependent_forgetting_result_v3",
+  "mediation_pass": true,
+  "n_cells": 9,
+  "n_consumed_cell_files": 9,
+  "n_entries_in_gates": 10,
+  "n_gates_the_verdicts_read": 9,
+  "n_rows": 76,
+  "preregistration_design_sha256": "a8537c467bb5439d6b2c741aeb0464184db698d7561601690e5bc5eafc71721f",
+  "produced_by": "RF2",
+  "rescored_from_stored_raw": false,
+  "router_held_out_accuracy": {
+    "17": {
+      "accuracy": 1.0,
+      "computed_from": "that seed's own held-out prediction file, not from a number recorded elsewhere",
+      "n": 12,
+      "n_correct": 12,
+      "router_seed": 17,
+      "source": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data/e2c_v3_real/outputs/realdata/e2e_post/e2e_results.json",
+      "source_sha256": "fa49ae89712e81307c12d51b1009f4eed052d5c1941e5f9bebb7afde68053c31"
+    }
+  },
+  "routing_factorization_pass": null,
+  "routing_reliability_pass": null,
+  "run_provenance": {
+    "captured_at_the_start_of_the_run": true,
+    "clean_worktree": {
+      "dirty_including_untracked": false,
+      "dirty_tracked_only": false,
+      "dirty_tracked_only_lines": [],
+      "excluded_prefixes": [
+        "datasets/route-unlearning-data/e2c_route_forgetting/"
+      ],
+      "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts",
+      "git_commit": "93af4acb1219a3e6321d0e652e80e91a3cd7f64c",
+      "n_dirty_including_untracked": 0,
+      "n_dirty_tracked_only": 0,
+      "n_excluded": 0,
+      "repo_root": "/scratch/wutiantong/MIDP",
+      "untracked_outside_exclusions": []
+    },
+    "cli": {
+      "cells": null,
+      "dataset": "ppubench",
+      "design_version": "v4",
+      "device": "cuda",
+      "direct_seed": null,
+      "direct_seeds": null,
+      "edit_seed": null,
+      "edit_seeds": null,
+      "forget_ids": null,
+      "forget_set": null,
+      "manifest": null,
+      "out": null,
+      "phase": [
+        "RF2"
+      ],
+      "preregister": false,
+      "resume": false,
+      "router_seed": null,
+      "router_seeds": null,
+      "verify": false
+    },
+    "executing_commit": "93af4acb1219a3e6321d0e652e80e91a3cd7f64c",
+    "executing_script_sha256": "85d286454f91322b0602fb837f6ab06ababf6f1becd512f8599ae4ae7b65b69a",
+    "missing_runtime_modules": [],
+    "n_runtime_modules_hashed": 9,
+    "paths_are_relative_to": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data",
+    "pilot_version": "v4",
+    "preregistration_design_sha256": "a8537c467bb5439d6b2c741aeb0464184db698d7561601690e5bc5eafc71721f",
+    "preregistration_file_sha256": "93b81df32c32bd63b92eb017ef9fd72092b65460629e34bbe08ee13b37e08764",
+    "preregistration_kind": "route_dependent_forgetting_preregistration_v4",
+    "preregistration_path": "e2c_route_forgetting/manifests/rf_pilot_ppubench_v4.json",
+    "runtime_module_sha256": {
+      "scripts/e2c_v3_granularity_matrix.py": "be9c965e48e7deb674280951dbc9e05999d699aa004df9c3910b5d8b4b5c16ef",
+      "scripts/e2c_v3_label_parser.py": "fdf713c51c2a543801615e64cee54600a18d46d86b7510b36695c8af96632ac9",
+      "scripts/e2c_v3_matrix.py": "f42a74390d6a15b771096a1b1f1056312996f300a245268eaf027c8575b8a7d4",
+      "scripts/e2c_v3_mllmu_matrix.py": "ab2fc9f04448d0ccf524af16d689bf454ed19db7af198119f69a05411bb6876f",
+      "scripts/e2c_v3_phaseC_discrete_bottleneck.py": "b5950a03f3e36606c015dc4da4567c8c1a92898e180a6854643d38f3300d8793",
+      "scripts/e2c_v3_realdata.py": "1068e2f2240f9f4cd73046e992f4bc51d505ebbe53e7090fc6c8cbb481a0e95c",
+      "scripts/e2c_v3_research_validity.py": "f649c2d72eb9e04a517724417a22fc570a39b09969943bfe9abe193b5b542f99",
+      "scripts/e2c_v3_route_dependent_forgetting.py": "85d286454f91322b0602fb837f6ab06ababf6f1becd512f8599ae4ae7b65b69a",
+      "scripts/e2c_v3_salmu.py": "9378a0608494f3f1ec77f11417bbcda8a7702ffb138c5d995c7e000df3208807"
+    }
+  },
+  "verdicts": {
+    "mediation": {
+      "failed_gates": [],
+      "gates": [
+        "conditional_forgotten_route_suppression",
+        "conditional_retained_route_accuracy",
+        "mediator_intervention_following_accuracy",
+        "direct_image_accuracy",
+        "direct_code_following_rate",
+        "no_unparseable_or_multi_label_outputs",
+        "baseline_forgotten_route_following"
+      ],
+      "passed": true,
+      "reason": null,
+      "state": "pass",
+      "thresholds_unchanged": {
+        "forgotten_route_suppression": 1.0,
+        "max_abs_e2e_prediction_error": 0.02,
+        "max_direct_code_following_rate": 0.1,
+        "max_multi_label_outputs": 0,
+        "max_unparseable_outputs": 0,
+        "min_baseline_forgotten_route_following": 1.0,
+        "min_direct_image_accuracy": 0.9,
+        "min_intervention_following_accuracy": 0.99,
+        "min_router_held_out_accuracy": 0.9,
+        "retained_route_accuracy": 1.0
+      }
+    },
+    "mediation_pass": true,
+    "no_omnibus_verdict": "there is deliberately no combined 'passed' field: a routing failure and a mediation success answer different questions, and one boolean would let either cancel the other",
+    "per_dataset_expectation": {
+      "mediation": "supported",
+      "routing_factorization": "not_established on unseen content",
+      "routing_reliability": "not_established"
+    },
+    "routing_factorization": {
+      "failed_gates": [],
+      "gates": [
+        "e2e_matches_the_routing_composition"
+      ],
+      "passed": null,
+      "policy": "recorded as not established on this dataset; the threshold is neither waived nor lowered, and the gates are still reported with their values",
+      "reason": "the factorization explains the gap between conditional and unconditional E2E accuracy; with no held-out image content there is no such gap to explain, so the formula would be filed against a quantity this dataset cannot produce",
+      "state": "not_established",
+      "thresholds_unchanged": {
+        "forgotten_route_suppression": 1.0,
+        "max_abs_e2e_prediction_error": 0.02,
+        "max_direct_code_following_rate": 0.1,
+        "max_multi_label_outputs": 0,
+        "max_unparseable_outputs": 0,
+        "min_baseline_forgotten_route_following": 1.0,
+        "min_direct_image_accuracy": 0.9,
+        "min_intervention_following_accuracy": 0.99,
+        "min_router_held_out_accuracy": 0.9,
+        "retained_route_accuracy": 1.0
+      }
+    },
+    "routing_factorization_pass": null,
+    "routing_reliability": {
+      "failed_gates": [],
+      "gates": [
+        "router_held_out_accuracy"
+      ],
+      "passed": null,
+      "policy": "recorded as not established on this dataset; the threshold is neither waived nor lowered, and the gates are still reported with their values",
+      "reason": "every test image's bytes also appear in train (4 of 4 distinct test images), so an accuracy measured here is measured on training bytes and is not a held-out routing accuracy",
+      "state": "not_established",
+      "thresholds_unchanged": {
+        "forgotten_route_suppression": 1.0,
+        "max_abs_e2e_prediction_error": 0.02,
+        "max_direct_code_following_rate": 0.1,
+        "max_multi_label_outputs": 0,
+        "max_unparseable_outputs": 0,
+        "min_baseline_forgotten_route_following": 1.0,
+        "min_direct_image_accuracy": 0.9,
+        "min_intervention_following_accuracy": 0.99,
+        "min_router_held_out_accuracy": 0.9,
+        "retained_route_accuracy": 1.0
+      }
+    },
+    "routing_reliability_pass": null
+  },
+  "what_the_edit_moved": {
+    "17": {
+      "codes": [
+        {
+          "code": "RID_001",
+          "h_base": {
+            "Dax": 0,
+            "Kael": 0,
+            "Oden": 1,
+            "Seri": 0,
+            "Unknown": 0
+          },
+          "h_edited": {
+            "Dax": 0,
+            "Kael": 0,
+            "Oden": 0,
+            "Seri": 0,
+            "Unknown": 1
+          }
+        }
+      ],
+      "n_codes": 4,
+      "n_codes_whose_response_moved": 1
+    },
+    "42": {
+      "codes": [
+        {
+          "code": "RID_001",
+          "h_base": {
+            "Dax": 0,
+            "Kael": 0,
+            "Oden": 1,
+            "Seri": 0,
+            "Unknown": 0
+          },
+          "h_edited": {
+            "Dax": 0,
+            "Kael": 0,
+            "Oden": 0,
+            "Seri": 0,
+            "Unknown": 1
+          }
+        }
+      ],
+      "n_codes": 4,
+      "n_codes_whose_response_moved": 1
+    },
+    "123": {
+      "codes": [
+        {
+          "code": "RID_001",
+          "h_base": {
+            "Dax": 0,
+            "Kael": 0,
+            "Oden": 1,
+            "Seri": 0,
+            "Unknown": 0
+          },
+          "h_edited": {
+            "Dax": 0,
+            "Kael": 0,
+            "Oden": 0,
+            "Seri": 0,
+            "Unknown": 1
+          }
+        }
+      ],
+      "n_codes": 4,
+      "n_codes_whose_response_moved": 1
+    }
+  },
+  "why_the_two_counts_differ": "a reported diagnostic sits beside the gates rather than in a separate block nobody reads, and is marked is_a_gate=False so no verdict and no summary can mistake it for one"
+}
