@@ -1871,16 +1871,46 @@ def test_the_v2_notes_say_why_v2_is_superseded_structurally(rf):
         # prediction is now checkable rather than merely stated, and checking it
         # is worth more than asserting the note still held -- which would be
         # asserting that the defect never happened.
-        reproduced = [p for p in got["problems"]
+        problems = got["problems"]
+        reproduced = [p for p in problems
                       if "does not reproduce design_sha256" in p]
         trained = got["roles_trained_since_freeze"]
-        if trained:
+        # But whether it is checkable depends on the checkout, and the states
+        # have to be told apart rather than collapsed into "trained or not".
+        # verify_manifest rebuilds the design inside a try/except and compares
+        # its hash ONLY if the constructor returned, so the two problems below
+        # are mutually exclusive: either the rebuild raised and the comparison
+        # never ran, or it ran and reported whether the hash moved.  The
+        # constructor reads the dataset images and the trained adapters, and
+        # neither is in a fresh clone -- PPUBench's images live outside the
+        # repository, SALMU's are gitignored, and so are the weights.  A clone
+        # can still report a trained role, because the held-out prediction files
+        # ARE tracked, while never reaching the comparison.  Reading `trained`
+        # as "the comparison ran" is what made this test pass here and fail in
+        # CI; see _ENVIRONMENTAL_PROBLEM for the same distinction.
+        unreachable = [p for p in problems
+                       if "the manifest cannot be rebuilt at all" in p]
+        ready = got["checkpoint_readiness"]
+        if unreachable:
+            # A checkout that cannot rebuild the design.  The prediction is not
+            # checkable here, and saying so is the assertion: the verifier has
+            # to name what the checkout lacks rather than return an empty
+            # problem list that reads as success.
+            assert not reproduced, problems
+            assert ready["must_be_trained"] or ready["unexpectedly_absent"], (
+                "a checkout that cannot rebuild the design should still be "
+                "short of something; if it is short of nothing then the rebuild "
+                "failure is not about this checkout's missing artifacts")
+            # ... and it re-hashed every input it could reach, which is why the
+            # runner's own drift is reported even in a bare clone.
+            assert any(p.startswith("input ") and "frozen" in p
+                       for p in problems), problems
+        elif trained:
             assert reproduced, (
                 "a role this v2 pilot was waiting for has arrived "
                 f"({sorted(t['role'] for t in trained)}) and the design still "
                 "rebuilds to its frozen hash, which would mean the hash never "
                 "covered live checkpoint status after all")
-            ready = got["checkpoint_readiness"]
             assert ready["runnable_now"] is True and not ready["must_be_trained"]
             assert not ready["unexpectedly_absent"]
             # ... and that is the whole defect in one line: the work arrived and
@@ -1889,11 +1919,11 @@ def test_the_v2_notes_say_why_v2_is_superseded_structurally(rf):
                 rf.load_prereg_v2(
                     "salmu" if "salmu" in path.name else "ppubench")
         else:
-            # A clone with no gitignored weights: the roles are still absent, so
-            # the constructor still embeds the same absence it froze and the
-            # design still rebuilds.  Only the runner's own bytes have moved.
-            assert all("does not reproduce design_sha256" not in p
-                       for p in got["problems"]), got["problems"]
+            # The rebuild was reachable and every weight the design hashes is
+            # still absent, so the constructor embeds the same absence it froze
+            # and the design still reproduces.  Only the runner's bytes moved,
+            # which is reported as input drift and not as a design change.
+            assert not reproduced, problems
         assert doc["checkpoint_requirements"]["verification"] is not None
         assert rf.checkpoint_readiness(doc)[
             "frozen_status_block_present_in_this_manifest"] is True
