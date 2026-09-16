@@ -620,10 +620,20 @@ def test_a_v4_report_lands_beside_the_v3_one(rf, tmp_path):
         assert v4 != v3 and "_v4" in v4.name and "_v4" not in v3.name
         assert v4.name == rf.REPORT_FILENAMES[kind].format(dataset="salmu",
                                                            version="v4")
-    # and the default is v4, one constant rather than a name per phase
+    # and the default is whatever the current spec is, one constant rather than
+    # a name per phase -- so a version that stops being current stops being the
+    # default with no second edit anywhere.
     assert rf.report_path("salmu", "RF2", tmp_path) == \
         rf.report_path("salmu", "RF2", tmp_path, rf.LATEST_PILOT_SPEC)
-    assert rf.LATEST_PILOT_SPEC is rf.PILOT_SPEC_V4
+    # v4 is no longer the current one: v5 supersedes it for a STATUS reason
+    # rather than a scientific one.  v4's re-analysis of v3's cells is correct
+    # and stays committed, but it is corrective, and v4's own bytes say a
+    # confirmatory result requires a run executed under the corrected scope from
+    # the start.  v5 is that run, and what this test pins -- that a v4 report
+    # lands BESIDE the v3 one rather than over it -- is unchanged by it.
+    assert rf.LATEST_PILOT_SPEC is rf.PILOT_SPEC_V5
+    assert rf.report_path("salmu", "RF2", tmp_path).name == \
+        "rf_report_salmu_v5.json"
 
 
 # ==========================================================================

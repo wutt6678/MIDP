@@ -1979,7 +1979,8 @@ def test_resume_without_the_flag_always_runs(rf, tmp_path):
 def test_every_phase_the_runner_promises_exists(rf):
     """Item 4.  A phase in the CLI that has no function behind it is a phase that
     silently does nothing."""
-    for phase in ("rf0", "rf1b", "rf1g", "rf1d", "rf1h", "rf1e", "rf2", "rf2p"):
+    for phase in ("rf0", "rfc", "rf1b", "rf1g", "rf1d", "rf1h", "rf1e", "rf2",
+                  "rf2p"):
         assert callable(getattr(rf, f"phase_{phase}")), f"no phase_{phase}"
     assert set(rf.CELL_KIND_PHASE.values()) == {"RF1B", "RF1H", "RF1E", "RF1D"}
     assert rf.CELL_KIND_PHASE["intervention"] == "RF1H"
@@ -1992,7 +1993,14 @@ def test_every_phase_the_runner_promises_exists(rf):
     # prediction file that RF1E's natural cells consume.
     assert set(rf.PHASES_BY_VERSION["v3"]) == (
         set(rf.CELL_KIND_PHASE.values()) | {"RF0", "RF1G", "RF2", "RF2P"})
-    assert set(rf.ALL_PHASES) == set(rf.PHASES_BY_VERSION["v3"])
+    # RFC is the ONE entry of ALL_PHASES that v3's list does not contain, and
+    # the reason is a property of the spec rather than of the phase: v3 declares
+    # no calibration, so there is no configuration for it to select before it
+    # confirms anything.  Stated as the set difference rather than by retyping
+    # v3's list, so a phase a later version adds is caught here instead of being
+    # silently absorbed into an equality nobody re-read.
+    assert set(rf.ALL_PHASES) - set(rf.PHASES_BY_VERSION["v3"]) == {"RFC"}
+    assert set(rf.PHASES_BY_VERSION["v3"]) <= set(rf.ALL_PHASES)
     assert "RF1B" not in rf.PHASES_BY_VERSION["v2"], \
         "v2 has no baseline cell, so it has no phase to fill one"
     assert set(rf.PHASES_BY_VERSION["v2"]) == \
@@ -2013,13 +2021,16 @@ def test_the_cli_names_every_factor_and_every_phase(rf):
     # denominators; v2 and v3 stay selectable so their frozen pilots can still
     # be rebuilt and so the filed v3 record can still be read under the design
     # that produced it.
-    assert args.design_version == "v4" == rf.LATEST_PILOT_SPEC.version
+    # Derived from the spec table on both sides, so "the default is the current
+    # version" stays true when a later one is declared instead of being a name
+    # this test has to be edited to match.
+    assert args.design_version == rf.LATEST_PILOT_SPEC.version
     assert parser.parse_args(["--design-version", "v2"]).design_version == "v2"
     assert parser.parse_args(["--design-version", "v3"]).design_version == "v3"
+    assert parser.parse_args(["--design-version", "v4"]).design_version == "v4"
     versions = parser._actions[
         [a.dest for a in parser._actions].index("design_version")].choices
-    assert set(versions) == {"v1", "v2", "v3", "v4"} == \
-        set(rf.SPEC_BY_VERSION) | {"v1"}, \
+    assert set(versions) == set(rf.SPEC_BY_VERSION) | {"v1"}, \
         "every reconstructible version is selectable and nothing else is: a " \
         "choice argparse accepts and no dispatcher can serve is a crash, and a " \
         "version the dispatcher serves but argparse refuses is unreachable"
@@ -2027,8 +2038,9 @@ def test_the_cli_names_every_factor_and_every_phase(rf):
         [a.dest for a in parser._actions].index("phase")].choices
     # "RF1" is accepted only so ``main`` can refuse it with the explanation of
     # what replaced it; argparse could say only that the choice was invalid.
-    assert set(choices) == {"RF0", "RF1", "RF1B", "RF1G", "RF1D", "RF1H",
-                            "RF1E", "RF2", "RF2P"} == set(rf.ALL_PHASES) | {"RF1"}
+    assert set(choices) == {"RF0", "RF1", "RFC", "RF1B", "RF1G", "RF1D",
+                            "RF1H", "RF1E", "RF2",
+                            "RF2P"} == set(rf.ALL_PHASES) | {"RF1"}
 
 
 def test_a_phase_that_needs_a_factor_refuses_without_it(rf):
@@ -2860,17 +2872,26 @@ def test_the_cli_freezes_into_out_under_the_canonical_name(rf, tmp_path,
               rf.prereg_path_v2),
              (["--design-version", "v3"], "rf_pilot_ppubench_v3.json",
               rf.prereg_path_v3)]
-    # No flag means the authoritative version.  Freezing v4 reads the committed
-    # v3 record its scope amendment cites -- both datasets' RF2 reports and both
-    # v3 manifests -- and refuses without it, because an amendment whose
-    # evidence cannot be read is an assertion.  So that case runs where the
-    # record is present rather than pretending the dependency is not there.
+    # Freezing v4 reads the committed v3 record its scope amendment cites -- both
+    # datasets' RF2 reports and both v3 manifests -- and refuses without it,
+    # because an amendment whose evidence cannot be read is an assertion.  So
+    # that case runs where the record is present rather than pretending the
+    # dependency is not there.
     if all(p.is_file() for p in _V3_RECORD):
-        cases.append(([], "rf_pilot_ppubench_v4.json", rf.prereg_path_v4))
+        cases.append((["--design-version", "v4"], "rf_pilot_ppubench_v4.json",
+                      rf.prereg_path_v4))
     else:
         with pytest.raises(RuntimeError, match="scope amendment cites"):
-            rf.main(["--dataset", "ppubench", "--preregister",
-                     "--out", str(tmp_path / "nov4")])
+            rf.main(["--dataset", "ppubench", "--design-version", "v4",
+                     "--preregister", "--out", str(tmp_path / "nov4")])
+    # No flag means the authoritative version, which is v5 -- and v5 refuses to
+    # freeze before RFC has selected a configuration.  That refusal IS the
+    # ordering the version exists to enforce, so it is asserted here rather than
+    # stubbed away: a test that supplied a fake selection to reach the write
+    # would be testing the write and calling it a test of the order.
+    with pytest.raises(RuntimeError, match="no calibration selection is filed"):
+        rf.main(["--dataset", "ppubench", "--preregister",
+                 "--out", str(tmp_path / "nov5")])
     for argv, expected, getter in cases:
         stage = tmp_path / (expected.split("_")[-1].split(".")[0])
         assert rf.main(["--dataset", "ppubench", "--preregister",

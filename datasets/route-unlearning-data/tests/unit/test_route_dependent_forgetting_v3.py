@@ -1731,8 +1731,20 @@ def test_the_module_docstring_names_the_conditions_and_phases_the_code_has(rf):
     phases = _table("Phases\n======", "RF1 no longer exists.")
     assert phases == list(rf.ALL_PHASES), phases
     assert "RF1" not in phases and "RF1 no longer exists" in doc
-    assert rf.PHASES_BY_VERSION["v2"] == tuple(
-        p for p in rf.ALL_PHASES if p != "RF1B"), \
+    # A version's phase list is a FILTER of ALL_PHASES on what its own spec
+    # declares, so the invariant is stated per spec rather than as one equality
+    # against a hand-written tuple.  The filter is the thing that cannot drift;
+    # a retyped list is a second place for the order to be written down, and the
+    # two agree only until a version declares a capability the list predates.
+    for spec in rf.SPEC_BY_VERSION.values():
+        got = rf.PHASES_BY_VERSION[spec.version]
+        assert list(got) == [p for p in rf.ALL_PHASES if p in got], \
+            f"{spec.version} reorders ALL_PHASES instead of filtering it"
+        assert ("RF1B" in got) is spec.baseline_cell, \
+            f"{spec.version}: RF1B is present exactly where a baseline cell is"
+        assert ("RFC" in got) is spec.calibration_phase, \
+            f"{spec.version}: RFC is present exactly where a calibration is"
+    assert "RF1B" not in rf.PHASES_BY_VERSION["v2"], \
         "v2 has no baseline cell, so it has no phase that would fill one"
 
     versions = doc.split("Design versions\n===============", 1)[1].split(

@@ -78,6 +78,7 @@ at inference time only.
 Phases
 ======
   RF0   verify the frozen manifest and every input it names (CPU)
+  RFC   calibrate D_s's schedule on a development split, select one (GPU)
   RF1B  h_base(do(C=c)) for every code -- the BEFORE in before/after (GPU)
   RF1G  train and evaluate ONE router seed g_s (GPU)
   RF1D  train and evaluate ONE direct adapter D_s (GPU)
@@ -89,22 +90,22 @@ Phases
 RF1 no longer exists.  It was one stub that raised for every dataset, and a
 phase that varies no factor cannot be resumed, re-run or reported per factor.
 
-Everything except the RF1 phases is CPU-only and is what the test suite
-exercises.  The planning, design, expectation, scoring, gating and bootstrap
+Everything except the RF1 phases and RFC is CPU-only and is what the test
+suite exercises.  The planning, design, expectation, scoring, gating and bootstrap
 layers all run without a model, so a design can be frozen and audited before any
 GPU time is spent -- and a cell can be re-scored from its stored generations
 without regenerating anything.
 
 Design versions
 ===============
-Four designs are reconstructible from this file, and all four have frozen
-manifests committed: ``--design-version v1``, ``v2`` and ``v3`` are SUPERSEDED
-and exist so the artifacts on disk can still be rebuilt and explained, ``v4`` is
-the current one and is the default.  Superseded means superseded in place, never
-edited: each version's constructor reads its differences from a ``PilotSpec``, so
-the four share one construction path and a repair cannot reach one version and
-not the others.  ``supersession_record`` states, per version, what the previous
-one got wrong and what the current one does instead.
+Five designs are reconstructible from this file, and all five have frozen
+manifests committed: ``--design-version v1``, ``v2``, ``v3`` and ``v4`` are
+SUPERSEDED and exist so the artifacts on disk can still be rebuilt and explained,
+``v5`` is the current one and is the default.  Superseded means superseded in
+place, never edited: each version's constructor reads its differences from a
+``PilotSpec``, so the five share one construction path and a repair cannot reach
+one version and not the others.  ``supersession_record`` states, per version, what
+the previous one got wrong and what the current one does instead.
 
 The three supersessions are not the same kind of correction, and the difference
 matters to anyone deciding which results to cite.  ``v2`` was superseded for a
@@ -119,6 +120,22 @@ carries ``post_outcome_scope_amendment: true`` and the derived evidence from bot
 datasets, because results aggregated under v4 from v3's cells are a CORRECTIVE
 analysis of a completed run; only a run executed under v4 from the start is
 pre-registered under the corrected scope.
+
+``v5`` is that run, and it supersedes v4 for a STATUS reason rather than a
+scientific one.  v4's analysis of v3's cells is correct, stays committed and is
+not re-derived here.  What v4 cannot be is confirmatory, by its own statement, so
+v5 executes under the corrected scope from the start: five forget sets that no
+earlier design consumed, chosen by a rule rather than listed; the router-seed x
+edit-seed cross over all of them; v4's thresholds, gate map, conditions and
+hygiene denominator held by OBJECT IDENTITY so "the scope is frozen" is a
+property a test can check with ``is``; and no ancestor declared, which makes
+``reused_from_the_ancestor_design`` unreachable and refuses a cell v1-v4 filed
+rather than aggregating it.  It also calibrates the direct adapter's training
+schedule on a development split disjoint from the held-out test images in image
+CONTENT, and freezes the selected configuration together with every confirmatory
+cell before any of them is produced.  The route itself is not calibrated and is
+not touched: g and h are read from the frozen route scripts and the frozen
+adapters, and a phase named RFC is not evidence that either was tuned.
 
 Independence from the granularity gates
 =======================================
@@ -1552,6 +1569,21 @@ def verify_manifest(path):
                 frozen["dataset"], frozen["forget_set_id"],
                 frozen["forget_identity_ids"], frozen["router_seeds"],
                 frozen["edit_seeds"], frozen["direct_seeds"])
+        elif kind == CALIBRATION_PREREG_KIND_V5:
+            # Rebuilt from the dataset alone: the split is derived from the
+            # manifest the freeze bound as an input, so a rebuilt document that
+            # disagrees is one whose split rule or whose images moved.
+            rebuilt = build_calibration_preregistration(frozen["dataset"])
+        elif kind == PREREG_V5_KIND:
+            rebuilt = build_pilot_preregistration_v5(
+                frozen["dataset"], frozen["forget_sets"],
+                frozen["forget_identity_ids"], frozen["router_seeds"],
+                frozen["edit_seeds"], frozen["direct_seeds"])
+        elif kind == KIND_V5:
+            rebuilt = build_design_v5(
+                frozen["dataset"], frozen["forget_sets"],
+                frozen["forget_identity_ids"], frozen["router_seeds"],
+                frozen["edit_seeds"], frozen["direct_seeds"])
         elif kind == KIND_V2:
             rebuilt = build_design_v2(
                 frozen["dataset"], frozen["forget_set_id"],
@@ -1567,8 +1599,10 @@ def verify_manifest(path):
                                f"this verifier can rebuild are {KIND!r}, "
                                f"{PREREG_KIND!r}, {KIND_V2!r}, "
                                f"{PREREG_V2_KIND!r}, {KIND_V3!r}, "
-                               f"{PREREG_V3_KIND!r}, {KIND_V4!r} and "
-                               f"{PREREG_V4_KIND!r}")
+                               f"{PREREG_V3_KIND!r}, {KIND_V4!r}, "
+                               f"{PREREG_V4_KIND!r}, {KIND_V5!r}, "
+                               f"{PREREG_V5_KIND!r} and "
+                               f"{CALIBRATION_PREREG_KIND_V5!r}")
         if design_sha256(rebuilt) != frozen.get("design_sha256"):
             problems.append(
                 f"rebuilding a {kind} from the frozen parameters does not "
@@ -1640,6 +1674,24 @@ def verify_manifest(path):
                 problems.append(
                     f"the selection rule now picks {now['set_id']!r}, but the "
                     f"pilot was frozen against {frozen['forget_set_id']!r}")
+        except RuntimeError as exc:
+            problems.append(f"the selection rule can no longer be applied: {exc}")
+
+    # v5's rule picks SEVERAL sets and is re-applied for the same reason: a rule
+    # that now returns a different list means the tree this pilot was frozen
+    # against is not the tree being verified.  Kept beside the single-set check
+    # rather than folded into it, because the two rules answer different
+    # questions and a version is checked against the one it declared.
+    if kind == PREREG_V5_KIND and frozen.get("pilot_forget_set_selection"):
+        try:
+            now = pilot_forget_sets_v5(frozen["dataset"], frozen["edit_seeds"])
+            was = [s["set_id"] for s in
+                   frozen["pilot_forget_set_selection"]["sets"]]
+            is_now = [s["set_id"] for s in now["sets"]]
+            if is_now != was:
+                problems.append(
+                    f"the selection rule now picks {is_now}, but the pilot was "
+                    f"frozen against {was}")
         except RuntimeError as exc:
             problems.append(f"the selection rule can no longer be applied: {exc}")
 
@@ -1764,19 +1816,22 @@ def _build_parser():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dataset", default="ppubench", choices=list(DATASETS))
-    p.add_argument("--design-version", default="v4",
-                   choices=["v1", "v2", "v3", "v4"],
-                   help="v1, v2 and v3 are SUPERSEDED and retained only so "
-                        "their frozen manifests can still be rebuilt and "
-                        "verified; v4 is the current design and is the default. "
-                        "v2's pilots hash their own live checkpoint status, so "
-                        "they stop reproducing the moment the training they "
-                        "require succeeds; v3 computes readiness outside the "
-                        "design but counts auxiliary rows toward a mediated "
-                        "verdict it declared them outside; v4 declares the "
-                        "hygiene gate's row scope and says, at the top level of "
-                        "its own design, that the scope was amended after an "
-                        "outcome")
+    p.add_argument("--design-version", default=LATEST_PILOT_SPEC.version,
+                   choices=["v1", *sorted(SPEC_BY_VERSION)],
+                   help="v1 to v4 are SUPERSEDED and retained only so their "
+                        "frozen manifests can still be rebuilt and verified; v5 "
+                        "is the current design and is the default.  v2's pilots "
+                        "hash their own live checkpoint status, so they stop "
+                        "reproducing the moment the training they require "
+                        "succeeds; v3 computes readiness outside the design but "
+                        "counts auxiliary rows toward a mediated verdict it "
+                        "declared them outside; v4 declares the hygiene gate's "
+                        "row scope and says, at the top level of its own design, "
+                        "that the scope was amended after an outcome; v5 is the "
+                        "run executed under that scope from the start -- it "
+                        "declares no ancestor, varies five unconsumed forget "
+                        "sets, and calibrates the direct adapter's schedule "
+                        "before it freezes its cells")
     p.add_argument("--phase", nargs="+", default=["RF0"],
                    choices=["RF1", *ALL_PHASES],
                    help="RF0 verify the frozen manifest and every input; "
@@ -1787,9 +1842,20 @@ def _build_parser():
                         "forced-code interventions for one edit seed; RF1E "
                         "evaluate the natural composition for one router/edit "
                         "pair; RF2 aggregate, gate and bootstrap; RF2P rescore "
-                        "the stored raw outputs and reproduce RF2 with no GPU")
+                        "the stored raw outputs and reproduce RF2 with no GPU; "
+                        "RFC calibrate the direct adapter's schedule on the "
+                        "development split, or -- with no --candidate -- apply "
+                        "the frozen selection rule to the filed measurements")
     p.add_argument("--forget-set", default=None,
-                   help="forget-set id as the matrix names it, e.g. fs_001")
+                   help="forget-set id as the matrix names it, e.g. fs_001.  A "
+                        "design that varies ONE forget set infers it; a design "
+                        "that varies several needs it to say which set RF1B, "
+                        "RF1H or RF1E fills, and refuses rather than guessing")
+    p.add_argument("--candidate", default=None,
+                   help="RFC only: the calibration candidate to train, e.g. "
+                        "C0_incumbent.  Omitted, RFC applies the frozen "
+                        "selection rule to the measurements already filed and "
+                        "trains nothing")
     p.add_argument("--forget-ids", nargs="+", default=None)
     p.add_argument("--router-seeds", nargs="+", type=int, default=None,
                    help="the router seeds a DESIGN varies; v2 defaults to the "
@@ -1817,6 +1883,13 @@ def _build_parser():
                         "audit, per-dataset gate applicability, the cluster "
                         "bootstrap configuration, the promotion rule and the "
                         "missing-data policy")
+    p.add_argument("--preregister-calibration", action="store_true",
+                   help="freeze the CALIBRATION pre-registration -- the "
+                        "development split, the candidate grid, the seeds, the "
+                        "metric, the tie-breaks and the floor -- rather than the "
+                        "pilot.  Refused if any calibration output already "
+                        "exists, because a grid frozen after the training it "
+                        "constrains is a grid that agrees with its own outcome")
     p.add_argument("--verify", action="store_true",
                    help="verify a frozen manifest and exit")
     p.add_argument("--out", default=None,
@@ -3085,14 +3158,25 @@ def router_checkpoint_path(dataset, router_seed):
             / "adapter_final" / "adapter_model.safetensors")
 
 
-def direct_checkpoint_path(dataset, direct_seed):
+def direct_checkpoint_path(dataset, direct_seed, namespace=None):
     """D_s: the direct X -> Y adapter for one direct seed.
 
     Its own directory and its own digest, never edited_h's: the direct pathway
     is a different model trained on different pairs, and sharing a checkpoint
     would make the direct control a measurement of the route.
+
+    ``namespace`` keeps one design's D_s out of another design's directory.
+    Defaulted to None so that the path every filed cell bound, and every frozen
+    role table recorded, is the path this function still returns: a design that
+    trains a direct adapter under a different configuration has to write it
+    somewhere else, because ``direct_seed_17/`` holds frozen weights whose
+    digest is recorded in a committed cell result, and overwriting them would
+    leave a report describing an adapter nobody can inspect.
     """
-    return (DATASET_ROOT / CELLS_DIR_V2 / dataset / f"direct_seed_{direct_seed}"
+    name = f"direct_seed_{direct_seed}"
+    if namespace:
+        name = f"{name}__{namespace}"
+    return (DATASET_ROOT / CELLS_DIR_V2 / dataset / name
             / "adapter_final" / "adapter_model.safetensors")
 
 
@@ -3373,7 +3457,7 @@ def build_natural_rows_v2(man, forget_ids, preds, cell_id, router_seed,
 
 
 def build_direct_rows_v2(man, cell_id, direct_seed, hybrid=False,
-                         image_sha_by_uri=None):
+                         image_sha_by_uri=None, images=None):
     """D_s(X), image only -- and the auxiliary hybrid probe.
 
     The direct control presents NO code, so it cannot follow one; the hybrid
@@ -3384,7 +3468,12 @@ def build_direct_rows_v2(man, cell_id, direct_seed, hybrid=False,
     """
     condition = "hybrid_conflict_probe" if hybrid else "direct_control"
     spec = CONDITIONS_V2[condition]
-    images = held_out_images(man)
+    # Defaulted to the held-out images, which is the only set v1-v4 ever asked
+    # for, so their rows are the rows they have always been.  A caller that
+    # passes images is the calibration, which scores the SAME condition over the
+    # development split so that its metric is the confirmatory gate's metric
+    # rather than a second statistic that happens to share a name.
+    images = images if images is not None else held_out_images(man)
     ids = sorted(man["identity_ids"])
     rows = []
     for iid in sorted(images):
@@ -3964,6 +4053,14 @@ class PilotSpec(NamedTuple):
     #: for a version that never reads another design's cells.
     declared_cell_compatibility: object
     superseded_filenames: tuple
+    #: Whether this version calibrates anything before it confirms it.  A
+    #: trailing default so that the specs already frozen -- whose bytes are the
+    #: reason ``design_sha256`` still reproduces -- construct exactly as they
+    #: always did and answer False.  The alternative is a ``version == "v5"``
+    #: test inside ``_phases_for``, which is the thing this NamedTuple's
+    #: docstring exists to argue against: a difference written as a field is one
+    #: a reader can list and a test can pin.
+    calibration_phase: bool = False
 
 
 #: What a design says about HOW its rate gates aggregate, as opposed to what
@@ -4055,15 +4152,27 @@ SPEC_BY_PREREG_KIND = {s.prereg_kind: s for s in (PILOT_SPEC_V2, PILOT_SPEC_V3)}
 #: beyond the inputs every version binds.
 #: ``ANCESTOR_MANIFEST_BY_VERSION`` names the frozen manifest a version's cells
 #: may legitimately have been produced under, if not its own.
+#: ``FORGET_SET_SELECTION_BY_VERSION`` names the rule that chooses the forget
+#: set(s) a version's pilot covers.
+#: ``FREEZE_BY_VERSION`` names the freeze entry point a version uses, where it is
+#: not the shared one.
 SCOPE_AMENDMENT_EVIDENCE_BY_VERSION = {}
 EXTRA_FREEZE_INPUTS_BY_VERSION = {}
 ANCESTOR_MANIFEST_BY_VERSION = {}
+FREEZE_BY_VERSION = {}
+
+#: ``FORGET_SET_SELECTION_BY_VERSION`` names the rule that picks the forget
+#: set(s) one version's pilot is built over.  Absent means the rule every
+#: version so far used, ``pilot_forget_set``, so the lookup default IS the
+#: existing behaviour rather than a branch that reproduces it.
+FORGET_SET_SELECTION_BY_VERSION = {}
 
 #: Every phase, in the order a complete run executes them.  Each version's own
 #: list is a FILTER of this one rather than a separately written tuple, so a
 #: version cannot reorder the phases it does have, and the parser's choices
 #: cannot disagree with what a dispatcher will accept.
-ALL_PHASES = ("RF0", "RF1B", "RF1G", "RF1D", "RF1H", "RF1E", "RF2", "RF2P")
+ALL_PHASES = ("RF0", "RFC", "RF1B", "RF1G", "RF1D", "RF1H", "RF1E", "RF2",
+              "RF2P")
 
 
 def _phases_for(spec):
@@ -4077,8 +4186,18 @@ def _phases_for(spec):
     adapter -- it is the route's own h, declared as already present -- so it is
     the one measurement obtainable before any of the work the design names, and
     taking it early is taking it before anything has moved.
+
+    RFC comes after RF0 and before every RF1 phase, because a calibration is
+    what SELECTS the configuration the confirmatory adapters are trained under:
+    run it after RF1D and the choice it makes has already been made by something
+    else.  It is filtered on ``spec.calibration_phase`` rather than offered to
+    every version, so a version that declared no calibration cannot be asked to
+    run one and a dispatcher that accepted the request would be inventing a
+    phase the design never froze.
     """
-    return tuple(p for p in ALL_PHASES if p != "RF1B" or spec.baseline_cell)
+    return tuple(p for p in ALL_PHASES
+                 if (p != "RF1B" or spec.baseline_cell)
+                 and (p != "RFC" or spec.calibration_phase))
 
 
 PHASES_BY_VERSION = {s.version: _phases_for(s) for s in SPEC_BY_VERSION.values()}
@@ -4976,12 +5095,15 @@ def build_design_for(spec, dataset, forget_set_id, forget_ids, router_seeds,
                                       image_sha_by_uri),
                 router_seed=rs, edit_seed=es)
     for ds in direct_seeds:
-        cid = f"direct__d{ds}"
+        # Through direct_cell_id with no namespace, which returns exactly the id
+        # this constructor has always produced.  The call is here so that v5's
+        # namespaced id and this one are one rule rather than two spellings.
+        cid = direct_cell_id("direct", ds)
         add(cid, "direct",
             build_direct_rows_v2(man, cid, ds,
                                  image_sha_by_uri=image_sha_by_uri),
             direct_seed=ds)
-        cid = f"hybrid__d{ds}"
+        cid = direct_cell_id("hybrid", ds)
         add(cid, "hybrid",
             build_direct_rows_v2(man, cid, ds, hybrid=True,
                                  image_sha_by_uri=image_sha_by_uri),
@@ -5557,10 +5679,47 @@ def check_seed_budget(dataset, router_seeds, direct_seeds, man=None):
     return policy
 
 
+def _check_selection(spec, dataset, selection, forget_set_id, forget_ids):
+    """That the target requested is the target the stated rule chose.
+
+    One function for both shapes a selection can have, because the claim is the
+    same in both: the pilot covers what the RULE picks, not what was asked for.
+    A rule a request can override is a preference recorded after the fact, which
+    is the thing ``pilot_forget_set``'s docstring calls a selection effect
+    inside a pre-registration.
+    """
+    sets = selection.get("sets")
+    if sets is None:
+        if selection["set_id"] != forget_set_id:
+            raise RuntimeError(
+                f"the selection rule picks {selection['set_id']!r} for the "
+                f"{dataset} {spec.version} pilot but {forget_set_id!r} was "
+                f"requested; pass nothing and let the rule choose, or change "
+                f"the rule in a new pre-registration -- not the request in "
+                f"this one")
+        if sorted(selection["targets"]) != sorted(forget_ids):
+            raise RuntimeError(
+                f"{forget_set_id} targets {selection['targets']} in the frozen "
+                f"matrix but {list(forget_ids)} was requested")
+        return
+    chosen = [s["set_id"] for s in sets]
+    if forget_set_id is not None:
+        raise RuntimeError(
+            f"the {spec.version} rule picks {len(chosen)} forget sets {chosen}, "
+            f"so the design names them in forget_sets and records no single "
+            f"forget_set_id; {forget_set_id!r} was requested")
+    union = sorted(i for s in sets for i in s["targets"])
+    if union != sorted(forget_ids):
+        raise RuntimeError(
+            f"the sets the rule picks {chosen} target {union} in the frozen "
+            f"matrix but {sorted(forget_ids)} was requested")
+
+
 def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
                                     router_seeds=None, edit_seeds=None,
                                     direct_seeds=None, man=None, images=None,
-                                    selection=None, superseded_paths=()):
+                                    selection=None, superseded_paths=(),
+                                    forget_sets=None):
     """The frozen pilot of one version: corrected architecture, real checkpoint
     requirements, actual cell structure, identity-level inference, separate
     verdicts.
@@ -5598,8 +5757,12 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
     # bootstrap cluster is the image's content digest, and only the audit has
     # hashed the bytes.
     audit = image_content_audit(man)
+    # A version whose rule picks several forget sets passes the LIST in this
+    # position; every version so far passes None for forget_sets and so reaches
+    # its constructor with the same single id it always did.
     design = _design_constructor(spec)(
-        dataset, forget_set_id, forget_ids, router_seeds, edit_seeds,
+        dataset, forget_sets if forget_sets is not None else forget_set_id,
+        forget_ids, router_seeds, edit_seeds,
         direct_seeds, man=man, images=images,
         image_sha_by_uri=audit["images_by_uri_sha256"])
     applicability = gate_applicability_v2(audit, dataset, spec)
@@ -5610,18 +5773,10 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
     # frozen matrix, not from a default and not from hand-picking a set after
     # inspecting which checkpoints exist.
     if selection is None:
-        selection = pilot_forget_set(dataset, edit_seeds)
-        if selection["set_id"] != forget_set_id:
-            raise RuntimeError(
-                f"the selection rule picks {selection['set_id']!r} for the "
-                f"{dataset} {spec.version} pilot but {forget_set_id!r} was "
-                f"requested; pass nothing and let the rule choose, or change "
-                f"the rule in a new pre-registration -- not the request in "
-                f"this one")
-        if sorted(selection["targets"]) != sorted(forget_ids):
-            raise RuntimeError(
-                f"{forget_set_id} targets {selection['targets']} in the frozen "
-                f"matrix but {list(forget_ids)} was requested")
+        chooser = FORGET_SET_SELECTION_BY_VERSION.get(spec.version,
+                                                      pilot_forget_set)
+        selection = chooser(dataset, edit_seeds)
+        _check_selection(spec, dataset, selection, forget_set_id, forget_ids)
 
     inventory = reuse_inventory(dataset, _promotion_forget_sets(dataset),
                                 edit_seeds)
@@ -5630,16 +5785,42 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
 
     # --- the cell structure is checked against what each kind depends on -----
     by_kind = design["cells_by_kind"]
+    # How many forget sets this design varies.  One where the design declares no
+    # forget_sets key at all -- which is every design frozen so far -- so the
+    # multiplications below are by 1 and these are the counts v2, v3 and v4 have
+    # always been checked against.
+    n_sets = len(design.get("forget_sets") or (None,))
     expected_kind_counts = {
-        "intervention": len(edit_seeds),
-        "natural": len(router_seeds) * len(edit_seeds),
+        "intervention": len(edit_seeds) * n_sets,
+        "natural": len(router_seeds) * len(edit_seeds) * n_sets,
         "direct": len(direct_seeds),
         "hybrid": len(direct_seeds),
     }
     if spec.baseline_cell:
-        # Exactly one, and not one per edit seed: it depends on no factor, so
-        # three copies would be one measurement reported three times.
-        expected_kind_counts["baseline"] = 1
+        # One per FORGET SET and never one per edit seed.  The baseline depends
+        # on neither factor, so three copies per seed would be one measurement
+        # reported three times -- but which codes are supposed to return their
+        # own alias is what two forget sets differ in, so five sets have five
+        # BEFOREs and collapsing them would compare an edit against a before
+        # that was not its own.
+        expected_kind_counts["baseline"] = n_sets
+    # Cross-checked against the module's own derivation instead of a second
+    # arithmetic written beside it: pilot_cell_plan_v2 already counts what a
+    # factorial over several forget sets runs, and already states which kinds do
+    # NOT vary by forget set.  Two counts of the same cells that agree only
+    # until one of them is edited are not a check.
+    _plan = pilot_cell_plan_v2(dataset, router_seeds, edit_seeds, direct_seeds,
+                               n_sets)
+    for _kind, _key in (("intervention", "intervention_cells"),
+                        ("natural", "natural_cells"),
+                        ("direct", "direct_cells"),
+                        ("hybrid", "hybrid_cells")):
+        if expected_kind_counts[_kind] != _plan[_key]:
+            raise RuntimeError(
+                f"the {spec.version} design implies {expected_kind_counts[_kind]} "
+                f"{_kind} cells but pilot_cell_plan_v2 derives {_plan[_key]} "
+                f"over {n_sets} forget set(s); one of the two is counting a "
+                f"measurement more times than it depends on a factor")
     for kind, want in expected_kind_counts.items():
         got = len(by_kind.get(kind, []))
         if got != want:
@@ -6478,6 +6659,45 @@ CELL_INPUT_BINDINGS = {
                            "held_out_predictions"),
 }
 
+#: The same binding for a design that varies MORE THAN ONE forget set.  Five
+#: forget sets have five edited-h adapters per edit seed, so a role name that
+#: does not say which set it belongs to resolves five files to one role -- and
+#: the cell would be re-hashed against whichever of the five the table named
+#: first, which is a check that passes against weights it did not use.
+EDITED_H_ROLE_MULTI = "edited_h__{forget_set}__seed{edit_seed}"
+
+
+def _binding_table(prereg):
+    """Which role-name templates one design's cells bind to.
+
+    Read off the DESIGN rather than off the version, because the question is
+    whether this pre-registration varies one forget set or several and not
+    which version froze it.  A design that does not declare several gets the
+    table every earlier design used, the same object rather than a copy, so
+    nothing about a v1-v4 cell resolves any differently than it did.
+    """
+    if not prereg.get("forget_sets"):
+        return CELL_INPUT_BINDINGS
+    return {**CELL_INPUT_BINDINGS, "edited_h": (EDITED_H_ROLE_MULTI, "adapter")}
+
+
+def edited_h_role_name(prereg, edit_seed, forget_set=None):
+    """The declared role one edited h occupies, in this design's own naming.
+
+    One function rather than an f-string at each of the three call sites, so a
+    phase and ``verify_cell_inputs`` cannot name the same adapter differently --
+    which is the disagreement ``CELL_INPUT_BINDINGS`` exists to prevent, and
+    which five forget sets per edit seed make reachable for the first time.
+    """
+    template = _binding_table(prereg)["edited_h"][0]
+    if "{forget_set}" in template and not forget_set:
+        raise RuntimeError(
+            f"this design varies {len(prereg.get('forget_sets') or ())} forget "
+            f"sets, so an edited-h role has to say which one it belongs to; got "
+            f"{forget_set!r} for edit seed {edit_seed}")
+    return template.format(edit_seed=edit_seed, forget_set=forget_set)
+
+
 #: Which of those keys one cell kind binds.  The phase that FILES a cell and RF2
 #: that RE-CHECKS it both read this table, so they cannot disagree about what a
 #: cell was supposed to consume: a filer that hashed one weight and a checker
@@ -6491,18 +6711,27 @@ CELL_KIND_INPUT_KEYS = {
 }
 
 
-def _role_for_binding(key, cell):
+def _role_for_binding(key, cell, table=CELL_INPUT_BINDINGS):
     """The declared role and file one recorded input key names for this cell.
 
     The role name is a template over the cell's own seeds, because the seeds are
     what distinguishes one level of a factor from another: resolving ``edited_h``
     without the cell's edit seed would check a natural cell against whichever
     edited h happened to be named first in the table.
+
+    ``table`` is the binding table of the DESIGN the cell was filed under, for
+    the same reason and one level up: a design with several forget sets has
+    several edited-h adapters per edit seed, and the cell's own forget set is
+    what tells them apart.
     """
-    role_name, file_key = CELL_INPUT_BINDINGS[key]
+    role_name, file_key = table[key]
+    # ``forget_set`` is passed to every template and used only by the ones that
+    # name it: str.format ignores a keyword its template does not contain, so
+    # the single-forget-set templates resolve exactly as they always did.
     return role_name.format(edit_seed=cell.get("edit_seed"),
                             direct_seed=cell.get("direct_seed"),
-                            router_seed=cell.get("router_seed")), file_key
+                            router_seed=cell.get("router_seed"),
+                            forget_set=cell.get("forget_set_id")), file_key
 
 
 def cell_input_digests(prereg, cell):
@@ -6523,9 +6752,10 @@ def cell_input_digests(prereg, cell):
             f"declared role file; the kinds that do are "
             f"{sorted(CELL_KIND_INPUT_KEYS)}")
     roles = (prereg.get("checkpoint_requirements") or {}).get("roles") or {}
+    table = _binding_table(prereg)
     out = OrderedDict()
     for key in CELL_KIND_INPUT_KEYS[kind]:
-        role_name, file_key = _role_for_binding(key, cell)
+        role_name, file_key = _role_for_binding(key, cell, table)
         raw = (roles.get(role_name) or {}).get(file_key)
         if not raw:
             raise RuntimeError(
@@ -6573,14 +6803,21 @@ def verify_cell_design_lineage(spec, prereg, cells):
     ancestor = block.get("ancestor") or {}
     this_design = prereg.get("design_sha256")
     ancestor_design = ancestor.get("design_sha256")
-    if not ancestor_design:
+    # A version that DECLARES an ancestor and has none is broken: its cells
+    # could have come from two designs and only one is named.  A version that
+    # declares none is not -- it consumes nothing but its own cells, which is
+    # what makes an absent ancestor the strictest policy available rather than
+    # a missing one.  Keyed on the version's own declaration so this stays a
+    # property of the spec and not a guess from the shape of the document.
+    if not ancestor_design and ANCESTOR_MANIFEST_BY_VERSION.get(spec.version):
         raise RuntimeError(
             f"{spec.version} declared a cell compatibility policy but the "
             f"pre-registration it was read from names no ancestor design; "
             f"without one, a cell filed under the ancestor cannot be told from "
             f"a cell filed under a design nobody declared")
-    accepted = {this_design: "produced_under_this_design",
-                ancestor_design: "reused_from_the_ancestor_design"}
+    accepted = {this_design: "produced_under_this_design"}
+    if ancestor_design:
+        accepted[ancestor_design] = "reused_from_the_ancestor_design"
     per_cell, counts, unrecognized = OrderedDict(), {}, []
     for cell_id, doc in cells.items():
         prov = doc.get("run_provenance") or {}
@@ -6609,12 +6846,15 @@ def verify_cell_design_lineage(spec, prereg, cells):
             "cannot aggregate: " + "; ".join(unrecognized[:4])
             + (f" (and {len(unrecognized) - 4} more)"
                if len(unrecognized) > 4 else "")
-            + f".  {spec.version} consumes cells produced under its own design "
-              f"({this_design}) or under the declared "
-              f"{ancestor.get('ancestor_version')} ancestor "
-              f"({ancestor_design}); a cell matching neither was produced by a "
-              f"design this pre-registration does not name, and aggregating it "
-              f"would report a verdict no frozen design stands behind")
+            + f".  {spec.version} consumes cells produced under "
+              + (f"its own design ({this_design}) or under the declared "
+                 f"{ancestor.get('ancestor_version')} ancestor "
+                 f"({ancestor_design})"
+                 if ancestor_design else
+                 f"its own design ({this_design}) alone")
+              + "; a cell produced under any other design was produced by one "
+              "this pre-registration does not name, and aggregating it would "
+              "report a verdict no frozen design stands behind")
     return OrderedDict((
         ("rule", declared.get("rule")),
         ("this_design_sha256", this_design),
@@ -6651,6 +6891,10 @@ def verify_cell_inputs(prereg, cells):
     re-checked, and saying so is the honest report.
     """
     roles = (prereg.get("checkpoint_requirements") or {}).get("roles") or {}
+    # The same table the filing phase resolved through, read off the same
+    # design: a checker that named roles differently from the filer would
+    # compare a cell against an adapter it never used.
+    table = _binding_table(prereg)
     per_cell, mismatched, unverifiable = OrderedDict(), [], []
     not_a_role_file = OrderedDict()
     n_compared = 0
@@ -6669,7 +6913,7 @@ def verify_cell_inputs(prereg, cells):
                     f"digest, so the weights that produced its rows were never "
                     f"bound and cannot be re-checked")
         for key, want in sorted(recorded.items()):
-            binding = CELL_INPUT_BINDINGS.get(key)
+            binding = table.get(key)
             if binding is None:
                 # A protocol digest or a design hash: bound to bytes that are
                 # not one of the design's declared role files, so there is
@@ -6678,7 +6922,7 @@ def verify_cell_inputs(prereg, cells):
                 not_a_role_file[key] = cell_id
                 row[key] = {"recorded": want, "bound_to_a_role_file": False}
                 continue
-            role_name, file_key = _role_for_binding(key, doc)
+            role_name, file_key = _role_for_binding(key, doc, table)
             raw = (roles.get(role_name) or {}).get(file_key)
             entry = {"role": role_name, "file_key": file_key, "recorded": want,
                      "bound_to_a_role_file": True}
@@ -6728,6 +6972,61 @@ def verify_cell_inputs(prereg, cells):
                        "generations where no adapter is present")}
 
 
+def _cell_forget_ids(prereg, design_cell):
+    """The forget identities one cell's rows were built against.
+
+    A design that varies a single forget set gives every cell the same answer,
+    and that answer is the design's own, so this returns it untouched and a
+    v2-v4 report keeps the bytes it has always had.
+
+    A design that varies several has to ask the CELL, because which identities
+    are forgotten is exactly what two forget sets differ in -- and
+    ``delta_route_v2`` splits its rows on that.  Computed against the wrong set
+    every row lands in the wrong arm, and the statistic is still a number, which
+    is what makes this worth a function rather than an index.
+    """
+    own = design_cell.get("forget_identity_ids")
+    return list(own) if own else list(prereg["forget_identity_ids"])
+
+
+def _response_key(design_cell):
+    """The key one hard-response matrix is filed under.
+
+    The edit seed alone where the design varies one forget set, which is every
+    design frozen so far and what keeps their reports byte-identical.
+
+    Where the design varies several, the seed alone is not a key.  Five forget
+    sets times three edit seeds is fifteen intervention cells and a dict keyed
+    on the seed holds three, each overwritten by whichever cell came last -- so
+    a natural cell would be composed against an H_e that was trained to suppress
+    a DIFFERENT identity, the factorization gate would still return a number,
+    and nothing downstream would report that the number described the wrong
+    adapter.
+    """
+    fs = design_cell.get("forget_set_id")
+    seed = design_cell.get("edit_seed")
+    return f"{fs}__seed{seed}" if fs else seed
+
+
+def _baseline_matrix_for(baseline_response, forget_set):
+    """The BEFORE that belongs to this edit's own forget set.
+
+    ``forget_set`` is None exactly where the design varies one forget set, and
+    there the container IS the matrix.  The discriminator is therefore a
+    property of the cell being compared and not a guess read off the shape of a
+    dict, which two different things can share.
+    """
+    if forget_set is None:
+        return baseline_response
+    if forget_set not in baseline_response:
+        raise RuntimeError(
+            f"the edit under forget set {forget_set!r} has no baseline matrix "
+            f"to be the BEFORE of; this design filed baselines for "
+            f"{sorted(baseline_response)}.  Comparing it against another set's "
+            f"BEFORE would report as an edit what two forget sets differ in")
+    return baseline_response[forget_set]
+
+
 def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
                         run_provenance=None):
     """RF2 and RF2P: gates, three verdicts and intervals, from filed cells.
@@ -6758,7 +7057,11 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
     """
     dataset = prereg["dataset"]
     vocab = prereg["vocab"]
-    forget_ids = prereg["forget_identity_ids"]
+    # No design-level forget list is read in this function.  A design that
+    # varies several forget sets records their UNION at the top level and no
+    # cell was built over the union, so the identities a statistic splits on
+    # come from the cell -- see _cell_forget_ids, which falls back to the
+    # design's own list for a cell that does not carry one.
     thresholds = prereg.get("gate_thresholds") or dict(spec.thresholds)
     applicability = prereg["gate_applicability"]
     plan = prereg["cluster_bootstrap"]
@@ -6808,6 +7111,8 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
             "edit_seed": design_cell.get("edit_seed"),
             "router_seed": design_cell.get("router_seed"),
             "direct_seed": design_cell.get("direct_seed"),
+            **({"forget_set_id": design_cell["forget_set_id"]}
+               if design_cell.get("forget_set_id") else {}),
             "n_rows": len(scored),
             "input_sha256": doc.get("input_sha256"),
             "n_unparseable": sum(1 for r in scored if r.get("unparseable")),
@@ -6824,15 +7129,20 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
         per_cell[cell_id] = block
 
     # --- H_e per EDIT seed, from that seed's own intervention cell -----------
+    # Keyed by _response_key rather than by the seed: see its docstring for what
+    # a seed-only key does to a design with several forget sets.
     hard_response = OrderedDict()
     for cell_id, design_cell in design_cells.items():
         if design_cell["kind"] != "intervention":
             continue
         es = design_cell["edit_seed"]
+        key = _response_key(design_cell)
         scored = [r for r in by_kind["intervention"] if r["cell_id"] == cell_id]
-        hard_response[es] = hard_response_matrix(scored, vocab)
-        hard_response[es]["edit_seed"] = es
-        hard_response[es]["cell_id"] = cell_id
+        hard_response[key] = hard_response_matrix(scored, vocab)
+        hard_response[key]["edit_seed"] = es
+        hard_response[key]["cell_id"] = cell_id
+        if design_cell.get("forget_set_id"):
+            hard_response[key]["forget_set_id"] = design_cell["forget_set_id"]
 
     # --- H_base, the same matrix for the UNEDITED h --------------------------
     # Reported beside H_e because the two are the before and after of one map:
@@ -6840,15 +7150,30 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
     # told only that a rate went down.  Built by the same function from the same
     # row shape, so the two matrices are comparable cell for cell by
     # construction and not by coincidence.
-    baseline_response = None
+    baseline_matrices = OrderedDict()
     for cell_id, design_cell in design_cells.items():
         if design_cell["kind"] != "baseline":
             continue
         scored = [r for r in by_kind["baseline"] if r["cell_id"] == cell_id]
-        baseline_response = hard_response_matrix(
-            scored, vocab, (BASELINE_CONDITION_V3,))
-        baseline_response["cell_id"] = cell_id
-        baseline_response["adapter"] = "baseline_h, the route's own unedited h"
+        m = hard_response_matrix(scored, vocab, (BASELINE_CONDITION_V3,))
+        m["cell_id"] = cell_id
+        m["adapter"] = "baseline_h, the route's own unedited h"
+        fs = design_cell.get("forget_set_id")
+        if fs:
+            m["forget_set_id"] = fs
+        baseline_matrices[fs] = m
+    if not baseline_matrices:
+        baseline_response = None
+    elif list(baseline_matrices) == [None]:
+        # One forget set, so one BEFORE, filed as the single matrix every design
+        # so far filed.  A loop that simply kept reassigning would also produce
+        # this for one cell and would silently keep the LAST of several.
+        baseline_response = baseline_matrices[None]
+    else:
+        # Several forget sets, so several BEFOREs: which codes are supposed to
+        # come back Unknown is what the sets differ in, and one matrix would
+        # compare five sets' edits against one set's before.
+        baseline_response = baseline_matrices
     what_the_edit_moved = None
     if baseline_response is not None and hard_response:
         # Which codes changed their response, per edit seed.  The suppression
@@ -6856,15 +7181,16 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
         # what makes "the edit moved the forgotten codes and left the retained
         # ones alone" a thing a reader can check rather than accept.
         what_the_edit_moved = OrderedDict()
-        before = baseline_response["matrix"]
-        for es, h_e in hard_response.items():
+        for key, h_e in hard_response.items():
+            before = _baseline_matrix_for(
+                baseline_response, h_e.get("forget_set_id"))["matrix"]
             after = h_e["matrix"]
             diffs = []
             for code in sorted(set(before) | set(after)):
                 if before.get(code) != after.get(code):
                     diffs.append({"code": code, "h_base": before.get(code),
                                   "h_edited": after.get(code)})
-            what_the_edit_moved[es] = {
+            what_the_edit_moved[key] = {
                 "n_codes": len(set(before) | set(after)),
                 "n_codes_whose_response_moved": len(diffs),
                 "codes": diffs}
@@ -6884,7 +7210,7 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
         scored = [r for r in by_kind["natural"] if r["cell_id"] == cell_id]
         confusion = router_confusion(scored)
         predicted = predicted_e2e_from_empirical(
-            scored, hard_response[es], confusion)
+            scored, hard_response[_response_key(design_cell)], confusion)
         observed = _mean_correct(scored)
         e2e[cell_id] = {
             "cell_id": cell_id, "router_seed": rs, "edit_seed": es,
@@ -6922,7 +7248,8 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
         if design_cell["kind"] != "intervention":
             continue
         scored = [r for r in by_kind["intervention"] if r["cell_id"] == cell_id]
-        delta[cell_id] = delta_route_v2(scored, forget_ids)
+        delta[cell_id] = delta_route_v2(
+            scored, _cell_forget_ids(prereg, design_cell))
 
     # Every weight behind every cell, re-hashed against the digest that cell
     # recorded -- and it refuses on a mismatch rather than reporting one.  Then
@@ -6944,6 +7271,8 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
         "rescored_from_stored_raw": bool(rescore),
         "dataset": dataset,
         "forget_set_id": prereg["forget_set_id"],
+        **({"forget_sets": prereg["forget_sets"]}
+           if prereg.get("forget_sets") else {}),
         "preregistration_design_sha256": prereg.get("design_sha256"),
         "n_cells": len(per_cell),
         "n_rows": sum(b["n_rows"] for b in per_cell.values()),
@@ -7315,6 +7644,12 @@ def _cell_skeleton(design_cell, phase, extra_inputs, result_kind=RESULT_KIND_V2)
         "edit_seed": design_cell.get("edit_seed"),
         "router_seed": design_cell.get("router_seed"),
         "direct_seed": design_cell.get("direct_seed"),
+        # Present only where the design cell carries one.  A design that varies
+        # a single forget set gives every cell the same answer, so recording it
+        # per cell would add a field that says nothing and would move the bytes
+        # of every cell v2, v3 and v4 file.
+        **({"forget_set_id": design_cell["forget_set_id"]}
+           if design_cell.get("forget_set_id") else {}),
         "n_rows": len(design_cell["rows"]),
         "prompts": dict(extra_inputs.pop("prompts")),
         "input_sha256": dict(extra_inputs.pop("input_sha256")),
@@ -7633,8 +7968,133 @@ def phase_rf0(dataset, path=None, out=None, cells=None):
     return report
 
 
+#: What D_s's training schedule may override, and nothing else.  These are
+#: exactly the values ``RouteSessionV2.train`` reads out of the protocol dict.
+#: The LoRA shape is NOT among them: it is fixed by the frozen route module that
+#: built g and h, so an override of it could be recorded and never applied -- a
+#: configuration the artifact claims and the adapter does not have.
+OVERRIDABLE_SCHEDULE_KEYS = ("steps", "warmup", "lr", "repeat")
+
+
+def _direct_schedule(protocol, overrides):
+    """D_s's protocol: the frozen route's, with a selected schedule replaced.
+
+    A COPY and never a mutation, and reachable only from RF1D and RFC: g and h
+    are trained under ``frozen_route_protocol()`` itself, so the recipe the route
+    was established with is not something this function can move.
+
+    Anything outside ``OVERRIDABLE_SCHEDULE_KEYS`` is REFUSED rather than
+    ignored.  Silently dropping an override is the worse failure: the design
+    would name a configuration, the adapter would be trained under another, and
+    every number filed against it would still look like a measurement of the one
+    that was named.
+    """
+    unknown = sorted(set(overrides) - set(OVERRIDABLE_SCHEDULE_KEYS))
+    if unknown:
+        raise RuntimeError(
+            f"the direct adapter's configuration asks to override {unknown}, "
+            f"which is not part of the training schedule.  Only "
+            f"{list(OVERRIDABLE_SCHEDULE_KEYS)} reach the trainer; the LoRA "
+            f"shape is set by the frozen route module that built g and h, so an "
+            f"override of it would be recorded and not applied")
+    out = dict(protocol)
+    out.update({k: overrides[k] for k in OVERRIDABLE_SCHEDULE_KEYS
+                if k in overrides})
+    out["schedule_overridden_for_the_direct_adapter"] = OrderedDict(
+        (k, {"frozen_route_value": protocol[k], "used": overrides[k]})
+        for k in OVERRIDABLE_SCHEDULE_KEYS if k in overrides)
+    out["not_overridable"] = (
+        "the LoRA rank, alpha, dropout and target modules, the model id and "
+        "revision and the dtype: those come from the frozen route module and "
+        "are the reason a direct adapter is comparable to the route rather than "
+        "merely another model")
+    return out
+
+
+def _direct_train_items(man, direct_training):
+    """The image-to-alias pairs D_s trains on.
+
+    The train split, minus whatever development images the design says the
+    configuration was selected on.  Read out of the DESIGN and not off a flag: a
+    phase that could be pointed at any subset of the training images is a phase
+    whose result does not say what it was trained on, and the design is the
+    artifact that has to say it.
+
+    The count is checked against what was named.  A hold-out that quietly
+    removed fewer images than it declared would leave the selected
+    configuration's own selection images inside the confirmatory training set,
+    and the accuracy reported against the held-out test images would still be a
+    number nobody could distinguish from the honest one.
+    """
+    items = [it for it in man["items"] if it["split"] == "train"]
+    dev = list((direct_training or {}).get("development_image_uris") or ())
+    if not dev:
+        return items
+    drop = set(dev)
+    kept = [it for it in items if it["image_uri"] not in drop]
+    if len(items) - len(kept) != len(drop):
+        raise RuntimeError(
+            f"the design names {len(drop)} development images to hold out of "
+            f"D_s's training, but only {len(items) - len(kept)} of the "
+            f"{len(items)} train images matched one.  A hold-out that does not "
+            f"remove what it names is not a hold-out")
+    return kept
+
+
+def design_forget_sets(prereg):
+    """The forget sets one design varies, in the order the design lists them.
+
+    Empty for every design frozen so far, which is what makes the qualified cell
+    ids and role names below unreachable for them: their cells and their reports
+    keep the bytes they have always had.
+    """
+    return list(prereg.get("forget_sets") or ())
+
+
+def qualified_cell_id(kind, forget_set, tail):
+    """One cell's id, qualified by forget set where the design varies several.
+
+    The KIND STAYS FIRST.  ``load_cell_result`` reads the phase a missing cell
+    needs out of ``cell_id.split("__")[0]``, so an id that led with the forget
+    set would name no phase and every absence would tell the operator to run
+    RF1 -- which ``main`` refuses on sight.
+    """
+    return f"{kind}__{forget_set}__{tail}" if forget_set else f"{kind}__{tail}"
+
+
+def select_forget_set(prereg, requested, phase, kind):
+    """Which forget set this invocation fills, or a refusal if it is ambiguous.
+
+    None where the design varies one forget set, so the id the phase builds is
+    the id it has always built.  Where the design varies several the phase has
+    to be TOLD which: defaulting to the first would run a fifth of the design
+    and return success, and the aggregate would then refuse with a list of
+    missing cells rather than naming the choice that was never made.
+    """
+    sets = [s["set_id"] for s in design_forget_sets(prereg)]
+    if not sets:
+        if requested is not None:
+            raise RuntimeError(
+                f"{phase} was given --forget-set {requested!r} but this design "
+                f"varies one forget set and its cell ids do not name one")
+        return None
+    if requested is None:
+        if len(sets) == 1:
+            return sets[0]
+        raise RuntimeError(
+            f"{phase} fills ONE {kind} cell and this design varies "
+            f"{len(sets)} forget sets {sets}, so pass --forget-set.  Choosing "
+            f"one here would be a selection made at run time by the code being "
+            f"run, which is the thing a frozen design exists to prevent")
+    if requested not in sets:
+        raise RuntimeError(
+            f"{phase} was given --forget-set {requested!r}, which this design "
+            f"does not vary; it varies {sets}")
+    return requested
+
+
 def phase_rf1b(dataset, prereg=None, device="cuda", resume=False,
-               cells_out=None, spec=None):
+               cells_out=None, spec=None, forget_set=None):
     """RF1B: the UNEDITED h on every route code -- the before in before/after.
 
     ``h_base(do(C=c))`` for every code in the route vocabulary with no image,
@@ -7660,7 +8120,8 @@ def phase_rf1b(dataset, prereg=None, device="cuda", resume=False,
     """
     prereg, prov, spec = _phase_prereg(dataset, prereg, spec)
     prompts = frozen_route_prompts()
-    cell_id = "baseline__h_base"
+    forget_set = select_forget_set(prereg, forget_set, "RF1B", "baseline")
+    cell_id = qualified_cell_id("baseline", forget_set, "h_base")
     cells = {c["cell_id"]: c for c in prereg["cells"]}
     if cell_id not in cells:
         raise RuntimeError(
@@ -7668,7 +8129,10 @@ def phase_rf1b(dataset, prereg=None, device="cuda", resume=False,
             f"design without a baseline cell measures post-edit behaviour only "
             f"and cannot establish that the edit changed anything, which is the "
             f"defect v3 repairs -- so it is not something to work around by "
-            f"running this phase against an older manifest")
+            f"running this phase against an older manifest"
+            + (f".  The forget sets it does vary are "
+               f"{[s['set_id'] for s in design_forget_sets(prereg)]}"
+               if design_forget_sets(prereg) else ""))
     design_cell = cells[cell_id]
     role = (prereg["checkpoint_requirements"]["roles"].get("baseline_h"))
     if role is None:
@@ -7898,10 +8362,23 @@ def phase_rf1d(dataset, direct_seed, prereg=None, device="cuda", resume=False,
     prereg, prov, spec = _phase_prereg(dataset, prereg, spec)
     man = load_manifest(dataset)
     check_seed_budget(dataset, [], [direct_seed], man=man)
+    # The frozen route protocol, and then -- only where the design records a
+    # calibration -- the schedule that calibration selected.  Absent for every
+    # design frozen before v5, so their D_s is trained under the frozen protocol
+    # itself and the digest its cells bind is the digest they have always bound.
+    direct_training = prereg.get("direct_training")
     protocol = frozen_route_protocol()
+    if direct_training:
+        protocol = _direct_schedule(protocol, direct_training["schedule"])
     prompts = frozen_route_prompts()
     cells = {c["cell_id"]: c for c in prereg["cells"]}
-    want_cells = [f"direct__d{direct_seed}", f"hybrid__d{direct_seed}"]
+    # The namespace comes from the design that recorded the selected
+    # configuration, which is the same document that named the adapter directory.
+    # Absent for every design frozen before v5, so their RF1D writes the ids it
+    # has always written.
+    want_cells = [direct_cell_id(k, direct_seed,
+                                 (direct_training or {}).get("namespace"))
+                  for k in ("direct", "hybrid")]
     for cid in want_cells:
         if cid not in cells:
             raise RuntimeError(
@@ -7938,7 +8415,12 @@ def phase_rf1d(dataset, direct_seed, prereg=None, device="cuda", resume=False,
         sess = RouteSessionV2(device, f"e2c_rf_d{direct_seed}", direct_seed)
         try:
             sess.reset_fresh(direct_seed)
-            train_items = [it for it in man["items"] if it["split"] == "train"]
+            # NOT the identical line in RF1G, which trains g and is left alone:
+            # g is the frozen route, it was trained on the whole train split, and
+            # holding development images out of it would change the route the
+            # design compares D_s against.  The asymmetry that creates is
+            # disclosed in the result rather than removed by editing g.
+            train_items = _direct_train_items(man, direct_training)
             pairs = [(it["image_uri"], prompts["d_image_to_alias"],
                       man["alias_of"][it["identity_id"]]) for it in train_items]
             sess.train(f"direct_seed{direct_seed}", pairs, out_dir, protocol)
@@ -7987,9 +8469,20 @@ def phase_rf1d(dataset, direct_seed, prereg=None, device="cuda", resume=False,
             "cells_filed": [c["cell_id"] for c in filed],
             "direct_pre_edit_held_out_accuracy": _mean_correct(held_out),
             "n_held_out_images": len(held_out),
-            "trained_on": ("the train split's image-to-alias pairs, the same "
-                           "associations the route encodes, under the protocol "
-                           "read from the frozen route scripts"),
+            "trained_on": (
+                "the train split's image-to-alias pairs, the same associations "
+                "the route encodes, under the protocol read from the frozen "
+                "route scripts" if not direct_training else
+                f"{len(train_items)} of the train split's image-to-alias pairs "
+                f"-- the train split minus the "
+                f"{len(direct_training.get('development_image_uris') or ())} "
+                f"development images the configuration was selected on -- under "
+                f"the frozen route protocol with the schedule the calibration "
+                f"selected"),
+            **({"training_data_asymmetry_against_the_route":
+                    direct_training["training_data_asymmetry"]}
+               if (direct_training or {}).get("training_data_asymmetry")
+               else {}),
             "pre_edit_by_construction": (
                 "D_s is not modified when an h is edited, so there is no "
                 "post-edit variant of this number and nothing to compare it "
@@ -8013,7 +8506,7 @@ def phase_rf1d(dataset, direct_seed, prereg=None, device="cuda", resume=False,
 
 
 def phase_rf1h(dataset, edit_seed, prereg=None, device="cuda", resume=False,
-               cells_out=None, spec=None):
+               cells_out=None, spec=None, forget_set=None):
     """RF1H: the forced-code interventions for ONE edited h.
 
     ``h_e(do(C=c))`` for every code in the route vocabulary, with NO image: the
@@ -8024,18 +8517,23 @@ def phase_rf1h(dataset, edit_seed, prereg=None, device="cuda", resume=False,
     """
     prereg, prov, spec = _phase_prereg(dataset, prereg, spec)
     prompts = frozen_route_prompts()
-    cell_id = f"intervention__h{edit_seed}"
+    forget_set = select_forget_set(prereg, forget_set, "RF1H", "intervention")
+    cell_id = qualified_cell_id("intervention", forget_set, f"h{edit_seed}")
     cells = {c["cell_id"]: c for c in prereg["cells"]}
     if cell_id not in cells:
         raise RuntimeError(
             f"the frozen {spec.version} pilot has no cell {cell_id!r}; the edit "
-            f"seeds it pre-registered are {prereg['edit_seeds']}")
+            f"seeds it pre-registered are {prereg['edit_seeds']}"
+            + (f" and its forget sets are "
+               f"{[s['set_id'] for s in design_forget_sets(prereg)]}"
+               if design_forget_sets(prereg) else ""))
     design_cell = cells[cell_id]
     role = (prereg["checkpoint_requirements"]["roles"]
-            .get(f"edited_h__seed{edit_seed}"))
+            .get(edited_h_role_name(prereg, edit_seed, forget_set)))
     if role is None:
         raise RuntimeError(f"the frozen pilot declares no edited_h role for "
-                           f"seed {edit_seed}")
+                           f"seed {edit_seed} under forget set "
+                           f"{forget_set or prereg.get('forget_set_id')}")
     # The frozen pilot records checkpoint paths RELATIVE to the dataset
     # root, so that verifying it is not tied to one filesystem root.
     ckpt = resolve_recorded_path(role["adapter"])
@@ -8082,7 +8580,7 @@ def phase_rf1h(dataset, edit_seed, prereg=None, device="cuda", resume=False,
 
 
 def phase_rf1e(dataset, router_seed, edit_seed, prereg=None, device="cuda",
-               resume=False, cells_out=None, spec=None):
+               resume=False, cells_out=None, spec=None, forget_set=None):
     """RF1E: the natural composition for ONE (router seed, edit seed) pair.
 
     ``c = g_s(X)`` is REPLAYED from that router seed's own held-out prediction
@@ -8094,20 +8592,26 @@ def phase_rf1e(dataset, router_seed, edit_seed, prereg=None, device="cuda",
     man = load_manifest(dataset)
     prereg, prov, spec = _phase_prereg(dataset, prereg, spec)
     prompts = frozen_route_prompts()
-    cell_id = f"natural__g{router_seed}__h{edit_seed}"
+    forget_set = select_forget_set(prereg, forget_set, "RF1E", "natural")
+    cell_id = qualified_cell_id(
+        "natural", forget_set, f"g{router_seed}__h{edit_seed}")
     cells = {c["cell_id"]: c for c in prereg["cells"]}
     if cell_id not in cells:
         raise RuntimeError(
             f"the frozen {spec.version} pilot has no cell {cell_id!r}; it "
             f"pre-registered router seeds {prereg['router_seeds']} and edit "
-            f"seeds {prereg['edit_seeds']}")
+            f"seeds {prereg['edit_seeds']}"
+            + (f" and its forget sets are "
+               f"{[s['set_id'] for s in design_forget_sets(prereg)]}"
+               if design_forget_sets(prereg) else ""))
     design_cell = cells[cell_id]
     preds = load_router_predictions(dataset, router_seed, held_out_uris(man))
     role = (prereg["checkpoint_requirements"]["roles"]
-            .get(f"edited_h__seed{edit_seed}"))
+            .get(edited_h_role_name(prereg, edit_seed, forget_set)))
     if role is None:
         raise RuntimeError(f"the frozen pilot declares no edited_h role for "
-                           f"seed {edit_seed}")
+                           f"seed {edit_seed} under forget set "
+                           f"{forget_set or prereg.get('forget_set_id')}")
     # The frozen pilot records checkpoint paths RELATIVE to the dataset
     # root, so that verifying it is not tied to one filesystem root.
     ckpt = resolve_recorded_path(role["adapter"])
@@ -8258,6 +8762,18 @@ def _freeze_for(spec, args):
         spec, args.dataset, forget_set, forget_ids, args.router_seeds,
         args.edit_seeds, args.direct_seeds, man=man, images=images,
         selection=selection)
+    return _freeze_write_and_verify(spec, args, block)
+
+
+def _freeze_write_and_verify(spec, args, block):
+    """Write one built pre-registration, then verify it from where it landed.
+
+    The tail of every version's freeze.  Shared rather than copied because a
+    version whose freeze skipped the verification step would file a manifest
+    nothing had ever read back -- and the read-back is the only check that the
+    artifact reproduces from its own tracked location rather than from the memory
+    of the process that built it.
+    """
     # ``--out`` is the DIRECTORY this run writes into, the same reading RF0, RF2
     # and RF2P give it, and the manifest keeps its canonical name inside it.  A
     # staged artifact written under some other name is one the phases will never
@@ -8296,8 +8812,13 @@ def _freeze_for(spec, args):
           f"{ {k: len(v) for k, v in block['cells_by_kind'].items()} }, "
           f"{block['n_rows_total']} rows, vocab {block['n_vocab']}",
           file=sys.stderr)
-    print(f"forget set        : {sel['set_id']} targets={sel['targets']}",
-          file=sys.stderr)
+    if sel.get("sets") is None:
+        print(f"forget set        : {sel['set_id']} "
+              f"targets={sel['targets']}", file=sys.stderr)
+    else:
+        print(f"forget sets       : {sel['n_sets']} "
+              f"{[s['set_id'] for s in sel['sets']]} "
+              f"targets={sel['targets']}", file=sys.stderr)
     print(f"mediator is hard  : "
           f"{not block['mediator_is_hard']['image_to_h_in_any_condition']} "
           f"(h prompt read from the frozen route scripts)", file=sys.stderr)
@@ -8375,9 +8896,25 @@ def _run_phase_for(spec, args, phase):
         # before its training work exists is valid and is supposed to say what
         # is still missing.  Failing here would make the honest state unusable.
         return 0 if rep["manifest_valid"] else 1
+    if phase == "RFC":
+        if "RFC" not in PHASES_BY_VERSION[spec.version]:
+            raise RuntimeError(
+                f"{spec.version} has no calibration phase; the phases it has are "
+                f"{PHASES_BY_VERSION[spec.version]}.  A version that declared no "
+                f"calibration has no configuration to select, and training one "
+                f"would produce adapters no design of that version names")
+        rep = phase_rfc(ds, args.candidate, args.direct_seed,
+                        device=args.device, resume=args.resume)
+        print(json.dumps(
+            {k: rep.get(k) for k in
+             ("phase", "candidate", "seed", "development_accuracy",
+              "n_development_images", "n_fit_images", "selected",
+              "selection_refused", "resume")}, indent=2))
+        return 0
     if phase == "RF1B":
         rep = phase_rf1b(ds, device=args.device, resume=args.resume,
-                         cells_out=args.cells, spec=spec)
+                         cells_out=args.cells, spec=spec,
+                         forget_set=args.forget_set)
         print(json.dumps({k: rep.get(k) for k in
                           ("phase", "cell_id", "n_rows", "input_sha256",
                            "adapter_path", "resume")}, indent=2))
@@ -8409,7 +8946,8 @@ def _run_phase_for(spec, args, phase):
         if args.edit_seed is None:
             raise RuntimeError("RF1H evaluates ONE edited h: pass --edit-seed")
         rep = phase_rf1h(ds, args.edit_seed, device=args.device,
-                         resume=args.resume, cells_out=args.cells, spec=spec)
+                         resume=args.resume, cells_out=args.cells, spec=spec,
+                         forget_set=args.forget_set)
         print(json.dumps({k: rep.get(k) for k in
                           ("phase", "cell_id", "edit_seed", "n_rows",
                            "input_sha256", "resume")}, indent=2))
@@ -8420,7 +8958,8 @@ def _run_phase_for(spec, args, phase):
                                "--router-seed and --edit-seed")
         rep = phase_rf1e(ds, args.router_seed, args.edit_seed,
                          device=args.device, resume=args.resume,
-                         cells_out=args.cells, spec=spec)
+                         cells_out=args.cells, spec=spec,
+                         forget_set=args.forget_set)
         print(json.dumps({k: rep.get(k) for k in
                           ("phase", "cell_id", "router_seed", "edit_seed",
                            "n_rows", "input_sha256", "resume")}, indent=2))
@@ -8465,8 +9004,16 @@ def _run_pilot(args, spec):
         got = verify_manifest(path)
         print(json.dumps(got, indent=2))
         return 0 if got["valid"] else 1
+    if args.preregister_calibration:
+        if not spec.calibration_phase:
+            raise RuntimeError(
+                f"{spec.version} declared no calibration, so there is no "
+                f"calibration pre-registration to freeze; the versions that have "
+                f"one are "
+                f"{sorted(v for v, s in SPEC_BY_VERSION.items() if s.calibration_phase)}")
+        return freeze_calibration(args)
     if args.preregister:
-        return _freeze_for(spec, args)
+        return FREEZE_BY_VERSION.get(spec.version, _freeze_for)(spec, args)
     rc = 0
     for phase in args.phase:
         rc |= _run_phase_for(spec, args, phase)
@@ -9162,6 +9709,1698 @@ SUPERSESSION_POLICY["v4"] = SUPERSESSION_POLICY_V4
 SUPERSEDED_NOTES[PREREG_V3_KIND] = SUPERSEDED_NOTES_V3
 SCOPE_AMENDMENT_EVIDENCE_BY_VERSION["v4"] = v4_scope_amendment_evidence
 EXTRA_FREEZE_INPUTS_BY_VERSION["v4"] = _v4_extra_freeze_inputs
+
+
+# ===========================================================================
+# PART IV -- v5: the run the corrected scope actually requires
+# ===========================================================================
+#
+# Everything v5 adds lives in this one contiguous block and works by REBINDING
+# the version tables the code above reads, exactly as PART III does for v4.  The
+# constructors above -- the ones that produced the frozen v1, v2, v3 and v4 bytes
+# -- stay textually untouched, which is the only reason to believe those bytes
+# still reproduce.
+#
+# WHY V5 EXISTS
+#   v4 corrected a denominator and then re-read the 28 cells v3 had already
+#   filed.  Every one of them is stamped ``reused_from_the_ancestor_design``,
+#   and v4's own bytes say what that makes it: "a confirmatory result under the
+#   corrected scope requires a run executed under v4 from the start."  v4 is that
+#   correction and not that run.  v5 is the run.
+#
+# WHAT V5 CHANGES
+#   1. It consumes NOTHING.  It declares no ancestor, so the lineage state
+#      ``reused_from_the_ancestor_design`` is unreachable and a cell filed by any
+#      earlier design is refused rather than aggregated.  Its result kind is its
+#      own, which is the opposite of v4's choice for the opposite reason: v4
+#      reused v3's kind so 28 filed cells would not be re-measured, and v5 must
+#      not be able to read them at all.
+#   2. It varies FIVE forget sets rather than one, and they are the five no
+#      filed design has consumed, chosen by a rule rather than listed.
+#   3. It calibrates the direct adapter's training schedule on a development
+#      split carved out of the train images, and freezes the selected
+#      configuration before any confirmatory cell exists.
+#
+# WHAT V5 DOES NOT CHANGE
+#   No threshold.  No gate-to-verdict mapping.  No condition, no prompt, no row
+#   builder, no hygiene denominator.  ``PILOT_SPEC_V5`` holds v4's tables by
+#   OBJECT IDENTITY, not by copy, so the claim "the scope and the thresholds are
+#   frozen" is a property a test can check with ``is`` rather than a promise.
+#
+#   The ROUTE is not calibrated and is not touched.  g and h come from
+#   ``frozen_route_protocol()`` and the frozen adapters on disk; the calibration
+#   is of D_s alone.  A phase named RFC does not imply a router was tuned, and
+#   every artifact this block produces says so in words.
+#
+# WHAT V5 DISCLOSES
+#   D_s trains on the train split MINUS the development images, while the frozen
+#   g trained on all of it.  That is an asymmetry in the route-versus-direct
+#   comparison and its direction favours the route: a direct pathway with less
+#   training data is harder to push over the ``min_direct_image_accuracy`` floor,
+#   so clearing the floor is more evidence than it would be at parity, not less.
+#   The asymmetry is recorded in the design and in every D_s result rather than
+#   removed by retraining g, which the frozen route does not permit.
+
+#: v5's kinds.  The supersession kind names what it supersedes, following the
+#: convention v3 and v4 set: four designs are behind this one.
+KIND_V5 = "route_dependent_forgetting_design_v5"
+PREREG_V5_KIND = "route_dependent_forgetting_preregistration_v5"
+SUPERSESSION_KIND_V5 = (
+    "route_dependent_forgetting_supersession_v1_v2_v3_and_v4")
+
+#: v5's result kind is its OWN, and that is the mechanism rather than a label.
+#: ``load_cell_result`` refuses a cell whose kind differs from the aggregating
+#: spec's, so a distinct kind is what makes the 28 filed cells unreadable here --
+#: a refusal at the door instead of a lineage check performed on cells that were
+#: already let in.
+RESULT_KIND_V5 = "route_dependent_forgetting_cell_result_v5"
+RESULT_KIND_VERSION[RESULT_KIND_V5] = "v5"
+
+#: What v5 repairs about v4, in the same shape the earlier tables use.
+SUPERSESSION_ITEMS_V5 = OrderedDict((
+    ("corrective_is_not_confirmatory", {
+        "v4": ("scoped the hygiene gate to the non-auxiliary rows and then "
+               "re-read the 28 cells v3 had filed under the corrected scope.  "
+               "Every one of them is stamped reused_from_the_ancestor_design, so "
+               "the verdicts v4 reports are a re-analysis of a run that was "
+               "pre-registered under a different design"),
+        "v5": ("executes under the corrected scope FROM THE START: it declares "
+               "no ancestor, so a cell filed by v1-v4 is refused rather than "
+               "aggregated, and every cell it reports was produced under the "
+               "design that states the thresholds"),
+        "also": ("v4's own bytes already say this is what a confirmatory result "
+                 "requires; v5 is that statement acted on rather than restated")}),
+    ("one_forget_set_is_not_a_factor", {
+        "v4": ("varied router seed and edit seed over ONE forget set, so nothing "
+               "in it established that the result was about route-dependent "
+               "forgetting rather than about the one identity that set happened "
+               "to suppress"),
+        "v5": ("varies five forget sets as well, all five chosen by a rule from "
+               "the sets no filed design consumed, so the crossed matrix is over "
+               "targets the design did not pick after seeing an outcome")}),
+    ("a_configuration_nobody_chose_in_advance", {
+        "v4": ("trained D_s under the route's own schedule because that was the "
+               "schedule available, not because anything had established it was "
+               "a schedule the direct pathway could clear its floor under"),
+        "v5": ("calibrates D_s's schedule on a development split disjoint from "
+               "the held-out test images, freezes the selection, and only then "
+               "trains the confirmatory adapters -- so the configuration is a "
+               "pre-registered choice and not a free parameter")}),
+))
+
+SUPERSESSION_POLICY_V5 = (
+    "the v1, v2, v3 and v4 manifests are preserved unmodified and their designs "
+    "are still reconstructible; they are marked superseded here rather than "
+    "edited, because a pre-registration changed after freezing was never a "
+    "pre-registration.  v4 is superseded for a STATUS reason rather than a "
+    "scientific one: its analysis of v3's cells is correct and stays committed, "
+    "but it is corrective, and a corrective analysis of a completed run is not a "
+    "confirmatory result under the scope it corrects.  v4's reports are therefore "
+    "not relabelled, not withdrawn and not re-derived here")
+
+#: What is true of a superseded v4 artifact.  Keyed on the KIND it records, like
+#: every other entry, and required: ``supersession_record`` refuses to describe a
+#: file whose kind has no notes rather than say nothing about it.
+SUPERSEDED_NOTES_V4 = {
+    "design_is_still_reconstructible": (
+        "verify_manifest dispatches on kind and rebuilds a v4 pilot through "
+        "build_pilot_preregistration_v4, which is retained for exactly this "
+        "reason, so the frozen design_sha256 still reproduces"),
+    "input_digests_will_report_drift": (
+        "a v4 manifest binds the bytes of this script as it was when that "
+        "manifest was frozen, and this script has since gained v5, so "
+        "verify_manifest names the script digest as drifted and returns "
+        "valid=False.  That is the documented state of a superseded artifact and "
+        "not a defect: the DESIGN still reproduces from its own recorded "
+        "parameters, which is the part that was pre-registered"),
+    "its_reports_stay_committed_and_stay_corrective": (
+        "rf_report_{ppubench,salmu}_v4.json re-read the 28 v3 cells under the "
+        "corrected denominator.  They are not withdrawn by v5 and they are not "
+        "confirmatory either: each carries cell_design_lineage naming both "
+        "designs and how many cells came from each"),
+}
+
+#: v4's scope declaration, minus the three keys that are statements about v4's
+#: HISTORY rather than about the scope.
+#:
+#: Every key that DEFINES the denominator is inherited with v4's own value, so
+#: "the scope is frozen" is a fact about v5 and not a restatement.  What is
+#: dropped is the claim that the denominator was chosen after the outcome it
+#: corrects had been read: that is true of v4 and cannot be true of v5, which
+#: freezes its denominator before it has any outcome at all.  Inheriting those
+#: keys verbatim would make every v5 artifact announce itself as a post-hoc
+#: amendment -- the one thing v5 exists to stop being.
+_V5_KEYS_NOT_INHERITED_FROM_V4_SCOPE = (
+    "post_outcome_scope_amendment",
+    "what_that_means",
+    "the_evidence_for_it_is_recorded_in_this_design")
+
+DECLARED_HYGIENE_SCOPE_V5 = OrderedDict((
+    *[(k, v) for k, v in DECLARED_HYGIENE_SCOPE_V4.items()
+      if k not in _V5_KEYS_NOT_INHERITED_FROM_V4_SCOPE],
+    ("scope_inherited_from", "v4"),
+    ("every_key_that_defines_the_denominator_is_v4s_own_value",
+     sorted(k for k in DECLARED_HYGIENE_SCOPE_V4
+            if k not in _V5_KEYS_NOT_INHERITED_FROM_V4_SCOPE)),
+    ("post_outcome_scope_amendment", False),
+    ("why_the_amendment_fields_are_not_inherited",
+     ("they state that v4's denominator was declared after v3's verdicts were "
+      "read, and that the evidence for it is derived from v3's committed "
+      "reports.  Both are true of v4 and neither is true of v5: v5 declares the "
+      "same denominator BEFORE it has a verdict to correct, and derives nothing "
+      "from v3's reports because it consumes no cell v3 filed")),
+    ("what_v5_is_instead",
+     ("the run v4's own bytes say a confirmatory result requires: executed "
+      "under the corrected scope from the start, over forget sets no earlier "
+      "design consumed, with its direct adapter's configuration selected on a "
+      "development split and frozen before its cells were produced")),
+))
+
+#: v5 DOES declare a cell compatibility policy, and what it declares is that it
+#: has no ancestor.  The policy is what makes the absence a statement rather than
+#: an omission: ``verify_cell_design_lineage`` returns None for a version that
+#: declared nothing, and a v5 report that carried no lineage block would be
+#: indistinguishable from one that never checked.
+DECLARED_CELL_COMPATIBILITY_V5 = OrderedDict((
+    ("rule", "this_design_only"),
+    ("ancestor", None),
+    ("why_there_is_no_ancestor",
+     ("v4 reused v3's result kind so that 28 filed cells would not be "
+      "re-measured, and paid for it by resting a v4 report on v3-stamped cells. "
+      "v5 exists to remove exactly that: a confirmatory result has to be produced "
+      "by the design that states its thresholds.  So v5 declares no ancestor, "
+      "takes a result kind of its own, and a cell filed under any earlier design "
+      "is refused at load rather than checked after the fact")),
+    ("what_is_checked_before_a_cell_is_consumed",
+     ("load_cell_result refuses any cell whose kind is not this design's, which "
+      "is every cell v1-v4 filed; verify_cell_design_lineage then compares each "
+      "consumed cell's recorded preregistration_design_sha256 against this "
+      "design's and refuses a cell that does not match it")),
+    ("states", ("produced_under_this_design", "unrecognized_design")),
+    ("reused_from_the_ancestor_design_is_unreachable",
+     ("the state exists in the earlier declarations and cannot occur here, "
+      "because there is no ancestor design hash for a cell to match.  A count of "
+      "zero reused cells is therefore not a measurement v5 happened to make; it "
+      "is a consequence of what v5 declared")),
+    ("what_a_v5_report_must_disclose",
+     ("that every cell it aggregates was produced under its own design, and that "
+      "the v3 cells v4 analysed take no part in any v5 verdict")),
+))
+
+PILOT_SPEC_V5 = PilotSpec(
+    version="v5", kind=KIND_V5, prereg_kind=PREREG_V5_KIND,
+    result_kind=RESULT_KIND_V5, supersession_kind=SUPERSESSION_KIND_V5,
+    conditions=CONDITIONS_V4,
+    forced_code_conditions=FORCED_CODE_CONDITIONS_V4,
+    mediated_conditions=MEDIATED_CONDITIONS_V4,
+    auxiliary_conditions=AUXILIARY_CONDITIONS_V4,
+    decisive_conditions=DECISIVE_CONDITIONS_V4,
+    thresholds=GATE_THRESHOLDS_V4, gate_to_verdict=GATE_TO_VERDICT_V4,
+    baseline_cell=True, embed_live_checkpoint_status=False,
+    direct_gate_aggregation="every_seed",
+    declared_gate_aggregation={
+        "direct_gate_aggregation": PER_SEED_GATE_AGGREGATION},
+    hygiene_gate_row_scope=HYGIENE_SCOPE_NON_AUXILIARY,
+    declared_hygiene_scope=DECLARED_HYGIENE_SCOPE_V5,
+    declared_cell_compatibility=DECLARED_CELL_COMPATIBILITY_V5,
+    superseded_filenames=("rf_pilot_ppubench.json", "rf_pilot_salmu.json",
+                          "rf_pilot_ppubench_v2.json",
+                          "rf_pilot_salmu_v2.json",
+                          "rf_pilot_ppubench_v3.json",
+                          "rf_pilot_salmu_v3.json",
+                          "rf_pilot_ppubench_v4.json",
+                          "rf_pilot_salmu_v4.json"),
+    calibration_phase=True)
+
+
+# ---------------------------------------------------------------------------
+# the development split
+# ---------------------------------------------------------------------------
+
+#: How many of each identity's TRAIN images are held out for development, taken
+#: as the highest-indexed ones.  The test images are the manifest's own
+#: ``split == "test"`` items and are not named here at all: the split exists to
+#: divide the TRAIN images, and a rule that also reached the test images would be
+#: a rule about the measurement rather than about the calibration.
+#:
+#: A COUNT and not a list of indices, because the two datasets do not share an
+#: index range.  SALMU has j=0..7 in train and j=8..10 in test for every one of
+#: its twelve identities.  PPUBench's indices are sparse, run past forty, and
+#: overlap between its own splits -- j=32 is a train image of one identity and a
+#: test image of another -- so a rule that named indices would fit SALMU and place
+#: some of PPUBench's train images in neither set, leaving a caller to decide
+#: where they went.  On SALMU this rule returns j=6 and j=7 for every identity,
+#: which is the split the design was sized against: the count is the rule and the
+#: indices are what the rule returns on this data.
+N_DEVELOPMENT_IMAGES_PER_IDENTITY_V5 = 2
+
+
+def image_index_within_identity(item):
+    """The position one image occupied in its identity's sorted list.
+
+    Read out of the recorded filename rather than recomputed by re-sorting the
+    manifest: the generator wrote ``SAL_{iid}_{j:02d}.png`` and derived the split
+    from that same j, so the filename IS the record of the position.  Re-deriving
+    it by sorting would agree today and be a second rule tomorrow, and the two
+    would differ the moment an image was added.
+    """
+    tail = Path(item["image_uri"]).stem.rsplit("_", 1)[-1]
+    if not tail.isdigit():
+        raise RuntimeError(
+            f"cannot read an image index out of {item['image_uri']!r}: the last "
+            f"filename component is {tail!r} and not a number.  The development "
+            f"split is defined on that index, so a manifest whose filenames do "
+            f"not carry it has no development split rather than a guessed one")
+    return int(tail)
+
+
+def dev_split(man, audit=None):
+    """The train images, divided into what D_s fits on and what selects its config.
+
+    Derived from the manifest alone and checked against image BYTES rather than
+    filenames.  The distinction is not precautionary here: PPUBench's held-out
+    filenames are bytes that also appear in its train split, so a split that
+    partitioned filenames would partition nothing.  SALMU is asserted to be
+    different rather than assumed to be, because the whole purpose of holding a
+    development set out is that the selection never sees the test images.
+    """
+    audit = audit if audit is not None else image_content_audit(man)
+    sha_of = audit["images_by_uri_sha256"]
+    fit, dev, test = [], [], []
+    train = {}
+    n_dev = N_DEVELOPMENT_IMAGES_PER_IDENTITY_V5
+    for it in man["items"]:
+        j = image_index_within_identity(it)
+        if it["split"] == "test":
+            test.append((it, j))
+        else:
+            train.setdefault(it["identity_id"], []).append((it, j))
+    for iid in sorted(train):
+        xs = sorted(train[iid], key=lambda tj: tj[1])
+        seen = [j for _, j in xs]
+        if len(set(seen)) != len(seen):
+            dup = sorted({j for j in seen if seen.count(j) > 1})
+            raise RuntimeError(
+                f"identity {iid} has more than one train image at image index "
+                f"{dup}, so 'the {n_dev} highest-indexed' names no particular "
+                f"images.  The rule refuses rather than breaking the tie by list "
+                f"order, which would make the split depend on the order the "
+                f"manifest's rows happen to be in rather than on the images")
+        if len(xs) <= n_dev:
+            raise RuntimeError(
+                f"identity {iid} has {len(xs)} train image(s) and the rule holds "
+                f"out {n_dev} for development, which would leave it nothing to "
+                f"fit on.  A development split that consumed an identity's whole "
+                f"training set would select a configuration on images that "
+                f"identity was never trained on, and would select it differently "
+                f"from every identity that had images left")
+        dev.extend(xs[-n_dev:])
+        fit.extend(xs[:-n_dev])
+
+    def uris(xs):
+        return [it["image_uri"] for it, _ in xs]
+
+    def shas(xs):
+        return [sha_of[it["image_uri"]] for it, _ in xs]
+
+    fit_sha, dev_sha, test_sha = shas(fit), shas(dev), shas(test)
+    overlaps = OrderedDict()
+    for a, b, na, nb in ((dev_sha, test_sha, "development", "test"),
+                         (fit_sha, test_sha, "fit", "test"),
+                         (fit_sha, dev_sha, "fit", "development")):
+        shared = sorted(set(a) & set(b))
+        overlaps[f"{na}_and_{nb}"] = {
+            "n_shared_image_bytes": len(shared), "shared": shared}
+        if shared:
+            raise RuntimeError(
+                f"the {na} and {nb} images share {len(shared)} image "
+                f"byte-value(s), e.g. {shared[0]}; a development split that "
+                f"overlaps the test images in CONTENT is not disjoint from them, "
+                f"and a configuration selected on it would be selected partly on "
+                f"the measurement it is supposed to be blind to")
+    per_identity = OrderedDict()
+    for it, _ in dev:
+        per_identity.setdefault(it["identity_id"], []).append(it["image_uri"])
+    counts = sorted({len(v) for v in per_identity.values()})
+    return OrderedDict((
+        ("rule", OrderedDict((
+            ("fit", ("split == 'train', all but the highest-indexed "
+                     f"{N_DEVELOPMENT_IMAGES_PER_IDENTITY_V5} of each identity")),
+            ("development", ("split == 'train', the highest-indexed "
+                             f"{N_DEVELOPMENT_IMAGES_PER_IDENTITY_V5} of each "
+                             "identity")),
+            ("test", ("split == 'test', taken from the manifest and not named by "
+                      "this rule at all")),
+            ("index_read_from",
+             ("the recorded image filename, which is where the generator wrote "
+              "the position it derived the split from")),
+            ("why_a_count_and_not_a_list_of_indices",
+             ("SALMU's train indices are 0..7 for every identity, so a list of "
+              "indices works there and reads like a rule.  PPUBench's are sparse, "
+              "run past forty and overlap its own test indices, so the same list "
+              "would leave some of its train images in neither set.  A count "
+              "holds on both, and on SALMU it returns j=6 and j=7")),
+        ))),
+        ("n_fit_images", len(fit)),
+        ("n_development_images", len(dev)),
+        ("n_test_images", len(test)),
+        ("n_train_images", len(fit) + len(dev)),
+        ("fit_image_uris", uris(fit)),
+        ("development_image_uris", uris(dev)),
+        ("test_image_uris", uris(test)),
+        ("fit_image_sha256", fit_sha),
+        ("development_image_sha256", dev_sha),
+        ("test_image_sha256", test_sha),
+        ("disjoint_in_image_content_not_only_in_filename", overlaps),
+        ("development_images_per_identity", OrderedDict(
+            (k, len(v)) for k, v in sorted(per_identity.items()))),
+        ("development_is_balanced_across_identities",
+         len(counts) == 1
+         and counts[0] == N_DEVELOPMENT_IMAGES_PER_IDENTITY_V5),
+        ("every_train_image_is_placed",
+         len(fit) + len(dev) == sum(1 for i in man["items"]
+                                    if i["split"] == "train")),
+    ))
+
+
+# ---------------------------------------------------------------------------
+# the calibration grid and the rule that selects from it
+# ---------------------------------------------------------------------------
+
+#: The two seeds each candidate is trained under.  Two rather than one because a
+#: candidate that wins on a single LoRA init has not been shown to win.
+CALIBRATION_SEEDS_V5 = (17, 42)
+
+#: The subdirectory of a dataset's output tree the calibration writes into.
+#: Beside the cells rather than among them, because no design consumes a
+#: calibration file: it is evidence about a choice, not an input to a verdict, and
+#: a reader who finds it inside the cell table would reasonably assume an
+#: aggregate had read it.
+CALIBRATION_SUBDIR_V5 = "calibration"
+
+#: The kind Freeze #1 files under.  A constant rather than a literal inside the
+#: constructor, because ``verify_manifest`` has to dispatch on the same string:
+#: a kind typed in two places is a verifier that cannot rebuild the artifact it
+#: is verifying, and the failure lands at the end of the freeze that wrote it.
+CALIBRATION_PREREG_KIND_V5 = (
+    "route_dependent_forgetting_calibration_preregistration_v5")
+
+
+def _incumbent_schedule():
+    """The schedule the frozen route protocol itself specifies."""
+    p = frozen_route_protocol()
+    return OrderedDict((k, p[k]) for k in OVERRIDABLE_SCHEDULE_KEYS)
+
+
+def direct_schedule_candidates_v5():
+    """The configurations RFC trains, as overrides of the frozen schedule.
+
+    The incumbent is candidate C0 and is READ from ``frozen_route_protocol()``
+    rather than retyped beside it.  A table that retyped 3000/200/2e-5/50 could
+    drift from the protocol it claims to reproduce and still call itself the
+    incumbent, and then "no change" would be a fifth configuration nobody named.
+
+    Only the SCHEDULE varies.  The LoRA shape cannot be overridden from here at
+    all -- see ``OVERRIDABLE_SCHEDULE_KEYS`` -- so D_s's adapter stays the same
+    class of adapter as the route's and the comparison between them is about the
+    pathway rather than about the recipe.
+    """
+    base = _incumbent_schedule()
+    return OrderedDict((
+        ("C0_incumbent", OrderedDict(base)),
+        ("C1_half_lr", OrderedDict({**base, "lr": base["lr"] / 2})),
+        ("C2_half_as_many_steps_again",
+         OrderedDict({**base, "steps": int(base["steps"] * 3 // 2)})),
+        ("C3_double_lr", OrderedDict({**base, "lr": base["lr"] * 2})),
+    ))
+
+
+def calibration_floor_v5():
+    """The dev accuracy a candidate must reach to be selectable at all.
+
+    Read from the confirmatory gate's own threshold rather than set beside it:
+    the floor is that a configuration which cannot clear ``direct_image_accuracy``
+    on the development images cannot be expected to clear it on the held-out ones,
+    and a threshold typed twice is a threshold that can be changed in one place.
+    """
+    return PILOT_SPEC_V5.thresholds["min_direct_image_accuracy"]
+
+
+CALIBRATION_SELECTION_RULE_V5 = OrderedDict((
+    ("metric", ("accuracy on the DEVELOPMENT images only, image-to-alias, which "
+                "is the same statistic the confirmatory gate "
+                "min_direct_image_accuracy uses, measured on images the "
+                "confirmatory gates never read")),
+    ("scored_over", "the mean of the calibration seeds"),
+    ("winner", "the highest mean"),
+    ("tie_breaks", (
+        ("the smaller maximum absolute difference between its own seeds, because a "
+        "configuration that is stable across inits is the one a single "
+        "confirmatory seed is more likely to reproduce"),
+        ("then the earlier candidate in the frozen table order, which is a fixed "
+        "order and not a preference"),
+        "then the incumbent, so that a tie is resolved toward changing nothing")),
+    ("floor", ("a candidate is selectable only at or above the confirmatory "
+               "gate's own threshold on the development images; if NO candidate "
+               "reaches it the calibration stops and reports instead of "
+               "selecting the best of a lot that cannot pass")),
+    ("why_the_floor_refuses_rather_than_degrades",
+     ("a selection rule that always returns a winner can select a configuration "
+      "the pilot then fails on, and the failure would read as a result about "
+      "route-dependent forgetting rather than as a result about the direct "
+      "adapter being unable to learn the associations at all")),
+    ("frozen_before_any_candidate_is_trained", True),
+))
+
+
+def select_direct_schedule(results):
+    """Apply the frozen rule to the calibration's own measurements.
+
+    ``results`` maps candidate name to seed to development accuracy.  The rule is
+    applied to whatever it is given and returns the table it reasoned over, so a
+    reader can see the winner was the winner under the stated rule and not under
+    a rule written after the numbers were known.
+    """
+    candidates = direct_schedule_candidates_v5()
+    unknown = sorted(set(results) - set(candidates))
+    if unknown:
+        raise RuntimeError(
+            f"the calibration produced results for {unknown}, which the frozen "
+            f"grid does not contain {list(candidates)}; selecting a "
+            f"configuration nobody pre-registered is the thing the grid exists "
+            f"to prevent")
+    missing = sorted(set(candidates) - set(results))
+    if missing:
+        raise RuntimeError(
+            f"the calibration is missing {missing}; the grid was frozen with "
+            f"{len(candidates)} candidates and a selection over part of it is a "
+            f"selection over a different grid")
+    floor = calibration_floor_v5()
+    table = OrderedDict()
+    for name, per_seed in results.items():
+        seeds = sorted(per_seed)
+        if seeds != sorted(CALIBRATION_SEEDS_V5):
+            raise RuntimeError(
+                f"candidate {name} was measured under seeds {seeds}, expected "
+                f"{list(CALIBRATION_SEEDS_V5)}")
+        accs = [per_seed[s] for s in seeds]
+        table[name] = OrderedDict((
+            ("schedule", candidates[name]),
+            ("per_seed_development_accuracy",
+             OrderedDict((str(s), per_seed[s]) for s in seeds)),
+            ("mean_development_accuracy", sum(accs) / len(accs)),
+            ("max_seed_spread", max(accs) - min(accs)),
+            ("clears_the_floor", (sum(accs) / len(accs)) >= floor),
+        ))
+    passing = [n for n, e in table.items() if e["clears_the_floor"]]
+    out = OrderedDict((
+        ("rule", CALIBRATION_SELECTION_RULE_V5),
+        ("floor", floor),
+        ("floor_read_from", "PILOT_SPEC_V5.thresholds['min_direct_image_accuracy']"),
+        ("n_candidates", len(table)),
+        ("candidates", table),
+        ("n_clearing_the_floor", len(passing)),
+        ("selected", None),
+        ("selection_refused", None),
+    ))
+    if not passing:
+        out["selection_refused"] = OrderedDict((
+            ("reason", ("no candidate reached a mean development accuracy of "
+                        f"{floor}; the best was "
+                        f"{max(e['mean_development_accuracy'] for e in table.values()):.4f}")),
+            ("what_this_means",
+             ("the direct X -> Y pathway could not learn the training "
+              "associations well enough on held-out-by-calibration images to "
+              "clear the confirmatory gate, so there is no configuration to "
+              "confirm.  That is a finding about the direct pathway and it is "
+              "reported instead of being optimized away by picking a winner")),
+            ("what_was_not_done",
+             ("the thresholds were not lowered, the floor was not waived, the "
+              "development images were not folded into the fit set and the test "
+              "images were not consulted")),
+        ))
+        return out
+    order = list(candidates)
+    ranked = sorted(
+        passing,
+        key=lambda n: (-table[n]["mean_development_accuracy"],
+                       table[n]["max_seed_spread"],
+                       order.index(n)))
+    winner = ranked[0]
+    tied = [n for n in passing
+            if table[n]["mean_development_accuracy"]
+            == table[winner]["mean_development_accuracy"]]
+    out["selected"] = OrderedDict((
+        ("candidate", winner),
+        ("schedule", table[winner]["schedule"]),
+        ("mean_development_accuracy",
+         table[winner]["mean_development_accuracy"]),
+        ("max_seed_spread", table[winner]["max_seed_spread"]),
+        ("n_tied_on_the_metric", len(tied)),
+        ("tied_candidates", tied),
+        ("tie_broken_by", (None if len(tied) == 1 else
+                           "seed spread, then frozen table order, then the "
+                           "incumbent")),
+        ("is_the_incumbent", winner == "C0_incumbent"),
+        ("ranking", ranked),
+    ))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# which forget sets v5 covers
+# ---------------------------------------------------------------------------
+
+#: The design versions in the order they were frozen.  The rule below needs an
+#: order and not a membership test, because "no filed design has consumed this
+#: set" has to mean no EARLIER design: a rule that also excluded the sets its own
+#: version consumed would return nothing the moment its own manifest was filed,
+#: and the manifest could then never be rebuilt from its own parameters.
+DESIGN_VERSION_ORDER = ("v1", "v2", "v3", "v4", "v5")
+
+
+def consumed_forget_sets(dataset, before_version):
+    """The forget sets every EARLIER design's committed manifest names.
+
+    Read out of the filed manifests rather than written down, so the answer moves
+    when the tree moves and cannot go stale beside it.
+    """
+    if before_version not in DESIGN_VERSION_ORDER:
+        raise RuntimeError(
+            f"{before_version!r} is not a design version; the order this rule "
+            f"reads is {list(DESIGN_VERSION_ORDER)}")
+    cut = DESIGN_VERSION_ORDER.index(before_version)
+    earlier = DESIGN_VERSION_ORDER[:cut]
+    consumed, per_manifest = set(), OrderedDict()
+    for path in sorted((DATASET_ROOT / MANIFEST_DIR).glob(
+            f"rf_pilot_{dataset}*.json")):
+        frozen = json.loads(path.read_text(encoding="utf-8"))
+        version = _version_of(frozen.get("kind"))
+        if version is None:
+            raise RuntimeError(
+                f"{_rel(path)} records kind {frozen.get('kind')!r}, which names "
+                f"no design version; a rule that excludes the sets earlier "
+                f"designs consumed cannot skip a design it cannot place")
+        if version not in earlier:
+            continue
+        named = ([frozen["forget_set_id"]] if frozen.get("forget_set_id")
+                 else []) + [s["set_id"] for s in (frozen.get("forget_sets")
+                                                   or ())]
+        per_manifest[path.name] = {"version": version, "names": named}
+        consumed.update(named)
+    return {"consumed": sorted(consumed), "per_manifest": per_manifest,
+            "versions_considered": list(earlier)}
+
+
+def _version_of(kind):
+    """The design version a manifest kind belongs to, read off the spec table."""
+    for spec in SPEC_BY_VERSION.values():
+        if kind in (spec.kind, spec.prereg_kind):
+            return spec.version
+    return "v1" if kind in (KIND, PREREG_KIND) else None
+
+
+def pilot_forget_sets_v5(dataset, edit_seeds):
+    """Which forget sets the v5 pilot covers, chosen by a stated rule.
+
+    The rule is: every SINGLE-target set the frozen matrix records, whose
+    checkpoints and cell results are complete for every required edit seed, and
+    which no EARLIER design's committed manifest names.
+
+    Three clauses and each one is doing work.  Single-target, because a
+    simultaneous set adds a second forget target whose interactions are a
+    different question -- the reason ``pilot_forget_set`` gives.  Complete on
+    disk, because v5 trains no edited h and a set missing one could not run
+    without training something this design does not name.  And unconsumed,
+    because re-running a forget set an earlier design already reported on is not
+    a new cell however many seeds are crossed over it -- which is the defect v5
+    exists to remove.
+
+    Derived and not listed: the ids below are what the rule returns on the
+    committed tree, and a test asserts that, so a set added to the matrix or a
+    manifest added to the tree moves the answer visibly.
+    """
+    mx = _matrix_manifest(dataset)
+    declared = list(mx.get("edit_seeds") or [])
+    if declared and list(edit_seeds) != declared:
+        raise RuntimeError(
+            f"edit seeds {list(edit_seeds)} are not the ones the frozen "
+            f"{dataset} matrix trained ({declared}); v5 reuses the matrix's "
+            f"edited-h adapters and cannot reuse adapters trained under "
+            f"different seeds")
+    consumed = consumed_forget_sets(dataset, "v5")
+    cells = DATASET_ROOT / MATRIX_CELLS[dataset]
+    candidates, chosen = [], []
+    for e in mx["sets"]:
+        if e.get("mode") != "single":
+            candidates.append({"set_id": e["set_id"], "targets": e["targets"],
+                               "considered": False,
+                               "why_not": (f"mode is {e.get('mode')!r}, and the "
+                                           f"pilot is single-target")})
+            continue
+        if e["set_id"] in consumed["consumed"]:
+            candidates.append({
+                "set_id": e["set_id"], "targets": list(e["targets"]),
+                "considered": False,
+                "why_not": ("a design frozen before v5 already names it, so its "
+                            "cells are not new however many seeds are crossed "
+                            "over them")})
+            continue
+        per_seed = {}
+        for s in edit_seeds:
+            d = cells / e["set_id"] / f"seed_{s}"
+            per_seed[str(s)] = {
+                "adapter": (d / "edited_h" / Path(*ADAPTER_RELPATH)).is_file(),
+                "cell_results": (d / "cell_results.json").is_file()}
+        complete = all(v["adapter"] and v["cell_results"]
+                       for v in per_seed.values())
+        entry = {"set_id": e["set_id"], "targets": list(e["targets"]),
+                 "considered": True, "complete": complete,
+                 "per_edit_seed": per_seed,
+                 "why_not": (None if complete else
+                             "at least one required edit seed has no adapter or "
+                             "no cell_results, so v5 could not run it without "
+                             "training an h, which it does not")}
+        candidates.append(entry)
+        if complete:
+            chosen.append({"set_id": e["set_id"], "targets": list(e["targets"])})
+    if not chosen:
+        raise RuntimeError(
+            f"no single-target {dataset} forget set is both unconsumed by an "
+            f"earlier design and complete for edit seeds {list(edit_seeds)}; v5 "
+            f"cannot be frozen over sets that do not exist, and it trains no "
+            f"edited h to make one exist")
+    return {
+        "dataset": dataset,
+        "sets": chosen,
+        "n_sets": len(chosen),
+        "targets": sorted(i for s in chosen for i in s["targets"]),
+        "selection_rule": (
+            "every single-target set in the frozen matrix whose edited-h "
+            "adapter and cell results are complete for every required edit seed "
+            "and which no earlier design's committed manifest names"),
+        "rule_is_derived_not_preferred": (
+            "the rule is stated here and applied to the matrix and the manifests "
+            "as they exist, so the sets cannot be chosen after seeing a result. "
+            "The unconsumed clause is what makes the cells new: a set an earlier "
+            "design already reported on yields cells that are re-runs however "
+            "many seeds are crossed over them"),
+        "earlier_designs_consulted": consumed,
+        "n_candidates": len(candidates),
+        "n_considered": sum(1 for c in candidates if c["considered"]),
+        "candidates": candidates,
+    }
+
+
+# ---------------------------------------------------------------------------
+# the v5 checkpoint roles and the v5 design
+# ---------------------------------------------------------------------------
+
+#: Which cell kinds a forget set changes the CONTENT of.  Derived from the row
+#: builders' own signatures and not from a guess: ``build_baseline_rows_v3``,
+#: ``build_intervention_rows_v2`` and ``build_natural_rows_v2`` all take
+#: ``forget_ids`` and split their rows on it, while ``build_direct_rows_v2`` does
+#: not take it at all and sets ``image_is_forgotten`` False on every row.
+#:
+#: That last fact is why there are three direct cells and not fifteen.  Running
+#: D_s once per forget set would make the identical call five times and file it as
+#: five observations, which is the defect ``build_design_for``'s docstring names
+#: -- and ``build_design_v5`` does not merely assert the rows are the same across
+#: sets, it compares them and refuses if they are not.
+FORGET_SET_DEPENDENT_KINDS = ("baseline", "intervention", "natural")
+
+
+def required_checkpoints_v5(dataset, forget_sets, router_seeds, edit_seeds,
+                            direct_seeds, direct_namespace):
+    """Every checkpoint and prediction file a v5 pilot needs, by role.
+
+    ``required_checkpoints_v2`` with two differences, both forced by what v5
+    varies:
+
+      edited_h__{set}__seed{E}   one per (FORGET SET, edit seed).  Five sets
+                                 times three seeds is fifteen roles, and a role
+                                 name without the set would resolve five
+                                 different adapters to one declaration.
+      direct_d__seed{S}          under a namespace of its own, because
+                                 ``direct_seed_17/`` holds weights whose digest a
+                                 committed v3 cell result records.  Overwriting
+                                 them would leave a filed report describing an
+                                 adapter nobody can inspect.
+
+    The router and baseline roles are unchanged: g and h are the frozen route and
+    v5 trains neither.
+    """
+    cells = MATRIX_CELLS[dataset]
+    route = ROUTE_DIRS[dataset]
+    req = OrderedDict()
+    for seed in router_seeds:
+        existing = seed == EXISTING_ROUTER_SEED
+        req[f"router_g__seed{seed}"] = {
+            "role": ("the frozen router, read not retrained" if existing else
+                     "a router trained under the identical frozen protocol with "
+                     "a fresh LoRA init at this seed"),
+            "adapter": _rel(router_checkpoint_path(dataset, seed)),
+            "held_out_predictions": _rel(router_prediction_path(dataset, seed)),
+            "exists_already": existing}
+    req["baseline_h"] = {
+        "role": "the unedited code->label map; the before in before/after",
+        "adapter": _rel(DATASET_ROOT / route / "h_C_to_Y"
+                        / Path(*ADAPTER_RELPATH)),
+        "exists_already": True}
+    for fs in forget_sets:
+        for seed in edit_seeds:
+            req[EDITED_H_ROLE_MULTI.format(forget_set=fs["set_id"],
+                                           edit_seed=seed)] = {
+                "role": ("the post-edit route for THIS forget set, reused from "
+                         "the frozen matrix; v5 trains no edited h"),
+                "adapter": _rel(DATASET_ROOT / cells / fs["set_id"]
+                                / f"seed_{seed}" / "edited_h"
+                                / Path(*ADAPTER_RELPATH)),
+                "cell_results": _rel(DATASET_ROOT / cells / fs["set_id"]
+                                     / f"seed_{seed}" / "cell_results.json"),
+                "exists_already": True}
+    for seed in direct_seeds:
+        req[f"direct_d__seed{seed}"] = {
+            "role": ("a separately trained X -> Y adapter, on the train split "
+                     "minus the development images, under the schedule the "
+                     "calibration selected; never edited when an h is edited"),
+            "adapter": _rel(direct_checkpoint_path(dataset, seed,
+                                                   direct_namespace)),
+            "exists_already": False}
+    # Which roles this design PRODUCES, stated rather than inferred from whether
+    # the file happens to be there.  ``exists_already`` answers a question about a
+    # disk; this answers a question about the design, and the freeze-ordering
+    # listing needs the second one.  Inferring it from presence is what made a
+    # router adapter the v3 run trained look like an output v5 had not produced
+    # yet, which would have refused every v5 freeze on a tree the route had
+    # already been run on.
+    for label in req:
+        req[label]["produced_by_this_design"] = label.startswith("direct_d__")
+    for label, spec in req.items():
+        spec["n_files_required"] = sum(1 for k in CHECKPOINT_FILE_KEYS_V2
+                                       if spec.get(k))
+        if not spec["n_files_required"]:
+            raise RuntimeError(
+                f"checkpoint role {label!r} declares no file in "
+                f"{list(CHECKPOINT_FILE_KEYS_V2)}, so there is nothing to hash "
+                f"and nothing that could be reported missing")
+    return {
+        "dataset": dataset,
+        "forget_set_id": None,
+        "forget_sets": [{"set_id": s["set_id"], "targets": list(s["targets"])}
+                        for s in forget_sets],
+        "roles": req,
+        "router_seeds": list(router_seeds),
+        "edit_seeds": list(edit_seeds),
+        "direct_seeds": list(direct_seeds),
+        "direct_namespace": direct_namespace,
+        "why_the_direct_adapters_are_namespaced": (
+            "the unnamespaced directories hold the adapters the v3 run trained "
+            "and the v4 analysis read; their digests are recorded in committed "
+            "cell results, so writing a differently trained adapter over them "
+            "would leave those results describing weights that no longer exist"),
+        "what_this_design_produces": (
+            "the D_s adapters and their cells, and nothing else.  v5 trains no "
+            "router and no edited h: g at every seed it varies is read from the "
+            "frozen route's own run and the fifteen edited-h adapters are read "
+            "from the frozen matrix.  A role v5 does not produce is an input it "
+            "was built over, so the freeze-ordering listing does not count it -- "
+            "and ``exists_already`` is left to say separately whether that input "
+            "is on this disk, which is a live question ``checkpoint_readiness`` "
+            "answers rather than one the design should assert"),
+        "edited_h_roles_are_qualified_by_forget_set": (
+            "one adapter per (forget set, edit seed); the same edited h cannot "
+            "serve two forget sets because it was trained to suppress one"),
+        "no_direct_condition_reuses_edited_h": (
+            "v1's direct condition reused edited_h and so measured a "
+            "code-trained adapter on an image; v5 requires an independent D_s "
+            "with its own digest, as v2 and every version since has"),
+        "router_seed_is_a_real_factor": (
+            "one checkpoint and one held-out prediction file per router seed; "
+            "forced-code interventions are one cell per (forget set, EDIT seed) "
+            "because they do not depend on g, so they are not repeated across "
+            "router seeds and counted as additional evidence"),
+        "paths_are_recorded_relative_not_absolute": (
+            "so that verifying this table is not tied to one filesystem root"),
+    }
+
+
+def _rename_cell(cell, new_id):
+    """One cell under a different id, with every row that belongs to it.
+
+    The id, the ``cell_id`` each row carries and the ``row_id`` prefix move
+    together, because ``aggregate_cells_for`` selects a cell's rows by
+    ``r["cell_id"] == cell_id``.  Renaming the cell and leaving its rows would be
+    worse than renaming nothing: the rows would match no cell, the gates would be
+    computed over an empty list, and this module refuses that loudest only where a
+    kind ends up with no rows at all.
+    """
+    old = cell["cell_id"]
+    if new_id == old:
+        return cell
+    rows = []
+    for r in cell["rows"]:
+        if r["cell_id"] != old:
+            raise RuntimeError(
+                f"row {r.get('row_id')!r} of cell {old!r} names cell "
+                f"{r['cell_id']!r}; a row that does not belong to the cell "
+                f"containing it cannot be renamed with it")
+        if not r["row_id"].startswith(old):
+            raise RuntimeError(
+                f"row id {r['row_id']!r} does not begin with its cell id "
+                f"{old!r}, so a new id cannot be substituted into it")
+        rows.append({**r, "cell_id": new_id,
+                     "row_id": new_id + r["row_id"][len(old):]})
+    return {**cell, "cell_id": new_id, "rows": rows}
+
+
+def _qualify_cell(cell, set_id, forget_ids):
+    """One cell of a single-forget-set design, made a cell of a specific set.
+
+    The renaming is ``_rename_cell``'s job, and so is its rationale.  What is
+    specific to a forget set is that the cell also records WHICH set it measures
+    and which identities that set targets, because the statistics read both off
+    the cell rather than off the design -- a design-level list of five sets would
+    tell an aggregate nothing about which one a given cell suppressed.
+    """
+    new = qualified_cell_id(cell["kind"], set_id,
+                            cell["cell_id"].split("__", 1)[1])
+    return {**_rename_cell(cell, new), "forget_set_id": set_id,
+            "forget_identity_ids": list(forget_ids)}
+
+
+#: The namespace v5's confirmatory direct adapters AND their cells are written
+#: under.  Both or neither: an adapter at ``direct_seed_17__v5`` whose cell lands
+#: at ``direct__d17`` is a v5 measurement filed at a v3 path, and the v3 report
+#: that reads ``direct__d17`` would then be describing weights nobody can
+#: reproduce.
+DIRECT_NAMESPACE_V5 = "v5"
+
+
+def direct_cell_id(kind, direct_seed, namespace=None):
+    """The id of a direct or hybrid cell, namespaced where its adapter is.
+
+    One function and two callers -- the shared design constructor and RF1D -- so
+    the id a design names and the id a phase writes cannot drift apart.  With no
+    namespace it returns exactly the id every design frozen before v5 has always
+    used, which is what makes namespacing v5's cells a change to v5 rather than a
+    change to what v1-v4 filed.
+    """
+    tail = f"d{direct_seed}"
+    return f"{kind}__{namespace}__{tail}" if namespace else f"{kind}__{tail}"
+
+
+
+def _require_calibration_selection(dataset):
+    """The filed calibration selection, or a refusal naming why there is none.
+
+    One function and two callers, because the design constructor and the freeze
+    ask the same question and a message written twice is a message that can
+    disagree with itself about what is missing.
+    """
+    p = calibration_selection_path(dataset)
+    if not p.is_file():
+        raise RuntimeError(
+            f"no calibration selection is filed at {_rel(p)}.  The confirmatory "
+            f"design embeds the configuration RFC selected, so it cannot be "
+            f"frozen before RFC has selected one -- and that order is the point: "
+            f"a configuration chosen after the cells exist was chosen with them "
+            f"in view")
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    sel = doc.get("selected")
+    if not sel:
+        raise RuntimeError(
+            f"the calibration filed at {_rel(p)} REFUSED to select: "
+            f"{(doc.get('selection_refused') or {}).get('reason')}.  There is no "
+            f"configuration to confirm, so there is no v5 design to freeze; the "
+            f"finding is that the direct pathway could not clear the floor on "
+            f"the development images")
+    return doc, sel
+
+
+def selected_direct_training(dataset, split):
+    """The D_s configuration the calibration selected, read out of its filing.
+
+    READ and never passed in.  A design that was handed a configuration could be
+    frozen with one that nothing selected, and no downstream check could tell the
+    difference -- the artifact would name a schedule and a reader would have no
+    way to know a rule had ever been applied to it.  Reading the filed selection
+    means the confirmatory design embeds the outcome of the rule that was frozen
+    before the candidates were trained, or it does not exist at all.
+    """
+    p = calibration_selection_path(dataset)
+    doc, sel = _require_calibration_selection(dataset)
+    return OrderedDict((
+        ("selected_candidate", sel["candidate"]),
+        ("schedule", OrderedDict(sel["schedule"])),
+        ("selected_by", OrderedDict((
+            ("rule", doc["rule"]),
+            ("floor", doc["floor"]),
+            ("mean_development_accuracy", sel["mean_development_accuracy"]),
+            ("max_seed_spread", sel["max_seed_spread"]),
+            ("is_the_incumbent", sel["is_the_incumbent"]),
+            ("n_tied_on_the_metric", sel["n_tied_on_the_metric"]),
+            ("selection_artifact", _rel(p)),
+            ("selection_artifact_sha256", sha256_file(p)),
+        ))),
+        ("development_image_uris", list(split["development_image_uris"])),
+        ("development_image_sha256", list(split["development_image_sha256"])),
+        ("n_fit_images", split["n_fit_images"]),
+        ("n_development_images", split["n_development_images"]),
+        ("namespace", DIRECT_NAMESPACE_V5),
+        ("training_data_asymmetry", OrderedDict((
+            ("statement",
+             (f"D_s trains on {split['n_fit_images']} images; the frozen g "
+             f"trained on all "
+             f"{split['n_fit_images'] + split['n_development_images']}")),
+            ("direction",
+             ("it handicaps the direct pathway, which is the conservative "
+             "direction for the mediation claim: the min_direct_image_accuracy "
+             "floor is harder to clear with less training data, so clearing it "
+             "is more evidence than it would be at parity and not less")),
+            ("why_it_is_not_removed",
+             ("removing it would mean retraining g on a subset of the train "
+             "split, and g is the frozen route -- its recipe, its prompts and "
+             "its training data are what the design compares D_s against")),
+        ))),
+    ))
+
+
+def build_design_v5(dataset, forget_sets, forget_ids, router_seeds, edit_seeds,
+                    direct_seeds, man=None, images=None,
+                    image_sha_by_uri=None):
+    """The v5 design: several forget sets, one crossed matrix, no reused cell.
+
+    Built by calling the SHARED ``build_design_for`` once per forget set and
+    merging the results, rather than by a second constructor.  Each per-set call
+    runs ``coverage_audit_v2`` with that set's own ``forget_ids``, so the audit
+    that decides whether a cell covers its design is the audit every earlier
+    version ran, with the right answer for the set it was given -- and there is no
+    second copy of that logic to drift.
+
+    ``build_design_for`` is not edited, because it produced the frozen v1-v4
+    bytes and a change to it is a change to what those designs mean.
+    """
+    if not forget_sets:
+        raise RuntimeError("a v5 design with no forget set covers nothing")
+    man = man if man is not None else load_manifest(dataset)
+    # The audit the caller already paid for is reused where it was supplied: the
+    # split only needs the digest table, and re-hashing every image a second time
+    # in one construction would be a second answer to the same question.
+    audit = ({"images_by_uri_sha256": image_sha_by_uri} if image_sha_by_uri
+             else image_content_audit(man))
+    direct_training = selected_direct_training(dataset, dev_split(man, audit))
+    ids_of = {s["set_id"]: list(s["targets"]) for s in forget_sets}
+    union = sorted(i for s in forget_sets for i in ids_of[s["set_id"]])
+    if sorted(forget_ids) != union:
+        raise RuntimeError(
+            f"the design's forget_identity_ids {sorted(forget_ids)} are not the "
+            f"union of its forget sets' targets {union}; the union is what the "
+            f"design-level field means where several sets are varied, and a "
+            f"different list would be a claim about a set no cell measures")
+    per_set = []
+    for fs in forget_sets:
+        per_set.append(build_design_for(
+            PILOT_SPEC_V5, dataset, fs["set_id"], ids_of[fs["set_id"]],
+            router_seeds, edit_seeds, direct_seeds, man=man, images=images,
+            image_sha_by_uri=image_sha_by_uri))
+
+    cells = []
+    for fs, one in zip(forget_sets, per_set):
+        for c in one["cells"]:
+            if c["kind"] in FORGET_SET_DEPENDENT_KINDS:
+                cells.append(_qualify_cell(c, fs["set_id"],
+                                           ids_of[fs["set_id"]]))
+    # The forget-set-INDEPENDENT kinds are taken from one per-set design, and the
+    # others are compared against it first.  The comparison is the derivation:
+    # "direct does not depend on the forget set" is a claim about the row
+    # builders, and this is where the design checks the claim instead of
+    # inheriting it.
+    for kind in ("direct", "hybrid"):
+        copies = [[c for c in one["cells"] if c["kind"] == kind]
+                  for one in per_set]
+        first = canonical_json(copies[0])
+        for fs, other in list(zip(forget_sets, copies))[1:]:
+            if canonical_json(other) != first:
+                raise RuntimeError(
+                    f"the {kind} cells differ between forget set "
+                    f"{forget_sets[0]['set_id']!r} and {fs['set_id']!r}, so "
+                    f"{kind} is NOT forget-set-independent and cannot be filed "
+                    f"once for the whole design.  Filing one copy would report "
+                    f"one measurement as covering sets it was never run against")
+        # Namespaced with the adapter, and for the same reason.  ``direct__d17``
+        # is the id v3 filed a cell under and v5's D_s is a differently trained
+        # adapter -- fit on the train split minus the development images, under
+        # the schedule RFC selected -- so writing v5's cell at v3's path would
+        # leave a committed v3 report describing a measurement nobody can
+        # reproduce.  It would also make the freeze-ordering listing report v5's
+        # own inputs as outputs it was about to overwrite, and refuse forever.
+        cells.extend(_rename_cell(
+            c, direct_cell_id(kind, c["direct_seed"], DIRECT_NAMESPACE_V5))
+            for c in copies[0])
+
+    by_kind = {}
+    for c in cells:
+        by_kind.setdefault(c["kind"], []).append(c["cell_id"])
+    base = per_set[0]
+    out = OrderedDict(base)
+    out["forget_set_id"] = None
+    out["forget_sets"] = [{"set_id": s["set_id"], "targets": ids_of[s["set_id"]]}
+                          for s in forget_sets]
+    out["n_forget_sets"] = len(forget_sets)
+    out["forget_identity_ids"] = union
+    out["forget_identity_ids_are_the_union"] = (
+        "no cell was built over the union: each forget-set-dependent cell carries "
+        "its own forget_set_id and forget_identity_ids, and those are what the "
+        "statistics read.  This field is the design's coverage statement, not a "
+        "measurement's input")
+    out["cells"] = cells
+    out["n_cells"] = len(cells)
+    out["cells_by_kind"] = by_kind
+    out["n_rows_total"] = sum(c["n_rows"] for c in cells)
+    out["checkpoint_requirements"] = required_checkpoints_v5(
+        dataset, forget_sets, router_seeds, edit_seeds, direct_seeds,
+        DIRECT_NAMESPACE_V5)
+    out["forget_set_dependent_kinds"] = list(FORGET_SET_DEPENDENT_KINDS)
+    out["forget_set_independent_kinds"] = ["direct", "hybrid"]
+    out["rows_are_not_duplicated_across_forget_sets"] = (
+        "direct and hybrid rows were compared across all "
+        f"{len(forget_sets)} per-set designs and found identical, so one copy of "
+        "each is filed; a design that filed five copies would report one "
+        "measurement five times, which is the defect the cell structure exists "
+        "to prevent")
+    out["direct_training"] = direct_training
+    # A static statement of the ordering rule, and deliberately NOT the outcome of
+    # applying it: the listing of which outputs existed at freeze time is filed
+    # beside the manifest by _freeze_v5, because a live listing inside the design
+    # would be covered by design_sha256 and would stop reproducing the moment the
+    # run it constrains began.  That is the v2 defect, and a check added to
+    # prevent a different one is still a way of arriving at it.
+    out["confirmatory_ordering_rule"] = (
+        "this design is frozen before any cell it names is produced and before "
+        "any adapter it requires is trained.  _freeze_v5 lists every output the "
+        "design names, REFUSES to freeze if one exists, and files the listing "
+        "beside the manifest rather than inside it")
+    return out
+
+
+def build_pilot_preregistration_v5(dataset, forget_sets, forget_ids,
+                                   router_seeds=None, edit_seeds=None,
+                                   direct_seeds=None, man=None, images=None,
+                                   selection=None, superseded_paths=()):
+    """The frozen v5 pilot.
+
+    Same construction path as every other version, with the forget sets passed
+    through to the shared builder as ``forget_sets`` so the design constructor
+    receives the list and the cell-count check receives the multiplier.
+    """
+    return build_pilot_preregistration_for(
+        PILOT_SPEC_V5, dataset, None, forget_ids, router_seeds, edit_seeds,
+        direct_seeds, man=man, images=images, selection=selection,
+        superseded_paths=superseded_paths, forget_sets=forget_sets)
+
+
+def prereg_path_v5(dataset, path=None):
+    return prereg_path_for(PILOT_SPEC_V5, dataset, path)
+
+
+def load_prereg_v5(dataset, path=None, verify=True):
+    return load_prereg_for(PILOT_SPEC_V5, dataset, path, verify)
+
+
+# ---------------------------------------------------------------------------
+# Freeze #1: the calibration pre-registration
+# ---------------------------------------------------------------------------
+
+def calibration_prereg_path(dataset, path=None):
+    return (Path(path) if path else
+            DATASET_ROOT / MANIFEST_DIR / f"rf_calibration_{dataset}_v5.json")
+
+
+def calibration_dir(dataset, candidate, seed):
+    """Where one (candidate, seed) calibration run writes."""
+    return (DATASET_ROOT / CELLS_DIR_V2 / dataset / CALIBRATION_SUBDIR_V5
+            / f"{candidate}__seed{seed}")
+
+
+def calibration_result_path(dataset, candidate, seed):
+    return calibration_dir(dataset, candidate, seed) / "calibration_result.json"
+
+
+def calibration_selection_path(dataset):
+    """Where the selection rule's outcome is filed, after the measurements."""
+    return (DATASET_ROOT / REPORTS_DIR
+            / f"rf_calibration_selection_{dataset}_v5.json")
+
+
+def load_calibration_prereg(dataset, path=None, verify=True):
+    """Freeze #1, verified before RFC trains anything against it.
+
+    The discipline ``load_prereg_for`` applies to a pilot, applied to the
+    calibration: RFC trains the grid that document declares, so a document that no
+    longer reproduces from its own recorded inputs is a grid nobody
+    pre-registered.  Reading it with ``json.loads`` instead would have made an
+    edit after freezing invisible in the selection it produced, which is the one
+    failure mode a pre-registration exists to make impossible.
+    """
+    p = calibration_prereg_path(dataset, path)
+    if not p.is_file():
+        raise RuntimeError(
+            f"RFC has no frozen calibration pre-registration at {_rel(p)}; "
+            f"freeze it first with --preregister-calibration --dataset "
+            f"{dataset}.  A calibration whose grid was not declared before the "
+            f"training is a search whose result was chosen twice")
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    if doc.get("kind") != CALIBRATION_PREREG_KIND_V5:
+        raise RuntimeError(
+            f"{_rel(p)} has kind {doc.get('kind')!r}, expected "
+            f"{CALIBRATION_PREREG_KIND_V5!r}; this is not a v5 calibration "
+            f"pre-registration and RFC will not train a grid it does not "
+            f"declare")
+    if verify:
+        got = verify_manifest(p)
+        if not got["valid"]:
+            raise RuntimeError(
+                f"the frozen calibration pre-registration at {_rel(p)} does not "
+                f"verify: " + "; ".join(got["problems"]))
+    return doc
+
+
+def build_calibration_preregistration(dataset, man=None, audit=None):
+    """Freeze #1: what the calibration will train, score and select between.
+
+    Frozen BEFORE any candidate is trained, which is the only thing that makes
+    the selection a pre-registration rather than a description of whichever
+    configuration happened to look best.  It carries the split rule, the grid,
+    the seeds, the metric, the tie-breaks and the floor, and it binds the dataset
+    manifest the split is derived from.
+
+    It carries NO threshold from the confirmatory design except by reference: the
+    floor is ``PILOT_SPEC_V5.thresholds['min_direct_image_accuracy']``, read at
+    freeze time, so a floor typed beside the gate could not disagree with it.
+    """
+    man = man if man is not None else load_manifest(dataset)
+    audit = audit if audit is not None else image_content_audit(man)
+    split = dev_split(man, audit)
+    if not split["development_is_balanced_across_identities"]:
+        raise RuntimeError(
+            f"the development split is not balanced across identities: "
+            f"{split['development_images_per_identity']}.  A calibration scored "
+            f"on images from some identities and not others would select a "
+            f"configuration for the identities it happened to include")
+    if not split["every_train_image_is_placed"]:
+        raise RuntimeError("the split did not place every train image")
+    return OrderedDict((
+        ("kind", CALIBRATION_PREREG_KIND_V5),
+        ("dataset", dataset),
+        ("version", "v5"),
+        ("preregistered", True),
+        ("executed", False),
+        ("what_is_being_calibrated", OrderedDict((
+            ("component", "D_s, the direct X -> Y adapter"),
+            ("what_is_NOT_being_calibrated",
+             ("g and h.  The router is used exactly as the frozen route left it "
+              "and no router or edited h is trained or selected here, so a phase "
+              "named RFC is not evidence that the route was tuned")),
+            ("why_only_the_schedule",
+             ("the LoRA rank, alpha, dropout and target modules are fixed by the "
+              "frozen route module that built g and h.  Overriding them for D_s "
+              "alone would make the direct pathway a different class of adapter "
+              "from the route it is compared against, and the comparison would "
+              "then be about the recipe rather than about the pathway")),
+        ))),
+        ("development_split", split),
+        ("grid", OrderedDict((
+            ("candidates", direct_schedule_candidates_v5()),
+            ("n_candidates", len(direct_schedule_candidates_v5())),
+            ("seeds", list(CALIBRATION_SEEDS_V5)),
+            ("n_trainings",
+             len(direct_schedule_candidates_v5()) * len(CALIBRATION_SEEDS_V5)),
+            ("overridable_keys", list(OVERRIDABLE_SCHEDULE_KEYS)),
+            ("incumbent_read_from", "frozen_route_protocol()"),
+            ("incumbent_is_a_candidate",
+             ("C0_incumbent is the frozen schedule itself, so 'change nothing' is "
+             "an outcome the grid can return; a grid that cannot return it has "
+             "already decided to change something")),
+        ))),
+        ("training", OrderedDict((
+            ("trains_on", ("the fit images: the train split minus the "
+                          "development images")),
+            ("n_fit_images", split["n_fit_images"]),
+            ("scored_on", "the development images only"),
+            ("n_development_images", split["n_development_images"]),
+            ("never_reads",
+             (f"the {split['n_test_images']} held-out test images, which are what "
+             f"the confirmatory gates measure")),
+        ))),
+        ("selection", CALIBRATION_SELECTION_RULE_V5),
+        ("floor", calibration_floor_v5()),
+        ("confirmatory_gate_thresholds_are_v4s",
+         "PILOT_SPEC_V5.thresholds is GATE_THRESHOLDS_V4, the same object"),
+        ("what_is_frozen_later",
+         ("the confirmatory design.  It embeds the candidate this calibration "
+          "selects and every cell it will run, and it is frozen before any of "
+          "those cells exists")),
+    ))
+
+
+def freeze_calibration(args):
+    """Write Freeze #1 and verify it from its tracked location."""
+    man = load_manifest(args.dataset)
+    block = build_calibration_preregistration(args.dataset, man=man)
+    canonical = calibration_prereg_path(args.dataset)
+    out = Path(args.out) / canonical.name if args.out else canonical
+    if out.is_file():
+        raise RuntimeError(
+            f"{_rel(out)} already exists.  A calibration pre-registration is "
+            f"frozen once; re-freezing it after the candidates have been trained "
+            f"would produce a document that agrees with the outcome, which is "
+            f"the thing it exists to make impossible")
+    root = DATASET_ROOT / CELLS_DIR_V2 / args.dataset / CALIBRATION_SUBDIR_V5
+    existing = sorted(root.glob("*")) if root.is_dir() else []
+    if existing:
+        raise RuntimeError(
+            f"{len(existing)} calibration output(s) already exist under "
+            f"{_rel(root)}, e.g. {existing[0].name}; the pre-registration has to "
+            f"precede the training it constrains, so freezing now would produce "
+            f"a grid that agrees with measurements already taken")
+    extra = [DATASET_ROOT / MANIFEST_PATHS[args.dataset]]
+    path, digest = freeze_manifest(block, out, extra_paths=extra)
+    print(f"calibration frozen : {_rel(path)}", file=sys.stderr)
+    print(f"sha256             : {digest[:16]}", file=sys.stderr)
+    print(f"development split  : {block['development_split']['n_fit_images']} "
+          f"fit / {block['development_split']['n_development_images']} dev / "
+          f"{block['development_split']['n_test_images']} test (untouched)",
+          file=sys.stderr)
+    print(f"grid               : {block['grid']['n_candidates']} candidates x "
+          f"{len(CALIBRATION_SEEDS_V5)} seeds = "
+          f"{block['grid']['n_trainings']} trainings", file=sys.stderr)
+    print(f"floor              : {block['floor']} on development accuracy, read "
+          f"from the confirmatory gate", file=sys.stderr)
+    got = verify_manifest(path)
+    print(f"verified           : valid={got['valid']} problems={got['problems']}",
+          file=sys.stderr)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# RFC: the calibration phase
+# ---------------------------------------------------------------------------
+
+def phase_rfc(dataset, candidate=None, seed=None, prereg=None, device="cuda",
+              resume=False):
+    """RFC: train one D_s candidate on the fit split and score it on the dev split.
+
+    With no candidate this is the SELECTION step instead: it reads every filed
+    measurement, applies the rule the calibration pre-registration froze, and
+    files the outcome.  That step needs no GPU and refuses to run before the grid
+    is complete, so a selection can never be made over part of a grid.
+
+    The development images are the only ones scored here.  Reading the held-out
+    test images during calibration would make the confirmatory gates a
+    measurement the configuration was chosen against, which is the one thing the
+    disjoint split exists to prevent.
+    """
+    # The path is asked for as well as the document, because RFC binds the
+    # digest of the pre-registration it trained under into every result it
+    # files -- a binding that named the document but not its bytes would record
+    # that a grid existed and not which grid.
+    cal_path = calibration_prereg_path(dataset, prereg)
+    cal = load_calibration_prereg(dataset, prereg)
+    man = load_manifest(dataset)
+    audit = image_content_audit(man)
+    split = dev_split(man, audit)
+    frozen_split = cal["development_split"]
+    for key in ("development_image_uris", "fit_image_uris", "test_image_uris"):
+        if split[key] != frozen_split[key]:
+            raise RuntimeError(
+                f"the development split derived now disagrees with the frozen "
+                f"one on {key}; the calibration was pre-registered against a "
+                f"different partition of the images")
+    candidates = direct_schedule_candidates_v5()
+    grid = cal["grid"]["candidates"]
+    if canonical_json(grid) != canonical_json(
+            {k: dict(v) for k, v in candidates.items()}):
+        raise RuntimeError(
+            "the grid derived now is not the grid the calibration froze; a "
+            "candidate added after the fact is a candidate the pre-registration "
+            "does not cover")
+    if candidate is None:
+        return _rfc_select(dataset, cal, candidates)
+
+    if candidate not in candidates:
+        raise RuntimeError(
+            f"candidate {candidate!r} is not in the frozen grid "
+            f"{list(candidates)}")
+    if seed is None:
+        raise RuntimeError("RFC trains ONE (candidate, seed) pair: pass "
+                           "--direct-seed")
+    if seed not in CALIBRATION_SEEDS_V5:
+        raise RuntimeError(
+            f"calibration seed {seed} is not one of "
+            f"{list(CALIBRATION_SEEDS_V5)}; a seed outside the frozen grid is a "
+            f"measurement the selection rule was not written for")
+    prompts = frozen_route_prompts()
+    vocab = label_vocab(man)
+    protocol = _direct_schedule(frozen_route_protocol(), candidates[candidate])
+    out_dir = calibration_dir(dataset, candidate, seed)
+    result_path = calibration_result_path(dataset, candidate, seed)
+    # Derived from out_dir and never from a second path rule: the trainer writes
+    # where it is told, so a checkpoint path computed independently is a path
+    # that reports a successful training as a missing file.
+    ckpt = out_dir / Path(*ADAPTER_RELPATH)
+    dev_by_identity = OrderedDict()
+    for it in _items_by_uri(man, split["development_image_uris"]).values():
+        dev_by_identity.setdefault(it["identity_id"], []).append(it)
+
+    # Bound through the same fields a cell result is bound through, so --resume
+    # reuses a measurement of THIS schedule on THIS split.  Without the schedule
+    # and split digests a candidate re-trained under a different grid would be
+    # read as already measured, and the selection would be made over numbers
+    # nobody produced.
+    bindings = OrderedDict((
+        ("schedule", sha256_bytes(
+            canonical_json(candidates[candidate]).encode("utf-8"))),
+        ("protocol", sha256_bytes(
+            canonical_json(protocol).encode("utf-8"))),
+        ("fit_images", sha256_bytes(
+            canonical_json(split["fit_image_uris"]).encode("utf-8"))),
+        ("development_images", sha256_bytes(
+            canonical_json(split["development_image_uris"]).encode("utf-8"))),
+        ("calibration_preregistration", sha256_file(cal_path)),
+    ))
+    want = {"cell_id": f"calibration__{candidate}__seed{seed}",
+            "kind": "direct_calibration_result_v5", "phase": "RFC",
+            "candidate": candidate, "seed": seed,
+            "schedule": dict(candidates[candidate]),
+            "input_sha256": bindings,
+            "n_development_images": len(split["development_image_uris"])}
+
+    def run():
+        sess = RouteSessionV2(device, f"e2c_rfc_{candidate}_{seed}", seed)
+        try:
+            sess.reset_fresh(seed)
+            train_items = _direct_train_items(man, {
+                "development_image_uris": split["development_image_uris"]})
+            pairs = [(it["image_uri"], prompts["d_image_to_alias"],
+                      man["alias_of"][it["identity_id"]])
+                     for it in train_items]
+            sess.train(f"calibration_{candidate}_seed{seed}", pairs, out_dir,
+                       protocol)
+            if not ckpt.is_file():
+                raise RuntimeError(
+                    f"training reported success but {ckpt} does not exist; a "
+                    f"calibration whose adapter cannot be found cannot be "
+                    f"re-run or inspected")
+            rows = build_direct_rows_v2(
+                man, f"calibration__{candidate}__seed{seed}", seed,
+                image_sha_by_uri=audit["images_by_uri_sha256"],
+                images=dev_by_identity)
+            for r in rows:
+                r["d_raw_text"] = sess.generate(
+                    _open_image(r["image_uri"]), prompts["d_image_to_alias"],
+                    max_new_tokens=8)
+                r["prompt_used"] = prompts["d_image_to_alias"]
+        finally:
+            sess.release()
+        scored, missing = score_rows_v2(rows, vocab)
+        if missing:
+            raise RuntimeError(
+                f"{len(missing)} development image(s) produced no generation, "
+                f"e.g. {missing[0]}; a calibration scored on part of the "
+                f"development split would select against images it never saw")
+        doc = {
+            **want, "dataset": dataset,
+            "adapter_path": _rel(ckpt),
+            "adapter_sha256": sha256_file(ckpt),
+            "adapter_bytes": ckpt.stat().st_size,
+            "protocol": protocol,
+            "n_fit_images": len(train_items),
+            "development_accuracy": _mean_correct(scored),
+            "n_unparseable": sum(1 for r in scored if r.get("unparseable")),
+            "n_multi_label_ambiguous": sum(1 for r in scored
+                                           if r.get("multi_label_ambiguous")),
+            "calibration_preregistration_sha256": sha256_file(cal_path),
+            "development_images_are_not_the_test_images": (
+                "the images scored here are the train-split images at the frozen "
+                "development indices; the held-out test images are disjoint from "
+                "them in CONTENT, which the pre-registration asserts and this "
+                "phase never reads"),
+            "scored": scored,
+        }
+        atomic_write_json(result_path, doc)
+        return doc
+
+    doc, decision = _resume_or_run(dataset, f"rfc_{candidate}_{seed}", want,
+                                   resume, run, result_path)
+    doc = {**doc, "resume": decision}
+    atomic_write_json(result_path, doc)
+    return doc
+
+
+def _items_by_uri(man, uris):
+    """The manifest items at these URIs, in the order given."""
+    want = set(uris)
+    out = OrderedDict()
+    for it in man["items"]:
+        if it["image_uri"] in want:
+            out[it["image_uri"]] = it
+    if len(out) != len(want):
+        raise RuntimeError(
+            f"{len(want) - len(out)} of the requested image URIs are not in the "
+            f"manifest; a split naming images the dataset does not have is not a "
+            f"split of it")
+    return out
+
+
+def _rfc_select(dataset, cal, candidates):
+    """Apply the frozen selection rule to the filed measurements, or refuse."""
+    results, absent = OrderedDict(), []
+    for name in candidates:
+        per_seed = OrderedDict()
+        for seed in CALIBRATION_SEEDS_V5:
+            p = calibration_result_path(dataset, name, seed)
+            if not p.is_file():
+                absent.append(f"{name}/seed{seed}")
+                continue
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            if doc.get("calibration_preregistration_sha256") != \
+                    sha256_file(calibration_prereg_path(dataset)):
+                raise RuntimeError(
+                    f"{_rel(p)} was produced against a different calibration "
+                    f"pre-registration than the one now frozen; a measurement "
+                    f"from another grid is not evidence about this one")
+            per_seed[seed] = doc["development_accuracy"]
+        if per_seed:
+            results[name] = per_seed
+    if absent:
+        raise RuntimeError(
+            f"RFC cannot select: {len(absent)} of "
+            f"{len(candidates) * len(CALIBRATION_SEEDS_V5)} calibration runs "
+            f"have no filed measurement, e.g. {absent[0]}.  Selecting over part "
+            f"of a grid is selecting over a different grid, and the rule was "
+            f"frozen for this one")
+    out = select_direct_schedule(results)
+    out["dataset"] = dataset
+    out["phase"] = "RFC"
+    out["calibration_preregistration"] = _rel(calibration_prereg_path(dataset))
+    out["calibration_preregistration_sha256"] = sha256_file(
+        calibration_prereg_path(dataset))
+    out["measurements_consumed"] = OrderedDict(
+        (name, OrderedDict((str(s), calibration_result_path(dataset, name, s))
+                           for s in CALIBRATION_SEEDS_V5))
+        for name in candidates)
+    if out["selected"] is None:
+        out["the_confirmatory_design_is_not_frozen"] = (
+            "the rule refused to select, so there is no configuration to embed "
+            "and no v5 pilot to freeze.  That is the outcome the floor exists to "
+            "produce, and it is reported rather than worked around")
+    path, digest = atomic_write_json(calibration_selection_path(dataset), out)
+    logger.info("RFC selection: filed %s %s", _rel(path), digest[:16])
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Freeze #2, and the ordering it has to hold
+# ---------------------------------------------------------------------------
+
+def confirmatory_outputs_present(dataset, block, cells_out=None):
+    """Every output this design names that ALREADY EXISTS.
+
+    The checkable form of "frozen before producing their outputs".  A promise
+    about ordering is a promise; a listing taken at freeze time, refused against,
+    and filed beside the manifest is a fact a reader can check later and a test
+    can assert on without trusting anybody's memory of which command ran first.
+
+    Roles this design does not PRODUCE are skipped: the router at every seed, the
+    unedited h and the matrix's fifteen edited-h adapters are all inputs v5 was
+    built over rather than outputs of it.  Counting them would report every v5
+    freeze as a freeze after the fact on any tree the route had already been run
+    on -- a check that fails so reliably it would be disabled.
+
+    Skipped on ``produced_by_this_design`` and not on ``exists_already``, because
+    the two answer different questions and only the first is about the design.
+    Whether an input is actually present is ``checkpoint_readiness``'s live
+    answer, and it is unchanged by this.
+    """
+    present = []
+    for c in block["cells"]:
+        p = cell_result_path(dataset, c["cell_id"], cells_out)
+        if p.is_file():
+            present.append({"what": "cell", "cell_id": c["cell_id"],
+                            "path": _rel(p), "sha256": sha256_file(p)})
+    roles = (block.get("checkpoint_requirements") or {}).get("roles") or {}
+    for label, role in sorted(roles.items()):
+        if "produced_by_this_design" not in role:
+            raise RuntimeError(
+                f"checkpoint role {label!r} does not say whether this design "
+                f"produces it, so the freeze-ordering listing cannot tell an "
+                f"output it has not made yet from an input it was built over.  "
+                f"Guessing from presence is the inference this check replaced")
+        if not role["produced_by_this_design"]:
+            continue
+        for key in CHECKPOINT_FILE_KEYS_V2:
+            raw = role.get(key)
+            if not raw:
+                continue
+            p = resolve_recorded_path(raw)
+            if p.is_file():
+                present.append({"what": "checkpoint", "role": label,
+                                "file_key": key, "path": _rel(p),
+                                "sha256": sha256_file(p)})
+    return present
+
+
+def freeze_ordering_report_path(dataset):
+    """Where the freeze-time listing is filed, beside the manifest not inside it.
+
+    Outside ``design_sha256`` deliberately.  A listing inside the design would be
+    covered by the hash and would stop reproducing the moment the run it
+    constrains began -- which is the v2 defect, arriving through a check that was
+    added to prevent a different one.
+    """
+    return (DATASET_ROOT / REPORTS_DIR
+            / f"rf_freeze_ordering_{dataset}_v5.json")
+
+
+def _freeze_v5(spec, args):
+    """Freeze #2: the confirmatory v5 pilot.
+
+    Ordered by what it reads rather than by convention.  The design constructor
+    refuses unless a calibration selection is filed, so a v5 manifest cannot
+    exist before RFC has selected a configuration; and this function refuses
+    unless every output the design names is absent, so a v5 manifest cannot exist
+    after the run it confirms has begun.
+    """
+    if spec.version != "v5":
+        raise RuntimeError(
+            f"_freeze_v5 was handed the {spec.version} spec; the forget-set rule "
+            f"and the design constructor it calls are v5's")
+    # Checked FIRST, before the forget-set rule runs and before any design is
+    # built.  The ordering v5 exists to enforce is that the configuration was
+    # chosen before the confirmatory design was frozen; a freeze that failed
+    # later for some unrelated reason would not have demonstrated that ordering
+    # at all, it would only have failed.
+    _require_calibration_selection(args.dataset)
+    man = load_manifest(args.dataset)
+    images = held_out_images(man)
+    policy = pilot_seed_policy_v2(args.dataset, man=man)
+    edit_seeds = args.edit_seeds or policy["edit_seeds"]
+    if args.forget_ids:
+        raise RuntimeError(
+            "v5's forget sets come from the selection rule and not from "
+            "--forget-ids; a design whose targets were passed in is a design "
+            "whose targets somebody chose")
+    selection = pilot_forget_sets_v5(args.dataset, edit_seeds)
+    block = build_pilot_preregistration_v5(
+        args.dataset, selection["sets"], selection["targets"],
+        args.router_seeds, edit_seeds, args.direct_seeds, man=man,
+        images=images, selection=selection)
+
+    already = confirmatory_outputs_present(args.dataset, block, args.cells)
+    listing = OrderedDict((
+        ("kind", "route_dependent_forgetting_freeze_ordering_v5"),
+        ("dataset", args.dataset),
+        ("version", "v5"),
+        ("what_was_listed", OrderedDict((
+            ("cells", len(block["cells"])),
+            ("checkpoint_roles_that_are_training_work",
+             sum(1 for r in block["checkpoint_requirements"]["roles"].values()
+                 if not r.get("exists_already"))),
+        ))),
+        ("n_outputs_that_already_existed", len(already)),
+        ("outputs_that_already_existed", already),
+        ("the_freeze_was_therefore", "before its outputs" if not already
+         else "REFUSED as after the fact"),
+        ("why_this_is_filed_outside_the_design",
+         ("a listing inside the manifest would be covered by design_sha256 and "
+         "would stop reproducing the moment the run it constrains began, which "
+         "is the v2 defect arriving through a check added to prevent another")),
+    ))
+    if already:
+        atomic_write_json(freeze_ordering_report_path(args.dataset), listing)
+        raise RuntimeError(
+            f"{len(already)} output(s) this design names already exist, e.g. "
+            f"{already[0]['path']}.  A confirmatory design has to be frozen "
+            f"before the cells it confirms are produced; the listing is filed at "
+            f"{_rel(freeze_ordering_report_path(args.dataset))}")
+    atomic_write_json(freeze_ordering_report_path(args.dataset), listing)
+    print(f"ordering           : 0 of {len(block['cells'])} cells and 0 of the "
+          f"adapters it requires exist yet -- frozen before its outputs",
+          file=sys.stderr)
+    return _freeze_write_and_verify(PILOT_SPEC_V5, args, block)
+
+
+def _v5_extra_freeze_inputs(dataset):
+    """The files a v5 freeze binds beyond the ones every version binds.
+
+    Both calibration artifacts, because the design's ``direct_training`` block is
+    READ out of the selection and the selection was made under the
+    pre-registration: a design that embedded a configuration without binding the
+    two documents that produced it would name a choice nothing could re-check.
+    """
+    return [calibration_prereg_path(dataset),
+            calibration_selection_path(dataset)]
+
+
+def _run_v5_phase(args, phase):
+    """The v5 dispatcher, kept so ``--design-version v5`` names a version the
+    same way v2, v3 and v4 do rather than only working through the default."""
+    return _run_phase_for(PILOT_SPEC_V5, args, phase)
+
+
+def _run_v5(args):
+    return _run_pilot(args, PILOT_SPEC_V5)
+
+
+# ---------------------------------------------------------------------------
+# Rebind the version tables.  Everything above reads these at call time, so
+# declaring v5 here is the same thing as declaring it where the tables are built,
+# and the constructors that produced the frozen v1, v2, v3 and v4 bytes stay
+# textually untouched.
+# ---------------------------------------------------------------------------
+
+LATEST_PILOT_SPEC = PILOT_SPEC_V5
+SPEC_BY_VERSION[PILOT_SPEC_V5.version] = PILOT_SPEC_V5
+SPEC_BY_PREREG_KIND[PILOT_SPEC_V5.prereg_kind] = PILOT_SPEC_V5
+PHASES_BY_VERSION[PILOT_SPEC_V5.version] = _phases_for(PILOT_SPEC_V5)
+REPAIRS_BY_VERSION["v5"] = OrderedDict((*SUPERSESSION_ITEMS.items(),
+                                        *SUPERSESSION_ITEMS_V3.items(),
+                                        *SUPERSESSION_ITEMS_V4.items(),
+                                        *SUPERSESSION_ITEMS_V5.items()))
+SUPERSESSION_POLICY["v5"] = SUPERSESSION_POLICY_V5
+
+#: v4 becomes superseded, and its kind needs notes before ``supersession_record``
+#: will describe a v4 manifest: it refuses to state nothing about an artifact it
+#: marks superseded, which is the right refusal.
+SUPERSEDED_NOTES[PREREG_V4_KIND] = SUPERSEDED_NOTES_V4
+
+#: v5 registers its own forget-set rule and its own extra freeze inputs, and
+#: registers NO scope-amendment evidence function -- the absence is the statement
+#: that v5 did not amend a scope after reading its own outcome.
+FORGET_SET_SELECTION_BY_VERSION["v5"] = pilot_forget_sets_v5
+EXTRA_FREEZE_INPUTS_BY_VERSION["v5"] = _v5_extra_freeze_inputs
+FREEZE_BY_VERSION["v5"] = _freeze_v5
 
 
 if __name__ == "__main__":
