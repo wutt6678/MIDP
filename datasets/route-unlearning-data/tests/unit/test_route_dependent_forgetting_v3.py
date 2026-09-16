@@ -1866,10 +1866,34 @@ def test_the_v2_notes_say_why_v2_is_superseded_structurally(rf):
         doc = json.loads(path.read_text(encoding="utf-8"))
         got = rf.verify_manifest(path)
         assert got["kind"] == rf.PREREG_V2_KIND
-        # the design still rebuilds; only the runner's own bytes have moved, and
-        # that is stated up front rather than discovered by a reader
-        assert all("does not reproduce design_sha256" not in p
-                   for p in got["problems"]), got["problems"]
+        # The note above was a PREDICTION, and the training it predicted has
+        # since arrived: v3 needed the same roles and trained them.  So the
+        # prediction is now checkable rather than merely stated, and checking it
+        # is worth more than asserting the note still held -- which would be
+        # asserting that the defect never happened.
+        reproduced = [p for p in got["problems"]
+                      if "does not reproduce design_sha256" in p]
+        trained = got["roles_trained_since_freeze"]
+        if trained:
+            assert reproduced, (
+                "a role this v2 pilot was waiting for has arrived "
+                f"({sorted(t['role'] for t in trained)}) and the design still "
+                "rebuilds to its frozen hash, which would mean the hash never "
+                "covered live checkpoint status after all")
+            ready = got["checkpoint_readiness"]
+            assert ready["runnable_now"] is True and not ready["must_be_trained"]
+            assert not ready["unexpectedly_absent"]
+            # ... and that is the whole defect in one line: the work arrived and
+            # the artifact became unloadable at the same moment.
+            with pytest.raises(RuntimeError, match="does not verify"):
+                rf.load_prereg_v2(
+                    "salmu" if "salmu" in path.name else "ppubench")
+        else:
+            # A clone with no gitignored weights: the roles are still absent, so
+            # the constructor still embeds the same absence it froze and the
+            # design still rebuilds.  Only the runner's own bytes have moved.
+            assert all("does not reproduce design_sha256" not in p
+                       for p in got["problems"]), got["problems"]
         assert doc["checkpoint_requirements"]["verification"] is not None
         assert rf.checkpoint_readiness(doc)[
             "frozen_status_block_present_in_this_manifest"] is True
@@ -2283,7 +2307,7 @@ def test_the_declared_gate_aggregation_is_the_one_the_gates_use(rf, run_v3):
 
 
 @_needs_v3_manifests
-def test_load_prereg_dispatches_on_version_and_only_v3_loads(rf):
+def test_load_prereg_dispatches_on_version_and_the_default_reads_the_latest(rf):
     """The phases load the authoritative design and refuse the superseded ones.
 
     A superseded pre-registration that still loaded would be a design two
@@ -2304,11 +2328,22 @@ def test_load_prereg_dispatches_on_version_and_only_v3_loads(rf):
         assert got["preregistered"] and got["frozen"] and not got["executed"]
         # A phase that names no version gets the authoritative design, so the
         # default and the explicit call cannot disagree about which pilot ran.
-        assert rf.load_prereg(ds, verify=False)["design_sha256"] == \
-            got["design_sha256"]
-        assert rf.load_prereg_for(rf.LATEST_PILOT_SPEC, ds,
-                                  verify=False)["design_sha256"] == \
-            got["design_sha256"]
+        # Both readings are asserted, because the latest version's manifest is
+        # committed one commit AFTER the code that names it: where it exists the
+        # default loads it, and where it does not the default REFUSES rather
+        # than falling back to a superseded design.  Falling back is the failure
+        # this pins -- it would run a phase against a design nobody asked for
+        # and report the result under the newer version's name.
+        latest = rf.prereg_path_for(rf.LATEST_PILOT_SPEC, ds)
+        if latest.is_file():
+            assert rf.load_prereg(ds, verify=False)["design_sha256"] == \
+                rf.load_prereg_for(rf.LATEST_PILOT_SPEC, ds,
+                                   verify=False)["design_sha256"]
+        else:
+            with pytest.raises(RuntimeError, match="no frozen"):
+                rf.load_prereg(ds, verify=False)
+            with pytest.raises(RuntimeError, match="no frozen"):
+                rf.load_prereg_for(rf.LATEST_PILOT_SPEC, ds, verify=False)
         # A superseded design refuses on EVERY checkout and for its own reason,
         # so the refusal is not this test's environment standing in for a result
         with pytest.raises(RuntimeError, match="does not verify"):
@@ -2326,9 +2361,15 @@ def test_load_prereg_dispatches_on_version_and_only_v3_loads(rf):
 
 
 @_needs_v3_manifests
-def test_rf0_on_the_frozen_v3_pilots_reports_what_is_still_missing(
+def test_rf0_on_the_frozen_v3_pilots_reports_what_the_tree_actually_has(
         rf, tmp_path):
-    """RF0 is the phase that says what is missing, and it now says it live.
+    """RF0 is the phase that says what is missing, and it says it live.
+
+    Every quantity below is derived from the artifacts and the tree rather than
+    pinned at the value it had when the pilot was frozen and unexecuted, so the
+    same test describes the pilot before its training arrived, after it arrived,
+    and after the run was filed -- which are three states of one artifact and
+    not three artifacts.
 
     The report goes under ``tmp_path``: a test that files into the repository
     leaves an untracked artifact behind, and CI's post-preflight step fails on a
@@ -2354,8 +2395,22 @@ def test_rf0_on_the_frozen_v3_pilots_reports_what_is_still_missing(
             "the drift check compares recorded URIs against the dataset " \
             "manifest, both of them tracked, so it answers the same thing in a " \
             "clone with no image bytes as it does here"
-        assert rep["n_cells_filed"] == 0
-        assert rep["n_cells_missing"] == rep["n_cells"] == doc["n_cells"]
+        assert rep["n_cells_filed"] + rep["n_cells_missing"] == \
+            rep["n_cells"] == doc["n_cells"]
+        # Counted from the tree rather than pinned at zero.  This pilot has been
+        # RUN and its cells are committed artifacts, so a hardcoded 0 asserted
+        # the state of a checkout that no longer exists -- and would have gone
+        # on asserting it after the run landed, which is how a test comes to
+        # describe the day it was written instead of the code.
+        filed = [c["cell_id"] for c in doc["cells"]
+                 if rf.cell_result_path(ds, c["cell_id"]).is_file()]
+        assert rep["n_cells_filed"] == len(filed)
+        assert rep["n_cells_missing"] == doc["n_cells"] - len(filed)
+        # ``executed`` stays False forever: it is a field of the frozen DESIGN,
+        # and a design that flipped it when its cells arrived would stop
+        # reproducing.  That is the v2 defect, not a report of progress; the
+        # fact that the work happened lives in the readiness block and in the
+        # filed cells, both of which are computed live.
         assert rep["executed"] is False
         # Verification and readiness are separate questions, and the report says
         # so rather than leaving a reader to infer it from two booleans.
@@ -2383,7 +2438,16 @@ def test_rf0_on_the_frozen_v3_pilots_reports_what_is_still_missing(
         assert rep["n_must_be_trained"] == len(must)
         assert rep["checkpoint_requirements_complete"] is (
             not (set(roles) - present))
-        assert rep["runnable_now"] is not (set(roles) - present)
+        # RF0's rule, stated as a rule.  This used to read ``is not
+        # (set(roles) - present)``, which compared a bool to a SET by identity
+        # and so was true whatever the report said -- an assertion that cannot
+        # fail is worse than no assertion, because it reads as coverage.
+        assert rep["runnable_now"] is (
+            rep["manifest_valid"] and not (set(roles) - present)
+            and not rep["held_out_image_drift_since_freeze"]), \
+            "runnable_now is verification AND inputs AND no drift, which is why " \
+            "a superseded pilot whose training has all arrived still reads as " \
+            "not runnable: what is missing is the artifact, not the work"
         if rep["runnable_now"]:
             assert rep["why_not_runnable"] is None
         else:

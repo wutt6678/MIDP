@@ -97,14 +97,28 @@ without regenerating anything.
 
 Design versions
 ===============
-Three designs are reconstructible from this file, and all three have frozen
-manifests committed: ``--design-version v1`` and ``v2`` are SUPERSEDED and exist
-so the artifacts on disk can still be rebuilt and explained, ``v3`` is the
-current one and is the default.  Superseded means superseded in place, never
+Four designs are reconstructible from this file, and all four have frozen
+manifests committed: ``--design-version v1``, ``v2`` and ``v3`` are SUPERSEDED
+and exist so the artifacts on disk can still be rebuilt and explained, ``v4`` is
+the current one and is the default.  Superseded means superseded in place, never
 edited: each version's constructor reads its differences from a ``PilotSpec``, so
-the three share one construction path and a repair cannot reach one version and
+the four share one construction path and a repair cannot reach one version and
 not the others.  ``supersession_record`` states, per version, what the previous
 one got wrong and what the current one does instead.
+
+The three supersessions are not the same kind of correction, and the difference
+matters to anyone deciding which results to cite.  ``v2`` was superseded for a
+STRUCTURAL reason: its design hash covered which adapters were on disk, so it
+could not survive the training it required.  ``v3`` is superseded for a SCOPE
+reason: it declared ``hybrid_conflict_probe`` auxiliary and "reported separately
+from every mediated gate", then counted that condition's rows toward a gate it
+mapped to mediation.  ``v4`` changes that one denominator, reports the auxiliary
+rows' hygiene as a diagnostic that feeds no verdict, and -- uniquely in this file
+-- was amended AFTER the run whose verdicts prompted it.  Every v4 artifact
+carries ``post_outcome_scope_amendment: true`` and the derived evidence from both
+datasets, because results aggregated under v4 from v3's cells are a CORRECTIVE
+analysis of a completed run; only a run executed under v4 from the start is
+pre-registered under the corrected scope.
 
 Independence from the granularity gates
 =======================================
@@ -1528,6 +1542,16 @@ def verify_manifest(path):
                 frozen["dataset"], frozen["forget_set_id"],
                 frozen["forget_identity_ids"], frozen["router_seeds"],
                 frozen["edit_seeds"], frozen["direct_seeds"])
+        elif kind == PREREG_V4_KIND:
+            rebuilt = build_pilot_preregistration_v4(
+                frozen["dataset"], frozen["forget_set_id"],
+                frozen["forget_identity_ids"], frozen["router_seeds"],
+                frozen["edit_seeds"], frozen["direct_seeds"])
+        elif kind == KIND_V4:
+            rebuilt = build_design_v4(
+                frozen["dataset"], frozen["forget_set_id"],
+                frozen["forget_identity_ids"], frozen["router_seeds"],
+                frozen["edit_seeds"], frozen["direct_seeds"])
         elif kind == KIND_V2:
             rebuilt = build_design_v2(
                 frozen["dataset"], frozen["forget_set_id"],
@@ -1542,8 +1566,9 @@ def verify_manifest(path):
             raise RuntimeError(f"unknown manifest kind {kind!r}; the kinds "
                                f"this verifier can rebuild are {KIND!r}, "
                                f"{PREREG_KIND!r}, {KIND_V2!r}, "
-                               f"{PREREG_V2_KIND!r}, {KIND_V3!r} and "
-                               f"{PREREG_V3_KIND!r}")
+                               f"{PREREG_V2_KIND!r}, {KIND_V3!r}, "
+                               f"{PREREG_V3_KIND!r}, {KIND_V4!r} and "
+                               f"{PREREG_V4_KIND!r}")
         if design_sha256(rebuilt) != frozen.get("design_sha256"):
             problems.append(
                 f"rebuilding a {kind} from the frozen parameters does not "
@@ -1739,14 +1764,19 @@ def _build_parser():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dataset", default="ppubench", choices=list(DATASETS))
-    p.add_argument("--design-version", default="v3",
-                   choices=["v1", "v2", "v3"],
-                   help="v1 and v2 are SUPERSEDED and retained only so their "
-                        "frozen manifests can still be rebuilt and verified; "
-                        "v3 is the repaired design and is the default.  v2's "
-                        "pilots hash their own live checkpoint status, so they "
-                        "stop reproducing the moment the training they require "
-                        "succeeds; v3 computes readiness outside the design")
+    p.add_argument("--design-version", default="v4",
+                   choices=["v1", "v2", "v3", "v4"],
+                   help="v1, v2 and v3 are SUPERSEDED and retained only so "
+                        "their frozen manifests can still be rebuilt and "
+                        "verified; v4 is the current design and is the default. "
+                        "v2's pilots hash their own live checkpoint status, so "
+                        "they stop reproducing the moment the training they "
+                        "require succeeds; v3 computes readiness outside the "
+                        "design but counts auxiliary rows toward a mediated "
+                        "verdict it declared them outside; v4 declares the "
+                        "hygiene gate's row scope and says, at the top level of "
+                        "its own design, that the scope was amended after an "
+                        "outcome")
     p.add_argument("--phase", nargs="+", default=["RF0"],
                    choices=["RF1", *ALL_PHASES],
                    help="RF0 verify the frozen manifest and every input; "
@@ -3879,6 +3909,14 @@ GATE_TO_VERDICT_V3 = OrderedDict((
 ))
 
 
+#: The two denominators a hygiene gate can have, named so a spec picks one
+#: rather than a reader inferring it from the aggregation code.  Defined here,
+#: above the spec table, because a spec field's value has to exist before the
+#: spec does.  See PART III for the version that uses the second one.
+HYGIENE_SCOPE_ALL_ROWS = "all_rows"
+HYGIENE_SCOPE_NON_AUXILIARY = "non_auxiliary_rows"
+
+
 class PilotSpec(NamedTuple):
     """Every way one pilot version differs from another, named in one place.
 
@@ -3914,6 +3952,17 @@ class PilotSpec(NamedTuple):
     embed_live_checkpoint_status: bool
     direct_gate_aggregation: str
     declared_gate_aggregation: object
+    #: Which rows the verdict-bearing hygiene count covers.  A denominator is
+    #: half a rule, so it is a field of the design rather than a choice the
+    #: aggregation code makes once the rows already exist.
+    hygiene_gate_row_scope: str
+    #: What the design SAYS about that scope, merged into ``frozen_gates``
+    #: beside the declared aggregation.  Empty for a version whose bytes are
+    #: frozen and which therefore cannot gain a field.
+    declared_hygiene_scope: object
+    #: What the design says about consuming cells another version filed.  Empty
+    #: for a version that never reads another design's cells.
+    declared_cell_compatibility: object
     superseded_filenames: tuple
 
 
@@ -3965,6 +4014,8 @@ PILOT_SPEC_V2 = PilotSpec(
     baseline_cell=False, embed_live_checkpoint_status=True,
     direct_gate_aggregation="pooled_over_seeds",
     declared_gate_aggregation={},
+    hygiene_gate_row_scope=HYGIENE_SCOPE_ALL_ROWS,
+    declared_hygiene_scope={}, declared_cell_compatibility={},
     superseded_filenames=("rf_pilot_ppubench.json", "rf_pilot_salmu.json"))
 
 PILOT_SPEC_V3 = PilotSpec(
@@ -3980,6 +4031,8 @@ PILOT_SPEC_V3 = PilotSpec(
     direct_gate_aggregation="every_seed",
     declared_gate_aggregation={
         "direct_gate_aggregation": PER_SEED_GATE_AGGREGATION},
+    hygiene_gate_row_scope=HYGIENE_SCOPE_ALL_ROWS,
+    declared_hygiene_scope={}, declared_cell_compatibility={},
     superseded_filenames=("rf_pilot_ppubench.json", "rf_pilot_salmu.json",
                           "rf_pilot_ppubench_v2.json",
                           "rf_pilot_salmu_v2.json"))
@@ -3990,6 +4043,21 @@ PILOT_SPEC_V3 = PilotSpec(
 LATEST_PILOT_SPEC = PILOT_SPEC_V3
 SPEC_BY_VERSION = {s.version: s for s in (PILOT_SPEC_V2, PILOT_SPEC_V3)}
 SPEC_BY_PREREG_KIND = {s.prereg_kind: s for s in (PILOT_SPEC_V2, PILOT_SPEC_V3)}
+
+#: Three tables a later version fills in, defined empty here so the shared
+#: builders can consult them without knowing which versions exist.  Keyed on the
+#: version rather than tested for inside a builder, because a builder that had to
+#: name a version is a builder the next version has to be edited into.
+#:
+#: ``SCOPE_AMENDMENT_EVIDENCE_BY_VERSION`` names the function that derives the
+#: evidence a post-outcome scope amendment has to carry.
+#: ``EXTRA_FREEZE_INPUTS_BY_VERSION`` names the files one version's freeze binds
+#: beyond the inputs every version binds.
+#: ``ANCESTOR_MANIFEST_BY_VERSION`` names the frozen manifest a version's cells
+#: may legitimately have been produced under, if not its own.
+SCOPE_AMENDMENT_EVIDENCE_BY_VERSION = {}
+EXTRA_FREEZE_INPUTS_BY_VERSION = {}
+ANCESTOR_MANIFEST_BY_VERSION = {}
 
 #: Every phase, in the order a complete run executes them.  Each version's own
 #: list is a FILTER of this one rather than a separately written tuple, so a
@@ -4275,19 +4343,41 @@ def evaluate_gates_for(spec, intervention_rows, natural_rows, direct_rows,
             th["max_direct_code_following_rate"], operator.le, hyb_describe,
             hyb_zero)
 
-    # Every row this design produced, whichever cell it came from: an output
+    # Every row this design produced, whichever cell it came from.  An output
     # naming no candidate label is a defect of the run and not of one condition,
-    # so the count is over the whole run rather than per gate.
-    all_rows = (inter + list(baseline_rows) + natural_rows + direct_rows
-                + hybrid_rows)
-    n_unp = sum(1 for r in all_rows if r.get("unparseable"))
-    n_amb = sum(1 for r in all_rows if r.get("multi_label_ambiguous"))
+    # so the count is over the whole run rather than per gate -- and that sentence
+    # stays true of the RUN.  What it cannot also be is the denominator of a
+    # verdict, because the same design declares its auxiliary condition "reported
+    # separately from every mediated gate" and then maps this count to mediation.
+    #
+    # Which rows the verdict counts is therefore a field of the spec rather than
+    # a branch on the version, so a reader can list it and a test can pin it.  The
+    # whole-run figure is still reported, on the gate, beside the one the verdict
+    # reads.
+    every_row = (inter + list(baseline_rows) + natural_rows + direct_rows
+                 + hybrid_rows)
+    aux_rows = [r for r in every_row
+                if r["condition"] in spec.auxiliary_conditions]
+    if spec.hygiene_gate_row_scope == HYGIENE_SCOPE_ALL_ROWS:
+        verdict_rows = every_row
+    elif spec.hygiene_gate_row_scope == HYGIENE_SCOPE_NON_AUXILIARY:
+        verdict_rows = [r for r in every_row
+                        if r["condition"] not in spec.auxiliary_conditions]
+    else:
+        raise RuntimeError(
+            f"spec {spec.version!r} names hygiene_gate_row_scope "
+            f"{spec.hygiene_gate_row_scope!r}; the scopes this gate can count "
+            f"are {HYGIENE_SCOPE_ALL_ROWS!r} and "
+            f"{HYGIENE_SCOPE_NON_AUXILIARY!r}.  A denominator no design "
+            f"declared is a verdict no design pre-registered")
+    n_unp = sum(1 for r in verdict_rows if r.get("unparseable"))
+    n_amb = sum(1 for r in verdict_rows if r.get("multi_label_ambiguous"))
     gates["no_unparseable_or_multi_label_outputs"] = {
         "name": "no_unparseable_or_multi_label_outputs",
         "passed": (n_unp <= th["max_unparseable_outputs"]
                    and n_amb <= th["max_multi_label_outputs"]),
         "value": {"unparseable": n_unp, "multi_label_ambiguous": n_amb},
-        "n": len(all_rows),
+        "n": len(verdict_rows),
         "threshold": {"max_unparseable_outputs":
                       th["max_unparseable_outputs"],
                       "max_multi_label_outputs": th["max_multi_label_outputs"]},
@@ -4297,7 +4387,55 @@ def evaluate_gates_for(spec, intervention_rows, natural_rows, direct_rows,
         "failed_because": (
             None if (n_unp <= th["max_unparseable_outputs"]
                      and n_amb <= th["max_multi_label_outputs"])
-            else f"{n_unp} unparseable and {n_amb} multi-label outputs")}
+            else f"{n_unp} unparseable and {n_amb} multi-label outputs"),
+        # Added only for a version that declared a scope, so the gates of a
+        # version whose bytes are frozen stay exactly the keys they were.
+        **({"row_scope": spec.hygiene_gate_row_scope,
+            "conditions_excluded_from_the_count":
+                list(spec.auxiliary_conditions),
+            "n_rows_excluded": len(aux_rows),
+            "n_rows_in_the_whole_run": len(every_row),
+            "both_denominators_are_named": (
+                "n is the one the verdict reads; the whole-run figure is here "
+                "beside it so what was excluded is a stated fact rather than "
+                "something a reader has to reconstruct")}
+           if spec.declared_hygiene_scope else {})}
+
+    if spec.declared_hygiene_scope:
+        # Reported, not dropped.  Excluding rows from a verdict is a statement
+        # about what the verdict rests on; it is not a statement that nothing
+        # happened to those rows, and a diagnostic nobody reports is a
+        # measurement nobody made.  ``is_a_gate`` is False and it appears in no
+        # gate_to_verdict map, so no verdict reads it and ``passed`` stays None
+        # rather than inventing a pass or a fail.
+        aux_unp = [r for r in aux_rows if r.get("unparseable")]
+        aux_amb = [r for r in aux_rows if r.get("multi_label_ambiguous")]
+        gates["auxiliary_output_hygiene"] = {
+            "name": "auxiliary_output_hygiene",
+            "is_a_gate": False,
+            "feeds_no_verdict": True,
+            "absent_from_gate_to_verdict": (
+                "auxiliary_output_hygiene" not in spec.gate_to_verdict),
+            "passed": None,
+            "conditions": list(spec.auxiliary_conditions),
+            "n": len(aux_rows),
+            "value": {"unparseable": len(aux_unp),
+                      "multi_label_ambiguous": len(aux_amb)},
+            "rate_unparseable": (round(len(aux_unp) / len(aux_rows), 6)
+                                 if aux_rows else None),
+            "example_row_ids": [r.get("row_id") for r in aux_unp[:8]],
+            "example_raw_outputs": [r.get("raw_text") for r in aux_unp[:8]],
+            "distinct_expected_labels_missed": sorted(
+                {str(r.get("expected_label")) for r in aux_unp}),
+            "n_examples_shown": min(len(aux_unp), 8),
+            "why_it_is_reported_at_all": (
+                "these rows are outside every mediated hygiene count, which is "
+                "a statement about the verdict and not about the rows.  What "
+                "they did is still a finding: an auxiliary probe that derails "
+                "out of the candidate vocabulary is telling us the direct "
+                "pathway ignores a code it was never trained on by answering "
+                "something else entirely"),
+        }
 
     tol = th["max_abs_e2e_prediction_error"]
     if not e2e or e2e.get("predicted") is None or e2e.get("observed") is None:
@@ -5632,6 +5770,19 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
     new_thresholds = [k for k in spec.thresholds
                       if k not in GATE_THRESHOLDS_V2]
 
+    # Both blocks below come from the spec's own declarations and are absent for
+    # a version that made none, so the frozen v2 and v3 bytes do not move.  The
+    # evidence function is looked up in a table keyed on the version rather than
+    # named here: a builder that had to say "v4" is a builder v5 has to be
+    # edited into.
+    evidence_for = SCOPE_AMENDMENT_EVIDENCE_BY_VERSION.get(spec.version)
+    scope_amendment = evidence_for(dataset, spec) if evidence_for else None
+    lineage_declared = (
+        OrderedDict((
+            *spec.declared_cell_compatibility.items(),
+            ("ancestor", ancestor_design_sha256(spec, dataset))))
+        if spec.declared_cell_compatibility else None)
+
     return {
         **design,
         "kind": spec.prereg_kind,
@@ -5688,6 +5839,16 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
                         "held-out ROUTING claim can be made from them"),
         },
         "gate_applicability": applicability,
+        # Top level, and not only inside the scope block: a reader deciding
+        # whether an artifact was pre-registered should not have to open the
+        # rationale to find out that it was amended after its own outcome.
+        **({"post_outcome_scope_amendment":
+                bool(spec.declared_hygiene_scope
+                     .get("post_outcome_scope_amendment"))}
+           if spec.declared_hygiene_scope else {}),
+        **({"scope_amendment": scope_amendment} if scope_amendment else {}),
+        **({"cell_design_lineage": lineage_declared}
+           if lineage_declared else {}),
         "frozen_gates": {
             "thresholds": dict(spec.thresholds),
             "gate_to_verdict": dict(spec.gate_to_verdict),
@@ -5699,6 +5860,10 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
             # test here, so the difference between two versions stays a field a
             # reader can list; it is empty for a version whose bytes are frozen.
             **spec.declared_gate_aggregation,
+            # Which rows the hygiene gate counts, which is the other half of
+            # that gate's rule for the same reason the aggregation is the other
+            # half of a rate gate's.
+            **spec.declared_hygiene_scope,
             **({"added_in_this_version": {
                     "gates": new_gates, "thresholds": new_thresholds,
                     "why": ("a gate added after a design was frozen is not a "
@@ -6381,6 +6546,93 @@ def cell_input_digests(prereg, cell):
     return out
 
 
+def verify_cell_design_lineage(spec, prereg, cells):
+    """Which design produced each cell this aggregate is about to consume.
+
+    Returns None for a version that declared no cell compatibility policy, so the
+    reports of versions that never read another design's cells stay exactly the
+    bytes they were.
+
+    v4 reuses v3's result kind, and that is what lets it read the 28 filed cells
+    instead of repeating 26 GPU phase invocations to write identical bytes back.
+    Reusing a kind removes the only check that stood between an aggregate and a
+    cell some other design produced, so the check moves to the thing that
+    actually identifies a design: the design hash each cell recorded for the
+    pre-registration it ran against.
+
+    A cell matching neither this design nor the declared ancestor is REFUSED
+    rather than annotated.  An aggregate that reported verdicts over rows
+    produced under a design nobody named would be a result with no
+    pre-registration behind it, which is the one thing this file exists to make
+    impossible.
+    """
+    declared = spec.declared_cell_compatibility
+    if not declared:
+        return None
+    block = prereg.get("cell_design_lineage") or {}
+    ancestor = block.get("ancestor") or {}
+    this_design = prereg.get("design_sha256")
+    ancestor_design = ancestor.get("design_sha256")
+    if not ancestor_design:
+        raise RuntimeError(
+            f"{spec.version} declared a cell compatibility policy but the "
+            f"pre-registration it was read from names no ancestor design; "
+            f"without one, a cell filed under the ancestor cannot be told from "
+            f"a cell filed under a design nobody declared")
+    accepted = {this_design: "produced_under_this_design",
+                ancestor_design: "reused_from_the_ancestor_design"}
+    per_cell, counts, unrecognized = OrderedDict(), {}, []
+    for cell_id, doc in cells.items():
+        prov = doc.get("run_provenance") or {}
+        got = (doc.get("preregistration_design_sha256")
+               or prov.get("preregistration_design_sha256"))
+        kind = doc.get("kind")
+        if kind != spec.result_kind:
+            raise RuntimeError(
+                f"cell {cell_id} has kind {kind!r} and {spec.version} consumes "
+                f"{spec.result_kind!r}; a cell of another result kind is a cell "
+                f"whose rows another design specified")
+        state = accepted.get(got, "unrecognized_design")
+        if state == "unrecognized_design":
+            unrecognized.append(f"{cell_id} records design {got}")
+        per_cell[cell_id] = OrderedDict((
+            ("state", state),
+            ("recorded_preregistration_design_sha256", got),
+            ("recorded_pilot_version", prov.get("pilot_version")),
+            ("recorded_preregistration_kind", prov.get("preregistration_kind")),
+            ("recorded_executing_commit", prov.get("executing_commit")),
+            ("result_kind", kind),
+        ))
+        counts[state] = counts.get(state, 0) + 1
+    if unrecognized:
+        raise RuntimeError(
+            "cannot aggregate: " + "; ".join(unrecognized[:4])
+            + (f" (and {len(unrecognized) - 4} more)"
+               if len(unrecognized) > 4 else "")
+            + f".  {spec.version} consumes cells produced under its own design "
+              f"({this_design}) or under the declared "
+              f"{ancestor.get('ancestor_version')} ancestor "
+              f"({ancestor_design}); a cell matching neither was produced by a "
+              f"design this pre-registration does not name, and aggregating it "
+              f"would report a verdict no frozen design stands behind")
+    return OrderedDict((
+        ("rule", declared.get("rule")),
+        ("this_design_sha256", this_design),
+        ("ancestor", ancestor),
+        ("per_cell", per_cell),
+        ("n_cells", len(per_cell)),
+        ("n_cells_by_state", OrderedDict(sorted(counts.items()))),
+        ("states", list(declared.get("states") or ())),
+        ("the_cells_were_not_relabelled",
+         ("a reused cell keeps its ancestor's kind string, its ancestor's "
+          "run_provenance and its own file bytes.  This block is the "
+          "disclosure, not a rewrite")),
+        ("why_this_check_exists",
+         declared.get("what_a_v4_report_must_disclose")),
+        ("policy", declared.get("what_is_checked_before_a_cell_is_consumed")),
+    ))
+
+
 def verify_cell_inputs(prereg, cells):
     """Re-hash the weights behind every filed cell and refuse on a mismatch.
 
@@ -6677,6 +6929,10 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
     # every cell file this aggregate consumed, hashed, so the report names its
     # own inputs by content instead of by a directory somebody can edit.
     input_check = verify_cell_inputs(prereg, cells)
+    # Beside the input check rather than inside it: that one re-hashes weights,
+    # this one names the design behind each cell, and a version that declared no
+    # compatibility policy gets None and reports nothing it did not do.
+    lineage = verify_cell_design_lineage(spec, prereg, cells)
     consumed = OrderedDict()
     for cid, p in sorted((cell_paths or {}).items()):
         p = Path(p)
@@ -6713,12 +6969,24 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
         },
         "delta_route": delta,
         "gates": gates,
+        # The gates dict can hold an entry that is not a gate, so both counts are
+        # stated rather than leaving a reader to reconcile them.
+        **({"n_entries_in_gates": len(gates),
+            "n_gates_the_verdicts_read": len(spec.gate_to_verdict),
+            "entries_in_gates_that_are_not_gates": sorted(
+                n for n, g in gates.items() if not g.get("is_a_gate", True)),
+            "why_the_two_counts_differ": (
+                "a reported diagnostic sits beside the gates rather than in a "
+                "separate block nobody reads, and is marked is_a_gate=False so "
+                "no verdict and no summary can mistake it for one")}
+           if spec.declared_hygiene_scope else {}),
         "verdicts": verdicts,
         "conditions_that_feed_the_mediation_verdict":
             list(spec.mediated_conditions),
         "auxiliary_conditions_reported_separately":
             list(spec.auxiliary_conditions),
         "input_verification": input_check,
+        **({"cell_design_lineage": lineage} if lineage is not None else {}),
         "consumed_cell_files": consumed,
         "n_consumed_cell_files": len(consumed),
         **({"run_provenance": run_provenance} if run_provenance else {}),
@@ -8003,10 +8271,12 @@ def _freeze_for(spec, args):
     # becomes a checked property rather than an intention.
     superseded = [DATASET_ROOT / MANIFEST_DIR / n
                   for n in spec.superseded_filenames]
+    extra_fn = EXTRA_FREEZE_INPUTS_BY_VERSION.get(spec.version)
     extra = [DATASET_ROOT / MANIFEST_PATHS[args.dataset],
              DATASET_ROOT / G_CACHE_PATHS[args.dataset],
              DATASET_ROOT / MATRIX_MANIFEST_DIR / f"matrix_{args.dataset}.json",
-             *superseded]
+             *superseded,
+             *(extra_fn(args.dataset) if extra_fn else ())]
     # The roles declared ``exists_already`` are deliberately NOT listed here.
     # They are gitignored adapters, so on a fresh clone they are legitimately
     # absent, and ``verify_manifest`` reports a hashed input it cannot find as
@@ -8166,7 +8436,7 @@ def _run_phase_for(spec, args, phase):
             "routing_reliability_pass": rep["routing_reliability_pass"],
             "routing_factorization_pass": rep["routing_factorization_pass"],
             "failed_gates": [n for n, g in rep["gates"].items()
-                             if not g["passed"]],
+                             if g.get("is_a_gate", True) and not g["passed"]],
             "verdict_states": {n: rep["verdicts"][n]["state"]
                                for n in VERDICT_NAMES},
             "no_omnibus_verdict": rep["verdicts"]["no_omnibus_verdict"],
@@ -8229,6 +8499,669 @@ def main(argv=None):
     note_cli(args)
     spec = SPEC_BY_VERSION[args.design_version]
     return _run_pilot(args, spec)
+
+
+# ===========================================================================
+# PART III -- v4: one denominator, declared after the outcome it corrects
+# ===========================================================================
+#
+# Everything v4 adds or changes lives in this one contiguous block, at the end
+# of the module, and it works by REBINDING the version tables the code above
+# reads: LATEST_PILOT_SPEC, SPEC_BY_VERSION, SPEC_BY_PREREG_KIND,
+# PHASES_BY_VERSION, REPAIRS_BY_VERSION, SUPERSESSION_POLICY, SUPERSEDED_NOTES
+# and the two dispatch tables the shared builders consult.  That is safe at the
+# end because every reference above resolves at call time rather than at import
+# time.
+#
+# Why one block and not eleven edits scattered through eight thousand lines: a
+# scope amendment made AFTER a run's verdicts were read has to be inspectable as
+# one object.  A reader who wants to know exactly what v4 changes, and what it
+# deliberately leaves alone, should read one screen rather than reconstruct it
+# out of a diff.  Keeping it here also leaves the constructors above -- the ones
+# that produced the frozen v1, v2 and v3 bytes -- textually untouched, which is
+# the only reason to believe those bytes still reproduce.
+#
+# WHAT V4 CHANGES
+#   One denominator.  ``no_unparseable_or_multi_label_outputs`` counted every
+#   row the run produced, including the rows of ``hybrid_conflict_probe``, which
+#   the same design declares ``auxiliary: true``, ``decisive: false`` and
+#   "reported separately from every mediated gate" -- and then mapped the count
+#   to the mediation verdict.  Each of those two statements is defensible on its
+#   own; holding both at once is not, and the run found out by failing a verdict
+#   on rows the design had already said were not part of it.
+#
+#   v4 scopes the verdict-bearing count to the rows the verdict rests on and
+#   reports the auxiliary rows' output hygiene as its own diagnostic, which is
+#   named in the report and feeds nothing.
+#
+# WHAT V4 DOES NOT CHANGE
+#   No threshold.  No gate-to-verdict mapping.  No condition, no prompt, no row
+#   builder, no cell layout, no result kind, no checkpoint role.  A v4 cell and
+#   a v3 cell of the same id are the same bytes, which is what makes reusing the
+#   filed v3 cells a re-analysis rather than a relabelling.
+#
+#   ``direct_code_following_rate`` is measured entirely on auxiliary rows and
+#   STILL maps to mediation.  It is not a hygiene count: it is the ceiling v2
+#   added so that an accuracy floor alone could not be satisfied by a direct
+#   adapter that answered from the code and was therefore not a direct model at
+#   all.  Moving it out of the verdict would undo that repair, so v4's claim is
+#   narrower than "auxiliary rows carry no verdict" and is the one that is true:
+#   auxiliary rows are outside every mediated HYGIENE count.
+#
+# WHAT V4 IS NOT
+#   It is not a pre-registration of the run whose verdicts prompted it.  Those
+#   cells were produced under v3, are consumed unchanged and are not relabelled;
+#   the analysis v4 performs on them is CORRECTIVE.  A confirmatory result under
+#   the corrected scope requires a run executed under v4 from the start, and
+#   every artifact v4 produces says so in so many words.
+
+#: v4's kinds.  The supersession kind names what it SUPERSEDES, following the
+#: convention v2 and v3 set, and v3 supersedes two versions rather than one --
+#: so a reader can tell from the kind alone how many frozen designs are behind
+#: this one.
+KIND_V4 = "route_dependent_forgetting_design_v4"
+PREREG_V4_KIND = "route_dependent_forgetting_preregistration_v4"
+SUPERSESSION_KIND_V4 = "route_dependent_forgetting_supersession_v1_v2_and_v3"
+
+#: v4 REUSES v3's result kind, and that is forced rather than convenient.
+#:
+#: ``load_cell_result`` refuses a cell whose ``kind`` is not the aggregating
+#: spec's ``result_kind``, so a new kind would refuse all 28 filed cells and
+#: repeat 26 GPU phase invocations -- six of them 3000-step training runs -- to
+#: produce byte-identical rows.  A version whose only claim is that one gate
+#: counts a different subset of the SAME rows has no business re-measuring them.
+#:
+#: The price is that a v4 report rests on v3-stamped cells, so the pairing is
+#: checked (``verify_cell_design_lineage``) and disclosed (the
+#: ``cell_design_lineage`` block every v4 report carries) rather than left to a
+#: reader who notices the kind string.
+RESULT_KIND_V4 = RESULT_KIND_V3
+
+#: The v3 condition table, reused by object.  Nothing v4 says is about what a
+#: condition EXECUTES, so nothing here is reworded: ``execution``, ``role`` and
+#: ``not_the_mediator_intervention`` are copied onto every row a builder makes,
+#: and editing them would make a v4 cell differ in bytes from the v3 cell it is
+#: supposed to be identical to.  The correction v4 makes is about how rows are
+#: COUNTED, which belongs to the gate and to the declared scope below.
+CONDITIONS_V4 = CONDITIONS_V3
+
+FORCED_CODE_CONDITIONS_V4 = tuple(
+    n for n, c in CONDITIONS_V4.items()
+    if c["prompt_key"] == "h_code_to_alias"
+    and "router_seed" not in c["depends_on"])
+MEDIATED_CONDITIONS_V4 = tuple(
+    n for n, c in CONDITIONS_V4.items()
+    if not c.get("auxiliary") and c["prompt_key"] == "h_code_to_alias")
+AUXILIARY_CONDITIONS_V4 = tuple(n for n, c in CONDITIONS_V4.items()
+                                if c.get("auxiliary"))
+DECISIVE_CONDITIONS_V4 = tuple(n for n, c in CONDITIONS_V4.items()
+                               if c.get("decisive"))
+
+#: Derived by comparing the two tables rather than written down, so the claim
+#: "v4 changes no measurement" is a fact about the objects and not a sentence
+#: somebody has to keep true.
+V4_CONDITION_TABLE_DIFFERENCE = OrderedDict((
+    ("conditions_added",
+     tuple(n for n in CONDITIONS_V4 if n not in CONDITIONS_V3)),
+    ("conditions_removed",
+     tuple(n for n in CONDITIONS_V3 if n not in CONDITIONS_V4)),
+    ("condition_entries_changed",
+     tuple(n for n in CONDITIONS_V4
+           if n in CONDITIONS_V3 and CONDITIONS_V4[n] != CONDITIONS_V3[n])),
+    ("same_object", CONDITIONS_V4 is CONDITIONS_V3),
+    ("why", ("a row copies its condition's execution text, so rewording the "
+             "table would change the bytes of every cell v4 files and break the "
+             "one property that makes reusing the v3 cells honest: that they are "
+             "the same measurements, not similar ones")),
+))
+
+#: v4 changes no threshold and remaps no gate.  Both statements are derived.
+GATE_THRESHOLDS_V4 = GATE_THRESHOLDS_V3
+GATE_TO_VERDICT_V4 = GATE_TO_VERDICT_V3
+
+V4_THRESHOLD_DIFFERENCE = tuple(
+    k for k in GATE_THRESHOLDS_V4
+    if k not in GATE_THRESHOLDS_V3 or GATE_THRESHOLDS_V4[k]
+    != GATE_THRESHOLDS_V3[k])
+V4_GATE_MAP_DIFFERENCE = tuple(
+    k for k in GATE_TO_VERDICT_V4
+    if k not in GATE_TO_VERDICT_V3 or GATE_TO_VERDICT_V4[k]
+    != GATE_TO_VERDICT_V3[k])
+
+#: What the design says about the hygiene gate's denominator, as opposed to what
+#: number it compares against.  Same shape as ``PER_SEED_GATE_AGGREGATION`` and
+#: for the same reason: the threshold and the row scope are two halves of one
+#: rule, and a pre-registration that recorded only the number had not recorded
+#: the rule it was frozen with.
+DECLARED_HYGIENE_SCOPE_V4 = OrderedDict((
+    ("hygiene_gate_row_scope", HYGIENE_SCOPE_NON_AUXILIARY),
+    ("which_gate_it_scopes", "no_unparseable_or_multi_label_outputs"),
+    ("rule", ("counted over the rows of every condition that is not declared "
+              "auxiliary, which is the set of rows the mediation verdict rests "
+              "on")),
+    ("n_rows_in_the_whole_run_is_still_reported",
+     ("the gate names both denominators, so a reader can see what was excluded "
+      "and how many rows that was rather than inferring it")),
+    ("auxiliary_rows_are_reported_not_dropped",
+     ("their unparseable and multi-label counts appear in the report under "
+      "auxiliary_output_hygiene, with the offending row ids and the raw outputs "
+      "themselves")),
+    ("what_it_does_not_move",
+     ("direct_code_following_rate is measured entirely on auxiliary rows and "
+      "still feeds mediation.  It is not a hygiene count; it is the ceiling v2 "
+      "added so an accuracy floor alone could not be met by a direct adapter "
+      "that answered from the code.  Scoping it out would undo a repair, so the "
+      "claim here is narrower and is the true one: auxiliary rows are outside "
+      "every mediated HYGIENE count")),
+    ("why_the_scope_belongs_in_the_design",
+     ("'zero unparseable outputs' and 'zero unparseable outputs among the rows "
+      "this verdict rests on' are two analyses of one run that reach different "
+      "verdicts.  A choice between them made in the aggregation code is made "
+      "after the rows exist and is invisible in the frozen design, which is the "
+      "one artifact that is supposed to say what was pre-registered")),
+    ("the_contradiction_it_resolves",
+     ("v3 declared hybrid_conflict_probe auxiliary, not decisive and 'reported "
+      "separately from every mediated gate', echoed that in its own report as "
+      "auxiliary_conditions_reported_separately, and then mapped a count over "
+      "ALL rows -- including those -- to mediation.  Both halves are "
+      "defensible; a design that states both is not")),
+    ("post_outcome_scope_amendment", True),
+    ("what_that_means",
+     ("this scope was declared after the v3 run's verdicts were read.  Results "
+      "aggregated under it from v3's cells are a CORRECTIVE analysis of a "
+      "completed run and are not pre-registered, however exactly they are "
+      "recomputed.  Only a run executed under v4 from the start is "
+      "pre-registered under the corrected scope")),
+    ("the_evidence_for_it_is_recorded_in_this_design",
+     ("scope_amendment below is computed at freeze time from the committed v3 "
+      "reports of BOTH datasets, so a reader can see what the amendment rests "
+      "on and that it was not chosen to reach one dataset's conclusion")),
+))
+
+#: What the design says about consuming cells another version filed.  The
+#: per-dataset half -- the ancestor manifest's own digest -- is filled in by the
+#: shared builder, which is where the dataset is known.
+DECLARED_CELL_COMPATIBILITY_V4 = OrderedDict((
+    ("rule", "cells_are_consumed_from_the_ancestor_design_and_checked"),
+    ("ancestor_version", "v3"),
+    ("accepted_result_kinds", (RESULT_KIND_V4,)),
+    ("why_the_result_kind_is_reused",
+     ("load_cell_result refuses a cell whose kind is not the aggregating spec's "
+      "result_kind.  v4 changes how rows are counted and not how they are "
+      "produced, so a new kind would have refused all 28 filed cells and "
+      "repeated 26 GPU phase invocations to write identical bytes back")),
+    ("what_is_checked_before_a_cell_is_consumed",
+     ("every cell's own recorded preregistration_design_sha256 is compared "
+      "against this design's and against the ancestor design frozen into this "
+      "manifest; a cell matching neither is refused rather than aggregated")),
+    ("states", ("produced_under_this_design",
+                "reused_from_the_ancestor_design",
+                "unrecognized_design")),
+    ("the_cells_are_not_relabelled",
+     ("a reused cell keeps its v3 kind, its v3 provenance and its v3 file "
+      "bytes.  Relabelling it would destroy the record of which design actually "
+      "executed it, and the whole point of the check is that the two designs "
+      "are visibly different")),
+    ("what_a_v4_report_must_disclose",
+     ("input_verification records the pre-registration a cell was produced "
+      "under without comparing it to the one doing the aggregating, so a v4 "
+      "report over v3 cells would otherwise look self-produced.  Every v4 "
+      "report therefore carries cell_design_lineage naming both designs and "
+      "how many cells came from each")),
+))
+
+PILOT_SPEC_V4 = PilotSpec(
+    version="v4", kind=KIND_V4, prereg_kind=PREREG_V4_KIND,
+    result_kind=RESULT_KIND_V4, supersession_kind=SUPERSESSION_KIND_V4,
+    conditions=CONDITIONS_V4,
+    forced_code_conditions=FORCED_CODE_CONDITIONS_V4,
+    mediated_conditions=MEDIATED_CONDITIONS_V4,
+    auxiliary_conditions=AUXILIARY_CONDITIONS_V4,
+    decisive_conditions=DECISIVE_CONDITIONS_V4,
+    thresholds=GATE_THRESHOLDS_V4, gate_to_verdict=GATE_TO_VERDICT_V4,
+    baseline_cell=True, embed_live_checkpoint_status=False,
+    direct_gate_aggregation="every_seed",
+    declared_gate_aggregation={
+        "direct_gate_aggregation": PER_SEED_GATE_AGGREGATION},
+    hygiene_gate_row_scope=HYGIENE_SCOPE_NON_AUXILIARY,
+    declared_hygiene_scope=DECLARED_HYGIENE_SCOPE_V4,
+    declared_cell_compatibility=DECLARED_CELL_COMPATIBILITY_V4,
+    superseded_filenames=("rf_pilot_ppubench.json", "rf_pilot_salmu.json",
+                          "rf_pilot_ppubench_v2.json",
+                          "rf_pilot_salmu_v2.json",
+                          "rf_pilot_ppubench_v3.json",
+                          "rf_pilot_salmu_v3.json"))
+
+#: The manifest each version's cells may legitimately come from, if it is not
+#: this version's own.  Empty for v2 and v3: neither consumes another design's
+#: cells, and a version that has not declared an ancestor has no ancestor to
+#: accept a cell from.
+ANCESTOR_MANIFEST_BY_VERSION["v4"] = "rf_pilot_{dataset}_v3.json"
+
+#: Named beside the filename rather than parsed out of it, because a version
+#: string extracted from a filename is one that a rename silently changes.
+ANCESTOR_VERSION_BY_VERSION = {"v4": "v3"}
+
+
+def ancestor_manifest_path(spec, dataset):
+    """The frozen manifest a version's cells may have been produced under."""
+    name = ANCESTOR_MANIFEST_BY_VERSION.get(spec.version)
+    if not name:
+        return None
+    return DATASET_ROOT / MANIFEST_DIR / name.format(dataset=dataset)
+
+
+def ancestor_design_sha256(spec, dataset):
+    """The ancestor design's identity, read out of its own committed bytes.
+
+    Read and not verified.  ``verify_manifest`` on a superseded pilot reports
+    drift, because such a pilot binds the bytes of this script as it was when it
+    was frozen and this script has since moved on; that is the documented state
+    of a superseded artifact and not a reason to refuse a cell it produced.  What
+    identifies the ancestor here is the design hash it recorded for itself, which
+    is a fact about that file and does not change when this one is edited.
+    """
+    p = ancestor_manifest_path(spec, dataset)
+    if p is None:
+        return None
+    if not p.is_file():
+        raise RuntimeError(
+            f"{spec.version} declares an ancestor manifest at {_rel(p)} and it "
+            f"is absent; without it a cell filed under the ancestor design "
+            f"cannot be told from a cell filed under no design at all")
+    frozen = json.loads(p.read_text(encoding="utf-8"))
+    return OrderedDict((
+        ("ancestor_version", ANCESTOR_VERSION_BY_VERSION[spec.version]),
+        ("manifest", _rel(p)),
+        ("manifest_sha256", sha256_file(p)),
+        ("design_sha256", frozen.get("design_sha256")),
+        ("kind", frozen.get("kind")),
+        ("read_not_verified",
+         ("a superseded pilot binds this script's earlier bytes and so reports "
+          "drift by design; its own recorded design_sha256 is still the "
+          "identity of the design it froze")),
+    ))
+
+
+def v4_scope_amendment_evidence(dataset, spec=None):
+    """What the amendment rests on, computed from the committed v3 record.
+
+    Read out of the two v3 RF2 reports and the two v3 manifests rather than
+    written down, for the reason every other count in this file is derived: a
+    number typed into a rationale is a number nobody can check, and this one is
+    doing more work than most -- it is the reason a frozen design changed after
+    its verdicts were read.
+
+    BOTH datasets are recorded in BOTH manifests.  An amendment justified by one
+    dataset's numbers alone is an amendment tailored to that dataset, and the
+    honest test of a scope correction is whether it moves the verdicts it should
+    move and leaves the others where they were.  Here it does: PPUBench's
+    mediation failed on this gate alone and is rescued, SALMU's failed on two
+    gates and is not.
+
+    Binding the reports' digests inside the design is deliberate and is not the
+    mistake v2 made.  v2 bound the state of work it had NOT done, so doing the
+    work broke the design.  These reports are filed, committed and superseded;
+    nothing this pilot will ever do changes them, and if somebody did change them
+    the rationale below would be citing bytes that no longer exist -- which is
+    exactly when this manifest ought to stop reproducing.
+    """
+    spec = spec or PILOT_SPEC_V4
+    aux = set(spec.auxiliary_conditions)
+    # The gates that feed the mediation verdict, read off the map rather than
+    # listed: the amendment touches one of them and the block has to show that
+    # it touched only that one.
+    mediation_gates = {g for g, v in spec.gate_to_verdict.items()
+                       if v == "mediation"}
+    per_dataset = OrderedDict()
+    sources = OrderedDict()
+    for ds in ("ppubench", "salmu"):
+        rep_path = report_path(ds, "RF2", None, PILOT_SPEC_V3)
+        man_path = prereg_path_for(PILOT_SPEC_V3, ds)
+        if not rep_path.is_file() or not man_path.is_file():
+            raise RuntimeError(
+                f"the v4 scope amendment cites the v3 record of {ds} and "
+                f"{_rel(rep_path) if not rep_path.is_file() else _rel(man_path)} "
+                f"is absent; an amendment whose evidence cannot be read is an "
+                f"assertion")
+        rep = json.loads(rep_path.read_text(encoding="utf-8"))
+        man = json.loads(man_path.read_text(encoding="utf-8"))
+        sources[ds] = OrderedDict((
+            ("v3_report", _rel(rep_path)),
+            ("v3_report_sha256", sha256_file(rep_path)),
+            ("v3_manifest", _rel(man_path)),
+            ("v3_manifest_sha256", sha256_file(man_path)),
+            ("v3_design_sha256", rep.get("preregistration_design_sha256")),
+            ("v3_report_kind", rep.get("kind")),
+        ))
+        # Which cells are auxiliary is read off the frozen design's own row
+        # table, not guessed from a cell id: the design is what declares a
+        # condition auxiliary, so it is what decides which rows fall outside the
+        # count.
+        aux_cells = set()
+        for cell in man.get("cells") or []:
+            conds = {r.get("condition") for r in cell.get("rows") or []}
+            if conds and conds <= aux:
+                aux_cells.add(cell["cell_id"])
+        reported_aux = set(rep.get("auxiliary_conditions_reported_separately")
+                           or [])
+        if reported_aux != aux:
+            raise RuntimeError(
+                f"the v3 report of {ds} names auxiliary conditions "
+                f"{sorted(reported_aux)} and this design names {sorted(aux)}; "
+                f"the amendment would be scoping rows out of a count on the "
+                f"strength of a table the filed run did not use")
+        gate = rep["gates"]["no_unparseable_or_multi_label_outputs"]
+        th = man["gate_thresholds"]
+        whole = {"unparseable": 0, "multi_label_ambiguous": 0, "n_rows": 0}
+        auxc = {"unparseable": 0, "multi_label_ambiguous": 0, "n_rows": 0}
+        for cid, cc in (rep.get("cells") or {}).items():
+            whole["unparseable"] += cc["n_unparseable"]
+            whole["multi_label_ambiguous"] += cc["n_multi_label_ambiguous"]
+            whole["n_rows"] += cc["n_rows"]
+            if cid in aux_cells:
+                auxc["unparseable"] += cc["n_unparseable"]
+                auxc["multi_label_ambiguous"] += cc["n_multi_label_ambiguous"]
+                auxc["n_rows"] += cc["n_rows"]
+        non = {k: whole[k] - auxc[k] for k in whole}
+        passes = (non["unparseable"] <= th["max_unparseable_outputs"]
+                  and non["multi_label_ambiguous"]
+                  <= th["max_multi_label_outputs"])
+        v3_mediation = rep["verdicts"]["mediation"]
+        still = [n for n in v3_mediation["failed_gates"]
+                 if n != "no_unparseable_or_multi_label_outputs"]
+        if not passes:
+            still = sorted(set(still)
+                           | {"no_unparseable_or_multi_label_outputs"})
+        # not_established is carried through rather than recomputed: a dataset
+        # that cannot support the question supports it no better under a
+        # different denominator, and reporting pass or fail for one would invent
+        # a measurement -- which is the coercion the three-state verdict exists
+        # to prevent.
+        under_v4 = (NOT_ESTABLISHED
+                    if v3_mediation["state"] == NOT_ESTABLISHED
+                    else ("fail" if still else "pass"))
+        per_dataset[ds] = OrderedDict((
+            ("n_cells", rep.get("n_cells")),
+            ("auxiliary_cells", sorted(aux_cells)),
+            ("rows", OrderedDict((
+                ("in_the_whole_run", whole["n_rows"]),
+                ("auxiliary", auxc["n_rows"]),
+                ("counted_under_the_v4_scope", non["n_rows"])))),
+            ("v3_hygiene_gate", OrderedDict((
+                ("row_scope", HYGIENE_SCOPE_ALL_ROWS),
+                ("n", gate["n"]),
+                ("value", gate["value"]),
+                ("passed", gate["passed"])))),
+            ("the_same_counts_split", OrderedDict((
+                ("auxiliary", {k: auxc[k] for k in
+                               ("unparseable", "multi_label_ambiguous")}),
+                ("non_auxiliary", {k: non[k] for k in
+                                   ("unparseable", "multi_label_ambiguous")})))),
+            ("hygiene_gate_under_the_v4_scope", OrderedDict((
+                ("row_scope", HYGIENE_SCOPE_NON_AUXILIARY),
+                ("n", non["n_rows"]),
+                ("value", {"unparseable": non["unparseable"],
+                           "multi_label_ambiguous":
+                               non["multi_label_ambiguous"]}),
+                ("passed", passes),
+                ("thresholds_unchanged",
+                 {k: th[k] for k in ("max_unparseable_outputs",
+                                     "max_multi_label_outputs")})))),
+            ("mediation", OrderedDict((
+                ("state_under_v3", v3_mediation["state"]),
+                ("failed_gates_under_v3", list(v3_mediation["failed_gates"])),
+                ("mediated_gates_that_still_fail_under_v4", still),
+                ("state_under_v4", under_v4),
+                ("moved_by_the_amendment",
+                 v3_mediation["state"] != under_v4)))),
+            ("the_other_gates_that_feed_mediation_are_untouched", OrderedDict(
+                (n, {"passed": rep["gates"][n]["passed"],
+                     "value": rep["gates"][n].get("value"),
+                     "threshold": rep["gates"][n].get("threshold"),
+                     "levels_that_failed":
+                         rep["gates"][n].get("levels_that_failed"),
+                     "n": rep["gates"][n].get("n")})
+                for n in sorted(mediation_gates)
+                if n in rep["gates"]
+                and n != "no_unparseable_or_multi_label_outputs")),
+            ("every_verdict_as_v3_filed_it", OrderedDict(
+                (v, rep["verdicts"][v]["state"]) for v in VERDICT_NAMES)),
+        ))
+    moved = [ds for ds, e in per_dataset.items()
+             if e["mediation"]["moved_by_the_amendment"]]
+    unmoved = [ds for ds, e in per_dataset.items()
+               if not e["mediation"]["moved_by_the_amendment"]]
+    return OrderedDict((
+        ("what_this_block_is",
+         ("the evidence the v4 row scope was amended on, computed at freeze time "
+          "from the committed v3 record of both datasets")),
+        ("this_manifests_dataset", dataset),
+        ("both_datasets_are_recorded_in_both_manifests",
+         ("an amendment justified by one dataset's numbers is an amendment "
+          "tailored to that dataset; the test of a scope correction is whether "
+          "it moves the verdicts it should move and leaves the rest where they "
+          "were")),
+        ("per_dataset", per_dataset),
+        ("sources", sources),
+        ("datasets_whose_mediation_verdict_moves", sorted(moved)),
+        ("datasets_whose_mediation_verdict_does_not_move", sorted(unmoved)),
+        ("the_amendment_is_not_a_waiver",
+         ("no threshold is lowered and no gate is unmapped.  Where the excluded "
+          "rows also fail a gate that is not a hygiene count, the verdict still "
+          "fails, and this block says which datasets those are")),
+        ("n_gates_in_the_v4_map", len(GATE_TO_VERDICT_V4)),
+        ("n_gates_in_the_v3_map", len(GATE_TO_VERDICT_V3)),
+        ("thresholds_that_moved", list(V4_THRESHOLD_DIFFERENCE)),
+        ("gate_mappings_that_moved", list(V4_GATE_MAP_DIFFERENCE)),
+        ("condition_table_difference", V4_CONDITION_TABLE_DIFFERENCE),
+        ("auxiliary_conditions", list(spec.auxiliary_conditions)),
+        ("n_gates_that_feed_mediation", len(mediation_gates)),
+    ))
+
+
+#: The repairs v4 makes over v3, in the shape v3's record uses: each item names
+#: the two versions it moves between, so the progression reads v1 -> v2 -> v3 ->
+#: v4 rather than as one flat list of complaints.
+SUPERSESSION_ITEMS_V4 = OrderedDict((
+    ("the_hygiene_gate_has_one_denominator", {
+        "v3": "no_unparseable_or_multi_label_outputs counted every row the run "
+              "produced, including the rows of hybrid_conflict_probe, and "
+              "mapped that count to mediation -- while the same design declared "
+              "that condition auxiliary, not decisive, and 'reported separately "
+              "from every mediated gate', and its own report echoed the "
+              "declaration as auxiliary_conditions_reported_separately.  Both "
+              "statements are defensible; holding both is not.  The PPUBench run "
+              "failed mediation on 9 unparseable outputs, all 9 of them in the "
+              "auxiliary probe, with 64 non-auxiliary rows clean",
+        "v4": "the row scope is a declared field of the design "
+              "(hygiene_gate_row_scope), the verdict-bearing count covers the "
+              "non-auxiliary rows the verdict rests on, and the gate names both "
+              "denominators so a reader sees what was excluded and how many rows "
+              "that was.  A denominator chosen in the aggregation code is chosen "
+              "after the rows exist and is invisible in the frozen design"}),
+    ("auxiliary_output_hygiene_is_reported_and_feeds_nothing", {
+        "v3": "the auxiliary rows' unparseable outputs were visible only as a "
+              "count inside a gate they were not supposed to decide, so the one "
+              "thing worth knowing about them -- that the probe derails out of "
+              "the candidate vocabulary entirely -- was reported as a number and "
+              "not as a finding",
+        "v4": "they are reported under auxiliary_output_hygiene with "
+              "is_a_gate=False and feeds_no_verdict=True, carrying both counts, "
+              "the rate, the offending row ids, the raw outputs themselves and "
+              "the distinct expected labels missed.  Excluded from a verdict is "
+              "not the same as deleted, and a diagnostic nobody reports is a "
+              "measurement nobody made"}),
+    ("direct_code_following_rate_stays_where_it_was", {
+        "v3": "measured entirely on auxiliary rows and mapped to mediation, as "
+              "the ceiling v2 added so that an accuracy floor alone could not be "
+              "satisfied by a direct adapter answering from the code",
+        "v4": "unchanged, deliberately.  It is not a hygiene count, so scoping "
+              "auxiliary rows out of hygiene does not touch it.  A repair that "
+              "moved it would have traded a v2 defect for a v4 one, and the "
+              "claim v4 makes is therefore narrower than 'auxiliary rows carry "
+              "no verdict' and is the one that is true"}),
+    ("a_cell_from_another_design_is_checked_before_it_is_consumed", {
+        "v3": "load_cell_result compared a cell's kind with the aggregating "
+              "spec's and nothing compared designs, because until now no version "
+              "had a reason to read another's cells.  input_verification "
+              "records the pre-registration a cell was produced under without "
+              "comparing it to the one doing the aggregating",
+        "v4": "verify_cell_design_lineage compares every cell's recorded "
+              "preregistration_design_sha256 against this design's and against "
+              "the ancestor design frozen into the manifest, refuses a cell "
+              "matching neither, and reports how many cells came from which -- "
+              "so a v4 report over v3 cells says so on its face instead of "
+              "looking self-produced"}),
+    ("a_post_outcome_amendment_says_it_is_one", {
+        "v3": "had no such concept: every repair v3 made was declared before any "
+              "cell existed, so nothing in the artifact distinguished a rule "
+              "frozen in advance from one adjusted afterwards",
+        "v4": "post_outcome_scope_amendment=true is a top-level field of the "
+              "design, the scope_amendment block carries the derived evidence "
+              "from BOTH datasets, and every report states that results "
+              "aggregated under v4 from v3's cells are a corrective analysis "
+              "rather than a pre-registered one.  Only a run executed under v4 "
+              "from the start is pre-registered under the corrected scope"}),
+))
+
+#: What is true of a superseded v3 pilot, in the shape ``supersession_record``
+#: reads.  Keyed on the kind it records rather than on the version replacing it.
+SUPERSEDED_NOTES_V3 = {
+    "design_is_still_reconstructible": (
+        "verify_manifest dispatches on kind and rebuilds a v3 pilot through "
+        "build_pilot_preregistration_v3, which is retained for exactly this "
+        "reason, so the frozen design_sha256 still reproduces and every "
+        "checkpoint digest still matches"),
+    "input_digests_will_report_drift": (
+        "a v3 manifest binds the bytes of this script as it was when that "
+        "manifest was frozen, and this script has since gained v4, so "
+        "verify_manifest names the script digest as drifted and returns "
+        "valid=False.  That is the expected state of a superseded artifact and "
+        "not a defect, and it is not re-frozen because a pre-registration "
+        "changed after freezing was never a pre-registration"),
+    "its_verdicts_stay_exactly_as_filed": (
+        "the v3 reports are committed and are not regenerated, reworded or "
+        "replaced.  v4 files its own reports beside them under v4 names; a "
+        "corrective analysis that overwrote the analysis it corrects would "
+        "leave no way to see that the two disagree"),
+    "its_cells_are_consumed_by_v4_and_are_not_relabelled": (
+        "v4 reuses v3's result kind, so the 28 filed cells are read as they "
+        "stand: same bytes, same kind string, same run_provenance naming v3 and "
+        "the commit that executed them.  verify_cell_design_lineage checks each "
+        "one against the v3 design hash frozen into the v4 manifest and reports "
+        "how many were reused, because a v4 report that did not say which design "
+        "produced its rows would look self-produced"),
+    "why_it_is_superseded": (
+        "for a scope reason and not a scientific one.  v3's science stands: its "
+        "router gate, its per-seed direct gates, its baseline cell and its live "
+        "readiness all did what they were repaired to do, and the run that "
+        "exercised them completed.  What it got wrong is one denominator -- it "
+        "counted auxiliary rows toward a mediated verdict it had declared they "
+        "were outside -- and that is corrected by declaring the scope, not by "
+        "re-measuring anything"),
+}
+
+SUPERSESSION_POLICY_V4 = (
+    "the v1, v2 and v3 manifests are preserved unmodified and their designs are "
+    "still reconstructible; they are marked superseded here rather than edited, "
+    "because a pre-registration changed after freezing was never a "
+    "pre-registration.  v2 was superseded for a structural reason -- its design "
+    "hash covered which adapters were on disk, so it could not survive the "
+    "training it required.  v3 is superseded for a scope reason: it declared its "
+    "auxiliary condition outside every mediated gate and then counted its rows "
+    "toward one.  v4 is the FIRST version in this file whose amendment was made "
+    "after a run's verdicts were read, and it says so at the top level of its "
+    "own design rather than only in a commit message; the results it computes "
+    "over v3's cells are corrective, and a pre-registered result under the "
+    "corrected scope requires a run executed under v4 from the start")
+
+
+def build_design_v4(dataset, forget_set_id, forget_ids, router_seeds,
+                    edit_seeds, direct_seeds, man=None, images=None,
+                    image_sha_by_uri=None):
+    """The v4 design: v3's measurements, one declared denominator.
+
+    Thin, like every other version's constructor: the one implementation is
+    ``build_design_for``, and a second copy would be a second place for the
+    cell counts, the row counts and the cluster checks to be missing from.
+    """
+    return build_design_for(PILOT_SPEC_V4, dataset, forget_set_id, forget_ids,
+                            router_seeds, edit_seeds, direct_seeds, man=man,
+                            images=images, image_sha_by_uri=image_sha_by_uri)
+
+
+def build_pilot_preregistration_v4(dataset, forget_set_id, forget_ids,
+                                   router_seeds=None, edit_seeds=None,
+                                   direct_seeds=None, man=None, images=None,
+                                   selection=None, superseded_paths=()):
+    """The frozen v4 pilot.
+
+    Same construction path as v2 and v3 with a different spec, so every check
+    they ran runs here too.  It additionally carries the scope amendment's
+    derived evidence and the ancestor design identity its cells are checked
+    against, both of which the shared builder fills in from this spec's
+    declarations.
+    """
+    return build_pilot_preregistration_for(
+        PILOT_SPEC_V4, dataset, forget_set_id, forget_ids, router_seeds,
+        edit_seeds, direct_seeds, man=man, images=images, selection=selection,
+        superseded_paths=superseded_paths)
+
+
+def prereg_path_v4(dataset, path=None):
+    return prereg_path_for(PILOT_SPEC_V4, dataset, path)
+
+
+def load_prereg_v4(dataset, path=None, verify=True):
+    return load_prereg_for(PILOT_SPEC_V4, dataset, path, verify)
+
+
+def _freeze_v4(args):
+    return _freeze_for(PILOT_SPEC_V4, args)
+
+
+def _run_v4_phase(args, phase):
+    """The v4 dispatcher, kept so ``--design-version v4`` names a version the
+    same way v2 and v3 do rather than only working through the default."""
+    return _run_phase_for(PILOT_SPEC_V4, args, phase)
+
+
+def _run_v4(args):
+    return _run_pilot(args, PILOT_SPEC_V4)
+
+
+def _v4_extra_freeze_inputs(dataset):
+    """The files a v4 freeze binds beyond the ones every version binds.
+
+    The two committed v3 RF2 reports, because the scope amendment's evidence is
+    computed from them and a rationale that cites bytes nothing re-hashes is a
+    rationale nobody can check later.  ``dataset`` is accepted for the shape of
+    the table and unused: both reports are bound in both manifests, which is the
+    point of recording both.
+    """
+    return [report_path(ds, "RF2", None, PILOT_SPEC_V3)
+            for ds in ("ppubench", "salmu")]
+
+
+# ---------------------------------------------------------------------------
+# Rebind the version tables.  Everything above reads these at call time, so
+# declaring v4 here is the same thing as declaring it where the tables are
+# built, and the constructors that produced the frozen v1, v2 and v3 bytes stay
+# textually untouched.
+# ---------------------------------------------------------------------------
+
+LATEST_PILOT_SPEC = PILOT_SPEC_V4
+SPEC_BY_VERSION[PILOT_SPEC_V4.version] = PILOT_SPEC_V4
+SPEC_BY_PREREG_KIND[PILOT_SPEC_V4.prereg_kind] = PILOT_SPEC_V4
+PHASES_BY_VERSION[PILOT_SPEC_V4.version] = _phases_for(PILOT_SPEC_V4)
+REPAIRS_BY_VERSION["v4"] = OrderedDict((*SUPERSESSION_ITEMS.items(),
+                                        *SUPERSESSION_ITEMS_V3.items(),
+                                        *SUPERSESSION_ITEMS_V4.items()))
+SUPERSESSION_POLICY["v4"] = SUPERSESSION_POLICY_V4
+SUPERSEDED_NOTES[PREREG_V3_KIND] = SUPERSEDED_NOTES_V3
+SCOPE_AMENDMENT_EVIDENCE_BY_VERSION["v4"] = v4_scope_amendment_evidence
+EXTRA_FREEZE_INPUTS_BY_VERSION["v4"] = _v4_extra_freeze_inputs
 
 
 if __name__ == "__main__":

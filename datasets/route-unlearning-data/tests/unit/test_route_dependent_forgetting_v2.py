@@ -1871,7 +1871,11 @@ def test_a_cell_with_no_run_provenance_is_not_filed(rf, tmp_path):
     # different device or a --resume that reused a stale file
     assert prov["cli"]["device"] == "cuda:1"
     assert prov["cli"]["resume"] is True
-    assert prov["cli"]["design_version"] == "v3"
+    # The DEFAULT, read off the one constant that decides it rather than typed
+    # here: this test's subject is that the provenance records the flag, and the
+    # flag's default is pinned by the CLI test below.  Typing the version here
+    # as well would be two places to update and one of them would be forgotten.
+    assert prov["cli"]["design_version"] == rf.LATEST_PILOT_SPEC.version
     filed = rf._file_cell("ppubench", cell, "RF1H", rows, scored, missing,
                           {"prompts": {}, "input_sha256": {},
                            "run_provenance": prov}, tmp_path / "c")
@@ -2005,10 +2009,20 @@ def test_the_cli_names_every_factor_and_every_phase(rf):
     assert (args.router_seed, args.edit_seed, args.direct_seed) == (42, 17, 123)
     assert args.device == "cuda:1" and args.resume is True
     assert args.out == "/tmp/o.json" and args.cells == "/tmp/cells"
-    # v3 is the default because it is the design that survives its own training;
-    # v2 stays selectable so the frozen v2 pilots can still be rebuilt.
-    assert args.design_version == "v3" == rf.LATEST_PILOT_SPEC.version
+    # v4 is the default because it is the design that declares its own
+    # denominators; v2 and v3 stay selectable so their frozen pilots can still
+    # be rebuilt and so the filed v3 record can still be read under the design
+    # that produced it.
+    assert args.design_version == "v4" == rf.LATEST_PILOT_SPEC.version
     assert parser.parse_args(["--design-version", "v2"]).design_version == "v2"
+    assert parser.parse_args(["--design-version", "v3"]).design_version == "v3"
+    versions = parser._actions[
+        [a.dest for a in parser._actions].index("design_version")].choices
+    assert set(versions) == {"v1", "v2", "v3", "v4"} == \
+        set(rf.SPEC_BY_VERSION) | {"v1"}, \
+        "every reconstructible version is selectable and nothing else is: a " \
+        "choice argparse accepts and no dispatcher can serve is a crash, and a " \
+        "version the dispatcher serves but argparse refuses is unreachable"
     choices = parser._actions[
         [a.dest for a in parser._actions].index("phase")].choices
     # "RF1" is accepted only so ``main`` can refuse it with the explanation of
@@ -2094,6 +2108,16 @@ _needs_v2_manifests = pytest.mark.skipif(
     len(_V2_PRESENT) != len(_V2_MANIFESTS),
     reason=("the v2 pilots are not frozen in this checkout: "
             + ", ".join(str(p) for p in _V2_MANIFESTS if not p.is_file())))
+
+#: The committed v3 RESULT record, which is what a v4 freeze derives its scope
+#: amendment's evidence from.  Named here rather than globbed, so a checkout
+#: missing part of it is a checkout that reports which part.
+_V3_RECORD = [_ROOT / "e2c_route_forgetting" / "reports" / n
+              for n in ("rf_report_ppubench_v3.json",
+                        "rf_report_salmu_v3.json")]
+_V3_RECORD += [_ROOT / "e2c_route_forgetting" / "manifests" / n
+               for n in ("rf_pilot_ppubench_v3.json",
+                         "rf_pilot_salmu_v3.json")]
 
 
 def _recorded_paths(node):
@@ -2616,17 +2640,20 @@ def test_the_frozen_v2_pilots_spend_the_router_budget_where_it_buys_something(
 
 
 @_needs_v2_manifests
-def test_rf0_reports_what_the_frozen_v2_pilots_still_need(rf, tmp_path):
+def test_rf0_reports_the_frozen_v2_pilots_against_the_tree(rf, tmp_path):
     """RF0 is the phase that says what is missing.
 
     The manifest is named explicitly: RF0 without a path reads the LATEST
-    version's canonical name, and a test that meant the v2 pilots but got the v3
+    version's canonical name, and a test that meant the v2 pilots but got the v4
     one would report on a design it did not load.
 
-    WHAT MUST BE TRAINED is now computed live rather than read out of the frozen
+    WHAT MUST BE TRAINED is computed live rather than read out of the frozen
     record, so it is the same answer in a fresh clone with no weights and on the
     machine that has them -- which is the repair, because reading it from a block
     frozen before the training existed could never say the training happened.
+    Every quantity below is derived from the tree for the same reason: this pilot
+    has since had its training done by v3, and a test pinned at "still missing"
+    would be pinning a date rather than a rule.
     """
     for path in _V2_MANIFESTS:
         ds = "salmu" if "salmu" in path.name else "ppubench"
@@ -2636,14 +2663,16 @@ def test_rf0_reports_what_the_frozen_v2_pilots_still_need(rf, tmp_path):
         assert rep["kind"] == rf.PREREG_V2_KIND
         assert rep["design_version"] == "v2", \
             "RF0 reports the version of the manifest it was handed, not the " \
-            "module default, or a v2 report would be filed under a v3 name"
+            "module default, or a v2 report would be filed under a v4 name"
         assert rep["manifest"] == rf._rel(path)
         assert rep["executed"] is False
         assert rep["manifest_valid"] == (rep["problems"] == []), \
             "invalid without naming a problem is a refusal with no reason"
         assert rep["runnable_now"] is False
         assert rep["why_not_runnable"]
-        assert rep["n_must_be_trained"] > 0
+        assert "does not verify" in rep["why_not_runnable"], \
+            "a superseded pilot binds an older runner, and that alone is enough " \
+            "to keep it out of reach of the phases"
         # the live answer, computed the way the frozen block could not have been
         # after it was written: the declared training work minus whatever has
         # since arrived
@@ -2652,8 +2681,10 @@ def test_rf0_reports_what_the_frozen_v2_pilots_still_need(rf, tmp_path):
             set(doc["checkpoint_requirements"]
                 ["must_be_trained_before_this_pilot_can_run"])
             - set(rep["roles_present"])), (ds, rep["roles_present"])
-        assert rep["n_cells_filed"] == 0
-        assert rep["n_cells_missing"] == rep["n_cells"] == doc["n_cells"]
+        assert rep["n_must_be_trained"] == len(
+            rep["must_be_trained_before_this_pilot_can_run"])
+        assert rep["n_cells_filed"] + rep["n_cells_missing"] == \
+            rep["n_cells"] == doc["n_cells"]
         assert rep["held_out_image_drift_since_freeze"] == [], \
             "the dataset manifests are tracked; a drift here means the pilot " \
             "was frozen over images this tree no longer names"
@@ -2673,10 +2704,18 @@ def test_rf0_reports_what_the_frozen_v2_pilots_still_need(rf, tmp_path):
             "an accuracy over fewer images than the design names is an accuracy " \
             "over a subset"
         for seed in doc["router_seeds"]:
-            if seed == rf.EXISTING_ROUTER_SEED:
+            entry = rep["routers"][str(seed)]
+            # Derived from the file rather than pinned at "RF1G has not run":
+            # it has since run for every seed v3 declared, and the predictions
+            # are committed.
+            assert entry["predictions_present"] is \
+                rf.router_prediction_path(ds, seed).is_file()
+            if not entry["predictions_present"]:
                 continue
-            assert rep["routers"][str(seed)]["predictions_present"] is False, \
-                "RF1G has not been run, so a trained router does not exist yet"
+            got = entry["held_out_accuracy"]
+            assert got and not entry["accuracy_error"], entry
+            assert got["n_correct"] / got["n"] == got["accuracy"]
+            assert got["n"] == rep["n_held_out_images"]
 
 
 @_needs_v2_manifests
@@ -2692,21 +2731,21 @@ def test_the_phases_read_the_frozen_v2_pilots_and_nothing_else(rf):
 
 
 @_needs_v2_verifiable
-def test_the_frozen_v2_pilots_still_rebuild_and_name_only_the_runner_drift(
+def test_the_frozen_v2_pilots_show_the_defect_they_were_superseded_for(
         rf, tmp_path):
-    """The claim that matters once the bytes are committed: each v2 pilot still
-    REBUILDS from its own recorded parameters through the same constructor that
-    froze it, and every checkpoint digest it names still matches.
+    """Each v2 pilot is still readable, still names its own design, and still
+    refuses to load -- and the reason it refuses is now measurable.
 
-    Exactly ONE problem is expected and it is this script's own digest, the state
-    the v1 pilots are already in: a v2 manifest binds the bytes of the runner
-    that froze it, and that runner has since gained v3.  Its ``design_sha256``
-    still reproduces, so the artifact is still readable and still says what was
-    pre-registered -- which is the whole reason a superseded manifest is kept.
+    When this test was written the v2 pilots were waiting for training that had
+    not happened, so "v2's ``design_sha256`` covered which adapters were on
+    disk" was a reading of the constructor.  v3 then trained the same roles, and
+    the reading became an observation: the work arrived and the artifact stopped
+    reproducing at that moment, which is the exact sequence the supersession
+    record predicts and the reason a v2 pilot was unrunnable by construction.
 
-    What is asserted alongside it is the repair: readiness is computed LIVE, so
-    even this superseded manifest answers "what is still missing" from the tree
-    as it is now rather than from a block written before the training existed.
+    Both states are asserted, because which one a checkout is in depends on
+    whether the gitignored adapters are there, and a test that only knew one of
+    them would fail in a fresh clone instead of describing it.
 
     Gated on the images and the weights because the rebuild re-hashes both; the
     record-reading tests above run in a fresh clone.
@@ -2721,25 +2760,41 @@ def test_the_frozen_v2_pilots_still_rebuild_and_name_only_the_runner_drift(
         assert got["kind"] == rf.PREREG_V2_KIND
         assert got["executed"] is False
         assert got["valid"] is False, (path.name, got["problems"])
-        assert len(got["problems"]) == 1, got["problems"]
-        only = got["problems"][0]
-        assert "e2c_v3_route_dependent_forgetting.py" in only, only
-        assert only.startswith("input "), only
-        assert "does not reproduce design_sha256" not in only, \
-            "the v2 design still rebuilds; only the runner's bytes have moved"
+        drift = [p for p in got["problems"] if p.startswith("input ")]
+        rebuilt = [p for p in got["problems"]
+                   if "does not reproduce design_sha256" in p]
+        trained = got["roles_trained_since_freeze"]
+        assert drift, "a superseded pilot always binds an older runner"
+        assert all("e2c_v3_route_dependent_forgetting.py" in p for p in drift), \
+            drift
+        assert set(got["problems"]) == set(drift) | set(rebuilt), \
+            "a problem that is neither the runner's own drift nor the rebuild " \
+            "failing is one this test cannot explain: " \
+            f"{got['problems']}"
         assert got["n_checkpoints_rehashed"] > 0, \
             "a pilot that hashed nothing binds no weights"
-        assert got["roles_trained_since_freeze"] == [], \
-            "a role that has appeared since freezing is training work no filed " \
-            "result has been bound to yet"
-        assert got["must_be_trained"], \
-            "frozen and not executed, so the training work is still outstanding"
-        # the repair, applied to a manifest that predates it
         assert got["checkpoint_readiness"] is not None
-        assert got["checkpoints_complete"] is False
         assert got["checkpoint_readiness"]["computed_live_not_read_from_the_"
                                           "frozen_design"] is True
-        assert got["checkpoint_readiness"]["runnable_now"] is False
+        ready = got["checkpoint_readiness"]
+        if trained:
+            assert rebuilt, (
+                f"{len(trained)} role(s) this pilot was waiting for have "
+                f"arrived ({sorted(t['role'] for t in trained)}) and the design "
+                "still reproduces, which would mean its hash never covered live "
+                "checkpoint status after all")
+            assert ready["runnable_now"] is True and ready["complete"] is True
+            assert ready["must_be_trained"] == []
+            assert got["must_be_trained"] == []
+            assert got["checkpoints_complete"] is True
+        else:
+            # Nothing has arrived here, so the constructor embeds the same
+            # absence it froze and only the runner's bytes have moved.
+            assert not rebuilt, got["problems"]
+            assert got["must_be_trained"], \
+                "frozen, not executed, and nothing trained in this checkout"
+            assert got["checkpoints_complete"] is False
+            assert ready["runnable_now"] is False
         # the verified reading refuses a drifted manifest, so the design hash is
         # compared through the unverified one; refusing is the point, not a bug
         with pytest.raises(RuntimeError, match="does not verify"):
@@ -2749,10 +2804,11 @@ def test_the_frozen_v2_pilots_still_rebuild_and_name_only_the_runner_drift(
         rep = rf.phase_rf0(ds, path, tmp_path)
         assert rep["manifest_valid"] is False, rep["problems"]
         assert rep["runnable_now"] is False
-        assert "must be trained first" in rep["why_not_runnable"]
         assert "does not verify" in rep["why_not_runnable"], \
             "every reason, not the first one: an operator who fixed the drift " \
-            "and re-ran would otherwise meet the training work as a surprise"
+            "and re-ran would otherwise meet the next reason as a surprise"
+        if not trained:
+            assert "must be trained first" in rep["why_not_runnable"]
 
 
 def test_out_is_a_directory_in_every_v2_phase_that_writes(rf, tmp_path):
@@ -2800,10 +2856,22 @@ def test_the_cli_freezes_into_out_under_the_canonical_name(rf, tmp_path,
     monkeypatch.setattr(rf, "load_manifest", lambda ds: man)
     monkeypatch.setattr(rf, "pilot_forget_set",
                         lambda ds, seeds: dict(SELECTION))
-    for argv, expected, getter in (
-            ([], "rf_pilot_ppubench_v3.json", rf.prereg_path_v3),
-            (["--design-version", "v2"], "rf_pilot_ppubench_v2.json",
-             rf.prereg_path_v2)):
+    cases = [(["--design-version", "v2"], "rf_pilot_ppubench_v2.json",
+              rf.prereg_path_v2),
+             (["--design-version", "v3"], "rf_pilot_ppubench_v3.json",
+              rf.prereg_path_v3)]
+    # No flag means the authoritative version.  Freezing v4 reads the committed
+    # v3 record its scope amendment cites -- both datasets' RF2 reports and both
+    # v3 manifests -- and refuses without it, because an amendment whose
+    # evidence cannot be read is an assertion.  So that case runs where the
+    # record is present rather than pretending the dependency is not there.
+    if all(p.is_file() for p in _V3_RECORD):
+        cases.append(([], "rf_pilot_ppubench_v4.json", rf.prereg_path_v4))
+    else:
+        with pytest.raises(RuntimeError, match="scope amendment cites"):
+            rf.main(["--dataset", "ppubench", "--preregister",
+                     "--out", str(tmp_path / "nov4")])
+    for argv, expected, getter in cases:
         stage = tmp_path / (expected.split("_")[-1].split(".")[0])
         assert rf.main(["--dataset", "ppubench", "--preregister",
                         "--out", str(stage), *argv]) == 0
