@@ -1,0 +1,163 @@
+{
+  "calibration_preregistration": "e2c_route_forgetting/manifests/rf_calibration_salmu_v5.json",
+  "calibration_preregistration_sha256": "99b31e946a0015e46bb442b27a1228bdafc688d54ffc8c31a3f63b190ce2449a",
+  "candidates": {
+    "C0_incumbent": {
+      "clears_the_floor": false,
+      "max_seed_spread": 0.125,
+      "mean_development_accuracy": 0.7708333333333334,
+      "per_seed_development_accuracy": {
+        "17": 0.8333333333333334,
+        "42": 0.7083333333333334
+      },
+      "schedule": {
+        "lr": 2e-05,
+        "repeat": 50,
+        "steps": 3000,
+        "warmup": 200
+      }
+    },
+    "C1_half_lr": {
+      "clears_the_floor": false,
+      "max_seed_spread": 0.16666666666666669,
+      "mean_development_accuracy": 0.5416666666666666,
+      "per_seed_development_accuracy": {
+        "17": 0.625,
+        "42": 0.4583333333333333
+      },
+      "schedule": {
+        "lr": 1e-05,
+        "repeat": 50,
+        "steps": 3000,
+        "warmup": 200
+      }
+    },
+    "C2_half_as_many_steps_again": {
+      "clears_the_floor": false,
+      "max_seed_spread": 0.08333333333333337,
+      "mean_development_accuracy": 0.8333333333333333,
+      "per_seed_development_accuracy": {
+        "17": 0.875,
+        "42": 0.7916666666666666
+      },
+      "schedule": {
+        "lr": 2e-05,
+        "repeat": 50,
+        "steps": 4500,
+        "warmup": 200
+      }
+    },
+    "C3_double_lr": {
+      "clears_the_floor": true,
+      "max_seed_spread": 0.125,
+      "mean_development_accuracy": 0.9375,
+      "per_seed_development_accuracy": {
+        "17": 1.0,
+        "42": 0.875
+      },
+      "schedule": {
+        "lr": 4e-05,
+        "repeat": 50,
+        "steps": 3000,
+        "warmup": 200
+      }
+    }
+  },
+  "dataset": "salmu",
+  "floor": 0.9,
+  "floor_read_from": "PILOT_SPEC_V5.thresholds['min_direct_image_accuracy']",
+  "measurements_consumed": {
+    "C0_incumbent": {
+      "17": "e2c_route_forgetting/outputs/salmu/calibration/C0_incumbent__seed17/calibration_result.json",
+      "42": "e2c_route_forgetting/outputs/salmu/calibration/C0_incumbent__seed42/calibration_result.json"
+    },
+    "C1_half_lr": {
+      "17": "e2c_route_forgetting/outputs/salmu/calibration/C1_half_lr__seed17/calibration_result.json",
+      "42": "e2c_route_forgetting/outputs/salmu/calibration/C1_half_lr__seed42/calibration_result.json"
+    },
+    "C2_half_as_many_steps_again": {
+      "17": "e2c_route_forgetting/outputs/salmu/calibration/C2_half_as_many_steps_again__seed17/calibration_result.json",
+      "42": "e2c_route_forgetting/outputs/salmu/calibration/C2_half_as_many_steps_again__seed42/calibration_result.json"
+    },
+    "C3_double_lr": {
+      "17": "e2c_route_forgetting/outputs/salmu/calibration/C3_double_lr__seed17/calibration_result.json",
+      "42": "e2c_route_forgetting/outputs/salmu/calibration/C3_double_lr__seed42/calibration_result.json"
+    }
+  },
+  "n_candidates": 4,
+  "n_clearing_the_floor": 1,
+  "phase": "RFC",
+  "provenance_of_this_filing": {
+    "executed_at_utc": "2026-09-17T10:53:03Z",
+    "filed_by": "/scratch/wutiantong/rfc_launch/select_under_repair.py",
+    "filed_by_sha256": "76b2a711c7427e15967ca7b6726401dc0cc19e5889f45e858676cba177520dd6",
+    "frozen_commit": "e75df65",
+    "head_when_filed": "88887fa071e1",
+    "measurement_digests": {
+      "C0_incumbent": {
+        "17": "e2a0516287c7a8f114f0379541a95f2783470c4e30ce3f9e15f6d0f49cb107a1",
+        "42": "0988b9820d62f7c26d737e6952f154fb0193a592e9f5b7c0b60cd1f85d05222d"
+      },
+      "C1_half_lr": {
+        "17": "d93b081f70e8fd0f3e7933d14efde8b2d0359329f7d1a358165e9ea3687fc350",
+        "42": "f22a95f8b3a231d23a1498975b5e6c1e3fb8bb91de46658d669ced2abaa9c56a"
+      },
+      "C2_half_as_many_steps_again": {
+        "17": "876f930f26c4b9ca933ff6e69aadc9ba0a7245626e2fa14fba9fd79beb2c7fc2",
+        "42": "40a34a436d0ea4dc60da9747dd356e7fe59997e336aad7027e14dd412c108cdb"
+      },
+      "C3_double_lr": {
+        "17": "f6a867218da1ba43e8f4879ab73248b8c6a96540c42b5ac3f4aca8fe4238d420",
+        "42": "be831b0fccbb9dee30f4b252338efb57d6e9e40482666ddeba931781dfb056b9"
+      }
+    },
+    "proved_instead": {
+      "all_eight_measurements_bound_to_freeze_1": "99b31e946a0015e46bb442b27a1228bdafc688d54ffc8c31a3f63b190ce2449a",
+      "freeze_1_design_reproduces": "f7fa78d17925cd54f2ff0c331bbdbe12f231cef10b640f347eface57058a55e2",
+      "only_drift_is_the_runners_bytes": true,
+      "ran_the_runners_own_phase_rfc": true,
+      "rule_proof_selftest": "accepts the repair, rejects six perturbations",
+      "selection_rule_identical_to_frozen_commit": true
+    },
+    "relaxation_applied": "exactly one check was skipped: that the runner's bytes still match the digest Freeze #1 recorded",
+    "runner_sha256_at_frozen_commit": "59d82c83fbf85b651bd9d9d6a8a0b026393941d9f152348be480371b6a2344eb",
+    "runner_sha256_when_filed": "20e928dc6cd864d3f67829ec8815631b0fa1da90b8d01d32d3f67b8196964485",
+    "selection_as_returned_by_the_rule_sha256": "b26ad22271a3aec0aea9ad75b8a85c018b753944cc597597b286f73f69f79652",
+    "this_block_was_added_after_the_rule_ran": "the rule returned the document above and it was hashed as selection_as_returned_by_the_rule_sha256 BEFORE this block was added, so nothing in the selection is attributable to this driver except this disclosure",
+    "why_not_the_runner": "Freeze #1 binds the runner's own bytes among its provenance inputs, and the runner was repaired after the eight trainings had run -- one of the two repairs being the TypeError that stopped the selection step. load_calibration_prereg therefore refuses, correctly, because it cannot tell a repair from a tampering. The relaxation is applied by this driver rather than by weakening the loader, so the loader still refuses for every other caller and every other reason"
+  },
+  "rule": {
+    "floor": "a candidate is selectable only at or above the confirmatory gate's own threshold on the development images; if NO candidate reaches it the calibration stops and reports instead of selecting the best of a lot that cannot pass",
+    "frozen_before_any_candidate_is_trained": true,
+    "metric": "accuracy on the DEVELOPMENT images only, image-to-alias, which is the same statistic the confirmatory gate min_direct_image_accuracy uses, measured on images the confirmatory gates never read",
+    "scored_over": "the mean of the calibration seeds",
+    "tie_breaks": [
+      "the smaller maximum absolute difference between its own seeds, because a configuration that is stable across inits is the one a single confirmatory seed is more likely to reproduce",
+      "then the earlier candidate in the frozen table order, which is a fixed order and not a preference",
+      "then the incumbent, so that a tie is resolved toward changing nothing"
+    ],
+    "why_the_floor_refuses_rather_than_degrades": "a selection rule that always returns a winner can select a configuration the pilot then fails on, and the failure would read as a result about route-dependent forgetting rather than as a result about the direct adapter being unable to learn the associations at all",
+    "winner": "the highest mean"
+  },
+  "selected": {
+    "candidate": "C3_double_lr",
+    "is_the_incumbent": false,
+    "max_seed_spread": 0.125,
+    "mean_development_accuracy": 0.9375,
+    "n_tied_on_the_metric": 1,
+    "ranking": [
+      "C3_double_lr"
+    ],
+    "schedule": {
+      "lr": 4e-05,
+      "repeat": 50,
+      "steps": 3000,
+      "warmup": 200
+    },
+    "tie_broken_by": null,
+    "tied_candidates": [
+      "C3_double_lr"
+    ]
+  },
+  "selection_refused": null
+}
