@@ -1,0 +1,253 @@
+{
+  "bound_artifacts": {
+    "calibration_preregistration_freeze_1": {
+      "path": "e2c_route_forgetting/manifests/rf_calibration_salmu_v5.json",
+      "present": true,
+      "sha256": "99b31e946a0015e46bb442b27a1228bdafc688d54ffc8c31a3f63b190ce2449a"
+    },
+    "calibration_selection": {
+      "path": "e2c_route_forgetting/reports/rf_calibration_selection_salmu_v5.json",
+      "present": true,
+      "sha256": "b3d596901398e2f27b1e8de7547c83895cc478b7a1b8126302f9e67bfa7f90ea"
+    },
+    "confirmatory_design_freeze_2": {
+      "path": "e2c_route_forgetting/manifests/rf_pilot_salmu_v5.json",
+      "present": true,
+      "sha256": "0dc8fcd2e1413d998fc206591fb79579e8ab203110f8c6aad2889b7ee47bd3e5"
+    },
+    "rederivation_sidecar": {
+      "path": "e2c_route_forgetting/reports/rf_report_salmu_v5_rederivation.json",
+      "present": true,
+      "sha256": "d7f4f8bc6cdf10359777f060c1bd290ae29695e6521966d9ffcdcfd491bbe660"
+    },
+    "rf2_report": {
+      "path": "e2c_route_forgetting/reports/rf_report_salmu_v5.json",
+      "present": true,
+      "sha256": "a7c7006090d235384297c9b84ecfa59e12a215c4d5ecc393964922b817c6c100"
+    },
+    "rf2p_report": {
+      "path": "e2c_route_forgetting/reports/rf_report_salmu_v5_rescored.json",
+      "present": true,
+      "sha256": "f7c87e01e6f180dca1ebc003f93569669a3e63d0595996b95c6a021a9c35ca37"
+    }
+  },
+  "calibration_grid_as_frozen_and_as_measured": {
+    "all_learning_rates_in_the_grid": [
+      1e-05,
+      2e-05,
+      2e-05,
+      4e-05
+    ],
+    "candidates_varying_only_the_learning_rate": [
+      {
+        "candidate": "C1_half_lr",
+        "lr": 1e-05,
+        "mean_development_accuracy": 0.5416666666666666
+      },
+      {
+        "candidate": "C0_incumbent",
+        "lr": 2e-05,
+        "mean_development_accuracy": 0.7708333333333334
+      },
+      {
+        "candidate": "C3_double_lr",
+        "lr": 4e-05,
+        "mean_development_accuracy": 0.9375
+      }
+    ],
+    "lora_shape_is_overridable": false,
+    "mean_accuracy_is_monotone_in_lr_across_those": true,
+    "n_candidates": 4,
+    "n_trainings": 8,
+    "overridable_keys": [
+      "steps",
+      "warmup",
+      "lr",
+      "repeat"
+    ],
+    "the_candidate_that_varies_steps_instead": {
+      "candidate": "C2_half_as_many_steps_again",
+      "lr": 2e-05,
+      "mean_development_accuracy": 0.8333333333333333,
+      "steps": 4500,
+      "why_it_matters": "a claim of monotonicity in learning rate across all four candidates would be false, because this one moves steps at the incumbent learning rate"
+    },
+    "the_selected_lr": 4e-05,
+    "the_selected_lr_is_the_maximum_in_the_grid": true
+  },
+  "changes_nothing": "no threshold, gate, verdict, design or cell is altered by this file; it records obligations and the refusals that enforce them",
+  "dataset": "salmu",
+  "deviations_from_the_approved_plan": [
+    {
+      "authority": "approved by the user when the grid was scoped",
+      "deviation": "the calibration grid varies the training SCHEDULE and not the LoRA shape",
+      "evidence": {
+        "no_lora_key_is_overridable": true,
+        "overridable_keys": [
+          "steps",
+          "warmup",
+          "lr",
+          "repeat"
+        ]
+      },
+      "n": 1,
+      "reason": "lora_rank 8, lora_alpha 16 and lora_dropout 0.05 are hardcoded at lines 440 and 464 of scripts/e2c_v3_research_validity.py, so varying them would have meant editing the module the frozen route was trained under"
+    },
+    {
+      "deviation": "DECLARED_HYGIENE_SCOPE_V5 inherits v4's scope-defining keys but not post_outcome_scope_amendment and its two explanatory keys",
+      "n": 2,
+      "reason": "those record that v4's scope was amended after its results were seen; v5's scope is declared before any result exists, so inheriting the amendment would assert a history v5 does not have"
+    },
+    {
+      "deviation": "the development split is a COUNT PER IDENTITY rather than the index list (6, 7) the plan named",
+      "n": 3,
+      "reason": "a count works on both datasets' index layouts and is what dev_split checks against image BYTES; the resulting SALMU split is 24 development images, 2 per identity, as the plan required"
+    },
+    {
+      "deviation": "v5 is SALMU-only",
+      "n": 4,
+      "reason": "see ppubench_cannot_host_a_v5_pilot: dev_split refuses PPUBench outright"
+    },
+    {
+      "deviation": "direct and hybrid cell ids are namespaced (direct__v5__d17) and they are NOT qualified by forget set, while baseline, intervention and natural ids are",
+      "n": 5,
+      "reason": "the plan did not specify ids; namespacing is what stops v5 overwriting the v3 cells whose digests committed v4 reports still cite, and the direct and hybrid cells depend on no forget set so qualifying them would have multiplied 6 cells into 30 identical ones"
+    },
+    {
+      "consequence": "C3_double_lr was selected at a mean of 0.9375 from 24/24 and 21/24, and then scored 34/36, 32/36 and 32/36 on the confirmatory images, so two seeds fell one image short of the 33/36 the floor requires and the mediation verdict is a fail.  This risk was reported before Freeze #2 and the rule was applied as frozen anyway, which is the correct order even though the outcome is the one it predicted",
+      "deviation": "the selection rule floors the MEAN of two calibration seeds while the confirmatory gate requires EVERY one of three seeds to clear 0.9",
+      "n": 6,
+      "reason": "left as frozen rather than repaired, because changing the rule after the measurements existed would have been selecting against them"
+    },
+    {
+      "consequence": "the selection is a boundary solution, so this pilot cannot distinguish 'double the learning rate is the right schedule' from 'more is still better'",
+      "deviation": "the selected schedule sits at the TOP of the pre-registered learning-rate range, and mean development accuracy is monotone increasing in learning rate across the three candidates that vary it",
+      "evidence": {
+        "all_learning_rates_in_the_grid": [
+          1e-05,
+          2e-05,
+          2e-05,
+          4e-05
+        ],
+        "candidates_varying_only_the_learning_rate": [
+          {
+            "candidate": "C1_half_lr",
+            "lr": 1e-05,
+            "mean_development_accuracy": 0.5416666666666666
+          },
+          {
+            "candidate": "C0_incumbent",
+            "lr": 2e-05,
+            "mean_development_accuracy": 0.7708333333333334
+          },
+          {
+            "candidate": "C3_double_lr",
+            "lr": 4e-05,
+            "mean_development_accuracy": 0.9375
+          }
+        ],
+        "lora_shape_is_overridable": false,
+        "mean_accuracy_is_monotone_in_lr_across_those": true,
+        "n_candidates": 4,
+        "n_trainings": 8,
+        "overridable_keys": [
+          "steps",
+          "warmup",
+          "lr",
+          "repeat"
+        ],
+        "the_candidate_that_varies_steps_instead": {
+          "candidate": "C2_half_as_many_steps_again",
+          "lr": 2e-05,
+          "mean_development_accuracy": 0.8333333333333333,
+          "steps": 4500,
+          "why_it_matters": "a claim of monotonicity in learning rate across all four candidates would be false, because this one moves steps at the incumbent learning rate"
+        },
+        "the_selected_lr": 4e-05,
+        "the_selected_lr_is_the_maximum_in_the_grid": true
+      },
+      "n": 7,
+      "reason": "reported rather than acted on: extending the grid upward after seeing that trend would be tuning against measurements that already exist, which is the thing the calibration was built to prevent"
+    },
+    {
+      "authority": "chosen by the user over filing a sidecar beside the executed reports",
+      "deviation": "the RF2 and RF2P reports were re-derived after the run, under a labelled driver, to add the disclosure the plan required them to carry",
+      "n": 8,
+      "proof": "rf_report_salmu_v5_rederivation.json: all 71 cell files byte-identical to the digests the committed report consumed, the design still reproducing dbddf8b78a7af66b, and the report differing in exactly one added key plus run_provenance",
+      "reason": "the reports were filed before that code existed"
+    }
+  ],
+  "disclosures_the_plan_required": [
+    {
+      "carried": true,
+      "n": 1,
+      "statement": "the router is not calibrated",
+      "where_it_is_carried": "rf_calibration_salmu_v5.json at /what_is_being_calibrated/what_is_NOT_being_calibrated"
+    },
+    {
+      "carried": true,
+      "n": 2,
+      "n_development_images": 24,
+      "n_fit_images": 72,
+      "n_test_images": 36,
+      "n_train_images": 96,
+      "statement": "D_s trains on 72 images while the frozen g trained on all 96, and the direction of that asymmetry favours the route",
+      "where_it_is_carried": "Freeze #2 at /direct_training/training_data_asymmetry, and the RF2 and RF2P reports at /direct_training_disclosure/training_data_asymmetry"
+    },
+    {
+      "carried": true,
+      "n": 3,
+      "statement": "D_s's recipe may differ from the route's once a non-incumbent candidate is selected",
+      "the_live_case": "a non-incumbent WAS selected, so this is not hypothetical",
+      "where_it_is_carried": "Freeze #2 at /direct_training/selected_candidate and /direct_training/schedule, and the RF2 and RF2P reports at /direct_training_disclosure, where the divergence is COMPUTED against _incumbent_schedule() rather than asserted"
+    },
+    {
+      "carried": true,
+      "n": 4,
+      "statement": "every v5 cell is produced_under_this_design, so the 28 v3 cells take no part in any v5 verdict",
+      "where_it_is_carried": "the RF2 report at /cell_design_lineage, with an empty ancestor and 71 of 71 cells produced_under_this_design"
+    },
+    {
+      "carried": false,
+      "carried_here_instead": true,
+      "n": 5,
+      "not_a_preference": "two guards in the runner refuse it, reproduced verbatim below",
+      "statement": "PPUBench is not run as a v5 pilot, and a future arm there is restricted to new forget sets at router seed 17, reported as forget-set generalisation rather than a router-seed cross",
+      "where_it_is_carried": "nowhere in a frozen artifact, which is why this file exists"
+    }
+  ],
+  "filed_at_utc": "2026-09-17T20:30:43Z",
+  "filed_by": "/scratch/wutiantong/rf5_launch/file_scope_note.py",
+  "filed_by_sha256": "765ea3b441e104f780329427ed598cbf5e530a2feb0bfbe5d7aa5faacae54099",
+  "kind": "route_dependent_forgetting_scope_note_v5",
+  "ppubench_cannot_host_a_v5_pilot": {
+    "development_split_refusal": {
+      "message": "the development and test images share 4 image byte-value(s), e.g. 6241c73fc92dcbd6bdd48c072a6886d0524ad8ceaa98dcebb0691fab77b4911a; a development split that overlaps the test images in CONTENT is not disjoint from them, and a configuration selected on it would be selected partly on the measurement it is supposed to be blind to",
+      "refused": true
+    },
+    "frozen_direct_seeds": [
+      17
+    ],
+    "frozen_router_seeds": [
+      17
+    ],
+    "held_out_image_content_exists": false,
+    "salmu_by_contrast": {
+      "development_split_is_disjoint_in_content": true,
+      "held_out_image_content_exists": true,
+      "split_sizes": {
+        "n_development_images": 24,
+        "n_fit_images": 72,
+        "n_test_images": 36,
+        "n_train_images": 96
+      }
+    },
+    "seed_budget_refusal": {
+      "message": "ppubench was asked for router seeds [42, 123] beyond the frozen g, but this dataset has no held-out image content, so those routers could only measure seed stability on repeated training bytes and no routing verdict would use them.  Item 3 spends the router-training budget on SALMU; freeze the ppubench pilot with router_seeds=[17]",
+      "refused": true
+    },
+    "what_this_means": "PPUBench is not merely deferred: its held-out filenames are bytes that also appear in its train split, so no development split of it can be content-disjoint from its test images, and a configuration selected on one would be selected partly on the measurement it is supposed to predict.  v5 is therefore SALMU-only, and the route-seed cross it exists to run is only possible on a dataset with held-out image content"
+  },
+  "runner_sha256": "e8332abe15083189e5e70f7849900b84e880dda76e2f232a42c2e026a07718f3",
+  "why_this_is_a_separate_file": "the two natural homes are closed: the v5 pre-registrations are frozen and cannot be re-frozen because 74 of Freeze #2's outputs now exist, and the calibration selection cannot be edited because the v5 design binds its sha256.  A scope statement made after the fact has to be its own file, so it binds everything it describes instead of being part of it"
+}
