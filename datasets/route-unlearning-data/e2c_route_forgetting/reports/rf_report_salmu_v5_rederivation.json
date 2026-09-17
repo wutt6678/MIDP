@@ -1,0 +1,92 @@
+{
+  "RF2P_diff": {
+    "added": [
+      "direct_training_disclosure"
+    ],
+    "dropped": [],
+    "values_that_moved": [
+      "run_provenance"
+    ]
+  },
+  "RF2_diff": {
+    "added": [
+      "direct_training_disclosure"
+    ],
+    "dropped": [],
+    "values_that_moved": [
+      "run_provenance"
+    ]
+  },
+  "design_reproduces": true,
+  "design_sha256": "dbddf8b78a7af66bfbbbb26fcb276fb437e0546d82a5e7eb9dcdc3e58216c311",
+  "dirty_tracked_files": [
+    " M datasets/route-unlearning-data/scripts/e2c_v3_route_dependent_forgetting.py",
+    " M datasets/route-unlearning-data/tests/unit/test_route_dependent_forgetting_v5.py"
+  ],
+  "head": "bc80af7c7d71a4c1b6832c31f61b921dda015af4",
+  "n_cell_files_changed": 0,
+  "n_cell_files_missing": 0,
+  "n_cell_files_rehashed": 71,
+  "n_dirty_tracked_files": 2,
+  "n_problems": 0,
+  "relaxation_applied": {
+    "filed_by": "/scratch/wutiantong/rf5_launch/rederive_report.py",
+    "filed_by_sha256": "8bc8c2ca34cac4918cb86c0ec9732fcba36de372d4bb3497951381ef8bf7d14a",
+    "function": "load_prereg_for",
+    "rederived_at_utc": "2026-09-17T20:19:39Z",
+    "runner_sha256_at_the_freeze": "5242d6ece57440a12c4168a0f51aef90eac397f70118499a0135a64c91834a08",
+    "runner_sha256_when_rederived": "e8332abe15083189e5e70f7849900b84e880dda76e2f232a42c2e026a07718f3",
+    "what_was_proved_instead": "the design rebuilds from the current runner to the same design_sha256, all 71 cell files are byte-identical to the digests the committed report consumed, and the re-derived report differs from the committed one in exactly the added disclosure and run_provenance",
+    "what_was_skipped": "exactly one check: that the runner's bytes still match the digest Freeze #2 recorded",
+    "why_the_pilot_will_not_verify_again": "Freeze #2 binds the runner bytes at 5281482 and cannot be re-frozen -- 74 of its outputs now exist, so _freeze_v5 correctly refuses. Any later runner that reads this pilot must relax the byte comparison and prove the design reproduces instead, which is what this file does and what the sidecar records"
+  },
+  "runner_diff_since_freeze": {
+    "added": 72,
+    "path": "datasets/route-unlearning-data/scripts/e2c_v3_route_dependent_forgetting.py",
+    "removed": 0
+  },
+  "selection": {
+    "artifact_sha256": "b3d596901398e2f27b1e8de7547c83895cc478b7a1b8126302f9e67bfa7f90ea",
+    "candidate": "C3_double_lr",
+    "is_the_incumbent": false,
+    "mean_development_accuracy": 0.9375
+  },
+  "staged_RF2P_diff": {
+    "added": [
+      "direct_training_disclosure"
+    ],
+    "dropped": [],
+    "values_that_moved": [
+      "run_provenance"
+    ]
+  },
+  "staged_RF2_diff": {
+    "added": [
+      "direct_training_disclosure"
+    ],
+    "dropped": [],
+    "values_that_moved": [
+      "run_provenance"
+    ]
+  },
+  "verify_problems": [
+    "input scripts/e2c_v3_route_dependent_forgetting.py: frozen 5242d6ece57440a12c4168a0f51aef90eac397f70118499a0135a64c91834a08, on disk e8332abe15083189e5e70f7849900b84e880dda76e2f232a42c2e026a07718f3"
+  ],
+  "verify_problems_all_runner_digest": true,
+  "write_was_guarded": {
+    "committed_digests_at_the_run": {
+      "RF2": "9ecb7e6f5113086c0135be824cc46d439d291fdcad4fa1242036cd2035172e5e",
+      "RF2P": "649575e303e800cd482681b0e1b7f7e15f2f86f19f48a95f3089f452c9685de8"
+    },
+    "in_place_digests": {
+      "RF2": "a7c7006090d235384297c9b84ecfa59e12a215c4d5ecc393964922b817c6c100",
+      "RF2P": "f7c87e01e6f180dca1ebc003f93569669a3e63d0595996b95c6a021a9c35ca37"
+    },
+    "staged_digests": {
+      "RF2": "f1240dafb60e42bb6cd11424a8f99a82261a8cd7eeee57d9e452a7f3d5e79f0f",
+      "RF2P": "207bf39f021b15d55266dd13d22860ffb42b349292542af5fd75ecc7f3b30081"
+    },
+    "staged_first": "/scratch/wutiantong/rf5_launch/staging",
+    "why": "a re-derived report replaces committed evidence, so it is written to a scratch directory and diffed against the version it replaces before anything lands in the repository; a gate failure therefore leaves the executed reports untouched"
+  }
+}

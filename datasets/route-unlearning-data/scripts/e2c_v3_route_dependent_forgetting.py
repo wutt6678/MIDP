@@ -7282,6 +7282,10 @@ def aggregate_cells_for(spec, prereg, cells, rescore=False, cell_paths=None,
         "forget_set_id": prereg["forget_set_id"],
         **({"forget_sets": prereg["forget_sets"]}
            if prereg.get("forget_sets") else {}),
+        # Gated on a key only v5's designs carry, so the reports of every version
+        # that trained D_s under the route's own schedule are byte-identical.
+        **({"direct_training_disclosure": _direct_training_disclosure(prereg)}
+           if prereg.get("direct_training") else {}),
         "preregistration_design_sha256": prereg.get("design_sha256"),
         "n_cells": len(per_cell),
         "n_rows": sum(b["n_rows"] for b in per_cell.values()),
@@ -10683,6 +10687,74 @@ def _require_calibration_selection(dataset):
             f"finding is that the direct pathway could not clear the floor on "
             f"the development images")
     return doc, sel
+
+
+def _direct_training_disclosure(prereg):
+    """What a report must say about D_s, derived from the frozen design.
+
+    Two disclosures the v5 pre-registration promises and its mediation verdict
+    depends on:
+
+    * the training-data asymmetry -- D_s fits on the fit split while the frozen g
+      fitted on all of train, which handicaps the direct pathway and so makes
+      ``min_direct_image_accuracy`` harder to clear rather than easier;
+    * the recipe divergence -- the schedule was selected by a calibration on a
+      development split disjoint from the held-out images, so when the selected
+      candidate is not the incumbent, D_s no longer trains under the route's own
+      schedule and the two arms of the comparison are two different recipes.
+
+    Both are READ rather than restated.  The asymmetry block comes out of the
+    design verbatim, and the divergence is computed by comparing the selected
+    schedule against ``frozen_route_protocol()`` field by field, so the claim
+    cannot drift from the two schedules it is about.
+
+    Computed here and filed in the report, not only in the manifest, because the
+    report is what a reader opens for the verdict: a mediation failure on
+    ``direct_image_accuracy`` reads as a statement about the direct pathway unless
+    the same document also says the pathway was handicapped by design and tuned on
+    images the gate never reads.
+    """
+    dt = prereg["direct_training"]
+    sel = dt.get("selected_by") or {}
+    rule = sel.get("rule") or {}
+    route = _incumbent_schedule()
+    chosen = OrderedDict(dt.get("schedule") or {})
+    differs = OrderedDict(
+        (k, {"the_frozen_route": route.get(k), "the_direct_adapter": chosen.get(k)})
+        for k in sorted(set(route) | set(chosen))
+        if route.get(k) != chosen.get(k))
+    return OrderedDict((
+        ("selected_candidate", dt.get("selected_candidate")),
+        ("is_the_incumbent", sel.get("is_the_incumbent")),
+        ("schedule", chosen),
+        ("selected_by_a_pre_registered_calibration", OrderedDict((
+            ("rule_frozen_before_any_candidate_was_trained",
+             rule.get("frozen_before_any_candidate_is_trained")),
+            ("metric", rule.get("metric")),
+            ("floor", sel.get("floor")),
+            ("mean_development_accuracy", sel.get("mean_development_accuracy")),
+            ("max_seed_spread", sel.get("max_seed_spread")),
+            ("selection_artifact", sel.get("selection_artifact")),
+            ("selection_artifact_sha256", sel.get("selection_artifact_sha256")),
+        ))),
+        ("schedule_diverges_from_the_frozen_route", bool(differs)),
+        ("schedule_fields_that_differ", differs),
+        ("what_divergence_means", (
+            "D_s does not train under the route's own schedule, so the direct "
+            "pathway and the route are two different recipes and the comparison "
+            "between them is about the pathway rather than about one recipe held "
+            "fixed. The route itself is unchanged: frozen_route_protocol() still "
+            "governs g and h, and the calibration trained and selected no router "
+            "and no edited h")),
+        ("training_data_asymmetry", dt.get("training_data_asymmetry")),
+        ("this_block_waives_nothing", (
+            "the gates are applied exactly as frozen and every threshold in this "
+            "report is v4's object, not a copy of it. These are the two declared "
+            "reasons the direct pathway had less to clear the floor with, recorded "
+            "so that a failure of min_direct_image_accuracy is read as a failure "
+            "of THIS configuration under THIS asymmetry and not as a general claim "
+            "that the direct pathway cannot learn the associations")),
+    ))
 
 
 def selected_direct_training(dataset, split):

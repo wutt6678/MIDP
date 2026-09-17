@@ -1297,6 +1297,105 @@ def test_confirmatory_outputs_present_skips_the_inputs_it_was_built_over(
     assert cells[0]["sha256"] == hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+@_needs_tree
+def test_the_report_discloses_the_direct_adapter_it_is_verdicts_about(rf):
+    """The disclosure the mediation verdict depends on, derived not restated.
+
+    Read against the real frozen design, which is the document the run consumed.
+    The divergence is the point: it is computed by comparing two schedules, so the
+    assertion below checks WHICH field differs and against what, rather than
+    trusting a sentence that says a divergence exists.
+    """
+    prereg = json.loads(
+        (rf.DATASET_ROOT / "e2c_route_forgetting" / "manifests"
+         / "rf_pilot_salmu_v5.json").read_text(encoding="utf-8"))
+    out = rf._direct_training_disclosure(prereg)
+    assert out["selected_candidate"] == "C3_double_lr"
+    assert out["is_the_incumbent"] is False
+    assert out["schedule_diverges_from_the_frozen_route"] is True
+    assert sorted(out["schedule_fields_that_differ"]) == ["lr"], \
+        "exactly one schedule field diverges, and the report should say which"
+    lr = out["schedule_fields_that_differ"]["lr"]
+    assert lr["the_frozen_route"] == rf._incumbent_schedule()["lr"]
+    assert lr["the_direct_adapter"] == 2 * lr["the_frozen_route"]
+    # the asymmetry block is the design's own, not a paraphrase of it
+    assert out["training_data_asymmetry"] == \
+        prereg["direct_training"]["training_data_asymmetry"]
+    assert "72" in out["training_data_asymmetry"]["statement"]
+    assert "96" in out["training_data_asymmetry"]["statement"]
+    cal = out["selected_by_a_pre_registered_calibration"]
+    assert cal["rule_frozen_before_any_candidate_was_trained"] is True
+    assert cal["floor"] == rf.calibration_floor_v5()
+    assert cal["selection_artifact_sha256"] == hashlib.sha256(
+        rf.calibration_selection_path(DS).read_bytes()).hexdigest()
+    # and the block says what it does not do, because a disclosure that read as an
+    # excuse would be worse than no disclosure at all
+    assert "applied exactly as frozen" in out["this_block_waives_nothing"]
+    assert "not as a general claim" in out["this_block_waives_nothing"]
+
+
+@_needs_tree
+def test_the_disclosure_reports_no_divergence_when_there_is_none(rf):
+    """Non-vacuity: a disclosure that always claimed divergence would be a
+    sentence, not a comparison.  The incumbent schedule has to come back clean."""
+    prereg = json.loads(
+        (rf.DATASET_ROOT / "e2c_route_forgetting" / "manifests"
+         / "rf_pilot_salmu_v5.json").read_text(encoding="utf-8"))
+    incumbent = dict(prereg["direct_training"])
+    incumbent["schedule"] = OrderedDict(rf._incumbent_schedule())
+    incumbent["selected_candidate"] = "C0_incumbent"
+    out = rf._direct_training_disclosure({"direct_training": incumbent})
+    assert out["schedule_diverges_from_the_frozen_route"] is False
+    assert out["schedule_fields_that_differ"] == {}
+    # the asymmetry is a property of the split and not of the schedule, so it
+    # survives a change of candidate unchanged
+    assert out["training_data_asymmetry"] == \
+        prereg["direct_training"]["training_data_asymmetry"]
+
+
+@_needs_tree
+def test_versions_that_trained_d_s_under_the_route_schedule_report_nothing(rf):
+    """The gate on ``direct_training`` is what keeps v1-v4's reports identical.
+
+    Asserted over every earlier manifest rather than over one, because the claim
+    is that no version before v5 carries the key -- and a v6 that added it would
+    start emitting a disclosure about a design that never made one.
+    """
+    for name in ("rf_pilot_salmu.json", "rf_pilot_salmu_v2.json",
+                 "rf_pilot_salmu_v3.json", "rf_pilot_salmu_v4.json",
+                 "rf_pilot_ppubench.json", "rf_pilot_ppubench_v2.json",
+                 "rf_pilot_ppubench_v3.json", "rf_pilot_ppubench_v4.json"):
+        p = (rf.DATASET_ROOT / "e2c_route_forgetting" / "manifests" / name)
+        if not p.is_file():
+            continue
+        doc = json.loads(p.read_text(encoding="utf-8"))
+        assert "direct_training" not in doc, name
+
+
+@_needs_tree
+def test_the_disclosure_reaches_the_filed_report(rf):
+    """The end of the chain: the report a reader opens, not the helper.
+
+    Reads the committed RF2 and RF2P reports and requires the block in both, with
+    the same content -- RF2P re-parses stored raw text on CPU and has to reproduce
+    RF2, and a disclosure present in only one of them would mean the two reports
+    disagree about what the experiment was.
+    """
+    reports = {}
+    for kind in ("RF2", "RF2P"):
+        p = rf.report_path(DS, kind, spec=rf.PILOT_SPEC_V5)
+        if not p.is_file():
+            pytest.skip(f"{kind} has filed no report at {rf._rel(p)}")
+        reports[kind] = json.loads(p.read_text(encoding="utf-8"))
+    for kind, rep in reports.items():
+        got = rep.get("direct_training_disclosure")
+        assert got, f"the {kind} report carries no direct_training_disclosure"
+        assert got["selected_candidate"] == "C3_double_lr"
+        assert got["schedule_diverges_from_the_frozen_route"] is True
+    assert reports["RF2"]["direct_training_disclosure"] == \
+        reports["RF2P"]["direct_training_disclosure"]
+
+
 def test_the_freeze_checks_the_selection_before_it_does_anything_else(rf,
                                                                      tmp_path,
                                                                      monkeypatch):

@@ -10776,6 +10776,39 @@
       "unit_of_analysis": "the CODE, not the image.  With a hard mediator the intervention is h_e(do(C=c)) and nothing else varies, so one code is one observation and there is no image axis to average over"
     }
   },
+  "direct_training_disclosure": {
+    "is_the_incumbent": false,
+    "schedule": {
+      "lr": 4e-05,
+      "repeat": 50,
+      "steps": 3000,
+      "warmup": 200
+    },
+    "schedule_diverges_from_the_frozen_route": true,
+    "schedule_fields_that_differ": {
+      "lr": {
+        "the_direct_adapter": 4e-05,
+        "the_frozen_route": 2e-05
+      }
+    },
+    "selected_by_a_pre_registered_calibration": {
+      "floor": 0.9,
+      "max_seed_spread": 0.125,
+      "mean_development_accuracy": 0.9375,
+      "metric": "accuracy on the DEVELOPMENT images only, image-to-alias, which is the same statistic the confirmatory gate min_direct_image_accuracy uses, measured on images the confirmatory gates never read",
+      "rule_frozen_before_any_candidate_was_trained": true,
+      "selection_artifact": "e2c_route_forgetting/reports/rf_calibration_selection_salmu_v5.json",
+      "selection_artifact_sha256": "b3d596901398e2f27b1e8de7547c83895cc478b7a1b8126302f9e67bfa7f90ea"
+    },
+    "selected_candidate": "C3_double_lr",
+    "this_block_waives_nothing": "the gates are applied exactly as frozen and every threshold in this report is v4's object, not a copy of it. These are the two declared reasons the direct pathway had less to clear the floor with, recorded so that a failure of min_direct_image_accuracy is read as a failure of THIS configuration under THIS asymmetry and not as a general claim that the direct pathway cannot learn the associations",
+    "training_data_asymmetry": {
+      "direction": "it handicaps the direct pathway, which is the conservative direction for the mediation claim: the min_direct_image_accuracy floor is harder to clear with less training data, so clearing it is more evidence than it would be at parity and not less",
+      "statement": "D_s trains on 72 images; the frozen g trained on all 96",
+      "why_it_is_not_removed": "removing it would mean retraining g on a subset of the train split, and g is the frozen route -- its recipe, its prompts and its training data are what the design compares D_s against"
+    },
+    "what_divergence_means": "D_s does not train under the route's own schedule, so the direct pathway and the route are two different recipes and the comparison between them is about the pathway rather than about one recipe held fixed. The route itself is unchanged: frozen_route_protocol() still governs g and h, and the calibration trained and selected no router and no edited h"
+  },
   "e2e_factorization": {
     "aggregation_is_stated_on_the_gate": "see gates.e2e_matches_the_routing_composition.aggregation; the rationale lives in one place so the two cannot drift",
     "gate_is_applied_to": "natural__fs_00039880__g17__h17",
@@ -30185,16 +30218,19 @@
     "captured_at_the_start_of_the_run": true,
     "clean_worktree": {
       "dirty_including_untracked": true,
-      "dirty_tracked_only": false,
-      "dirty_tracked_only_lines": [],
+      "dirty_tracked_only": true,
+      "dirty_tracked_only_lines": [
+        " M datasets/route-unlearning-data/scripts/e2c_v3_route_dependent_forgetting.py",
+        " M datasets/route-unlearning-data/tests/unit/test_route_dependent_forgetting_v5.py"
+      ],
       "excluded_prefixes": [
         "datasets/route-unlearning-data/e2c_route_forgetting/"
       ],
       "exclusion_note": "only this stage's own output prefix is excluded, and the exclusion is reported rather than applied silently; any other untracked file counts",
-      "git_commit": "5281482f4b6be80cd5fc052c1beeb38ad8452ea7",
-      "n_dirty_including_untracked": 84,
-      "n_dirty_tracked_only": 0,
-      "n_excluded": 84,
+      "git_commit": "bc80af7c7d71a4c1b6832c31f61b921dda015af4",
+      "n_dirty_including_untracked": 2,
+      "n_dirty_tracked_only": 2,
+      "n_excluded": 0,
       "repo_root": "/scratch/wutiantong/MIDP",
       "untracked_outside_exclusions": []
     },
@@ -30222,8 +30258,8 @@
       "router_seeds": null,
       "verify": false
     },
-    "executing_commit": "5281482f4b6be80cd5fc052c1beeb38ad8452ea7",
-    "executing_script_sha256": "5242d6ece57440a12c4168a0f51aef90eac397f70118499a0135a64c91834a08",
+    "executing_commit": "bc80af7c7d71a4c1b6832c31f61b921dda015af4",
+    "executing_script_sha256": "e8332abe15083189e5e70f7849900b84e880dda76e2f232a42c2e026a07718f3",
     "missing_runtime_modules": [],
     "n_runtime_modules_hashed": 9,
     "paths_are_relative_to": "/scratch/wutiantong/MIDP/datasets/route-unlearning-data",
@@ -30240,7 +30276,7 @@
       "scripts/e2c_v3_phaseC_discrete_bottleneck.py": "b5950a03f3e36606c015dc4da4567c8c1a92898e180a6854643d38f3300d8793",
       "scripts/e2c_v3_realdata.py": "1068e2f2240f9f4cd73046e992f4bc51d505ebbe53e7090fc6c8cbb481a0e95c",
       "scripts/e2c_v3_research_validity.py": "f649c2d72eb9e04a517724417a22fc570a39b09969943bfe9abe193b5b542f99",
-      "scripts/e2c_v3_route_dependent_forgetting.py": "5242d6ece57440a12c4168a0f51aef90eac397f70118499a0135a64c91834a08",
+      "scripts/e2c_v3_route_dependent_forgetting.py": "e8332abe15083189e5e70f7849900b84e880dda76e2f232a42c2e026a07718f3",
       "scripts/e2c_v3_salmu.py": "9378a0608494f3f1ec77f11417bbcda8a7702ffb138c5d995c7e000df3208807"
     }
   },
