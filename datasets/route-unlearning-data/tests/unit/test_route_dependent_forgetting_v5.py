@@ -1017,6 +1017,63 @@ def test_the_router_adapters_exist_and_are_still_not_outputs(rf, tmp_path,
     assert rf.confirmatory_outputs_present(DS, block) == []
 
 
+def test_the_full_v5_block_builds_through_the_shared_pilot_builder(
+        rf, tmp_path, monkeypatch):
+    """The design is not the pre-registration, and only the second one is frozen.
+
+    ``build_design_v5`` is the cells and their rows; ``build_pilot_preregistration_v5``
+    wraps it with the audit, the gate applicability, the bootstrap plan, the
+    promotion rule and the supersession record, and it is the shared
+    ``build_pilot_preregistration_for`` that guards all of it.  Testing only the
+    design leaves every one of those guards unexercised with several forget sets,
+    which is how a check written for one set -- intervention cells must equal the
+    number of edit seeds -- survived into a version that varies five.
+
+    The counts here are the hermetic ones, not the committed tree's: five
+    synthetic sets over a stub manifest.  The real tree's 71 cells and 2076 rows
+    are checked by the probe in tmp_e2c_v5, which reads a selection nobody has
+    filed yet and so cannot be a test.
+    """
+    design, man, forget_sets = _v5_design(rf, tmp_path, monkeypatch)
+    selection = {"dataset": DS, "n_sets": len(forget_sets),
+                 "sets": forget_sets,
+                 "targets": sorted({t for s in forget_sets for t in s["targets"]}),
+                 "selection_rule": "hermetic-fixture", "candidates": []}
+    block = rf.build_pilot_preregistration_v5(
+        DS, forget_sets, selection["targets"], [17, 42, 123], [17, 42, 123],
+        [17, 42, 123], man=man, images=rf.held_out_images(man),
+        selection=selection)
+    assert block["kind"] == rf.PREREG_V5_KIND
+    assert block["n_cells"] == design["n_cells"] == 71
+    assert block["n_rows_total"] == design["n_rows_total"]
+    assert {k: len(v) for k, v in block["cells_by_kind"].items()} == {
+        "baseline": 5, "intervention": 15, "natural": 45, "direct": 3,
+        "hybrid": 3}
+    assert block["executed"] is False
+    assert block["preregistered"] is True
+    assert block["post_outcome_scope_amendment"] is False
+    assert block["cell_design_lineage"]["ancestor"] in (None, {})
+    assert block["pilot_forget_set_selection"]["n_sets"] == 5
+    # every guard in the shared builder ran, and the block carries the parts only
+    # it adds -- which is the point of building it rather than the design
+    for key in ("gate_applicability", "cluster_bootstrap", "promotion_rule",
+                "missing_data_policy", "supersession", "held_out_images",
+                "frozen_gates", "verdicts_to_be_reported"):
+        assert key in block, f"the shared builder did not add {key}"
+    # all eight earlier pilots -- v1 to v4 on both datasets -- are marked
+    # superseded and bound as hashed inputs, so "preserved byte-identical" is a
+    # checked property of every later verification rather than an intention
+    sup = rf.supersession_record(rf.PILOT_SPEC_V5)
+    assert len(sup["superseded"]) == 8
+    assert sup["authoritative_design"] == "v5"
+    # recorded relative to the dataset root, so verifying the table is not tied to
+    # one filesystem root -- and each entry carries the digest of the bytes it is
+    # claiming were preserved
+    assert sorted(e["path"] for e in sup["superseded"]) ==         sorted(f"{rf.MANIFEST_DIR}/{n}"
+               for n in rf.PILOT_SPEC_V5.superseded_filenames)
+    assert all(e["sha256"] and e["bytes"] for e in sup["superseded"])
+
+
 def test_a_v5_design_is_not_a_relabelled_v4_design(rf, tmp_path, monkeypatch):
     """Same construction path, different document -- and the difference is the
     forget sets, not a version string."""
@@ -1159,20 +1216,24 @@ def test_the_v5_freeze_binds_both_calibration_artifacts(rf):
 # ==========================================================================
 
 
-def _hermetic_root(rf, monkeypatch, tmp_path, man):
+def _hermetic_root(rf, monkeypatch, tmp_path, man, dataset="hermetic"):
     """Point the runner at a temporary dataset root holding only a manifest.
 
     Freeze #1 binds ``DATASET_ROOT / MANIFEST_PATHS[dataset]`` as an input and
     writes under ``DATASET_ROOT``, so a hermetic freeze needs a hermetic root --
     and verifying it for real afterwards is what makes the test a test of the
     artifact rather than of the stub.
+
+    ``dataset`` is a name because the runner indexes ``MANIFEST_PATHS``,
+    ``CELLS_DIR_V2`` and ``MATRIX_CELLS`` by it, and a test that invented a name
+    in none of those tables would be testing a KeyError rather than a freeze.
     """
     root = tmp_path / "root"
     (root / "manifests").mkdir(parents=True, exist_ok=True)
     mpath = root / "manifests" / "hermetic_manifest.json"
     mpath.write_text(json.dumps(man, indent=2), encoding="utf-8")
     monkeypatch.setattr(rf, "DATASET_ROOT", root)
-    monkeypatch.setitem(rf.MANIFEST_PATHS, "hermetic",
+    monkeypatch.setitem(rf.MANIFEST_PATHS, dataset,
                         Path("manifests/hermetic_manifest.json"))
     monkeypatch.setattr(rf, "load_manifest", lambda ds: man)
     return root
@@ -1285,6 +1346,97 @@ def test_rfc_verifies_the_preregistration_before_it_trains(rf, tmp_path,
     p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
     with pytest.raises(RuntimeError, match="is not a v5 calibration"):
         rf.load_calibration_prereg("hermetic", verify=False)
+
+
+def test_the_selection_step_files_json_and_not_a_path(rf, tmp_path,
+                                                     monkeypatch):
+    """The step that CONSUMES the grid, exercised end to end.
+
+    ``select_direct_schedule`` is the rule and was already well covered.
+    ``_rfc_select`` is the step around it: it reads eight filed measurements,
+    checks each one was produced against the frozen pre-registration, refuses if
+    any is missing, applies the rule, and FILES the outcome.  Only the filing was
+    broken -- ``measurements_consumed`` held a ``Path`` and ``canonical_json``
+    raised ``TypeError`` -- and it broke after nine and a half hours of training
+    had already been paid for, because nothing tested the step.
+
+    Every candidate is stubbed at the same accuracy, which also makes this a second
+    test of the tie-break: all four clear the floor with zero spread, so the frozen
+    table order has to pick the incumbent.
+    """
+    man = _disk_manifest(tmp_path)
+    root = _hermetic_root(rf, monkeypatch, tmp_path, man, dataset=DS)
+    assert rf.freeze_calibration(_cal_args(dataset=DS)) == 0
+    cal = rf.load_calibration_prereg(DS)
+    prereg = rf.calibration_prereg_path(DS)
+    prereg_sha = hashlib.sha256(prereg.read_bytes()).hexdigest()
+    cal_dir = root / rf.CELLS_DIR_V2 / DS / rf.CALIBRATION_SUBDIR_V5
+    for cand in rf.direct_schedule_candidates_v5():
+        for seed in rf.CALIBRATION_SEEDS_V5:
+            (cal_dir / f"{cand}__seed{seed}").mkdir(parents=True,
+                                                    exist_ok=True)
+            rf.atomic_write_json(rf.calibration_result_path(DS, cand, seed), {
+                "development_accuracy": 0.95,
+                "calibration_preregistration_sha256": prereg_sha})
+
+    names = list(rf.direct_schedule_candidates_v5())
+    out = rf._rfc_select(DS, cal, names)
+    p = rf.calibration_selection_path(DS)
+    assert p.is_file(), "the step returned without filing anything"
+    filed = json.loads(p.read_text(encoding="utf-8"))
+    assert filed["selected"]["candidate"] == names[0]
+    assert filed["selected"]["is_the_incumbent"] is True
+    assert filed["selected"]["n_tied_on_the_metric"] == len(names)
+    assert filed["calibration_preregistration_sha256"] == prereg_sha
+    # the property the TypeError was about: every path in the filed document is a
+    # relative string that resolves to a file that exists
+    assert sorted(filed["measurements_consumed"]) == sorted(names)
+    for cand, per_seed in filed["measurements_consumed"].items():
+        assert sorted(per_seed) == [str(s) for s in rf.CALIBRATION_SEEDS_V5]
+        for seed, rel in per_seed.items():
+            assert isinstance(rel, str), f"{cand}/{seed} filed a {type(rel)}"
+            assert not Path(rel).is_absolute(), rel
+            assert (root / rel).is_file(), rel
+    # What was filed is exactly the canonical JSON of what the step returned --
+    # the property the TypeError broke.  Compared through a round trip rather than
+    # by ``out == filed``, because the rule it embeds holds TUPLES (its tie_breaks)
+    # and JSON has no tuple: ``out == filed`` is false for a correctly filed
+    # document, and an assertion that fails on success is worse than none.
+    assert json.loads(rf.canonical_json(out)) == filed
+
+
+def test_the_selection_step_refuses_a_measurement_from_another_grid(rf,
+                                                                   tmp_path,
+                                                                   monkeypatch):
+    """The binding check inside the step, which is the one that makes "these eight
+    measurements answer the frozen grid" a fact rather than an assumption."""
+    man = _disk_manifest(tmp_path)
+    root = _hermetic_root(rf, monkeypatch, tmp_path, man, dataset=DS)
+    assert rf.freeze_calibration(_cal_args(dataset=DS)) == 0
+    cal = rf.load_calibration_prereg(DS)
+    names = list(rf.direct_schedule_candidates_v5())
+    cal_dir = root / rf.CELLS_DIR_V2 / DS / rf.CALIBRATION_SUBDIR_V5
+    for cand in names:
+        for seed in rf.CALIBRATION_SEEDS_V5:
+            d = cal_dir / f"{cand}__seed{seed}"
+            d.mkdir(parents=True, exist_ok=True)
+            rf.atomic_write_json(rf.calibration_result_path(DS, cand, seed), {
+                "development_accuracy": 0.95,
+                "calibration_preregistration_sha256": "0" * 64})
+    with pytest.raises(RuntimeError, match="a different calibration"):
+        rf._rfc_select(DS, cal, names)
+    # and a grid with a hole in it is refused rather than ranked over what arrived
+    good = hashlib.sha256(
+        rf.calibration_prereg_path(DS).read_bytes()).hexdigest()
+    for cand in names:
+        for seed in rf.CALIBRATION_SEEDS_V5:
+            rf.atomic_write_json(rf.calibration_result_path(DS, cand, seed), {
+                "development_accuracy": 0.95,
+                "calibration_preregistration_sha256": good})
+    (cal_dir / f"{names[-1]}__seed{rf.CALIBRATION_SEEDS_V5[-1]}"
+     / "calibration_result.json").unlink()
+    with pytest.raises(RuntimeError, match="have no filed measurement"):
+        rf._rfc_select(DS, cal, names)
 
 
 def test_the_calibration_writes_beside_the_cells_not_among_them(rf):

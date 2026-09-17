@@ -5828,7 +5828,16 @@ def build_pilot_preregistration_for(spec, dataset, forget_set_id, forget_ids,
                 f"the {spec.version} design has {got} {kind} cell(s) but the "
                 f"factors imply {want}; a cell count that does not follow from "
                 f"what the measurement depends on is the defect item 3 names")
-    if len(by_kind.get("intervention", [])) != len(edit_seeds):
+    # The count above says HOW MANY intervention cells there are; this says what
+    # they vary by, and a count can be right for the wrong reason -- three edit
+    # seeds over five forget sets is fifteen cells, and so is fifteen router-seed
+    # copies of one edit.  Compared on the (forget set, edit seed) PAIR rather than
+    # on the count so the two cannot be confused, and so a design that varies
+    # several sets is checked on the property this message names rather than on a
+    # number that only coincided with it while every design varied one.
+    _inter = [(c.get("forget_set_id"), c.get("edit_seed"))
+              for c in design["cells"] if c["kind"] == "intervention"]
+    if len(set(_inter)) != len(_inter):
         raise RuntimeError("intervention cells were multiplied by router seed")
 
     n_held_out = sum(len(v) for v in images.values())
@@ -11206,9 +11215,17 @@ def _rfc_select(dataset, cal, candidates):
     out["calibration_preregistration"] = _rel(calibration_prereg_path(dataset))
     out["calibration_preregistration_sha256"] = sha256_file(
         calibration_prereg_path(dataset))
+    # ``_rel`` and not the bare Path, for the same reason every other path in
+    # this document goes through it: the artifact is JSON, so a Path is a
+    # TypeError at write time, and a path recorded relative to the dataset root is
+    # one a reader on another filesystem can still resolve.  Found by the step
+    # failing after the eight trainings it consumes had already run, which is the
+    # expensive place to find it and the reason the test beside this exercises the
+    # whole step rather than only the rule it calls.
     out["measurements_consumed"] = OrderedDict(
-        (name, OrderedDict((str(s), calibration_result_path(dataset, name, s))
-                           for s in CALIBRATION_SEEDS_V5))
+        (name, OrderedDict(
+            (str(s), _rel(calibration_result_path(dataset, name, s)))
+            for s in CALIBRATION_SEEDS_V5))
         for name in candidates)
     if out["selected"] is None:
         out["the_confirmatory_design_is_not_frozen"] = (
