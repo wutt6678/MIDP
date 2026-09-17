@@ -831,20 +831,39 @@ def test_rf1d_writes_the_ids_its_design_names(rf, tmp_path, monkeypatch):
 
 
 @_needs_tree
-def test_the_v3_direct_cells_exist_and_the_v5_ids_do_not(rf):
-    """The non-vacuity of the namespacing.
+def test_the_v3_direct_cells_are_intact_beside_the_v5_ones(rf):
+    """The non-vacuity of the namespacing, stated so it survives the run.
 
-    ``direct__d17`` is on disk, filed by the v3 run and read by v4's analysis;
-    ``direct__v5__d17`` is not.  A test that only asserted the second would pass
-    in a bare clone where neither exists, and would have passed just as happily
-    before the collision was fixed.
+    ``direct__d17`` was filed by the v3 run and read by v4's analysis, and v5
+    writes ``direct__v5__d17``.  This test used to assert that the second one did
+    NOT exist, which was true when it was written and became false the moment the
+    run it was written for succeeded -- a statement about a moment in this tree's
+    history rather than about the code.
+
+    What is true either way is the reason the namespace exists: the two ids
+    resolve to different files, and v5 did not write over v3's cell.  That last
+    part is checked by reading the v3 cell and asking which version's result it
+    says it is, so an overwrite would be caught rather than merely made unlikely
+    by the two paths differing.
     """
     old = rf.cell_result_path(DS, rf.direct_cell_id("direct", 17))
     new = rf.cell_result_path(
         DS, rf.direct_cell_id("direct", 17, rf.DIRECT_NAMESPACE_V5))
+    assert old != new, "the namespace produced the path it exists to avoid"
     assert old.is_file(), f"{old} was expected from the v3 run"
-    assert not new.is_file(), f"{new} exists before v5 was frozen"
-    assert old != new
+    v3 = json.loads(old.read_text(encoding="utf-8"))
+    assert v3["kind"] == rf.SPEC_BY_VERSION["v3"].result_kind, (
+        "the cell at the v3 path is no longer a v3 result: v5 wrote over the run "
+        "whose digests committed v4 reports still cite")
+    assert v3["cell_id"] == rf.direct_cell_id("direct", 17)
+    # and when the v5 cell exists it is a v5 cell under its own id, not a rename
+    # of the v3 one -- the same claim from the other side
+    if new.is_file():
+        v5 = json.loads(new.read_text(encoding="utf-8"))
+        assert v5["kind"] == rf.PILOT_SPEC_V5.result_kind
+        assert v5["cell_id"] == rf.direct_cell_id(
+            "direct", 17, rf.DIRECT_NAMESPACE_V5)
+        assert v5["run_provenance"]["pilot_version"] == "v5"
 
 
 def test_the_union_field_is_a_coverage_statement_and_not_an_input(rf, tmp_path,
@@ -1022,7 +1041,24 @@ def test_the_router_adapters_exist_and_are_still_not_outputs(rf, tmp_path,
     assert present, "no skipped role exists on disk, so the skip is untested"
     block = {"cells": design["cells"],
              "checkpoint_requirements": design["checkpoint_requirements"]}
-    assert rf.confirmatory_outputs_present(DS, block) == []
+    # Not ``== []``, which is what this asserted before the confirmatory run and
+    # which the run correctly made false: the three D_s adapters ARE outputs of
+    # this design, and once trained they belong in the listing.  A listing that
+    # hid them would let the same design be frozen again over cells that already
+    # exist.  What must never appear is an input v5 was built over.
+    listed = rf.confirmatory_outputs_present(DS, block)
+    counted_inputs = [e for e in listed
+                      if e["what"] == "checkpoint"
+                      and not roles[e["role"]]["produced_by_this_design"]]
+    assert not counted_inputs, (
+        f"{len(counted_inputs)} input(s) this design was built over were counted "
+        f"as its output, e.g. {counted_inputs[0]['role']!r}: the freeze-ordering "
+        f"check would refuse every v5 freeze on a tree the route had been run on")
+    assert all(e["what"] == "cell"
+               or roles[e["role"]]["produced_by_this_design"]
+               for e in listed), (
+        "the listing named something that is neither a cell of this design nor "
+        "a checkpoint role it produces")
 
 
 def test_the_full_v5_block_builds_through_the_shared_pilot_builder(
@@ -1154,6 +1190,14 @@ def test_the_sidecar_counts_the_roles_the_design_produces(rf, tmp_path,
     monkeypatch.setattr(rf, "atomic_write_json", capture)
     monkeypatch.setattr(rf, "_freeze_write_and_verify",
                         lambda spec, args, block: (None, "0" * 64))
+    # The listing is stubbed empty and the stub is stated, because this test is
+    # about the COUNT the sidecar files, which is computed from the role table and
+    # is independent of what the listing finds.  On a tree where the confirmatory
+    # run has happened the real listing names every cell and adapter the design
+    # produced, and ``_freeze_v5`` refuses -- correctly, since a design cannot be
+    # frozen after the fact -- which would test the refusal instead of the count.
+    monkeypatch.setattr(rf, "confirmatory_outputs_present",
+                        lambda ds, block, cells=None: [])
     rf._freeze_v5(rf.PILOT_SPEC_V5, _freeze_args())
 
     sidecar = [o for p, o in written
@@ -1217,7 +1261,21 @@ def test_confirmatory_outputs_present_skips_the_inputs_it_was_built_over(
     design, _man, _sel = _v5_design(rf, tmp_path, monkeypatch, n_sets=1)
     block = {"cells": design["cells"],
              "checkpoint_requirements": design["checkpoint_requirements"]}
-    assert rf.confirmatory_outputs_present(DS, block) == []
+    roles = design["checkpoint_requirements"]["roles"]
+    # The inputs v5 reads -- the frozen route at every seed, the baseline h and
+    # the fifteen edited-h adapters -- are never counted, whether or not the run
+    # has since produced the outputs this design does make.
+    listed = rf.confirmatory_outputs_present(DS, block)
+    assert not [e for e in listed if e["what"] == "checkpoint"
+                and not roles[e["role"]]["produced_by_this_design"]]
+    # The direct and hybrid cells are NOT qualified by forget set -- their ids are
+    # direct__v5__d17, because they depend on no forget set -- so on a tree where
+    # v5 has run they are on disk even though this test's forget sets are
+    # synthetic, and the listing is right to name them.  What must not appear is
+    # any cell of the synthetic sets, whose ids do carry the set.
+    synthetic = [s["set_id"] for s in design["forget_sets"]]
+    assert not [e for e in listed if e["what"] == "cell"
+                and any(fs in e["cell_id"] for fs in synthetic)]
     # and a cell that exists IS listed, with its digest
     cid = design["cells"][0]["cell_id"]
     p = tmp_path / f"{cid}.json"
@@ -1230,9 +1288,13 @@ def test_confirmatory_outputs_present_skips_the_inputs_it_was_built_over(
         lambda ds, c, out=None: p if c == cid
         else tmp_path / "absent" / f"{c}.json")
     present = rf.confirmatory_outputs_present(DS, block)
-    assert [e["cell_id"] for e in present] == [cid]
-    assert present[0]["what"] == "cell"
-    assert present[0]["sha256"] == hashlib.sha256(p.read_bytes()).hexdigest()
+    # Filtered to cells rather than read off the whole listing: the listing may
+    # also name the D_s adapters this design produces, and those carry a "role"
+    # and no "cell_id", so indexing the first entry would be reading whichever
+    # kind of entry happened to be appended first.
+    cells = [e for e in present if e["what"] == "cell"]
+    assert [e["cell_id"] for e in cells] == [cid]
+    assert cells[0]["sha256"] == hashlib.sha256(p.read_bytes()).hexdigest()
 
 
 def test_the_freeze_checks_the_selection_before_it_does_anything_else(rf,
