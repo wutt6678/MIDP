@@ -975,17 +975,25 @@ def test_the_checkpoint_roles_are_qualified_by_forget_set(rf, tmp_path,
     assert req["forget_set_id"] is None
     assert [s["set_id"] for s in req["forget_sets"]] == \
         [s["set_id"] for s in forget_sets]
-    # the baseline h and the router seed that already exists are the frozen route
+    # Every role v5 reads rather than trains is a declared input: the baseline h
+    # and the router at EVERY seed, because v5 trains no router at any of them.
+    # The seeds the frozen route did not establish were trained by the run v2
+    # pre-registered, so declaring them absent -- as v2 correctly did, before that
+    # run existed -- names work no phase of this design performs.
     assert roles["baseline_h"]["exists_already"] is True
-    assert roles[f"router_g__seed{rf.EXISTING_ROUTER_SEED}"]["exists_already"]
-    # everything else is training work, and the direct adapters are all of it plus
-    # whichever router seeds the frozen route did not already train
+    for s in req["router_seeds"]:
+        assert roles[f"router_g__seed{s}"]["exists_already"] is True, \
+            f"v5 trains no router, so g at seed {s} is an input it reads"
+    # The only training work is the direct adapters, and that is the same set the
+    # design says it produces: the two declarations have to agree, because a role
+    # declared absent and produced by nobody is one nothing would ever supply.
     trained = sorted(r for r, s in roles.items() if not s["exists_already"])
-    expected = sorted(
-        [f"direct_d__seed{s}" for s in req["direct_seeds"]]
-        + [f"router_g__seed{s}" for s in req["router_seeds"]
-           if s != rf.EXISTING_ROUTER_SEED])
-    assert trained == expected
+    produced = sorted(r for r, s in roles.items()
+                      if s["produced_by_this_design"])
+    expected = sorted(f"direct_d__seed{s}" for s in req["direct_seeds"])
+    assert trained == produced == expected
+    assert not [r for r, s in roles.items()
+                if not s["exists_already"] and not s["produced_by_this_design"]]
     assert all(roles[r]["n_files_required"] for r in roles)
     # what the design PRODUCES is a separate statement from what is on disk, and
     # it names the direct adapters alone: v5 trains no router and no edited h
@@ -1123,6 +1131,83 @@ def test_the_listing_is_filed_beside_the_manifest_and_not_inside_it(rf,
         "the sidecar must not be an input the manifest hashes"
 
 
+def test_the_sidecar_counts_the_roles_the_design_produces(rf, tmp_path,
+                                                          monkeypatch):
+    """The listing's own number, from the real ``_freeze_v5``.
+
+    It reported five roles as training work for a design that trains three,
+    because it counted ``not exists_already`` while two routers were declared
+    absent and produced by nobody.  Counting what the design PRODUCES is what the
+    field name says, so this asserts the number against the roles themselves
+    rather than against a literal -- a literal would keep passing if both were
+    wrong in the same way.
+
+    Both writes are captured, so ``_freeze_v5`` runs end to end and files nothing.
+    """
+    _v5_design(rf, tmp_path, monkeypatch)
+    written = []
+
+    def capture(path, obj):
+        written.append((path, obj))
+        return path, "0" * 64
+
+    monkeypatch.setattr(rf, "atomic_write_json", capture)
+    monkeypatch.setattr(rf, "_freeze_write_and_verify",
+                        lambda spec, args, block: (None, "0" * 64))
+    rf._freeze_v5(rf.PILOT_SPEC_V5, _freeze_args())
+
+    sidecar = [o for p, o in written
+               if p == rf.freeze_ordering_report_path(DS)]
+    assert len(sidecar) == 1, \
+        f"expected exactly one sidecar write, got {[str(p) for p, _ in written]}"
+    listing = sidecar[0]
+    roles = rf.required_checkpoints_v5(
+        DS, rf.pilot_forget_sets_v5(DS, [17, 42, 123])["sets"],
+        [17, 42, 123], [17, 42, 123], [17, 42, 123],
+        rf.DIRECT_NAMESPACE_V5)["roles"]
+    produced = sorted(r for r, s in roles.items()
+                      if s["produced_by_this_design"])
+    got = listing["what_was_listed"]["checkpoint_roles_that_are_training_work"]
+    assert got == len(produced) == 3, f"{got} vs {produced}"
+    assert listing["what_was_listed"]["cells"] == 71
+    # and the ordering claim it exists to make
+    assert listing["n_outputs_that_already_existed"] == 0
+    assert listing["the_freeze_was_therefore"] == "before its outputs"
+
+
+def test_a_role_nobody_produces_and_nobody_supplies_refuses(rf, tmp_path,
+                                                           monkeypatch):
+    """The invariant, proved to fire on the table that violated it.
+
+    Asserting only that v5's table is coherent would pass on a constructor that
+    never checked anything, so the same check is handed a corrupted copy -- a
+    router the design reads turned into work nobody performs, which is exactly
+    what copying v2's declaration did.
+
+    Called directly rather than by wrapping the constructor: the check runs inside
+    ``required_checkpoints_v5`` before it returns, so a wrapper can only corrupt
+    the table after the check has already passed it, and the test then reports
+    DID NOT RAISE against a check that is present and working.
+    """
+    design, _man, _sets = _v5_design(rf, tmp_path, monkeypatch)
+    roles = design["checkpoint_requirements"]["roles"]
+    rf._require_checkpoint_roles_coherent(roles)
+
+    label = next(r for r in roles
+                 if r.startswith("router_g__seed")
+                 and r != f"router_g__seed{rf.EXISTING_ROUTER_SEED}")
+    broken = {k: dict(v) for k, v in roles.items()}
+    broken[label]["exists_already"] = False
+    with pytest.raises(RuntimeError,
+                       match="declared as work this design does not produce"):
+        rf._require_checkpoint_roles_coherent(broken)
+    # the refusal names the role, because "2 roles are wrong" is not actionable
+    with pytest.raises(RuntimeError, match=label):
+        rf._require_checkpoint_roles_coherent(broken)
+    # and the real table was not mutated by building the corrupted copy
+    assert roles[label]["exists_already"] is True
+
+
 def test_confirmatory_outputs_present_skips_the_inputs_it_was_built_over(
         rf, tmp_path, monkeypatch):
     """Roles declared ``exists_already`` are the frozen route and the matrix's
@@ -1237,6 +1322,21 @@ def _hermetic_root(rf, monkeypatch, tmp_path, man, dataset="hermetic"):
                         Path("manifests/hermetic_manifest.json"))
     monkeypatch.setattr(rf, "load_manifest", lambda ds: man)
     return root
+
+
+def _freeze_args(dataset=DS, router_seeds=None, edit_seeds=None,
+                 direct_seeds=None):
+    """The fields ``_freeze_v5`` reads.
+
+    ``dataset`` is a real name here and not a hermetic one because ``_freeze_v5``
+    derives the forget sets from the committed matrix, and that derivation is part
+    of what is under test.  The seeds default to None so the frozen seed policy
+    supplies them exactly as the CLI does when they are not passed.
+    """
+    return argparse.Namespace(
+        dataset=dataset, out=None, cells=None, forget_ids=None,
+        router_seeds=router_seeds, edit_seeds=edit_seeds,
+        direct_seeds=direct_seeds)
 
 
 def _cal_args(dataset="hermetic", out=None):

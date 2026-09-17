@@ -10439,6 +10439,31 @@ def pilot_forget_sets_v5(dataset, edit_seeds):
 FORGET_SET_DEPENDENT_KINDS = ("baseline", "intervention", "natural")
 
 
+def _require_checkpoint_roles_coherent(roles):
+    """No role may be work this design does not perform.
+
+    The two declarations a role carries have to satisfy one invariant TOGETHER.
+    ``exists_already`` False means the role is work; ``produced_by_this_design``
+    False means it is an input the design reads.  A role that is both is one
+    nothing supplies and nothing trains, so ``checkpoint_readiness`` would list it
+    under ``must_train`` forever and ``runnable_now`` could never become True --
+    with no phase at fault, because no phase was ever asked to do the work.
+
+    A function and not an inline block, so it can be handed a corrupted table and
+    shown to refuse: a check nobody can provoke is a comment with a raise attached.
+    """
+    orphaned = sorted(
+        label for label, spec in roles.items()
+        if not spec["exists_already"] and not spec["produced_by_this_design"])
+    if orphaned:
+        raise RuntimeError(
+            f"{len(orphaned)} checkpoint role(s) are declared as work this "
+            f"design does not produce, e.g. {orphaned[0]!r}.  No phase would "
+            f"train them and no input supplies them, so this design could never "
+            f"become runnable; either declare the role an input it reads or have "
+            f"this design produce it")
+
+
 def required_checkpoints_v5(dataset, forget_sets, router_seeds, edit_seeds,
                             direct_seeds, direct_namespace):
     """Every checkpoint and prediction file a v5 pilot needs, by role.
@@ -10467,10 +10492,22 @@ def required_checkpoints_v5(dataset, forget_sets, router_seeds, edit_seeds,
         req[f"router_g__seed{seed}"] = {
             "role": ("the frozen router, read not retrained" if existing else
                      "a router trained under the identical frozen protocol with "
-                     "a fresh LoRA init at this seed"),
+                     "a fresh LoRA init at this seed, and read by v5 rather than "
+                     "trained by it"),
             "adapter": _rel(router_checkpoint_path(dataset, seed)),
             "held_out_predictions": _rel(router_prediction_path(dataset, seed)),
-            "exists_already": existing}
+            # EVERY router seed is a declared input and not only the one the
+            # frozen route was established under.  v2 declared the other seeds as
+            # work it was waiting for, which was true when v2 was frozen and
+            # became false when the run v2 pre-registered trained them.  v5 is
+            # frozen after that run and trains no router at any seed, so copying
+            # v2's declaration named two adapters as work no phase of this design
+            # performs, beside a produced_by_this_design that said the design
+            # produces neither.  Declaring them inputs means a missing one is
+            # reported by checkpoint_readiness as unexpectedly_absent, which makes
+            # the design not runnable -- the consequence a required input should
+            # have, and one a "must train" declaration could never deliver here.
+            "exists_already": True}
     req["baseline_h"] = {
         "role": "the unedited code->label map; the before in before/after",
         "adapter": _rel(DATASET_ROOT / route / "h_C_to_Y"
@@ -10505,6 +10542,7 @@ def required_checkpoints_v5(dataset, forget_sets, router_seeds, edit_seeds,
     # already been run on.
     for label in req:
         req[label]["produced_by_this_design"] = label.startswith("direct_d__")
+    _require_checkpoint_roles_coherent(req)
     for label, spec in req.items():
         spec["n_files_required"] = sum(1 for k in CHECKPOINT_FILE_KEYS_V2
                                        if spec.get(k))
@@ -11341,9 +11379,16 @@ def _freeze_v5(spec, args):
         ("version", "v5"),
         ("what_was_listed", OrderedDict((
             ("cells", len(block["cells"])),
+            # Counted on what the design PRODUCES, which is the property this
+            # field name states, rather than on ``exists_already``.  The two
+            # agree now that every router seed is a declared input, but counting
+            # on the name's own meaning is what keeps them from drifting apart
+            # again the next time a role is added -- and it was counting the
+            # other one that reported five roles as training work for a design
+            # that trains three.
             ("checkpoint_roles_that_are_training_work",
              sum(1 for r in block["checkpoint_requirements"]["roles"].values()
-                 if not r.get("exists_already"))),
+                 if r.get("produced_by_this_design"))),
         ))),
         ("n_outputs_that_already_existed", len(already)),
         ("outputs_that_already_existed", already),
