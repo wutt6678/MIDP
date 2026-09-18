@@ -18,7 +18,7 @@
     "rederivation_sidecar": {
       "path": "e2c_route_forgetting/reports/rf_report_salmu_v5_rederivation.json",
       "present": true,
-      "sha256": "d7f4f8bc6cdf10359777f060c1bd290ae29695e6521966d9ffcdcfd491bbe660"
+      "sha256": "c1460a7cb636f336a44c0b25e9094ba40bad8fb3189a72a499f9455ae41e13c6"
     },
     "rf2_report": {
       "path": "e2c_route_forgetting/reports/rf_report_salmu_v5.json",
@@ -171,6 +171,7 @@
     },
     {
       "authority": "chosen by the user over filing a sidecar beside the executed reports",
+      "defect_found_afterwards_and_corrected": "the sidecar recorded the digests of the committed originals, the staged copies and the in-place copies in one block using two different methods: the first two were sha256 of a sorted re-serialization of the parsed document and only the third was sha256 of raw file bytes. The committed originals therefore did not hash to what the sidecar said, and no common normalization reproduced it. The comparison itself never consumed those digests -- it compared git-show text against file text, then the parsed documents key by key -- so no gate was weakened, but a record that cannot be reproduced does not support the claim it was filed to support. Corrected in the sidecar's /correction block, which preserves the erroneous values, names the source commit, gives both correct raw sha256, states the verifying command, and re-establishes the substantive claim from raw bytes",
       "deviation": "the RF2 and RF2P reports were re-derived after the run, under a labelled driver, to add the disclosure the plan required them to carry",
       "n": 8,
       "proof": "rf_report_salmu_v5_rederivation.json: all 71 cell files byte-identical to the digests the committed report consumed, the design still reproducing dbddf8b78a7af66b, and the report differing in exactly one added key plus run_provenance",
@@ -180,12 +181,18 @@
   "disclosures_the_plan_required": [
     {
       "carried": true,
+      "carried_by_scope_note": false,
+      "carried_in_frozen_artifact": true,
+      "carried_in_report": false,
       "n": 1,
       "statement": "the router is not calibrated",
       "where_it_is_carried": "rf_calibration_salmu_v5.json at /what_is_being_calibrated/what_is_NOT_being_calibrated"
     },
     {
       "carried": true,
+      "carried_by_scope_note": false,
+      "carried_in_frozen_artifact": true,
+      "carried_in_report": true,
       "n": 2,
       "n_development_images": 24,
       "n_fit_images": 72,
@@ -196,6 +203,9 @@
     },
     {
       "carried": true,
+      "carried_by_scope_note": false,
+      "carried_in_frozen_artifact": true,
+      "carried_in_report": true,
       "n": 3,
       "statement": "D_s's recipe may differ from the route's once a non-incumbent candidate is selected",
       "the_live_case": "a non-incumbent WAS selected, so this is not hypothetical",
@@ -203,22 +213,58 @@
     },
     {
       "carried": true,
+      "carried_by_scope_note": false,
+      "carried_in_frozen_artifact": false,
+      "carried_in_report": true,
       "n": 4,
       "statement": "every v5 cell is produced_under_this_design, so the 28 v3 cells take no part in any v5 verdict",
       "where_it_is_carried": "the RF2 report at /cell_design_lineage, with an empty ancestor and 71 of 71 cells produced_under_this_design"
     },
     {
-      "carried": false,
-      "carried_here_instead": true,
+      "carried": true,
+      "carried_by_scope_note": true,
+      "carried_in_frozen_artifact": false,
+      "carried_in_report": false,
       "n": 5,
       "not_a_preference": "two guards in the runner refuse it, reproduced verbatim below",
       "statement": "PPUBench is not run as a v5 pilot, and a future arm there is restricted to new forget sets at router seed 17, reported as forget-set generalisation rather than a router-seed cross",
-      "where_it_is_carried": "nowhere in a frozen artifact, which is why this file exists"
+      "where_it_is_carried": "nowhere in a frozen artifact, which is why this file exists",
+      "why_not_a_frozen_artifact": "Freeze #1 and Freeze #2 cannot be re-frozen because 74 of Freeze #2's outputs now exist and _freeze_v5 correctly refuses, and the calibration selection cannot be edited because the v5 design binds its sha256"
     }
   ],
-  "filed_at_utc": "2026-09-17T20:30:43Z",
-  "filed_by": "/scratch/wutiantong/rf5_launch/file_scope_note.py",
-  "filed_by_sha256": "765ea3b441e104f780329427ed598cbf5e530a2feb0bfbe5d7aa5faacae54099",
+  "drivers_archived_verbatim": {
+    "file_scope_note.py": {
+      "matches_the_sidecar_correction": true,
+      "named_by_the_sidecar_correction": true,
+      "path": "e2c_route_forgetting/drivers/file_scope_note.py",
+      "sha256": "765ea3b441e104f780329427ed598cbf5e530a2feb0bfbe5d7aa5faacae54099",
+      "what_it_filed": "filed the superseded scope note 3097353f9f4d02a9"
+    },
+    "file_scope_note_v2.py": {
+      "matches_the_sidecar_correction": null,
+      "named_by_the_sidecar_correction": false,
+      "path": "e2c_route_forgetting/drivers/file_scope_note_v2.py",
+      "sha256": "109439c64b3ef373ac0600a82bcad7e0ee7789bd390d0d5ca480f27902309d9f",
+      "what_it_filed": "filed this scope note, superseding 3097353f9f4d02a9"
+    },
+    "rederive_report.py": {
+      "matches_the_sidecar_correction": true,
+      "named_by_the_sidecar_correction": true,
+      "path": "e2c_route_forgetting/drivers/rederive_report.py",
+      "sha256": "8bc8c2ca34cac4918cb86c0ec9732fcba36de372d4bb3497951381ef8bf7d14a",
+      "what_it_filed": "filed the re-derivation sidecar this block corrects"
+    },
+    "repair_sidecar_digests.py": {
+      "matches_the_sidecar_correction": true,
+      "named_by_the_sidecar_correction": true,
+      "path": "e2c_route_forgetting/drivers/repair_sidecar_digests.py",
+      "sha256": "6279956d1a228d396e0333e420d844447b50fea1e22fd531b05aa0306b784e0f",
+      "what_it_filed": "filed this correction block"
+    }
+  },
+  "filed_at_utc": "2026-09-18T01:50:10Z",
+  "filed_by": "/scratch/wutiantong/rf5_launch/file_scope_note_v2.py",
+  "filed_by_sha256": "109439c64b3ef373ac0600a82bcad7e0ee7789bd390d0d5ca480f27902309d9f",
   "kind": "route_dependent_forgetting_scope_note_v5",
   "ppubench_cannot_host_a_v5_pilot": {
     "development_split_refusal": {
@@ -249,5 +295,29 @@
     "what_this_means": "PPUBench is not merely deferred: its held-out filenames are bytes that also appear in its train split, so no development split of it can be content-disjoint from its test images, and a configuration selected on one would be selected partly on the measurement it is supposed to predict.  v5 is therefore SALMU-only, and the route-seed cross it exists to run is only possible on a dataset with held-out image content"
   },
   "runner_sha256": "e8332abe15083189e5e70f7849900b84e880dda76e2f232a42c2e026a07718f3",
+  "sidecar_digest_correction": {
+    "changes_no_report_gate_or_verdict": "no report, gate, verdict, cell, manifest or design is altered by this correction, and neither RF2 nor RF2P was re-run.  The mediation, routing-reliability and routing-factorization verdicts, all nine gate values and all 2076 rows across 71 cells are exactly as filed at 80eecb0 and as re-derived under proof; only the record of how the re-derivation was checked is corrected",
+    "correct_raw_sha256_of_the_original_reports": {
+      "RF2": "d566fb6f2d492f67c7169db2fe16c59868dc49b1bf45bcfb849a1617495c7d4d",
+      "RF2P": "e5c7d3f598726a03f4eb7e8c58162c03ac639321051a8e8c64f382c450294f4a"
+    },
+    "corrected_at_utc": "2026-09-18T01:44:08Z",
+    "corrected_by": "/scratch/wutiantong/rf5_launch/repair_sidecar_digests.py",
+    "digest_method_used_everywhere_in_this_note": "sha256 of the RAW FILE BYTES, the only method that reproduces with sha256sum and the only one a reader can check without knowing which serializer produced the file",
+    "erroneous_values_preserved_in_the_sidecar": true,
+    "see": "e2c_route_forgetting/reports/rf_report_salmu_v5_rederivation.json at /correction",
+    "source_commit_of_the_original_reports": "80eecb0"
+  },
+  "supersedes_scope_note": {
+    "filed_at_commit": "9515035",
+    "sha256": "3097353f9f4d02a9ff8b77a34d2935bb6128c89ccef2bdd8355637b543060d92",
+    "what_changed_in_this_note": [
+      "binds the corrected sidecar digest rather than d7f4f8bc6cdf1035",
+      "adds this supersedes_scope_note lineage block",
+      "lists the archived driver sources by digest and cross-checks them against the sidecar's correction block",
+      "splits disclosure 5's single 'carried' field into carried / carried_in_frozen_artifact / carried_by_scope_note, because 'carried': false beside 'carried_here_instead': true read as a contradiction"
+    ],
+    "why_it_was_superseded": "that note bound the re-derivation sidecar at d7f4f8bc6cdf1035, before the sidecar's recorded digests were found to have been computed by re-serializing the parsed reports rather than by hashing their raw bytes. The sidecar now carries a correction block that preserves the erroneous values and supplies the correct raw sha256 of both reports at their source commit, so this note is regenerated to bind the corrected sidecar and to record the lineage. The superseded note is preserved in git history at the commit above and is not deleted"
+  },
   "why_this_is_a_separate_file": "the two natural homes are closed: the v5 pre-registrations are frozen and cannot be re-frozen because 74 of Freeze #2's outputs now exist, and the calibration selection cannot be edited because the v5 design binds its sha256.  A scope statement made after the fact has to be its own file, so it binds everything it describes instead of being part of it"
 }

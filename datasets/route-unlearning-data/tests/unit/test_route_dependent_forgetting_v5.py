@@ -1713,3 +1713,142 @@ def test_the_calibration_writes_beside_the_cells_not_among_them(rf):
         d / "calibration_result.json"
     assert rf.calibration_selection_path(DS).parent == \
         rf.DATASET_ROOT / rf.REPORTS_DIR
+
+
+# --------------------------------------------------------------------------
+# every digest in the v5 provenance artifacts reproduces from raw bytes
+# --------------------------------------------------------------------------
+
+
+def _digest_pairs(obj, where=""):
+    """Every ``{path, sha256}`` pair in a document, labelled by JSON pointer.
+
+    Found by walking rather than by naming the fields, so a pair added to either
+    artifact later is covered without this test being edited -- and the pointer is
+    carried along so a failure says WHICH entry is wrong instead of only that one
+    is.
+    """
+    out = []
+    if isinstance(obj, dict):
+        if isinstance(obj.get("path"), str) and isinstance(obj.get("sha256"), str):
+            out.append((where, obj["path"], obj["sha256"]))
+        for k, v in obj.items():
+            out.extend(_digest_pairs(v, f"{where}/{k}"))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            out.extend(_digest_pairs(v, f"{where}[{i}]"))
+    return out
+
+
+def _digests_that_do_not_reproduce(root, pairs):
+    """The pairs whose file is absent, or whose raw bytes hash to something else."""
+    root = Path(root)
+    return [(w, p) for w, p, d in pairs
+            if not (root / p).is_file()
+            or hashlib.sha256((root / p).read_bytes()).hexdigest() != d]
+
+
+def test_the_digest_walk_detects_one_that_does_not_reproduce(tmp_path):
+    """Non-vacuity, against the same two helpers the real test calls.
+
+    A walk that found nothing would report nothing wrong, so this hands it one
+    good pair, one wrong digest and one absent file, and requires exactly the two
+    bad ones back -- named by pointer, because "2 digests are wrong" is not
+    actionable.
+    """
+    (tmp_path / "a.json").write_text("{}", encoding="utf-8")
+    good = {"path": "a.json",
+            "sha256": hashlib.sha256(b"{}").hexdigest()}
+    doc = {"x": {"y": [good,
+                       {"path": "a.json", "sha256": "0" * 64},
+                       {"path": "absent.json", "sha256": "1" * 64}]}}
+    pairs = _digest_pairs(doc)
+    assert len(pairs) == 3, f"the walk found {len(pairs)} of 3 pairs"
+    broken = _digests_that_do_not_reproduce(tmp_path, pairs)
+    assert len(broken) == 2, f"expected the 2 bad pairs, got {broken}"
+    assert [w for w, _ in broken] == ["/x/y[1]", "/x/y[2]"], \
+        f"the failures are not named by pointer: {broken}"
+    # and the good pair alone reproduces, so the check is not refusing everything
+    assert not _digests_that_do_not_reproduce(tmp_path, pairs[:1])
+
+
+@_needs_tree
+def test_every_recorded_digest_reproduces_from_raw_file_bytes(rf):
+    """A digest only a serializer can reproduce is not a digest a reader can check.
+
+    The re-derivation sidecar recorded three sets of digests in one block using two
+    different methods: the digests of the committed originals and of the staged
+    copies were sha256 of a sorted re-serialization of the PARSED document, while
+    the in-place digests were sha256 of raw file bytes.  Nothing in the pipeline
+    consumed them, so every gate passed and the re-derivation was sound -- but a
+    reader who hashed the committed reports got a different number and could not
+    reconcile it with any common normalization.
+
+    So this walks both artifacts and re-hashes, from RAW BYTES, every file they
+    name beside a digest.  Filing a digest is a claim that a reader can reproduce
+    it, and this is the check that the claim is true.
+    """
+    reports = rf.DATASET_ROOT / "e2c_route_forgetting" / "reports"
+    side_p = reports / "rf_report_salmu_v5_rederivation.json"
+    note_p = reports / "rf_scope_note_salmu_v5.json"
+    if not (side_p.is_file() and note_p.is_file()):
+        pytest.skip("the re-derivation sidecar and the scope note are not filed")
+    side = json.loads(side_p.read_text(encoding="utf-8"))
+    note = json.loads(note_p.read_text(encoding="utf-8"))
+
+    def raw(p):
+        return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+    pairs = _digest_pairs(note, "scope_note") + _digest_pairs(side, "sidecar")
+    assert pairs, "no {path, sha256} pair was found in either artifact, so this " \
+                  "test would pass without checking anything"
+    broken = _digests_that_do_not_reproduce(rf.DATASET_ROOT, pairs)
+    assert not broken, (
+        f"{len(broken)} recorded digest(s) do not reproduce from the raw bytes of "
+        f"the file they name, e.g. {broken[0]}")
+
+    # the sidecar's in-place digests name no path beside them, so they are checked
+    # against the reports they describe rather than found by the walk above
+    guarded = side["write_was_guarded"]
+    for kind in ("RF2", "RF2P"):
+        p = rf.report_path(DS, kind, spec=rf.PILOT_SPEC_V5)
+        assert raw(p) == guarded["in_place_digests"][kind], \
+            f"{kind}'s in_place_digest is not the sha256 of the report on disk"
+
+    corr = side["correction"]
+    assert corr["source_commit_of_the_original_reports"] == "80eecb0"
+    wrong = corr["erroneous_values_as_filed"]
+    right = corr["correct_raw_sha256_of_the_original_reports"]
+    assert set(wrong) == set(right) == {"RF2", "RF2P"}
+    for kind in right:
+        assert len(right[kind]) == 64 and right[kind] != wrong[kind], (
+            f"{kind}'s correction does not actually correct anything, which "
+            f"would make the correction block a restatement of the error")
+        # the erroneous value is preserved, not overwritten, so the record of what
+        # was claimed survives and the correction stays falsifiable
+        assert guarded["committed_digests_at_the_run"][kind] == wrong[kind]
+        method = corr["how_the_erroneous_values_reproduce"][kind]
+        assert len(method["reproduced_by"]) == 1, (
+            f"{kind}: {len(method['reproduced_by'])} methods reproduce the "
+            f"erroneous value, so the cause is not pinned to one")
+        assert "sort_keys" in method["reproduced_by"][0], \
+            "the cause was a sorted re-serialization; if that is no longer the " \
+            "reproducing method then this correction describes a different defect"
+        assert "sha256(raw file bytes)" in method["every_method_tried"], \
+            "the correction must show that raw bytes were tried and did not match"
+
+    # the drivers the sidecar says it archived are the bytes it recorded
+    for name, rec in corr["drivers_archived_verbatim"].items():
+        p = rf.DATASET_ROOT / rec["archived_at"]
+        assert p.is_file(), f"the sidecar archived {name} but it is not in the tree"
+        assert raw(p) == rec["sha256"]
+
+    # and the note binds the corrected sidecar, superseding a different digest
+    assert note["bound_artifacts"]["rederivation_sidecar"]["sha256"] == raw(side_p)
+    sup = note["supersedes_scope_note"]
+    assert len(sup["sha256"]) == 64
+    assert sup["sha256"] != raw(note_p), \
+        "a note cannot supersede itself"
+    assert sup["filed_at_commit"]
+    assert note["sidecar_digest_correction"][
+        "correct_raw_sha256_of_the_original_reports"] == right

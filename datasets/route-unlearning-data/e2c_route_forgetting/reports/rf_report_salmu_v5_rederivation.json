@@ -17,6 +17,128 @@
       "run_provenance"
     ]
   },
+  "correction": {
+    "changes_nothing_about_the_result": "no report, gate, verdict, cell, manifest or design is altered by this correction, and neither RF2 nor RF2P was re-run.  The mediation, routing-reliability and routing-factorization verdicts, all nine gate values and all 2076 rows across 71 cells are exactly as filed at 80eecb0 and as re-derived under proof; only the record of how the re-derivation was checked is corrected",
+    "commit_the_driver_read_them_at": "bc80af7",
+    "correct_raw_sha256_of_the_original_reports": {
+      "RF2": "d566fb6f2d492f67c7169db2fe16c59868dc49b1bf45bcfb849a1617495c7d4d",
+      "RF2P": "e5c7d3f598726a03f4eb7e8c58162c03ac639321051a8e8c64f382c450294f4a"
+    },
+    "corrected_at_utc": "2026-09-18T01:44:08Z",
+    "corrected_by": "/scratch/wutiantong/rf5_launch/repair_sidecar_digests.py",
+    "corrected_by_sha256": "6279956d1a228d396e0333e420d844447b50fea1e22fd531b05aa0306b784e0f",
+    "drivers_archived_verbatim": {
+      "file_scope_note.py": {
+        "archived_at": "e2c_route_forgetting/drivers/file_scope_note.py",
+        "archived_verbatim_because": "a driver is evidence about how an artifact was produced, so it is copied byte for byte into the repository and deliberately kept outside src/tests/scripts, which CI reformats with ruff and which would silently break the digest the artifact records",
+        "sha256": "765ea3b441e104f780329427ed598cbf5e530a2feb0bfbe5d7aa5faacae54099",
+        "what_it_filed": "filed the superseded scope note 3097353f9f4d02a9"
+      },
+      "rederive_report.py": {
+        "archived_at": "e2c_route_forgetting/drivers/rederive_report.py",
+        "archived_verbatim_because": "a driver is evidence about how an artifact was produced, so it is copied byte for byte into the repository and deliberately kept outside src/tests/scripts, which CI reformats with ruff and which would silently break the digest the artifact records",
+        "sha256": "8bc8c2ca34cac4918cb86c0ec9732fcba36de372d4bb3497951381ef8bf7d14a",
+        "what_it_filed": "filed the re-derivation sidecar this block corrects"
+      },
+      "repair_sidecar_digests.py": {
+        "archived_at": "e2c_route_forgetting/drivers/repair_sidecar_digests.py",
+        "archived_verbatim_because": "a driver is evidence about how an artifact was produced, so it is copied byte for byte into the repository and deliberately kept outside src/tests/scripts, which CI reformats with ruff and which would silently break the digest the artifact records",
+        "sha256": "6279956d1a228d396e0333e420d844447b50fea1e22fd531b05aa0306b784e0f",
+        "what_it_filed": "filed this correction block"
+      }
+    },
+    "erroneous_values_as_filed": {
+      "RF2": "9ecb7e6f5113086c0135be824cc46d439d291fdcad4fa1242036cd2035172e5e",
+      "RF2P": "649575e303e800cd482681b0e1b7f7e15f2f86f19f48a95f3089f452c9685de8"
+    },
+    "how_the_erroneous_values_reproduce": {
+      "RF2": {
+        "every_method_tried": {
+          "sha256(canonical_json(obj).encode())": "39bace0cdf46591dbdbf9465a77a31151801efa32510d1193dd5acd03ecd231b",
+          "sha256(json.dumps(obj, sort_keys=True).encode())": "9ecb7e6f5113086c0135be824cc46d439d291fdcad4fa1242036cd2035172e5e",
+          "sha256(json.dumps(obj, sort_keys=True, separators=(',',':')).encode())": "c3f0f5bef1258c78611120e1b0339d4e26712b715b10801c52aef8f74cbb42b2",
+          "sha256(raw file bytes)": "d566fb6f2d492f67c7169db2fe16c59868dc49b1bf45bcfb849a1617495c7d4d"
+        },
+        "recorded": "9ecb7e6f5113086c0135be824cc46d439d291fdcad4fa1242036cd2035172e5e",
+        "reproduced_by": [
+          "sha256(json.dumps(obj, sort_keys=True).encode())"
+        ]
+      },
+      "RF2P": {
+        "every_method_tried": {
+          "sha256(canonical_json(obj).encode())": "10424936efed1d0633e81848a57a2ad70bd1c2b30821b395a0b5d08654286d4a",
+          "sha256(json.dumps(obj, sort_keys=True).encode())": "649575e303e800cd482681b0e1b7f7e15f2f86f19f48a95f3089f452c9685de8",
+          "sha256(json.dumps(obj, sort_keys=True, separators=(',',':')).encode())": "58d290462df624dbc6481bef7fcd89dd214bd123d48ca7c969300c7fa34a6cda",
+          "sha256(raw file bytes)": "e5c7d3f598726a03f4eb7e8c58162c03ac639321051a8e8c64f382c450294f4a"
+        },
+        "recorded": "649575e303e800cd482681b0e1b7f7e15f2f86f19f48a95f3089f452c9685de8",
+        "reproduced_by": [
+          "sha256(json.dumps(obj, sort_keys=True).encode())"
+        ]
+      }
+    },
+    "source_commit_of_the_original_reports": "80eecb0",
+    "the_erroneous_values_are_preserved_not_overwritten": "write_was_guarded.committed_digests_at_the_run and .staged_digests are left exactly as filed, because replacing them would destroy the record of what was claimed and make this correction unfalsifiable",
+    "the_substantive_claim_re_established_from_raw_bytes": {
+      "per_report": {
+        "RF2": {
+          "added_keys": [
+            "direct_training_disclosure"
+          ],
+          "dropped_keys": [],
+          "gates_verdicts_and_counts_byte_identical": true,
+          "keys_whose_value_moved": [
+            "run_provenance"
+          ],
+          "run_provenance_execution_fields_moved": [
+            "executing_commit",
+            "executing_script_sha256"
+          ],
+          "run_provenance_identity_fields_unchanged": [
+            "preregistration_design_sha256",
+            "preregistration_file_sha256",
+            "preregistration_kind",
+            "preregistration_path",
+            "pilot_version"
+          ]
+        },
+        "RF2P": {
+          "added_keys": [
+            "direct_training_disclosure"
+          ],
+          "dropped_keys": [],
+          "gates_verdicts_and_counts_byte_identical": true,
+          "keys_whose_value_moved": [
+            "run_provenance"
+          ],
+          "run_provenance_execution_fields_moved": [
+            "executing_commit",
+            "executing_script_sha256"
+          ],
+          "run_provenance_identity_fields_unchanged": [
+            "preregistration_design_sha256",
+            "preregistration_file_sha256",
+            "preregistration_kind",
+            "preregistration_path",
+            "pilot_version"
+          ]
+        },
+        "cell_files_rehashed_against_the_original_report": {
+          "n": 71,
+          "n_disagreeing": 0
+        }
+      },
+      "why_re_established": "the sidecar's claim was that the re-derived reports differ from the committed originals in exactly one added key plus run_provenance.  That claim is recomputed here from the raw bytes at the source commit, so it no longer rests on a digest nobody could reproduce"
+    },
+    "verification_method": {
+      "and": "git -C /scratch/wutiantong/MIDP show 80eecb0:datasets/route-unlearning-data/e2c_route_forgetting/reports/rf_report_salmu_v5_rescored.json | sha256sum",
+      "command": "git -C /scratch/wutiantong/MIDP show 80eecb0:datasets/route-unlearning-data/e2c_route_forgetting/reports/rf_report_salmu_v5.json | sha256sum",
+      "digest_method_this_correction_uses_everywhere": "sha256 of the RAW FILE BYTES, which is the only method that reproduces with sha256sum and the only one a reader can check without knowing which serializer produced the file",
+      "python_equivalent": "hashlib.sha256(subprocess.run(['git','show','80eecb0:<path>'],capture_output=True).stdout).hexdigest()"
+    },
+    "what_was_not_wrong": "the comparison these digests were meant to summarise did not consume them.  The driver compared git-show TEXT against the file's TEXT, and then compared the parsed documents key by key; the three digest fields appear exactly once each in its source, inside the record construction that runs after every gate.  They were output, not input, which is why the mistake was invisible while the driver ran and is only visible to somebody reproducing the numbers",
+    "what_was_wrong": "write_was_guarded recorded three sets of digests using two different methods and presented them as one kind of thing.  committed_digests_at_the_run and staged_digests were sha256(json.dumps(parsed, sort_keys=True)) -- a re-serialization in Python's default spacing -- while in_place_digests were sha256 of the raw file bytes.  The first two therefore match no file on disk, no file in git, no compact-separator form and not canonical_json, so a reader hashing the committed reports could not reconcile them with what this sidecar said it was describing"
+  },
   "design_reproduces": true,
   "design_sha256": "dbddf8b78a7af66bfbbbb26fcb276fb437e0546d82a5e7eb9dcdc3e58216c311",
   "dirty_tracked_files": [
