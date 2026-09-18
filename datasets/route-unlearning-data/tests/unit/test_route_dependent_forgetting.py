@@ -909,7 +909,7 @@ def test_missing_intervention_rows_block_the_freeze(rf, monkeypatch):
         _design(rf)
 
 
-def test_rf1_refuses_rather_than_pretending_to_run(rf):
+def test_rf1_refuses_rather_than_pretending_to_run(rf, monkeypatch):
     """A GPU phase must say so instead of producing an empty cell that later
     reads as a result.
 
@@ -917,6 +917,14 @@ def test_rf1_refuses_rather_than_pretending_to_run(rf):
     so "run RF1" could not say which router, which edited h or which direct
     model it meant.  The refusal now names the four phases that replaced it, and
     the superseded v1 session stub still refuses exactly as it did.
+
+    Constructing a session loads the frozen route scripts, and those import torch
+    at module scope -- so the constructor, not any of the three stubs below, is
+    what needs a GPU stack.  None of the three reads what that load returns (each
+    raises unconditionally), so the sibling load is stubbed and the whole test
+    still runs on a machine with no torch.  Skipping the second half instead would
+    trade real coverage for a green tick: the claim under test is that the v1
+    stub refuses, not that torch imports.
     """
     with pytest.raises(RuntimeError, match="RF1 no longer exists") as exc:
         rf.main(["--dataset", "ppubench", "--phase", "RF1",
@@ -925,6 +933,7 @@ def test_rf1_refuses_rather_than_pretending_to_run(rf):
         assert replacement in str(exc.value), \
             f"the refusal must name {replacement} as what replaced RF1"
 
+    monkeypatch.setattr(rf, "_load_sibling", lambda *a, **k: object())
     session = rf.RouteSession("ppubench", "cpu")
     for call in (lambda: session.load("x"),
                  lambda: session.generate_with_image("x", "y"),

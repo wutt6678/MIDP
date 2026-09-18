@@ -103,15 +103,78 @@ def _absent(paths):
     return [str(p) for p in paths if not Path(p).is_file()]
 
 
-def _gate(paths, what):
+def _gate(paths, what, show=4):
+    """A skip gate that names what is missing, truncated to stay readable.
+
+    ``show`` caps the enumeration because the image gate can name 132 paths, and
+    a skip reason listing every one buries the two things a reader needs: how many
+    are missing and an example.
+    """
     missing = _absent(paths)
     return pytest.mark.skipif(
         bool(missing),
         reason=(f"{what} reads {len(missing)} committed artifact(s) this "
-                f"checkout does not have: " + ", ".join(missing)))
+                f"checkout does not have: " + ", ".join(missing[:show])
+                + (f" (and {len(missing) - show} more)"
+                   if len(missing) > show else "")))
 
 
-_needs_images = _gate(list(_MANIFESTS.values()), "the development split")
+def _manifest_images(ds):
+    """The image BYTES a dataset's manifest names, resolved through the runner.
+
+    Probing the manifest is not a gate on the images.  The manifest is tracked and
+    the images are not, so a gate built on the manifest never fires in a bare
+    clone -- which is what made the split tests fail in CI instead of skipping.
+    ``image_content_audit`` hashes every image the manifest names, so all of them
+    are enumerated rather than a sample: under-enumerating would let a checkout
+    missing one image run a test that can only fail.
+
+    PPUBench records absolute paths under the downloaded benchmark, so those are
+    resolved as the runner resolves them.  On the machine that has the benchmark
+    this gate does not fire and on a CI runner it does, which is the correct
+    behaviour either way -- the gate asks about the bytes the code will read.
+    """
+    p = _MANIFESTS[ds]
+    if not p.is_file():
+        return []
+    man = json.loads(p.read_text(encoding="utf-8"))
+    return [_RF.resolve_recorded_path(it["image_uri"]) for it in man["items"]]
+
+
+def _input_weights(pilot):
+    """The adapter weights a frozen design declares it READS, re-rooted here.
+
+    Gated on the bytes and not on a directory: ``adapter_config.json`` and
+    ``README.md`` sit beside every weight and ARE tracked, so each
+    ``adapter_final`` directory exists in a bare clone while the
+    ``adapter_model.safetensors`` inside it does not.  A gate keyed on the
+    directory reports nothing missing, and the test then fails on the weights.
+
+    Only roles with ``produced_by_this_design`` false, which are the design's
+    inputs.  A role this design trains is not something a checkout can be
+    expected to already have, and including those would skip tests on a tree that
+    simply has not run yet.
+    """
+    if not pilot.is_file():
+        return []
+    doc = json.loads(pilot.read_text(encoding="utf-8"))
+    roles = (doc.get("checkpoint_requirements") or {}).get("roles") or {}
+    out = []
+    for spec in roles.values():
+        if spec.get("produced_by_this_design"):
+            continue
+        raw = spec.get("adapter")
+        if raw:
+            out.append(_RF.resolve_recorded_path(raw))
+    return out
+
+
+_V5_PILOT = _RF.DATASET_ROOT / _RF.MANIFEST_DIR / "rf_pilot_salmu_v5.json"
+_IMAGES = [p for ds in ("ppubench", "salmu") for p in _manifest_images(ds)]
+_INPUT_WEIGHTS = _input_weights(_V5_PILOT)
+_needs_images = _gate(_IMAGES, "the development split")
+_needs_input_weights = _gate(
+    _INPUT_WEIGHTS, "the checkpoint roles the v5 design reads")
 #: A glob over an absent directory is empty rather than an error, so "no cells"
 #: is probed as its own condition: a gate built only on the paths a glob returned
 #: would pass in the one checkout it exists to describe.
@@ -123,6 +186,63 @@ _needs_tree = pytest.mark.skipif(
             "matrix cells; missing: "
             + ", ".join([*_absent([*_MANIFESTS.values(), *_MATRICES.values(),
                                    *_PILOTS.values()]), *_EMPTY])))
+
+
+def test_the_skip_gates_probe_bytes_and_not_the_artifacts_that_name_them(
+        rf, tmp_path, monkeypatch):
+    """Non-vacuity for both gates, proved on a machine that HAS the data.
+
+    A skip gate that reports "nothing missing" in a bare clone is worse than no
+    gate at all: the test runs there and fails while passing here, so the failure
+    is only ever seen by CI.  That is exactly what happened -- ``_needs_images``
+    gated on the manifests, which are tracked, so it never fired and four tests
+    failed on a fresh checkout instead of skipping.
+
+    Both gates are therefore pointed at an empty root and required to name what
+    they can no longer find: the images through the manifest that names them, the
+    weights through the design that reads them.
+
+    Only the SALMU half is asserted absent under the empty root, because PPUBench
+    records ABSOLUTE paths under the downloaded benchmark and re-rooting the
+    dataset root does not move those.  The gate still enumerates them, and on a
+    runner without the benchmark they are absent for real.
+    """
+    salmu = _manifest_images("salmu")
+    weights = _input_weights(_V5_PILOT)
+    assert salmu, "no image was enumerated, so the image gate is vacuous"
+    assert weights, "no weight was enumerated, so the weight gate is vacuous"
+    # The two regressions this exists to prevent, pinned by name.
+    assert _MANIFESTS["salmu"] not in salmu, \
+        "the gate must probe the IMAGES, not the manifest that names them"
+    assert all(p.name == "adapter_model.safetensors" for p in weights), \
+        "the gate must probe the weight BYTES, not the adapter_final directory " \
+        "that exists in a bare clone because the config beside it is tracked"
+    # The re-rooting below is only a valid proof of absence because SALMU records
+    # RELATIVE image uris, which resolve against DATASET_ROOT and so move with it.
+    # Asserted on the recorded uri and not on the resolved path: resolving joins
+    # DATASET_ROOT, so every resolved path is absolute whichever shape was
+    # recorded, and asserting that would have tested the join instead of the
+    # recording.
+    recorded = json.loads(_MANIFESTS["salmu"].read_text(encoding="utf-8"))
+    assert not [it["image_uri"] for it in recorded["items"]
+                if Path(it["image_uri"]).is_absolute()], \
+        "a SALMU image uri is absolute, so re-rooting DATASET_ROOT would not move " \
+        "it and the absence asserted below would prove nothing"
+
+    monkeypatch.setattr(rf, "DATASET_ROOT", tmp_path)
+    gone_images = _manifest_images("salmu")
+    gone_weights = _input_weights(_V5_PILOT)
+    assert len(gone_images) == len(salmu), \
+        "the manifest is still readable, so every image it names is still " \
+        "enumerated; a shorter list would mean the gate silently narrowed"
+    assert len(_absent(gone_images)) == len(salmu), \
+        "under an empty root every SALMU image must read as absent"
+    assert len(_absent(gone_weights)) == len(weights), \
+        "under an empty root every input weight must read as absent"
+    # and the gate condition is wired to that enumeration, on both roots, without
+    # assuming this machine has the data
+    for paths in (_IMAGES, gone_images, _INPUT_WEIGHTS, gone_weights):
+        assert _gate(paths, "x").args[0] == bool(_absent(paths))
 
 
 # --------------------------------------------------------------------------
@@ -682,6 +802,7 @@ def test_the_version_order_the_rule_reads(rf):
 
 
 @_needs_tree
+@_needs_input_weights
 def test_the_sets_are_derived_and_none_was_consumed_earlier(rf):
     """The ids are what the rule returns on the committed tree, not a list written
     into the test: a set added to the matrix or a manifest added to the tree moves
@@ -1022,6 +1143,7 @@ def test_the_checkpoint_roles_are_qualified_by_forget_set(rf, tmp_path,
 
 
 @_needs_tree
+@_needs_input_weights
 def test_the_router_adapters_exist_and_are_still_not_outputs(rf, tmp_path,
                                                              monkeypatch):
     """The non-vacuity of skipping by provenance rather than by presence.
@@ -1031,6 +1153,12 @@ def test_the_router_adapters_exist_and_are_still_not_outputs(rf, tmp_path,
     freeze-ordering check would have refused every v5 freeze -- a check that fails
     so reliably it would have been disabled.  This asserts the inputs exist AND
     are still not counted.
+
+    Gated on the weights themselves rather than on the tree, because the assertion
+    below is that at least one input role's ``adapter_model.safetensors`` is on
+    disk.  A bare clone has every ``adapter_final`` directory -- the config and
+    README beside each weight are tracked -- and none of the weights, so without
+    this gate the test fails on the very existence it exists to demonstrate.
     """
     design, _man, _sets = _v5_design(rf, tmp_path, monkeypatch, n_sets=1)
     roles = design["checkpoint_requirements"]["roles"]
@@ -1167,6 +1295,8 @@ def test_the_listing_is_filed_beside_the_manifest_and_not_inside_it(rf,
         "the sidecar must not be an input the manifest hashes"
 
 
+@_needs_images
+@_needs_input_weights
 def test_the_sidecar_counts_the_roles_the_design_produces(rf, tmp_path,
                                                           monkeypatch):
     """The listing's own number, from the real ``_freeze_v5``.
@@ -1179,6 +1309,12 @@ def test_the_sidecar_counts_the_roles_the_design_produces(rf, tmp_path,
     wrong in the same way.
 
     Both writes are captured, so ``_freeze_v5`` runs end to end and files nothing.
+
+    Gated on the image bytes and on the design's input weights, neither of which
+    a bare clone has: ``_freeze_v5`` builds the real SALMU design, which hashes
+    every manifest image and asks the forget-set rule which sets have their
+    edited-h adapters on disk.  This test had no gate at all, so it failed in CI
+    rather than skipping.
     """
     _v5_design(rf, tmp_path, monkeypatch)
     written = []
